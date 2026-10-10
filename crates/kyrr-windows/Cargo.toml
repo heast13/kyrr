@@ -2,6 +2,7 @@
 name = "kyrr-windows"
 description = "Windows integration for kyrr: installing the audio filter, microphones, audio service"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true

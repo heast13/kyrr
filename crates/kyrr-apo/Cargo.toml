@@ -2,6 +2,7 @@
 name = "kyrr-apo"
 description = "kyrr's voice filter as a Windows audio processing object"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true

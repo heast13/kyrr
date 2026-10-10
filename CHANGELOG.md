@@ -11,3 +11,6 @@ First public release.
 - Dictation: hold F9, speak, release; German and English, on your computer.
 - Check: live level and a five-second before/after test.
 - Check for updates, only when you click it.
+
+Thanks to Fovty (HushMic), Ceva (DPDFNet), primeLine AI (German model),
+NVIDIA (Parakeet) and the sherpa-onnx project; see the README.

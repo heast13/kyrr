@@ -13,6 +13,7 @@ exclude = ["vendor"]
 
 [workspace.package]
 version = "0.2.0"
+authors = ["heast13"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/heast13/kyrr"

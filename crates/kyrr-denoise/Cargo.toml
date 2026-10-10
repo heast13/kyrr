@@ -2,6 +2,7 @@
 name = "kyrr-denoise"
 description = "DPDFNet voice filter for any capture format"
 version.workspace = true
+authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true

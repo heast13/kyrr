@@ -73,6 +73,7 @@ Source: "{#Stage}\dpdfnet2_48khz_hr.onnx"; DestDir: "{app}"; Flags: ignoreversio
 Source: "{#Stage}\dpdfnet2_48khz_hr.weights.f32"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\LICENSE-MIT"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\LICENSE-APACHE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Stage}\NOTICE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\THIRD_PARTY.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs
 

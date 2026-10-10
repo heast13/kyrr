@@ -76,7 +76,7 @@ def stage() -> None:
     runtime = vc_runtime_dir()
     for f in VC_RUNTIME:
         shutil.copy2(runtime / f, STAGE)
-    for f in ("LICENSE-MIT", "LICENSE-APACHE", "THIRD_PARTY.md"):
+    for f in ("LICENSE-MIT", "LICENSE-APACHE", "NOTICE", "THIRD_PARTY.md"):
         shutil.copy2(ROOT / f, STAGE)
     for f in ("LICENSE-onnxruntime.txt", "ThirdPartyNotices-onnxruntime.txt"):
         shutil.copy2(ASSETS / f, licenses)

@@ -162,3 +162,25 @@ see [THIRD_PARTY.md](THIRD_PARTY.md); the app shows the model credits under
 Settings, About. kyrr's window is made with [Slint](https://slint.dev) under
 its royalty-free license, which asks for the badge at the top of this page.
 Security issues: see [SECURITY.md](SECURITY.md).
+
+If you build on kyrr, please keep the copyright notice and
+[NOTICE](NOTICE) (the licenses ask for it) and, if you like, mention
+heast13 with a link to this repository.
+
+## Thanks
+
+kyrr stands on the work of others. Thank you to
+
+- [Fovty](https://github.com/Fovty) for HushMic, whose DPDFNet runtime
+  kyrr's filter is built on,
+- [Ceva](https://github.com/ceva-ip/DPDFNet) for DPDFNet and for releasing
+  its models openly,
+- [primeLine AI](https://huggingface.co/primeline/parakeet-primeline) for
+  the German speech model,
+- NVIDIA for Parakeet, the model family behind both languages,
+- csukuangfj and the [k2-fsa](https://github.com/k2-fsa/sherpa-onnx) team
+  for sherpa-onnx and the English model in ONNX,
+- [Equalizer APO](https://sourceforge.net/projects/equalizerapo/), which
+  showed how a filter can live inside Windows audio,
+- [Slint](https://slint.dev) for the UI toolkit and
+  [SignPath Foundation](https://signpath.org) for free code signing.
