@@ -64,25 +64,25 @@ static GERMAN: ModelSpec = ModelSpec {
     files: &[
         ModelFile {
             name: "encoder.int8.onnx",
-            url: "https://huggingface.co/heast13/kyrr-models/resolve/main/de-primeline/encoder.int8.onnx",
+            url: "https://huggingface.co/heast13/kyrr-models/resolve/3e2dae70cbb505a7d0bfb6c79c5150e518273791/de-primeline/encoder.int8.onnx",
             size: 881_596_736,
             sha256: "e2d1a42b442e7499ecdc9647a358e75540db9691503d430c7a6bc4263b6e0321",
         },
         ModelFile {
             name: "decoder.int8.onnx",
-            url: "https://huggingface.co/heast13/kyrr-models/resolve/main/de-primeline/decoder.int8.onnx",
+            url: "https://huggingface.co/heast13/kyrr-models/resolve/3e2dae70cbb505a7d0bfb6c79c5150e518273791/de-primeline/decoder.int8.onnx",
             size: 11_845_274,
             sha256: "6b32c9339900086afd3d282eb40688ae19f3d106281e7731ee27ead1add8b29d",
         },
         ModelFile {
             name: "joiner.int8.onnx",
-            url: "https://huggingface.co/heast13/kyrr-models/resolve/main/de-primeline/joiner.int8.onnx",
+            url: "https://huggingface.co/heast13/kyrr-models/resolve/3e2dae70cbb505a7d0bfb6c79c5150e518273791/de-primeline/joiner.int8.onnx",
             size: 6_355_277,
             sha256: "ff5ec87a02959bcc792f7012931665de36cb2f03963e0d8def0d6193b5c6159f",
         },
         ModelFile {
             name: "tokens.txt",
-            url: "https://huggingface.co/heast13/kyrr-models/resolve/main/de-primeline/tokens.txt",
+            url: "https://huggingface.co/heast13/kyrr-models/resolve/3e2dae70cbb505a7d0bfb6c79c5150e518273791/de-primeline/tokens.txt",
             size: 93_939,
             sha256: "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
         },
