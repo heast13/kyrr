@@ -62,8 +62,7 @@ fn main() {
     state.set_level_after(0.55);
     state.set_download_size("880 MB".into());
     state.set_credits(
-        "German: primeline/parakeet-primeline by primeLine AI (CC-BY-4.0), based on NVIDIA parakeet-tdt-0.6b-v3.
-
+        "German: primeline/parakeet-primeline by primeLine AI (CC-BY-4.0), based on NVIDIA parakeet-tdt-0.6b-v3.\n\n\
          English: NVIDIA parakeet-unified-en-0.6b, licensed by NVIDIA Corporation under the NVIDIA Open Model License."
             .into(),
     );
@@ -120,7 +119,10 @@ fn main() {
     state.set_look_index(0);
     state.set_voice_is_default(true);
     state.set_has_probe(false);
+    state.set_update_state(UpdateState::Available);
+    state.set_update_version("0.2.0".into());
     render(&window, &ui, &format!("{out}/settings-off-{lang}.rgba"));
+    state.set_update_state(UpdateState::Idle);
 
     state.set_page(0);
     ui.set_setup_mode(true);

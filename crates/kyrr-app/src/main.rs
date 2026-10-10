@@ -12,6 +12,7 @@ mod platform;
 mod player;
 mod probe;
 mod recorder;
+mod update;
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -658,6 +659,37 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     });
     state.on_autostart_toggled(platform::set_autostart);
     state.on_open_licenses(platform::open_licenses);
+    state.on_check_updates({
+        let weak = window.as_weak();
+        move || {
+            let Some(w) = weak.upgrade() else { return };
+            w.global::<AppState>().set_update_state(UpdateState::Checking);
+            let weak = weak.clone();
+            std::thread::spawn(move || {
+                let outcome = update::check();
+                let _ = weak.upgrade_in_event_loop(move |w| {
+                    let state = w.global::<AppState>();
+                    match outcome {
+                        update::Outcome::UpToDate => state.set_update_state(UpdateState::Current),
+                        update::Outcome::Failed => state.set_update_state(UpdateState::Failed),
+                        update::Outcome::Available { version, url } => {
+                            state.set_update_version(version.into());
+                            state.set_update_url(url.into());
+                            state.set_update_state(UpdateState::Available);
+                        }
+                    }
+                });
+            });
+        }
+    });
+    state.on_open_update({
+        let weak = window.as_weak();
+        move || {
+            if let Some(w) = weak.upgrade() {
+                platform::open_url(&w.global::<AppState>().get_update_url());
+            }
+        }
+    });
     state.on_dictation_retry({
         let worker = worker.clone();
         move || {

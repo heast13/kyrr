@@ -2843,6 +2843,7 @@ dependencies = [
  "serde_json",
  "slint",
  "slint-build",
+ "ureq 3.4.2",
  "windows",
  "winresource",
 ]

@@ -14,6 +14,8 @@ slint = { version = "1.18", features = ["system-tray", "renderer-software", "sof
 cpal = "0.18"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Only for "Check for updates" (the same TLS setup as the model download).
+ureq = { version = "3", default-features = false, features = ["native-tls"] }
 
 [target.'cfg(windows)'.dependencies]
 kyrr-windows = { path = "../kyrr-windows" }

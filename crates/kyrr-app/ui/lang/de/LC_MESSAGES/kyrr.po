@@ -486,6 +486,24 @@ msgstr "Taste"
 msgid "Licenses"
 msgstr "Lizenzen"
 
+msgid "Check for updates"
+msgstr "Nach Updates suchen"
+
+msgid "kyrr only asks GitHub when you click."
+msgstr "kyrr fragt GitHub nur, wenn du klickst."
+
+msgid "Having a look…"
+msgstr "Schaue nach …"
+
+msgid "You have the newest version. Nothing to do."
+msgstr "Du hast die neueste Version. Nichts zu tun."
+
+msgid "Could not check right now. Offline?"
+msgstr "Konnte gerade nicht nachsehen. Offline?"
+
+msgid "Version {} is out. Download it and run the installer, your settings stay."
+msgstr "Version {} ist da. Herunterladen und den Installer starten, deine Einstellungen bleiben."
+
 msgid "Moves while an app uses the mic."
 msgstr "Bewegt sich, solange eine App das Mikro nutzt."
 

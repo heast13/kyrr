@@ -129,6 +129,11 @@ mod imp {
         }
     }
 
+    /// Opens a web page in the default browser.
+    pub fn open_url(url: &str) {
+        let _ = std::process::Command::new("explorer.exe").arg(url).spawn();
+    }
+
     /// Push-to-talk events; `None` when the key could not be hooked.
     pub fn start_hotkey() -> Option<std::sync::mpsc::Receiver<hotkey::KeyEvent>> {
         hotkey::start().ok()
@@ -234,6 +239,10 @@ mod imp {
     pub fn set_hotkey_key(_: u32) {}
 
     pub fn open_licenses() {}
+
+    pub fn open_url(url: &str) {
+        let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+    }
 
     #[derive(Clone, Copy, Debug)]
     #[allow(dead_code)]

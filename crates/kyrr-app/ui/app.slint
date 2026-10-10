@@ -8,6 +8,7 @@ import { Button, ComboBox, Switch, Slider, ProgressIndicator, ScrollView, Palett
 export enum FilterState { checking, running, off, passthrough, not-attached, not-installed, setting-up, error, detached }
 export enum DictationState { off, no-model, downloading, loading, ready, recording, transcribing, error }
 export enum ProbeState { idle, recording, before, after }
+export enum UpdateState { idle, checking, current, available, failed }
 
 export global AppState {
     // Noise removal
@@ -60,6 +61,10 @@ export global AppState {
     in property <string> key-name: "F9";
     // Model credits, as their licenses ask.
     in property <string> credits;
+    // "Check for updates", on request only.
+    in property <UpdateState> update-state;
+    in property <string> update-version;
+    in property <string> update-url;
 
     in-out property <bool> autostart;
     in property <string> error-text;
@@ -101,6 +106,8 @@ export global AppState {
     callback key-changed(int);
     callback key-toggle-changed(bool);
     callback open-licenses();
+    callback check-updates();
+    callback open-update();
     callback skip-setup();
 }
 
@@ -590,13 +597,37 @@ component DictationSettings inherits Card {
     Hint { text: @tr("Say “new line” or “new paragraph” for line breaks."); }
 }
 
-// Settings: who made what.
+// Settings: who made what, and whether there is something newer.
 component AboutSettings inherits Card {
     Heading { text: @tr("About"); }
     Hint { text: AppState.credits; }
     HorizontalLayout {
+        spacing: 8px;
         Rectangle { }
+        Button {
+            text: @tr("Check for updates");
+            enabled: AppState.update-state != UpdateState.checking;
+            clicked => { AppState.check-updates(); }
+        }
         Button { text: @tr("Licenses"); clicked => { AppState.open-licenses(); } }
+    }
+    if AppState.update-state == UpdateState.idle: Hint {
+        text: @tr("kyrr only asks GitHub when you click.");
+    }
+    if AppState.update-state == UpdateState.checking: Hint { text: @tr("Having a look…"); }
+    if AppState.update-state == UpdateState.current: Hint { text: @tr("You have the newest version. Nothing to do."); }
+    if AppState.update-state == UpdateState.failed: Hint { text: @tr("Could not check right now. Offline?"); }
+    // Text and button separately: wrapped text inside a nested layout
+    // under `if` is measured as one line.
+    if AppState.update-state == UpdateState.available: Hint {
+        text: @tr("Version {} is out. Download it and run the installer, your settings stay.", AppState.update-version);
+    }
+    if AppState.update-state == UpdateState.available: HorizontalLayout {
+        Rectangle { }
+        Button {
+            text: @tr("Download");
+            clicked => { AppState.open-update(); }
+        }
     }
 }
 

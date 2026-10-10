@@ -80,7 +80,9 @@ of after a quarter of an hour without dictation:
 
 Audio never leaves your computer. The app makes network connections only to
 download the speech model, from Hugging Face, with every file checked
-against a SHA256 hash built into kyrr. No telemetry, no update check.
+against a SHA256 hash built into kyrr, and when you click "Check for
+updates", one request to GitHub for the newest version number. Nothing is
+downloaded or installed by itself. No telemetry.
 (Building kyrr also downloads its assets and libraries from GitHub.)
 
 ## Building
