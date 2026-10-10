@@ -1,0 +1,272 @@
+// kyrr's user interface: the tray icon and one small window that shows the
+// first-run setup or the main panel. All texts are English source strings
+// translated through the bundled translations in ui/lang.
+
+import { Button, ComboBox, Switch, ProgressIndicator, VerticalBox, HorizontalBox, Palette } from "std-widgets.slint";
+
+export enum FilterState { checking, running, off, passthrough, not-attached, not-installed, setting-up, error }
+export enum DictationState { off, no-model, downloading, loading, ready, recording, transcribing, error }
+
+export global AppState {
+    // Clean microphone
+    in-out property <bool> filter-enabled: true;
+    in-out property <int> strength-index: 2; // 0 gentle, 1 medium, 2 strong
+    in property <FilterState> filter-state: FilterState.checking;
+    in property <string> filter-detail; // technical, not translated
+    in property <[string]> microphones;
+    in-out property <int> mic-index;
+    in property <string> attached-mic;
+
+    // Dictation
+    in-out property <bool> dictation-enabled: true;
+    in-out property <int> language-index; // 0 German, 1 English
+    in property <DictationState> dictation-state: DictationState.off;
+    in property <float> download-progress;
+    in property <string> download-size;
+    in property <string> last-text;
+
+    in property <string> error-text;
+    in property <string> version;
+
+    callback filter-toggled(bool);
+    callback strength-changed(int);
+    callback attach-microphone(int);
+    callback dictation-toggled(bool);
+    callback language-changed(int);
+    callback download-model();
+    callback cancel-download();
+    callback finish-setup();
+    callback change-microphone();
+    callback quit();
+}
+
+// The tray has its own properties: globals are per component instance, so
+// the app wires tray and window separately.
+export component Tray inherits SystemTrayIcon {
+    in property <bool> recording;
+    in property <bool> active;
+    in property <bool> filter-enabled;
+    in property <bool> dictation-enabled;
+    callback open();
+    callback toggle-filter();
+    callback toggle-dictation();
+    callback quit();
+    icon: recording ? @image-url("icons/kyrr-recording-32.png") : active ? @image-url("icons/kyrr-32.png") : @image-url("icons/kyrr-off-32.png");
+    tooltip: "kyrr";
+    clicked => { root.open(); }
+    Menu {
+        MenuItem {
+            title: @tr("Open kyrr");
+            activated => { root.open(); }
+        }
+        MenuItem {
+            title: root.filter-enabled ? @tr("Turn clean microphone off") : @tr("Turn clean microphone on");
+            activated => { root.toggle-filter(); }
+        }
+        MenuItem {
+            title: root.dictation-enabled ? @tr("Turn dictation off") : @tr("Turn dictation on");
+            activated => { root.toggle-dictation(); }
+        }
+        MenuItem {
+            title: @tr("Quit");
+            activated => { root.quit(); }
+        }
+    }
+}
+
+component Caption inherits Text {
+    color: Palette.foreground.with-alpha(0.65);
+    font-size: 12px;
+    wrap: word-wrap;
+}
+
+component Heading inherits Text {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+component Card inherits Rectangle {
+    background: Palette.alternate-background;
+    border-radius: 10px;
+    VerticalLayout {
+        padding: 14px;
+        spacing: 8px;
+        @children
+    }
+}
+
+component Segmented {
+    in property <[string]> options;
+    in-out property <int> selected;
+    callback changed(int);
+    HorizontalLayout {
+        spacing: 6px;
+        for option[i] in options: Rectangle {
+            height: 28px;
+            border-radius: 6px;
+            background: i == selected ? Palette.accent-background : Palette.control-background;
+            border-width: 1px;
+            border-color: Palette.border;
+            Text {
+                text: option;
+                color: i == selected ? Palette.accent-foreground : Palette.control-foreground;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            TouchArea {
+                clicked => {
+                    selected = i;
+                    changed(i);
+                }
+            }
+        }
+    }
+}
+
+component FilterCard inherits Card {
+    HorizontalLayout {
+        Heading { text: @tr("Clean microphone"); vertical-alignment: center; }
+        Rectangle { }
+        Switch {
+            checked <=> AppState.filter-enabled;
+            enabled: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed;
+            toggled => { AppState.filter-toggled(self.checked); }
+        }
+    }
+    Caption {
+        text: AppState.filter-state == FilterState.running ? (AppState.filter-enabled ? @tr("Noise is filtered on {}.", AppState.attached-mic) : @tr("Off. {} passes through unchanged.", AppState.attached-mic))
+            : AppState.filter-state == FilterState.checking ? @tr("Waiting for an app to use the microphone…")
+            : AppState.filter-state == FilterState.passthrough ? @tr("The filter could not start and passes the microphone through.")
+            : AppState.filter-state == FilterState.not-attached ? @tr("No microphone set up yet.")
+            : AppState.filter-state == FilterState.not-installed ? @tr("kyrr's audio filter is not installed. Please reinstall kyrr.")
+            : AppState.filter-state == FilterState.setting-up ? @tr("Setting up… sound pauses for a moment.")
+            : AppState.error-text;
+    }
+    if AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking: VerticalLayout {
+        spacing: 6px;
+        Caption { text: @tr("Strength"); }
+        Segmented {
+            options: [@tr("Gentle"), @tr("Medium"), @tr("Strong")];
+            selected <=> AppState.strength-index;
+            changed(i) => { AppState.strength-changed(i); }
+        }
+    }
+}
+
+component DictationCard inherits Card {
+    HorizontalLayout {
+        Heading { text: @tr("Dictation (hold F9)"); vertical-alignment: center; }
+        Rectangle { }
+        Switch {
+            checked <=> AppState.dictation-enabled;
+            toggled => { AppState.dictation-toggled(self.checked); }
+        }
+    }
+    Caption {
+        text: AppState.dictation-state == DictationState.off ? @tr("Off.")
+            : AppState.dictation-state == DictationState.no-model ? @tr("The speech model ({}) needs to be downloaded once.", AppState.download-size)
+            : AppState.dictation-state == DictationState.downloading ? @tr("Downloading the speech model… {}%", round(AppState.download-progress * 100))
+            : AppState.dictation-state == DictationState.loading ? @tr("Loading the speech model…")
+            : AppState.dictation-state == DictationState.ready ? @tr("Hold F9, speak, release. The text appears where your cursor is.")
+            : AppState.dictation-state == DictationState.recording ? @tr("Listening…")
+            : AppState.dictation-state == DictationState.transcribing ? @tr("Writing…")
+            : AppState.error-text;
+    }
+    if AppState.dictation-state == DictationState.downloading: HorizontalLayout {
+        spacing: 12px;
+        VerticalLayout {
+            alignment: center;
+            ProgressIndicator { progress: AppState.download-progress; height: 6px; }
+        }
+        Button { text: @tr("Cancel"); clicked => { AppState.cancel-download(); } }
+    }
+    if AppState.dictation-state == DictationState.no-model: Button {
+        text: @tr("Download");
+        primary: true;
+        clicked => { AppState.download-model(); }
+    }
+}
+
+component SetupPage {
+    in property <int> step;
+    VerticalLayout {
+        spacing: 12px;
+        if step == 0: VerticalLayout {
+            spacing: 12px;
+            Heading { text: @tr("Welcome to kyrr"); font-size: 20px; }
+            Caption { text: @tr("kyrr removes background noise from your microphone, for every app. Which microphone do you use?"); }
+            ComboBox {
+                model: AppState.microphones;
+                current-index <=> AppState.mic-index;
+            }
+            Caption { text: @tr("Windows will ask for permission. Sound pauses for a moment while kyrr sets up."); }
+            Button {
+                text: AppState.filter-state == FilterState.setting-up ? @tr("Setting up…") : @tr("Set up microphone");
+                primary: true;
+                enabled: AppState.filter-state != FilterState.setting-up && AppState.microphones.length > 0;
+                clicked => { AppState.attach-microphone(AppState.mic-index); }
+            }
+            if AppState.filter-state == FilterState.error: Caption { text: AppState.error-text; color: #e5484d; }
+        }
+        if step == 1: VerticalLayout {
+            spacing: 12px;
+            Heading { text: @tr("Dictation"); font-size: 20px; }
+            Caption { text: @tr("Hold F9 anywhere, speak, release: kyrr types what you said. It runs on your computer, nothing is sent anywhere."); }
+            Caption { text: @tr("Language"); }
+            Segmented {
+                options: ["Deutsch", "English"];
+                selected <=> AppState.language-index;
+                changed(i) => { AppState.language-changed(i); }
+            }
+            DictationCard { }
+            Button {
+                text: @tr("Done");
+                primary: AppState.dictation-state != DictationState.no-model;
+                clicked => { AppState.finish-setup(); }
+            }
+        }
+    }
+}
+
+export component MainWindow inherits Window {
+    in property <bool> setup-mode;
+    in property <int> setup-step;
+    out property <length> content-height: layout.preferred-height;
+    title: "kyrr";
+    icon: @image-url("icons/kyrr-256.png");
+    preferred-width: 380px;
+    min-width: 380px;
+    max-width: 380px;
+
+    layout := VerticalLayout {
+        padding: 18px;
+        spacing: 12px;
+        if setup-mode: SetupPage { step: root.setup-step; }
+        if !setup-mode: VerticalLayout {
+            spacing: 12px;
+            HorizontalLayout {
+                spacing: 10px;
+                Image { source: @image-url("icons/kyrr-256.png"); width: 28px; height: 28px; }
+                Heading { text: "kyrr"; font-size: 20px; vertical-alignment: center; }
+            }
+            FilterCard { }
+            DictationCard { }
+            HorizontalLayout {
+                spacing: 8px;
+                Caption { text: @tr("Language"); vertical-alignment: center; }
+                Segmented {
+                    options: ["Deutsch", "English"];
+                    selected <=> AppState.language-index;
+                    changed(i) => { AppState.language-changed(i); }
+                }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                Caption { text: "kyrr " + AppState.version; vertical-alignment: center; }
+                Rectangle { }
+                Button { text: @tr("Change microphone"); clicked => { AppState.change-microphone(); } }
+                Button { text: @tr("Quit"); clicked => { AppState.quit(); } }
+            }
+        }
+    }
+}

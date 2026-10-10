@@ -9,6 +9,14 @@ use sha2::{Digest, Sha256};
 
 use crate::model::{hex, ModelFile, ModelSpec};
 
+fn agent() -> ureq::Agent {
+    use ureq::tls::{TlsConfig, TlsProvider};
+    ureq::config::Config::builder()
+        .tls_config(TlsConfig::builder().provider(TlsProvider::NativeTls).build())
+        .build()
+        .new_agent()
+}
+
 /// Progress of a running download, in bytes over all files.
 #[derive(Clone, Copy, Debug)]
 pub struct Progress {
@@ -70,7 +78,7 @@ fn fetch_file(
 ) -> Result<(), DownloadError> {
     let fail = |e: String| DownloadError::Failed(format!("{}: {e}", file.name));
     let part = dest.with_extension("part");
-    let response = ureq::get(file.url).call().map_err(|e| fail(e.to_string()))?;
+    let response = agent().get(file.url).call().map_err(|e| fail(e.to_string()))?;
     let mut reader = response.into_body().into_reader();
     let mut out = std::fs::File::create(&part).map_err(|e| fail(e.to_string()))?;
     let mut hasher = Sha256::new();

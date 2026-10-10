@@ -1,0 +1,120 @@
+# German translation of kyrr's user interface.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: de\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgid "Change microphone"
+msgstr "Mikrofon wechseln"
+
+msgid "Clean microphone"
+msgstr "Sauberes Mikrofon"
+
+msgid "Dictation"
+msgstr "Diktieren"
+
+msgid "Dictation (hold F9)"
+msgstr "Diktieren (F9 halten)"
+
+msgid "Done"
+msgstr "Fertig"
+
+msgid "Download"
+msgstr "Herunterladen"
+
+msgid "Downloading the speech model… {}%"
+msgstr "Sprachmodell wird geladen … {} %"
+
+msgid "Gentle"
+msgstr "Sanft"
+
+msgid "Hold F9 anywhere, speak, release: kyrr types what you said. It runs on your computer, nothing is sent anywhere."
+msgstr "F9 halten, sprechen, loslassen: kyrr tippt, was du gesagt hast. Alles läuft auf deinem Computer, nichts wird irgendwohin geschickt."
+
+msgid "Hold F9, speak, release. The text appears where your cursor is."
+msgstr "F9 halten, sprechen, loslassen. Der Text erscheint dort, wo dein Cursor steht."
+
+msgid "kyrr removes background noise from your microphone, for every app. Which microphone do you use?"
+msgstr "kyrr entfernt Hintergrundgeräusche aus deinem Mikrofon, für jede App. Welches Mikrofon verwendest du?"
+
+msgid "kyrr's audio filter is not installed. Please reinstall kyrr."
+msgstr "Der Audiofilter von kyrr ist nicht installiert. Bitte installiere kyrr neu."
+
+msgid "Language"
+msgstr "Sprache"
+
+msgid "Listening…"
+msgstr "Hört zu …"
+
+msgid "Loading the speech model…"
+msgstr "Sprachmodell wird gestartet …"
+
+msgid "Medium"
+msgstr "Mittel"
+
+msgid "Noise is filtered on {}."
+msgstr "Rauschen wird gefiltert: {}."
+
+msgid "No microphone set up yet."
+msgstr "Noch kein Mikrofon eingerichtet."
+
+msgid "Off."
+msgstr "Aus."
+
+msgid "Off. {} passes through unchanged."
+msgstr "Aus. {} läuft unverändert durch."
+
+msgid "Open kyrr"
+msgstr "kyrr öffnen"
+
+msgid "Quit"
+msgstr "Beenden"
+
+msgid "Setting up…"
+msgstr "Wird eingerichtet …"
+
+msgid "Setting up… sound pauses for a moment."
+msgstr "Wird eingerichtet … der Ton setzt kurz aus."
+
+msgid "Set up microphone"
+msgstr "Mikrofon einrichten"
+
+msgid "Strength"
+msgstr "Stärke"
+
+msgid "Strong"
+msgstr "Stark"
+
+msgid "The filter could not start and passes the microphone through."
+msgstr "Der Filter konnte nicht starten und lässt das Mikrofon unverändert durch."
+
+msgid "The speech model ({}) needs to be downloaded once."
+msgstr "Das Sprachmodell ({}) muss einmal heruntergeladen werden."
+
+msgid "Turn clean microphone off"
+msgstr "Sauberes Mikrofon ausschalten"
+
+msgid "Turn clean microphone on"
+msgstr "Sauberes Mikrofon einschalten"
+
+msgid "Turn dictation off"
+msgstr "Diktieren ausschalten"
+
+msgid "Turn dictation on"
+msgstr "Diktieren einschalten"
+
+msgid "Waiting for an app to use the microphone…"
+msgstr "Wartet, bis eine App das Mikrofon benutzt …"
+
+msgid "Welcome to kyrr"
+msgstr "Willkommen bei kyrr"
+
+msgid "Windows will ask for permission. Sound pauses for a moment while kyrr sets up."
+msgstr "Windows fragt gleich um Erlaubnis. Während kyrr sich einrichtet, setzt der Ton kurz aus."
+
+msgid "Writing…"
+msgstr "Schreibt …"

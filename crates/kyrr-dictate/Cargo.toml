@@ -8,7 +8,9 @@ repository.workspace = true
 
 [dependencies]
 sherpa-onnx = "=1.13.8"
-ureq = "3"
+# native-tls: schannel on Windows (system certificates, proxies), and no C
+# compiler needed for the TLS stack.
+ureq = { version = "3", default-features = false, features = ["native-tls"] }
 sha2 = "0.11"
 rubato.workspace = true
 audioadapter-buffers.workspace = true

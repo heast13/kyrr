@@ -1,0 +1,22 @@
+[package]
+name = "kyrr"
+description = "Clean microphone and F9 dictation, local and free"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+kyrr-common = { path = "../kyrr-common" }
+kyrr-dictate = { path = "../kyrr-dictate" }
+slint = { version = "1.18", features = ["system-tray", "renderer-software", "software-renderer-systemfonts"] }
+cpal = "0.18"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(windows)'.dependencies]
+kyrr-windows = { path = "../kyrr-windows" }
+windows = { version = "0.62", features = ["Win32_Globalization"] }
+
+[build-dependencies]
+slint-build = "1.18"

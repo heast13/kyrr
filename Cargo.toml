@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/kyrr-apo",
+    "crates/kyrr-app",
     "crates/kyrr-common",
     "crates/kyrr-denoise",
     "crates/kyrr-dictate",
