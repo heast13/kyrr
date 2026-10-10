@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1 (unreleased)
+
+- Dictation in German works on older processors too (Intel before
+  Ice Lake/Alder Lake, AMD before Zen 4). On these it typed nothing or a
+  stray word. kyrr fetches the corrected speech model by itself (about
+  900 MB) and deletes the old one.
+- The before/after test records ten seconds instead of five.
+- The installer thanks the projects kyrr builds on, on its last page and in
+  the NOTICE file next to the app.
+
 ## 0.2.0 (2026-10-10)
 
 First public release.

@@ -22,7 +22,7 @@ A small, free Windows app for your microphone:
   English, on your computer, no account, no cloud. Say "new line" or "neue
   Zeile" for a line break.
 - **Check.** A live level of what the microphone hears and what apps get,
-  and a five-second test that plays the same take before and after kyrr.
+  and a ten-second test that plays the same take before and after kyrr.
 
 <p align="center">
   <img src="docs/screenshots/main.png" width="380" alt="kyrr's window: noise filter, voice and dictation, each with one switch">
@@ -86,8 +86,8 @@ adds no latency. On by default with a neutral sound, light compression and
 the low cut; Reset brings back the defaults.
 
 **Check.** The filter shares a small block of memory with the app
-(`Global\kyrr-monitor-1`): the level before and after kyrr, and on request
-one five-second take, unprocessed and processed. The audio service writes
+(`Global\kyrr-monitor-2`): the level before and after kyrr, and on request
+one ten-second take, unprocessed and processed. The audio service writes
 it; users signed in at this computer can read it and ask for a take, which
 only records while an app already uses the microphone. The app plays the
 take, keeps it only in memory and clears it from the shared block.

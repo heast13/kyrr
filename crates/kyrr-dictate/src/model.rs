@@ -54,39 +54,46 @@ pub struct ModelSpec {
     /// Shown in the app's about page, as the model licenses require.
     pub attribution: &'static str,
     pub files: &'static [ModelFile],
+    /// Folders of earlier versions of this model. One of them on disk means
+    /// the user already chose this model: the new version is downloaded
+    /// without asking, and the old folder deleted once it is in place.
+    pub replaces: &'static [&'static str],
 }
 
 /// primeline/parakeet-primeline, converted with `tools/export-primeline`.
+/// `de-primeline` had signed int8 weights, which ONNX Runtime gets wrong on
+/// x86 CPUs without VNNI (see the tool's README).
 static GERMAN: ModelSpec = ModelSpec {
-    id: "de-primeline",
+    id: "de-primeline-u8",
     attribution: "German: primeline/parakeet-primeline by primeLine AI (CC-BY-4.0), \
                   based on NVIDIA parakeet-tdt-0.6b-v3; converted to ONNX and quantized to int8.",
     files: &[
         ModelFile {
             name: "encoder.int8.onnx",
-            url: "https://huggingface.co/heast13/kyrr-models/resolve/3e2dae70cbb505a7d0bfb6c79c5150e518273791/de-primeline/encoder.int8.onnx",
+            url: "https://huggingface.co/heast13/kyrr-models/resolve/060909ddfa399aa1036c33b23c79096f7a882c4f/de-primeline-u8/encoder.int8.onnx",
             size: 881_596_736,
-            sha256: "e2d1a42b442e7499ecdc9647a358e75540db9691503d430c7a6bc4263b6e0321",
+            sha256: "49596a2c9c20a224fd087b2c1dc8cdc5dfe3fb8d3ddd4eefb070d81e492c93d8",
         },
         ModelFile {
             name: "decoder.int8.onnx",
-            url: "https://huggingface.co/heast13/kyrr-models/resolve/3e2dae70cbb505a7d0bfb6c79c5150e518273791/de-primeline/decoder.int8.onnx",
+            url: "https://huggingface.co/heast13/kyrr-models/resolve/060909ddfa399aa1036c33b23c79096f7a882c4f/de-primeline-u8/decoder.int8.onnx",
             size: 11_845_274,
             sha256: "6b32c9339900086afd3d282eb40688ae19f3d106281e7731ee27ead1add8b29d",
         },
         ModelFile {
             name: "joiner.int8.onnx",
-            url: "https://huggingface.co/heast13/kyrr-models/resolve/3e2dae70cbb505a7d0bfb6c79c5150e518273791/de-primeline/joiner.int8.onnx",
+            url: "https://huggingface.co/heast13/kyrr-models/resolve/060909ddfa399aa1036c33b23c79096f7a882c4f/de-primeline-u8/joiner.int8.onnx",
             size: 6_355_277,
-            sha256: "ff5ec87a02959bcc792f7012931665de36cb2f03963e0d8def0d6193b5c6159f",
+            sha256: "c84fcf848108531a7309ef65308dc5dc610091ce0fbde134f76bb0f6c42ca530",
         },
         ModelFile {
             name: "tokens.txt",
-            url: "https://huggingface.co/heast13/kyrr-models/resolve/3e2dae70cbb505a7d0bfb6c79c5150e518273791/de-primeline/tokens.txt",
+            url: "https://huggingface.co/heast13/kyrr-models/resolve/060909ddfa399aa1036c33b23c79096f7a882c4f/de-primeline-u8/tokens.txt",
             size: 93_939,
             sha256: "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
         },
     ],
+    replaces: &["de-primeline"],
 };
 
 /// nvidia/parakeet-unified-en-0.6b as packaged by sherpa-onnx (int8,
@@ -121,6 +128,7 @@ static ENGLISH: ModelSpec = ModelSpec {
             sha256: "dc0b4584ab2e4ddbf888425c076c61b736e7356a015250db7d307e6f1a8188ff",
         },
     ],
+    replaces: &[],
 };
 
 impl ModelSpec {
@@ -140,6 +148,19 @@ impl ModelSpec {
         self.files
             .iter()
             .all(|f| std::fs::metadata(dir.join(f.name)).is_ok_and(|m| m.len() == f.size))
+    }
+
+    /// Whether an earlier version of this model is on disk.
+    pub fn replaces_installed(&self, root: &Path) -> bool {
+        self.replaces.iter().any(|id| root.join(id).is_dir())
+    }
+
+    /// Deletes the earlier versions; a folder that will not go is left for
+    /// the next time.
+    pub fn remove_replaced(&self, root: &Path) {
+        for id in self.replaces {
+            let _ = std::fs::remove_dir_all(root.join(id));
+        }
     }
 
     /// Full check of every file's SHA256.

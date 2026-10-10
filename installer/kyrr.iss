@@ -57,6 +57,9 @@ en.RemoveData=Also delete the downloaded speech models (up to 900 MB) and kyrr's
 de.RemoveData=Auch die heruntergeladenen Sprachmodelle (bis zu 900 MB) und die Einstellungen von kyrr löschen?%n%nDer Ton setzt kurz aus, während der Filter entfernt wird.
 en.UninstallFailed=Not everything could be removed:%n%1
 de.UninstallFailed=Nicht alles ließ sich entfernen:%n%1
+; The same thanks as in the README and NOTICE.
+en.Thanks=kyrr stands on the work of others. Thank you to Fovty (HushMic), Ceva (DPDFNet), primeLine AI (German speech model), NVIDIA (Parakeet), csukuangfj and the k2-fsa team (sherpa-onnx), Equalizer APO, Slint and SignPath Foundation.
+de.Thanks=kyrr baut auf der Arbeit anderer auf. Danke an Fovty (HushMic), Ceva (DPDFNet), primeLine AI (deutsches Sprachmodell), NVIDIA (Parakeet), csukuangfj und das k2-fsa-Team (sherpa-onnx), Equalizer APO, Slint und die SignPath Foundation.
 
 [Files]
 Source: "{#Stage}\kyrr.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -95,6 +98,7 @@ const
 var
   AudioStopped: Boolean;
   RemoveData: Boolean;
+  ThanksLabel: TNewStaticText;
 
 // The notes go on the welcome page instead of a box before it: that an
 // installed kyrr is updated in place, and what happens to the sound.
@@ -106,6 +110,17 @@ begin
   if RegQueryStringValue(HKLM, UninstallKey, 'DisplayVersion', Version) then
     Note := FmtMessage(CustomMessage('UpdateNote'), [Version]) + #13#10#13#10 + Note;
   WizardForm.WelcomeLabel2.Caption := WizardForm.WelcomeLabel2.Caption + #13#10#13#10 + Note;
+
+  // The thanks sit at the bottom of the last page, clear of the start box.
+  ThanksLabel := TNewStaticText.Create(WizardForm);
+  ThanksLabel.Parent := WizardForm.FinishedPage;
+  ThanksLabel.Left := WizardForm.FinishedLabel.Left;
+  ThanksLabel.Width := WizardForm.FinishedLabel.Width;
+  ThanksLabel.AutoSize := False;
+  ThanksLabel.WordWrap := True;
+  ThanksLabel.Height := ScaleY(64);
+  ThanksLabel.Top := WizardForm.FinishedPage.ClientHeight - ThanksLabel.Height - ScaleY(8);
+  ThanksLabel.Caption := CustomMessage('Thanks');
 end;
 
 // On an update the audio engine keeps kyrr_apo.dll loaded: stop it (and a

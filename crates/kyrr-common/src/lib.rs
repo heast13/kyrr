@@ -220,12 +220,14 @@ impl Amount {
 pub mod monitor {
     use std::sync::atomic::AtomicU32;
 
-    pub const NAME: &str = r"Global\kyrr-monitor-1";
-    pub const MAGIC: u32 = u32::from_le_bytes(*b"kyr1");
+    /// Name and magic change with the layout, so an app and a filter of
+    /// different versions do not read each other's buffers.
+    pub const NAME: &str = r"Global\kyrr-monitor-2";
+    pub const MAGIC: u32 = u32::from_le_bytes(*b"kyr2");
     /// Length of the probe recording.
-    pub const PROBE_SECONDS: u32 = 5;
-    /// Mono samples per probe buffer: five seconds at up to 96 kHz.
-    pub const PROBE_CAPACITY: usize = 5 * 96_000;
+    pub const PROBE_SECONDS: u32 = 10;
+    /// Mono samples per probe buffer: the probe at up to 96 kHz.
+    pub const PROBE_CAPACITY: usize = PROBE_SECONDS as usize * 96_000;
     /// The header, then the probe before kyrr, then after kyrr (f32 each).
     pub const HEADER_SIZE: usize = 64;
     pub const SIZE: usize = HEADER_SIZE + 2 * PROBE_CAPACITY * 4;

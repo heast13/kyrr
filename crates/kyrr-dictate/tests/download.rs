@@ -17,6 +17,7 @@ static GOOD: ModelSpec = ModelSpec {
         size: 8_952,
         sha256: "dc0b4584ab2e4ddbf888425c076c61b736e7356a015250db7d307e6f1a8188ff",
     }],
+    replaces: &[],
 };
 
 static TAMPERED: ModelSpec = ModelSpec {
@@ -28,6 +29,7 @@ static TAMPERED: ModelSpec = ModelSpec {
         size: 8_952,
         sha256: "0000000000000000000000000000000000000000000000000000000000000000",
     }],
+    replaces: &[],
 };
 
 #[test]

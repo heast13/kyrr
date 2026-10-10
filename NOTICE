@@ -4,3 +4,19 @@ https://github.com/heast13/kyrr
 
 Licensed under MIT OR Apache-2.0. Third-party components and models keep
 their own licenses, see THIRD_PARTY.md.
+
+kyrr stands on the work of others. Thank you to
+
+- Fovty (https://github.com/Fovty) for HushMic, whose DPDFNet runtime
+  kyrr's filter is built on,
+- Ceva (https://github.com/ceva-ip/DPDFNet) for DPDFNet and for releasing
+  its models openly,
+- primeLine AI (https://huggingface.co/primeline/parakeet-primeline) for
+  the German speech model,
+- NVIDIA for Parakeet, the model family behind both languages,
+- csukuangfj and the k2-fsa team (https://github.com/k2-fsa/sherpa-onnx)
+  for sherpa-onnx and the English model in ONNX,
+- Equalizer APO (https://sourceforge.net/projects/equalizerapo/), which
+  showed how a filter can live inside Windows audio,
+- Slint (https://slint.dev) for the UI toolkit and SignPath Foundation
+  (https://signpath.org) for free code signing.

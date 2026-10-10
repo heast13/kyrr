@@ -313,7 +313,7 @@ component StatusLine inherits HorizontalLayout {
         if (AppState.mic-active && AppState.mic-silent) { return @tr("Your mic delivers pure silence. Muted?"); }
         if (AppState.probe-state == ProbeState.recording) {
             return pick([
-                @tr("Five seconds of fame."),
+                @tr("Ten seconds of fame."),
                 @tr("Noise for science."),
                 @tr("Open-mic night, short edition."),
                 @tr("Shopping-list reading hour."),
@@ -767,7 +767,7 @@ component ToolsSettings inherits Card {
             clicked => { AppState.probe-play(true); }
         }
     }
-    Hint { text: @tr("Records five seconds and plays them twice: raw, then with kyrr. Nothing is saved, promise."); }
+    Hint { text: @tr("Records ten seconds and plays them twice: raw, then with kyrr. Nothing is saved, promise."); }
     if AppState.probe-error != "": Caption { text: AppState.probe-error; color: #e5484d; }
 }
 

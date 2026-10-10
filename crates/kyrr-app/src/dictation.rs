@@ -114,6 +114,9 @@ struct Worker {
     /// download waits for it, both would write the same files.
     download_running: bool,
     download_again: bool,
+    /// The new version of an installed model was fetched without asking;
+    /// once is enough, a cancel or error leaves it to the user.
+    upgrade_started: bool,
     last_used: Instant,
     tx: mpsc::Sender<Command>,
     notify: Notify,
@@ -142,6 +145,7 @@ pub fn spawn(
         download_id: 0,
         download_running: false,
         download_again: false,
+        upgrade_started: false,
         last_used: Instant::now(),
         tx: tx.clone(),
         notify,
@@ -201,8 +205,14 @@ impl Worker {
             return;
         }
         self.model = None;
-        if !self.language.model().is_installed(&self.root) {
-            self.set_state(State::NoModel);
+        let spec = self.language.model();
+        if !spec.is_installed(&self.root) {
+            if !self.upgrade_started && spec.replaces_installed(&self.root) {
+                self.upgrade_started = true;
+                self.start_download();
+            } else {
+                self.set_state(State::NoModel);
+            }
             return;
         }
         self.set_state(State::Loading);
@@ -270,7 +280,11 @@ impl Worker {
                 self.download_running = false;
                 self.download_cancel = None;
                 match result {
-                    Ok(()) | Err(DownloadError::Cancelled) => self.refresh(),
+                    Ok(()) => {
+                        self.language.model().remove_replaced(&self.root);
+                        self.refresh();
+                    }
+                    Err(DownloadError::Cancelled) => self.refresh(),
                     Err(DownloadError::Offline(_)) => self.error("offline"),
                     Err(DownloadError::Server(_)) => self.error("server"),
                     Err(DownloadError::Corrupt(_)) => self.error("corrupt"),

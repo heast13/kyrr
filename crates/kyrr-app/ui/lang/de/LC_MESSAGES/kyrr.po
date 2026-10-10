@@ -305,8 +305,8 @@ msgstr "Vorher"
 msgid "After"
 msgstr "Nachher"
 
-msgid "Records five seconds and plays them twice: raw, then with kyrr. Nothing is saved, promise."
-msgstr "Nimmt fünf Sekunden auf und spielt sie zweimal ab: roh, dann mit kyrr. Gespeichert wird nichts, versprochen."
+msgid "Records ten seconds and plays them twice: raw, then with kyrr. Nothing is saved, promise."
+msgstr "Nimmt zehn Sekunden auf und spielt sie zweimal ab: roh, dann mit kyrr. Gespeichert wird nichts, versprochen."
 
 msgid "General"
 msgstr "Allgemein"
@@ -351,8 +351,8 @@ msgstr "Einstellungen"
 msgid "← Back"
 msgstr "← Zurück"
 
-msgid "Five seconds of fame."
-msgstr "Fünfsekundenruhm."
+msgid "Ten seconds of fame."
+msgstr "Zehn Sekunden Ruhm."
 
 msgid "Noise for science."
 msgstr "Krach für die Wissenschaft."

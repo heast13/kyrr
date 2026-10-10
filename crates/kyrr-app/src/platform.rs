@@ -34,7 +34,7 @@ pub struct Levels {
     pub after: f32,
 }
 
-/// The same five seconds before and after kyrr, mono.
+/// The same take before and after kyrr, mono.
 #[derive(Debug)]
 pub struct Take {
     pub rate: u32,
