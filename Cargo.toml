@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = ["crates/kyrr-denoise"]
+exclude = ["vendor"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/heast13/kyrr"
+
+[workspace.dependencies]
+# DPDFNet engine from HushMic v0.10.2, vendored with the MSVC patches from
+# dpdf-voice. See vendor/hushmic-denoiser/PATCHES.md.
+hushmic-denoiser = { path = "vendor/hushmic-denoiser", features = ["native"] }
+rubato = "5"
+audioadapter-buffers = "5.1"
+hound = "3.5"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
