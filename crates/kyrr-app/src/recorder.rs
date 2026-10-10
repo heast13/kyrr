@@ -28,11 +28,25 @@ fn mono<T: SizedSample>(data: &[T], channels: usize, convert: fn(T) -> f32, out:
     }
 }
 
+/// The input device whose endpoint id ends with `guid` (the microphone kyrr
+/// is attached to, so dictation hears the cleaned signal), else the default.
+fn device(guid: Option<&str>) -> Option<cpal::Device> {
+    let host = cpal::default_host();
+    if let Some(guid) = guid.filter(|g| !g.is_empty()) {
+        let guid = guid.to_ascii_lowercase();
+        let found = host.input_devices().ok().and_then(|mut devices| {
+            devices.find(|d| d.id().is_ok_and(|id| id.id().to_ascii_lowercase().ends_with(&guid)))
+        });
+        if found.is_some() {
+            return found;
+        }
+    }
+    host.default_input_device()
+}
+
 impl Recording {
-    pub fn start() -> Result<Recording, String> {
-        let device = cpal::default_host()
-            .default_input_device()
-            .ok_or("no microphone found")?;
+    pub fn start(microphone: Option<&str>) -> Result<Recording, String> {
+        let device = device(microphone).ok_or("no microphone found")?;
         let supported = device.default_input_config().map_err(|e| e.to_string())?;
         let config = supported.config();
         let channels = config.channels.max(1) as usize;

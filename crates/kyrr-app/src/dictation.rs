@@ -40,6 +40,8 @@ pub enum Command {
     Language(Language),
     Download,
     CancelDownload,
+    /// Endpoint GUID of the microphone to record (the one the filter is on).
+    Microphone(Option<String>),
     KeyDown,
     KeyUp,
     Quit,
@@ -58,6 +60,7 @@ struct Worker {
     enabled: bool,
     model: Option<Dictation>,
     recording: Option<Recording>,
+    microphone: Option<String>,
     download_cancel: Option<Arc<AtomicBool>>,
     /// Number of the current download, so a cancelled one finishing late
     /// does not end a newer one.
@@ -76,6 +79,7 @@ pub fn spawn(root: PathBuf, language: Language, enabled: bool, notify: Notify, t
         enabled,
         model: None,
         recording: None,
+        microphone: None,
         download_cancel: None,
         download_id: 0,
         tx: tx.clone(),
@@ -157,6 +161,7 @@ impl Worker {
                     self.refresh();
                 }
             }
+            Command::Microphone(guid) => self.microphone = guid,
             Command::Download => self.start_download(),
             Command::CancelDownload => {
                 self.cancel_download();
@@ -177,7 +182,7 @@ impl Worker {
                 if self.state != State::Ready {
                     return;
                 }
-                match Recording::start() {
+                match Recording::start(self.microphone.as_deref()) {
                     Ok(rec) => {
                         self.recording = Some(rec);
                         self.set_state(State::Recording);

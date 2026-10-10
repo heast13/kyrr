@@ -133,13 +133,15 @@ impl App {
                 .map(|m| m.name.clone())
                 .unwrap_or_else(|| text(self.language(), "disconnected"))
         };
-        let (fs, mic, detail) = match platform::filter_status() {
-            FilterStatus::NotInstalled => (FilterState::NotInstalled, String::new(), String::new()),
-            FilterStatus::NotAttached => (FilterState::NotAttached, String::new(), String::new()),
-            FilterStatus::Waiting(g) => (FilterState::Checking, name(&g), String::new()),
-            FilterStatus::Running(g, d) => (FilterState::Running, name(&g), d),
-            FilterStatus::Passthrough(g, d) => (FilterState::Passthrough, name(&g), d),
+        let (fs, guid, detail) = match platform::filter_status() {
+            FilterStatus::NotInstalled => (FilterState::NotInstalled, None, String::new()),
+            FilterStatus::NotAttached => (FilterState::NotAttached, None, String::new()),
+            FilterStatus::Waiting(g) => (FilterState::Checking, Some(g), String::new()),
+            FilterStatus::Running(g, d) => (FilterState::Running, Some(g), d),
+            FilterStatus::Passthrough(g, d) => (FilterState::Passthrough, Some(g), d),
         };
+        let mic = guid.as_deref().map(name).unwrap_or_default();
+        let _ = self.worker.send(Command::Microphone(guid));
         if state.get_filter_state() != FilterState::Error || fs != FilterState::NotAttached {
             state.set_filter_state(fs);
         }

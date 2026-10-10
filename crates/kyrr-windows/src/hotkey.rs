@@ -5,7 +5,8 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{mpsc, OnceLock};
 
-use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
+use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
+use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::VK_F9;
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, GetMessageW, SetWindowsHookExW, KBDLLHOOKSTRUCT, LLKHF_INJECTED, MSG, WH_KEYBOARD_LL, WM_KEYDOWN,
@@ -57,7 +58,8 @@ pub fn start() -> Result<mpsc::Receiver<KeyEvent>, String> {
     std::thread::Builder::new()
         .name("kyrr-hotkey".into())
         .spawn(move || {
-            let installed = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook), None, 0) };
+            let module = unsafe { GetModuleHandleW(None) }.ok().map(|m| HINSTANCE(m.0));
+            let installed = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook), module, 0) };
             let _ = ready_tx.send(installed.as_ref().map(|_| ()).map_err(|e| e.message()));
             if installed.is_err() {
                 return;
