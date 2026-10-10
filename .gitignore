@@ -1,6 +1,5 @@
 /target
 /dist
 /models
-*.wav
 /assets
-/models
+*.wav

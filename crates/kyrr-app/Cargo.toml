@@ -20,3 +20,5 @@ windows = { version = "0.62", features = ["Win32_Globalization"] }
 
 [build-dependencies]
 slint-build = "1.18"
+# Icon and version info in kyrr.exe (needs the Windows resource compiler).
+winresource = "0.1"

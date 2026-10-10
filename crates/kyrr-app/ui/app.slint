@@ -262,10 +262,14 @@ export component MainWindow inherits Window {
             }
             HorizontalLayout {
                 spacing: 8px;
-                Caption { text: "kyrr " + AppState.version; vertical-alignment: center; }
-                Rectangle { }
                 Button { text: @tr("Change microphone"); clicked => { AppState.change-microphone(); } }
+                Rectangle { }
                 Button { text: @tr("Quit"); clicked => { AppState.quit(); } }
+            }
+            Caption {
+                text: "kyrr " + AppState.version + " · Made with Slint";
+                horizontal-alignment: center;
+                font-size: 11px;
             }
         }
     }
