@@ -49,12 +49,19 @@ fn main() {
         eprintln!("translation {lang}: {e}");
     }
     let state = ui.global::<AppState>();
-    state.set_version("0.1.0".into());
+    state.set_version(env!("CARGO_PKG_VERSION").into());
+    // Windows names devices in its display language.
+    let mic = if lang == "de" {
+        "Mikrofon (Shure MV7)"
+    } else {
+        "Microphone (Shure MV7)"
+    };
+    state.set_language_index((lang != "de") as i32);
     state.set_microphones(ModelRc::new(VecModel::from(vec![
-        "Mikrofon (Shure MV7)".into(),
+        mic.into(),
         "Headset (Logitech G Pro X)".into(),
     ])));
-    state.set_attached_mic("Mikrofon (Shure MV7)".into());
+    state.set_attached_mic(mic.into());
     state.set_filter_state(FilterState::Running);
     state.set_dictation_state(DictationState::Ready);
     state.set_mic_active(true);
