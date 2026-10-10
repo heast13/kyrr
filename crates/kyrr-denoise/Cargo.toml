@@ -6,6 +6,12 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+# The DPDFNet authors' C engine (INT8, AVX2), about half the CPU of ONNX
+# Runtime. Needs a C compiler; without it only ONNX Runtime is available.
+default = ["native"]
+native = ["hushmic-denoiser/native"]
+
 [dependencies]
 hushmic-denoiser.workspace = true
 rubato.workspace = true

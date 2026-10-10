@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/kyrr-denoise", "crates/kyrr-dictate"]
+members = ["crates/kyrr-apo", "crates/kyrr-common","crates/kyrr-denoise", "crates/kyrr-dictate"]
 exclude = ["vendor"]
 
 [workspace.package]
@@ -11,8 +11,9 @@ repository = "https://github.com/heast13/kyrr"
 
 [workspace.dependencies]
 # DPDFNet engine from HushMic v0.10.2, vendored with the MSVC patches from
-# dpdf-voice. See vendor/hushmic-denoiser/PATCHES.md.
-hushmic-denoiser = { path = "vendor/hushmic-denoiser", features = ["native"] }
+# dpdf-voice. See vendor/hushmic-denoiser/PATCHES.md. The native C engine is
+# switched on through kyrr-denoise's `native` feature.
+hushmic-denoiser = { path = "vendor/hushmic-denoiser" }
 rubato = "5"
 audioadapter-buffers = "5.1"
 hound = "3.5"

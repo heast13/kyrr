@@ -1,0 +1,7 @@
+[package]
+name = "kyrr-common"
+description = "Identifiers and settings shared by kyrr's app, installer and audio filter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true

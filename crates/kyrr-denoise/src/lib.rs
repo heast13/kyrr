@@ -15,7 +15,9 @@ use std::path::{Path, PathBuf};
 use audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler};
 
-pub use hushmic_denoiser::{Denoiser, Engine, Inference, Mode};
+pub use hushmic_denoiser::{Denoiser, Mode};
+#[cfg(feature = "native")]
+pub use hushmic_denoiser::{Engine, Inference};
 use hushmic_denoiser::{StreamDenoiser, HOP, LATENCY_SAMPLES, SAMPLE_RATE};
 
 /// Rate the DPDFNet models run at.
@@ -68,7 +70,11 @@ pub fn load(dir: &Path, model: Model, ort_library: Option<&Path>) -> Result<Deno
                 let ort = ort.ok_or("native engine unavailable and no ONNX Runtime given")?;
                 hushmic_denoiser::init_runtime(&ort).map_err(|e| format!("{}: {e:?}", ort.display()))?;
             }
-            Denoiser::from_file_with(&path, Inference::Auto).map_err(|e| format!("{}: {e:?}", path.display()))
+            #[cfg(feature = "native")]
+            let denoiser = Denoiser::from_file_with(&path, Inference::Auto);
+            #[cfg(not(feature = "native"))]
+            let denoiser = Denoiser::from_file(&path);
+            denoiser.map_err(|e| format!("{}: {e:?}", path.display()))
         })
         .map_err(|e| format!("loader thread: {e}"))?
         .join()
@@ -78,9 +84,9 @@ pub fn load(dir: &Path, model: Model, ort_library: Option<&Path>) -> Result<Deno
 /// Whether the native INT8 engine can run: AVX2 and FMA, and the model's
 /// packed weights next to it (the engine verifies their checksum itself).
 pub fn native_possible(model_path: &Path) -> bool {
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(feature = "native", target_arch = "x86_64"))]
     let cpu = std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma");
-    #[cfg(not(target_arch = "x86_64"))]
+    #[cfg(not(all(feature = "native", target_arch = "x86_64")))]
     let cpu = false;
     cpu && model_path.with_extension("weights.f32").is_file()
 }
