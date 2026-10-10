@@ -9,3 +9,7 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    ignore:
+      # windows-core has to match the version the windows crate uses;
+      # it is bumped by hand together with windows.
+      - dependency-name: windows-core
