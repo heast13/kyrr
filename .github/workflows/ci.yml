@@ -15,6 +15,10 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
+        with:
+          # sherpa-onnx-sys unpacks its prebuilt libraries here; the cache
+          # would otherwise keep its build output but drop the libraries.
+          cache-directories: target/sherpa-onnx-prebuilt
       - name: Fetch assets
         run: python scripts/fetch-assets.py --windows --test
       - name: Format
@@ -28,8 +32,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - name: System libraries
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libfontconfig1-dev libxkbcommon-dev libssl-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          # sherpa-onnx-sys unpacks its prebuilt libraries here; the cache
+          # would otherwise keep its build output but drop the libraries.
+          cache-directories: target/sherpa-onnx-prebuilt
       - name: Fetch assets
         run: python3 scripts/fetch-assets.py --test
       - name: Test
