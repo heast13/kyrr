@@ -453,9 +453,6 @@ msgstr "Wachsamkeitsnickerchen."
 msgid "Stockpiling silence."
 msgstr "Ruhevorratshaltung."
 
-msgid "By heast13 and Claude Opus. Built in silence."
-msgstr "Von heast13 und Claude Opus. In aller Stille gebaut."
-
 msgid "Your mic delivers pure silence. Muted?"
 msgstr "Dein Mikro liefert nur Stille. Stumm geschaltet?"
 
