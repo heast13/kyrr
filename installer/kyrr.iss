@@ -42,6 +42,8 @@ Name: "de"; MessagesFile: "compiler:Languages\German.isl"
 [CustomMessages]
 en.AudioNote=kyrr hooks into Windows sound. For that it changes one Windows setting and briefly restarts the audio service, so sound drops out for a second or two. Uninstalling puts everything back.
 de.AudioNote=kyrr klinkt sich in den Windows-Ton ein. Dafür stellt es eine Windows-Einstellung um und startet kurz den Audiodienst neu, der Ton setzt dabei ein, zwei Sekunden aus. Beim Deinstallieren wird alles zurückgestellt.
+en.UpdateNote=kyrr %1 is already installed and will be updated. Settings and speech models stay.
+de.UpdateNote=kyrr %1 ist schon installiert und wird aktualisiert. Einstellungen und Sprachmodelle bleiben erhalten.
 en.StartKyrr=Start kyrr
 de.StartKyrr=kyrr starten
 en.SetupFailed=kyrr's audio filter could not be set up:%n%1%n%nThe app still works for dictation. Reinstalling usually helps.
@@ -80,14 +82,24 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Filename: "{app}\kyrr.exe"; Description: "{cm:StartKyrr}"; Flags: postinstall nowait runasoriginaluser skipifsilent
 
 [Code]
+const
+  // Where Setup records an installed kyrr (AppId + "_is1").
+  UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6B7C2E0A-4F1D-4C8B-9A5E-2D3F1B6C7A90}_is1';
+
 var
   AudioStopped: Boolean;
   RemoveData: Boolean;
 
-// The note goes on the welcome page instead of a box before it.
+// The notes go on the welcome page instead of a box before it: that an
+// installed kyrr is updated in place, and what happens to the sound.
 procedure InitializeWizard();
+var
+  Note, Version: String;
 begin
-  WizardForm.WelcomeLabel2.Caption := WizardForm.WelcomeLabel2.Caption + #13#10#13#10 + CustomMessage('AudioNote');
+  Note := CustomMessage('AudioNote');
+  if RegQueryStringValue(HKLM, UninstallKey, 'DisplayVersion', Version) then
+    Note := FmtMessage(CustomMessage('UpdateNote'), [Version]) + #13#10#13#10 + Note;
+  WizardForm.WelcomeLabel2.Caption := WizardForm.WelcomeLabel2.Caption + #13#10#13#10 + Note;
 end;
 
 // On an update the audio engine keeps kyrr_apo.dll loaded: stop it (and a
