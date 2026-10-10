@@ -2,55 +2,105 @@
 
 *kyrr* (Old Norse): still, quiet, at rest.
 
-A small, free Windows app that does two things well:
+[![Made with Slint](https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png)](https://slint.dev)
 
-- **Clean microphone.** Real-time neural noise suppression
+A small, free Windows app for your microphone:
+
+- **Remove background noise.** Real-time neural noise suppression
   ([DPDFNet](https://github.com/ceva-ip/DPDFNet)) on your microphone, for
-  every app: Teams, Zoom, Discord, OBS, the browser.
-- **Dictation.** Hold F9, speak, release. The text appears where your cursor
-  is. German and English, on your computer, no account, no cloud.
+  every app: Teams, Zoom, Discord, OBS, the browser. A large model for the
+  cleanest result, a small one for older laptops.
+- **Voice.** Shaping after the noise is gone: a sound (Neutral, Warm,
+  Clear, Bright or your own), even volume, softer S sounds and a cut for
+  low rumble.
+- **Dictation.** Hold F9 (or F8, Pause, right Ctrl; or tap to start and
+  stop), speak, release. The text appears where your cursor is. German and
+  English, on your computer, no account, no cloud. Say "new line" or "neue
+  Zeile" for a line break.
+- **Check.** A live level of what the microphone hears and what apps get,
+  and a five-second test that plays the same take before and after kyrr.
 
 Status: early development, not released yet.
 
+## Install
+
+Windows 10 22H2 or Windows 11, 64-bit. The installer needs administrator
+rights, and sound drops out for a second while kyrr sets up its filter.
+Until the installer is code-signed, Windows SmartScreen warns about it
+("More info", "Run anyway"); compare the installer with its `.sha256` file
+from the release page first.
+
+Uninstalling takes the filter off the microphone, puts the Windows setting
+below back and asks whether to delete the downloaded speech models.
+
 ## How it works
 
-**Clean microphone.** kyrr installs an audio processing object (APO), a
+**Remove background noise.** kyrr installs an audio processing object (APO), a
 filter the Windows audio engine runs on the microphone itself, the way
 Equalizer APO does. Every app gets the cleaned signal without choosing a
 virtual device. If the microphone's driver has its own effect (for example
 beamforming), kyrr keeps it and runs after it. Latency is 60 ms at 48 kHz.
+On processors without AVX2 the filter falls back to ONNX Runtime and kyrr
+switches to the small model once.
 
 Windows only loads audio filters signed by Microsoft unless the setting
 `DisableProtectedAudioDG` is on. kyrr's installer switches it on, as
 Equalizer APO's does, says so before it starts, and restores the previous
-value on uninstall.
+value on uninstall (unless Equalizer APO is installed and still needs it).
+If a Windows or driver update takes kyrr off the microphone, the app notices
+and offers to repair it.
 
-**Dictation.** kyrr records while F9 is held and transcribes locally with
-[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). The speech model is
-downloaded once on first use:
+**Voice.** The same filter can shape the voice, with the chain of
+[Omavoice DPDFNet](https://github.com/heast13/omarchy-omavoice-dpdfnet) and
+its sounds and de-esser levels: a low cut (80 Hz) before the noise filter,
+then three EQ bands (body at 250 Hz, presence at 3 kHz, air above 8 kHz), a
+de-esser on the band above 4 kHz, a compressor (light, medium or strong) and
+a limiter at −1 dBFS. It works with the noise filter switched off too, and
+adds no latency. On by default with a neutral sound, light compression and
+the low cut; Reset brings back the defaults.
+
+**Check.** The filter shares a small block of memory with the app
+(`Global\kyrr-monitor-1`): the level before and after kyrr, and on request
+one five-second take, unprocessed and processed. The audio service writes
+it; users signed in at this computer can read it and ask for a take, which
+only records while an app already uses the microphone. The app plays the
+take, keeps it only in memory and clears it from the shared block.
+
+**Dictation.** kyrr records while the key is held and transcribes locally
+with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (its build without
+text-to-speech). The speech model is downloaded once on first use and let go
+of after a quarter of an hour without dictation:
 
 | Language | Model | Size |
 |---|---|---|
 | German | [primeline/parakeet-primeline](https://huggingface.co/primeline/parakeet-primeline), a German fine-tune of NVIDIA Parakeet; also handles English | 900 MB |
-| English | [NVIDIA parakeet-unified-en-0.6b](https://huggingface.co/nvidia/parakeet-unified-en-0.6b) | 660 MB |
+| English | [NVIDIA parakeet-unified-en-0.6b](https://huggingface.co/nvidia/parakeet-unified-en-0.6b) | 663 MB |
 
 ## Privacy
 
-Audio never leaves your computer. kyrr makes network connections only to
+Audio never leaves your computer. The app makes network connections only to
 download the speech model, from Hugging Face, with every file checked
-against a SHA256 hash built into kyrr.
+against a SHA256 hash built into kyrr. No telemetry, no update check.
+(Building kyrr also downloads its assets and libraries from GitHub.)
 
 ## Building
 
-Windows with Rust (MSVC) and Python 3; for the installer Inno Setup 6.
+Windows with Rust (MSVC), the Visual Studio Build Tools and Python 3; for
+the installer Inno Setup 6.
 
 ```powershell
 python scripts/fetch-assets.py --windows
+$env:SHERPA_ONNX_LIB_DIR = "$PWD\assets\sherpa-onnx\lib"
 cargo build --release -p kyrr -p kyrr-apo
 python scripts/package.py
 ```
 
-The cores (`kyrr-denoise`, `kyrr-dictate`) build and test on Linux too;
+`SHERPA_ONNX_LIB_DIR` points the build at sherpa-onnx's libraries without
+text-to-speech; the default ones bundle espeak-ng (GPL-3.0).
+`scripts/check-binaries.py` (run by `package.py` and CI) refuses a build
+that contains it, or a filter DLL that needs the Visual C++ runtime.
+
+The cores (`kyrr-denoise`, `kyrr-voice`, `kyrr-dictate`) build and test on Linux too;
 `cargo run -p kyrr --example preview -- <dir>` renders the window headless.
 
 ## License
@@ -61,4 +111,7 @@ kyrr is licensed under either of
 - MIT license ([LICENSE-MIT](LICENSE-MIT))
 
 at your option. Third-party components and models keep their own licenses,
-see [THIRD_PARTY.md](THIRD_PARTY.md). Made with [Slint](https://slint.dev).
+see [THIRD_PARTY.md](THIRD_PARTY.md); the app shows the model credits under
+Settings, About. kyrr's window is made with [Slint](https://slint.dev) under
+its royalty-free license, which asks for the badge at the top of this page.
+Security issues: see [SECURITY.md](SECURITY.md).
