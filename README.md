@@ -20,10 +20,11 @@ A small, free Windows app for your microphone:
 - **Check.** A live level of what the microphone hears and what apps get,
   and a five-second test that plays the same take before and after kyrr.
 
-<p>
-  <img src="docs/screenshots/main.png" width="285" alt="kyrr's window: noise filter, voice and dictation, each with one switch">
-  <img src="docs/screenshots/settings.png" width="285" alt="Settings: noise strength and model, voice sound, volume, S sounds and low cut">
-  <img src="docs/screenshots/settings-more.png" width="285" alt="Settings: dictation key, level check with before/after test, language, autostart, about">
+<p align="center">
+  <img src="docs/screenshots/main.png" width="380" alt="kyrr's window: noise filter, voice and dictation, each with one switch">
+</p>
+<p align="center">
+  <img src="docs/screenshots/settings.png" width="760" alt="Settings: noise strength and model, voice sound, volume, S sounds, low cut, dictation key, level check with before/after test, language and autostart">
 </p>
 
 Status: early, first public release (0.2.0).
