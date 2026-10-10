@@ -37,4 +37,4 @@ windows = { version = "0.62", features = [
     "Win32_UI_Shell_PropertiesSystem",
 ] }
 # The `implement` macro expands to paths in windows-core.
-windows-core = "0.62"
+windows-core = "0.100"
