@@ -1,0 +1,2 @@
+# Upstream HushMic is formatted with rustfmt defaults; this file keeps
+# kyrr's wider max_width from applying here.

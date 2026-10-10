@@ -26,3 +26,8 @@ Changes for the `x86_64-pc-windows-msvc` target, other targets unchanged:
 - `native/README.md`: note about the modified files added at the top.
 - `tests/` and `examples/` are upstream as-is; they need HushMic's asset
   script and fixtures and are not built or run in dpdf-voice.
+
+## kyrr
+
+- `rustfmt.toml` added (empty settings) so the workspace's `max_width = 120`
+  does not reformat the vendored sources.
