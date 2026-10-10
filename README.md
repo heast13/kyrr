@@ -31,6 +31,10 @@ Status: early, first public release (0.2.0).
 
 ## Install
 
+Download `kyrr-setup-<version>.exe` from the [latest
+release](https://github.com/heast13/kyrr/releases/latest) and run it (see the
+[code signing policy](#code-signing-policy)).
+
 Windows 10 22H2 or Windows 11, 64-bit. The installer needs administrator
 rights, and sound drops out for a second while kyrr sets up its filter.
 Until the installer is code-signed, Windows SmartScreen warns about it

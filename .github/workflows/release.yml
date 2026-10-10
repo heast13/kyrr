@@ -119,4 +119,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create $env:TAG --draft --title "kyrr $env:TAG" --notes-file CHANGELOG.md (Get-ChildItem dist\kyrr-setup-*).FullName
+        run: |
+          $signed = if ($env:SIGN -eq 'true') { '--signed' } else { $null }
+          python scripts/release-notes.py $env:VERSION $signed --out dist/notes.md
+          gh release create $env:TAG --draft --title "kyrr $env:TAG" --notes-file dist/notes.md (Get-ChildItem dist\kyrr-setup-*).FullName
