@@ -11,6 +11,8 @@
   in every app (Windows 11 Notepad dropped words), and "new line" makes a
   new line in chat apps instead of sending the message. The clipboard is put
   back afterwards, and the dictated text stays out of the clipboard history.
+- Line breaks also with "nächste Zeile", "nächster Absatz", "Zeilenumbruch",
+  "next line", "next paragraph", "newline" and "line break".
 - The installer thanks the projects kyrr builds on, on its last page and in
   the NOTICE file next to the app.
 

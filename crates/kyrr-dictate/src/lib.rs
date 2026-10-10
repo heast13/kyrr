@@ -94,11 +94,20 @@ fn tidy(text: &str) -> String {
 }
 
 /// Spoken line breaks, in both languages: what is said and what is typed.
-const COMMANDS: [(&str, &str); 4] = [
+/// The window names the first of each; the others are what people say
+/// without thinking about it.
+const COMMANDS: [(&str, &str); 11] = [
     ("neuer absatz", "\n\n"),
+    ("nächster absatz", "\n\n"),
     ("neue zeile", "\n"),
+    ("nächste zeile", "\n"),
+    ("zeilenumbruch", "\n"),
     ("new paragraph", "\n\n"),
+    ("next paragraph", "\n\n"),
     ("new line", "\n"),
+    ("next line", "\n"),
+    ("newline", "\n"),
+    ("line break", "\n"),
 ];
 
 /// Replaces spoken commands ("neue Zeile", "new paragraph") with line
@@ -154,7 +163,15 @@ mod tests {
             commands("First point. New line. Second point."),
             "First point.\nSecond point."
         );
+        assert_eq!(commands("Hallo, nächste Zeile, Tschüss."), "Hallo\nTschüss.");
+        assert_eq!(commands("Eins. Nächster Absatz. Zwei."), "Eins.\n\nZwei.");
+        assert_eq!(commands("Eins, Zeilenumbruch, zwei."), "Eins\nzwei.");
+        assert_eq!(commands("One. Next line. Two."), "One.\nTwo.");
         assert_eq!(commands("Die neue Zeilenlänge passt."), "Die neue Zeilenlänge passt.");
+        assert_eq!(
+            commands("In der nächsten Zeile steht es."),
+            "In der nächsten Zeile steht es."
+        );
         assert_eq!(commands("Kein Befehl hier."), "Kein Befehl hier.");
     }
 
