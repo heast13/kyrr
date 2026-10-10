@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.1 (unreleased)
+## 0.2.1 (2026-10-10)
 
 - Dictation in German works on older processors too (Intel before
   Ice Lake/Alder Lake, AMD before Zen 4). On these it typed nothing or a
