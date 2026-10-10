@@ -1,0 +1,33 @@
+name: winget
+
+# Opens a pull request on microsoft/winget-pkgs for every published release,
+# once the first version of heast13.kyrr is in winget (submitted by hand from
+# packaging/winget/). Needs the secret WINGET_TOKEN: a classic token of
+# heast13 with the public_repo scope, and a fork of microsoft/winget-pkgs
+# under heast13.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to submit, e.g. v0.3.0
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    runs-on: windows-latest
+    env:
+      HAS_TOKEN: ${{ secrets.WINGET_TOKEN != '' }}
+    steps:
+      - uses: vedantmgoyal9/winget-releaser@v2
+        if: env.HAS_TOKEN == 'true'
+        with:
+          identifier: heast13.kyrr
+          # The versioned installer, not the kyrr-setup.exe copy.
+          installers-regex: 'kyrr-setup-[0-9.]+\.exe$'
+          release-tag: ${{ inputs.tag || github.event.release.tag_name }}
+          token: ${{ secrets.WINGET_TOKEN }}

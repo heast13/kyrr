@@ -122,4 +122,8 @@ jobs:
         run: |
           $signed = if ($env:SIGN -eq 'true') { '--signed' } else { $null }
           python scripts/release-notes.py $env:VERSION $signed --out dist/notes.md
-          gh release create $env:TAG --draft --title "kyrr $env:TAG" --notes-file dist/notes.md (Get-ChildItem dist\kyrr-setup-*).FullName
+          # Also without the version, so releases/latest/download/kyrr-setup.exe
+          # always fetches the newest one.
+          Copy-Item "dist\kyrr-setup-$env:VERSION.exe" dist\kyrr-setup.exe
+          gh release create $env:TAG --draft --title "kyrr $env:TAG" --notes-file dist/notes.md `
+            "dist\kyrr-setup-$env:VERSION.exe" "dist\kyrr-setup-$env:VERSION.exe.sha256" dist\kyrr-setup.exe

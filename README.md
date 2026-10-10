@@ -2,6 +2,10 @@
 
 *kyrr* (Old Norse): still, quiet, at rest.
 
+<p>
+  <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-setup.exe"><img src="https://img.shields.io/github/v/release/heast13/kyrr?label=Download%20for%20Windows&style=for-the-badge&color=005fb8" alt="Download kyrr for Windows"></a>
+</p>
+
 [![Made with Slint](https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png)](https://slint.dev)
 
 A small, free Windows app for your microphone:
@@ -28,6 +32,17 @@ A small, free Windows app for your microphone:
 </p>
 
 Status: early, first public release (0.2.0).
+
+## Compared with
+
+| | kyrr | NVIDIA Broadcast | Krisp |
+|---|---|---|---|
+| Price | free, open source | free | subscription after a free trial |
+| Needs | any 64-bit PC with Windows 10 or 11 | an NVIDIA RTX graphics card | an account |
+| Where it works | on the microphone itself: every app, nothing to choose | apps set to its virtual microphone | apps set to its virtual microphone |
+
+On top, kyrr dictates into any app, on your computer. As far as we know in
+October 2026; corrections welcome.
 
 ## Install
 
