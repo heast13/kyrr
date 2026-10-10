@@ -8,9 +8,17 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   installer:
     runs-on: windows-latest
+    permissions:
+      # Only to create the draft release for a tag.
+      contents: write
+    env:
+      SHERPA_ONNX_LIB_DIR: ${{ github.workspace }}\assets\sherpa-onnx\lib
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -35,4 +43,5 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create ${{ github.ref_name }} --draft --title "kyrr ${{ github.ref_name }}" --notes "Draft" (Get-ChildItem dist\kyrr-setup-*).FullName
+          TAG: ${{ github.ref_name }}
+        run: gh release create $env:TAG --draft --title "kyrr $env:TAG" --notes-file CHANGELOG.md (Get-ChildItem dist\kyrr-setup-*).FullName

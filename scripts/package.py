@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Stages the release files and builds the installer (Windows).
 
-Run `python scripts/fetch-assets.py --windows` and
-`cargo build --release -p kyrr -p kyrr-apo` first.
+Run `python scripts/fetch-assets.py --windows` and, with SHERPA_ONNX_LIB_DIR
+set to assets/sherpa-onnx/lib, `cargo build --release -p kyrr -p kyrr-apo`
+first. The binaries are checked (scripts/check-binaries.py) before staging.
 
   dist/stage/                       everything the installer ships
   dist/kyrr-setup-<version>.exe     the installer (needs Inno Setup 6)
@@ -32,7 +33,28 @@ def version() -> str:
     return re.search(r'^version = "(.+)"', text, re.M).group(1)
 
 
+# The Visual C++ runtime onnxruntime.dll needs (only on CPUs without AVX2/FMA);
+# shipped next to it, app-local, as the Visual Studio license allows.
+VC_RUNTIME = ["vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "msvcp140_1.dll"]
+
+
+def vc_runtime_dir() -> Path:
+    vswhere = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / (
+        "Microsoft Visual Studio/Installer/vswhere.exe"
+    )
+    found = subprocess.run(
+        [str(vswhere), "-latest", "-products", "*", "-find", "VC/Redist/MSVC/*/x64/Microsoft.VC*.CRT"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    if not found:
+        sys.exit("Visual C++ redistributable files not found (Visual Studio Build Tools)")
+    return Path(found[-1])
+
+
 def stage() -> None:
+    subprocess.run([sys.executable, str(ROOT / "scripts" / "check-binaries.py")], check=True)
     shutil.rmtree(STAGE, ignore_errors=True)
     licenses = STAGE / "licenses"
     licenses.mkdir(parents=True)
@@ -47,6 +69,9 @@ def stage() -> None:
         "dpdfnet2_48khz_hr.weights.f32",
     ):
         shutil.copy2(ASSETS / f, STAGE)
+    runtime = vc_runtime_dir()
+    for f in VC_RUNTIME:
+        shutil.copy2(runtime / f, STAGE)
     for f in ("LICENSE-MIT", "LICENSE-APACHE", "THIRD_PARTY.md"):
         shutil.copy2(ROOT / f, STAGE)
     for f in ("LICENSE-onnxruntime.txt", "ThirdPartyNotices-onnxruntime.txt"):

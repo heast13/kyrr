@@ -3,3 +3,15 @@
 /models
 /assets
 *.wav
+*.log
+*.pdb
+.env
+.vscode/
+.idea/
+# Model export work (tools/export-primeline): checkpoints, exports, venvs.
+/tools/**/venv/
+/tools/**/fp32/
+/tools/**/de-primeline/
+*.nemo
+/*.onnx
+/*.weights.f32

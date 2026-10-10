@@ -20,8 +20,13 @@ DisableDirPage=yes
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-MinVersion=10.0.17763
+; Windows 10 22H2 or newer; older builds are out of support.
+MinVersion=10.0.19045
 WizardStyle=modern
+; The welcome page carries the note about the audio setting.
+DisableWelcomePage=no
+; The Windows display language picks German or English, no extra question.
+ShowLanguageDialog=auto
 SetupIconFile=..\crates\kyrr-app\ui\icons\kyrr.ico
 UninstallDisplayIcon={app}\kyrr.exe
 OutputDir=..\dist
@@ -35,15 +40,26 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "de"; MessagesFile: "compiler:Languages\German.isl"
 
 [CustomMessages]
-en.AudioNote=kyrr adds a noise filter to the Windows audio system. Like Equalizer APO, it switches on the Windows setting that allows audio filters not signed by Microsoft. Uninstalling kyrr restores the setting.
-de.AudioNote=kyrr fügt dem Windows-Audiosystem einen Rauschfilter hinzu. Wie Equalizer APO schaltet es dafür die Windows-Einstellung ein, die nicht von Microsoft signierte Audiofilter erlaubt. Beim Deinstallieren stellt kyrr die Einstellung wieder her.
+en.AudioNote=kyrr hooks into Windows sound. For that it changes one Windows setting and briefly restarts the audio service, so sound drops out for a second or two. Uninstalling puts everything back.
+de.AudioNote=kyrr klinkt sich in den Windows-Ton ein. Dafür stellt es eine Windows-Einstellung um und startet kurz den Audiodienst neu, der Ton setzt dabei ein, zwei Sekunden aus. Beim Deinstallieren wird alles zurückgestellt.
 en.StartKyrr=Start kyrr
 de.StartKyrr=kyrr starten
+en.SetupFailed=kyrr's audio filter could not be set up:%n%1%n%nThe app still works for dictation. Reinstalling usually helps.
+de.SetupFailed=Der Audiofilter von kyrr ließ sich nicht einrichten:%n%1%n%nDiktieren geht trotzdem. Neu installieren hilft meistens.
+en.RemoveData=Also delete the downloaded speech models (up to 900 MB) and kyrr's settings?%n%nSound drops out for a second while kyrr's filter is removed.
+de.RemoveData=Auch die heruntergeladenen Sprachmodelle (bis zu 900 MB) und die Einstellungen von kyrr löschen?%n%nDer Ton setzt kurz aus, während der Filter entfernt wird.
+en.UninstallFailed=Not everything could be removed:%n%1
+de.UninstallFailed=Nicht alles ließ sich entfernen:%n%1
 
 [Files]
 Source: "{#Stage}\kyrr.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\kyrr_apo.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\onnxruntime.dll"; DestDir: "{app}"; Flags: ignoreversion
+; The Visual C++ runtime onnxruntime.dll needs, app-local.
+Source: "{#Stage}\vcruntime140.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Stage}\vcruntime140_1.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Stage}\msvcp140.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Stage}\msvcp140_1.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\dpdfnet8_48khz_hr.onnx"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\dpdfnet8_48khz_hr.weights.f32"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\dpdfnet2_48khz_hr.onnx"; DestDir: "{app}"; Flags: ignoreversion
@@ -61,32 +77,88 @@ Name: "{autoprograms}\kyrr"; Filename: "{app}\kyrr.exe"
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "kyrr"; Flags: dontcreatekey uninsdeletevalue
 
 [Run]
-Filename: "{app}\kyrr.exe"; Parameters: "--setup install ""{app}\kyrr_apo.dll"""; StatusMsg: "Setting up the audio filter..."; Flags: runhidden waituntilterminated
-Filename: "{sys}\net.exe"; Parameters: "start audiosrv"; Flags: runhidden waituntilterminated
 Filename: "{app}\kyrr.exe"; Description: "{cm:StartKyrr}"; Flags: postinstall nowait runasoriginaluser skipifsilent
 
-[UninstallRun]
-Filename: "{sys}\taskkill.exe"; Parameters: "/f /im kyrr.exe"; Flags: runhidden waituntilterminated; RunOnceId: "StopKyrr"
-Filename: "{app}\kyrr.exe"; Parameters: "--setup uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveFilter"
-
-[UninstallDelete]
-Type: filesandordirs; Name: "{localappdata}\kyrr"
-Type: filesandordirs; Name: "{userappdata}\kyrr"
-
 [Code]
-function InitializeSetup(): Boolean;
+var
+  AudioStopped: Boolean;
+  RemoveData: Boolean;
+
+// The note goes on the welcome page instead of a box before it.
+procedure InitializeWizard();
 begin
-  MsgBox(CustomMessage('AudioNote'), mbInformation, MB_OK);
-  Result := True;
+  WizardForm.WelcomeLabel2.Caption := WizardForm.WelcomeLabel2.Caption + #13#10#13#10 + CustomMessage('AudioNote');
 end;
 
-// The audio engine keeps kyrr_apo.dll loaded; stop it (and a running kyrr)
-// so an update can replace the files. [Run] starts the audio service again.
+// On an update the audio engine keeps kyrr_apo.dll loaded: stop it (and a
+// running kyrr) so the files can be replaced. A first install leaves the
+// sound alone.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Code: Integer;
 begin
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/f /im kyrr.exe', '', SW_HIDE, ewWaitUntilTerminated, Code);
-  Exec(ExpandConstant('{sys}\net.exe'), 'stop audiosrv /y', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  if FileExists(ExpandConstant('{app}\kyrr_apo.dll')) then
+  begin
+    Exec(ExpandConstant('{sys}\net.exe'), 'stop audiosrv /y', '', SW_HIDE, ewWaitUntilTerminated, Code);
+    AudioStopped := True;
+  end;
   Result := '';
+end;
+
+procedure StartAudio();
+var
+  Code: Integer;
+begin
+  if AudioStopped then
+  begin
+    Exec(ExpandConstant('{sys}\net.exe'), 'start audiosrv', '', SW_HIDE, ewWaitUntilTerminated, Code);
+    AudioStopped := False;
+  end;
+end;
+
+// Registers the filter (kyrr finds its own DLL; it takes no path) and says
+// so when that fails, instead of a quiet "finished".
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Code: Integer;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    if not Exec(ExpandConstant('{app}\kyrr.exe'), '--setup install', '', SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then
+      MsgBox(FmtMessage(CustomMessage('SetupFailed'), [IntToStr(Code)]), mbError, MB_OK);
+    StartAudio();
+  end;
+end;
+
+// Whatever happened (cancelled, failed), the sound comes back.
+procedure DeinitializeSetup();
+begin
+  StartAudio();
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  // A silent uninstall keeps the models (no one to ask).
+  RemoveData := not UninstallSilent and (MsgBox(CustomMessage('RemoveData'), mbConfirmation, MB_YESNO) = IDYES);
+  Result := True;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Code: Integer;
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/f /im kyrr.exe', '', SW_HIDE, ewWaitUntilTerminated, Code);
+    // Takes the filter off every microphone and restarts the audio
+    // service; must run while kyrr.exe still exists.
+    if not Exec(ExpandConstant('{app}\kyrr.exe'), '--setup uninstall', '', SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then
+      MsgBox(FmtMessage(CustomMessage('UninstallFailed'), [IntToStr(Code)]), mbError, MB_OK);
+  end;
+  if (CurUninstallStep = usPostUninstall) and RemoveData then
+  begin
+    DelTree(ExpandConstant('{localappdata}\kyrr'), True, True, True);
+    DelTree(ExpandConstant('{userappdata}\kyrr'), True, True, True);
+  end;
 end;

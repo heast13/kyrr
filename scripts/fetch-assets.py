@@ -5,6 +5,10 @@
   HushMic v0.10.2 release
 - ONNX Runtime 1.27.0 for Windows (Microsoft, MIT), the fallback engine on
   CPUs without AVX2/FMA; only with --windows
+- sherpa-onnx 1.13.8 static libraries *without* text-to-speech (Apache-2.0),
+  so kyrr.exe links no GPL code (the default build bundles espeak-ng);
+  only with --windows. Build with SHERPA_ONNX_LIB_DIR pointing at
+  assets/sherpa-onnx/lib (CI and package.py check it)
 - two short speech clips from the sherpa-onnx test assets for the dictation
   tests; only with --test
 
@@ -12,8 +16,12 @@ Standard library only, so it runs the same on Linux and Windows.
 """
 
 import hashlib
+import os
 import shutil
+import subprocess
 import sys
+import tarfile
+import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -33,6 +41,15 @@ TEST_AUDIO = [
     ("de.wav", "36d3c4845b9808a1656a2a2e92d884590e2db94389e6fe559643291ae0cd3710"),
     ("en.wav", "148b936b43ce7c546a866e64da059f0458aee2d65e617f16e9d94f06e8d99ed6"),
 ]
+SHERPA_LIB = (
+    "sherpa-onnx-v1.13.8-win-x64-static-MT-Release-no-tts-lib.tar.bz2",
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/"
+    "sherpa-onnx-v1.13.8-win-x64-static-MT-Release-no-tts-lib.tar.bz2",
+    "f0aa074ddc39553b30208b53e84c12275d09702911c9faa8d34fa932428e4641",
+)
+# sherpa-onnx-sys always links these text-to-speech libraries; without
+# text-to-speech nothing references them, so empty stand-ins do.
+SHERPA_STUBS = ["espeak-ng", "piper_phonemize", "ucd"]
 ORT_ZIP = (
     "onnxruntime-win-x64-1.27.0.zip",
     "https://github.com/microsoft/onnxruntime/releases/download/v1.27.0/onnxruntime-win-x64-1.27.0.zip",
@@ -85,12 +102,51 @@ def extract_ort(zip_path: Path) -> None:
     print("OK  onnxruntime.dll")
 
 
+def msvc_tool(name: str) -> Path:
+    vswhere = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / (
+        "Microsoft Visual Studio/Installer/vswhere.exe"
+    )
+    found = subprocess.run(
+        [str(vswhere), "-latest", "-products", "*", "-find", f"VC/Tools/MSVC/**/bin/Hostx64/x64/{name}"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    if not found:
+        sys.exit(f"MSVC {name} not found (Visual Studio Build Tools with C++ needed)")
+    return Path(found[-1])
+
+
+def extract_sherpa(archive: Path) -> None:
+    lib = ASSETS / "sherpa-onnx" / "lib"
+    shutil.rmtree(lib.parent, ignore_errors=True)
+    lib.mkdir(parents=True)
+    with tarfile.open(archive) as t:
+        for member in t.getmembers():
+            if member.isfile() and member.name.endswith(".lib"):
+                member.name = Path(member.name).name
+                t.extract(member, lib, filter="data")
+    with tempfile.TemporaryDirectory() as tmp:
+        definition = Path(tmp) / "stub.def"
+        definition.write_text("LIBRARY kyrr_stub\nEXPORTS\n", encoding="ascii")
+        stub = Path(tmp) / "stub.lib"
+        subprocess.run(
+            [str(msvc_tool("lib.exe")), "/NOLOGO", f"/DEF:{definition}", "/MACHINE:X64", f"/OUT:{stub}"],
+            check=True,
+            capture_output=True,
+        )
+        for name in SHERPA_STUBS:
+            shutil.copy2(stub, lib / f"{name}.lib")
+    print(f"OK  sherpa-onnx without text-to-speech: SHERPA_ONNX_LIB_DIR={lib}")
+
+
 def main() -> None:
     ASSETS.mkdir(exist_ok=True)
     for name, digest in MODELS:
         fetch(name, f"{HUSHMIC}/{name}", digest)
     if "--windows" in sys.argv[1:]:
         extract_ort(fetch(*ORT_ZIP))
+        extract_sherpa(fetch(*SHERPA_LIB))
     if "--test" in sys.argv[1:]:
         for name, digest in TEST_AUDIO:
             fetch(name, f"{SHERPA}/{name}", digest, ASSETS / "test-audio")

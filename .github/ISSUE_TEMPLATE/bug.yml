@@ -1,0 +1,29 @@
+name: Something does not work
+description: kyrr misbehaves, crashes or does nothing.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 25H2
+    validations:
+      required: true
+  - type: input
+    id: microphone
+    attributes:
+      label: Microphone (and whether another audio tool like Equalizer APO is installed)
+  - type: textarea
+    id: details
+    attributes:
+      label: Details from kyrr
+      description: >
+        Settings, Tools: what the status line says. If the filter is involved, the log
+        C:\Windows\ServiceProfiles\LocalService\AppData\Local\Temp\kyrr-apo.log
+        (needs admin rights to open) helps a lot. It contains events only, no audio.
