@@ -5,6 +5,8 @@
   HushMic v0.10.2 release
 - ONNX Runtime 1.27.0 for Windows (Microsoft, MIT), the fallback engine on
   CPUs without AVX2/FMA; only with --windows
+- two short speech clips from the sherpa-onnx test assets for the dictation
+  tests; only with --test
 
 Standard library only, so it runs the same on Linux and Windows.
 """
@@ -26,6 +28,11 @@ MODELS = [
     ("dpdfnet8_48khz_hr.weights.f32", "5a5bb67a8619090c54dc2793536fe813fe38123b236d445f3433aafe3075529d"),
     ("dpdfnet2_48khz_hr.weights.f32", "cb7248b8fccbff7b32f254ec2ed0061e604514b2ccd98d997cd081a876424e7b"),
 ]
+SHERPA = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models"
+TEST_AUDIO = [
+    ("de.wav", "36d3c4845b9808a1656a2a2e92d884590e2db94389e6fe559643291ae0cd3710"),
+    ("en.wav", "148b936b43ce7c546a866e64da059f0458aee2d65e617f16e9d94f06e8d99ed6"),
+]
 ORT_ZIP = (
     "onnxruntime-win-x64-1.27.0.zip",
     "https://github.com/microsoft/onnxruntime/releases/download/v1.27.0/onnxruntime-win-x64-1.27.0.zip",
@@ -41,8 +48,9 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def fetch(name: str, url: str, digest: str) -> Path:
-    dest = ASSETS / name
+def fetch(name: str, url: str, digest: str, folder: Path = ASSETS) -> Path:
+    folder.mkdir(exist_ok=True)
+    dest = folder / name
     if dest.is_file() and sha256(dest) == digest:
         print(f"OK  {name}")
         return dest
@@ -83,6 +91,9 @@ def main() -> None:
         fetch(name, f"{HUSHMIC}/{name}", digest)
     if "--windows" in sys.argv[1:]:
         extract_ort(fetch(*ORT_ZIP))
+    if "--test" in sys.argv[1:]:
+        for name, digest in TEST_AUDIO:
+            fetch(name, f"{SHERPA}/{name}", digest, ASSETS / "test-audio")
 
 
 if __name__ == "__main__":

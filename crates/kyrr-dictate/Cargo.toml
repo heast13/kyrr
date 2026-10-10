@@ -1,0 +1,17 @@
+[package]
+name = "kyrr-dictate"
+description = "Local speech to text for German and English"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+sherpa-onnx = "=1.13.8"
+ureq = "3"
+sha2 = "0.11"
+rubato.workspace = true
+audioadapter-buffers.workspace = true
+
+[dev-dependencies]
+hound.workspace = true

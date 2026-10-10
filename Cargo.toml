@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/kyrr-denoise"]
+members = ["crates/kyrr-denoise", "crates/kyrr-dictate"]
 exclude = ["vendor"]
 
 [workspace.package]
