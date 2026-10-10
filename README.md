@@ -85,6 +85,25 @@ updates", one request to GitHub for the newest version number. Nothing is
 downloaded or installed by itself. No telemetry.
 (Building kyrr also downloads its assets and libraries from GitHub.)
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io),
+certificate by [SignPath Foundation](https://signpath.org).
+
+- Signed are kyrr's own files: `kyrr.exe`, `kyrr_apo.dll` and the installer
+  `kyrr-setup-<version>.exe`, each built by the [release
+  workflow](.github/workflows/release.yml) on GitHub from a version tag of
+  this repository. Third-party files keep the signatures of their authors
+  (ONNX Runtime and the Visual C++ runtime by Microsoft); models are data.
+- Committers and reviewers: [heast13](https://github.com/heast13).
+  Approvers, who approve every signing request: [heast13](https://github.com/heast13).
+- Privacy policy: see [Privacy](#privacy). kyrr sends no data about you or
+  your computer anywhere; it only downloads the speech model from Hugging
+  Face and, when you click "Check for updates", asks GitHub for the newest
+  version number. Their privacy policies apply to those requests:
+  [Hugging Face](https://huggingface.co/privacy),
+  [GitHub](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
+
 ## Building
 
 Windows with Rust (MSVC), the Visual Studio Build Tools and Python 3; for

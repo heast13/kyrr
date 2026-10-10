@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.2.0 (unreleased)
 
-First release.
+First public release.
 
 - Remove background noise: DPDFNet inside the Windows audio engine, for every
   app; strength gentle/medium/strong, a large and a small model.

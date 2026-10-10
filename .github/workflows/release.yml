@@ -2,6 +2,14 @@ name: release
 
 # Builds the Windows installer on every push to main (as an artifact) and
 # for tags v* as a draft release.
+#
+# Tags are code signed through SignPath (free for open source, certificate by
+# SignPath Foundation) once the repository variable SIGNPATH_ORGANIZATION_ID
+# is set: first kyrr.exe and kyrr_apo.dll, then the installer built from
+# them. Every signing request waits for a manual approval on SignPath.
+# Settings: secret SIGNPATH_API_TOKEN, variables SIGNPATH_ORGANIZATION_ID,
+# SIGNPATH_PROJECT_SLUG, SIGNPATH_SIGNING_POLICY_SLUG; the artifact
+# configurations are in installer/signpath/.
 on:
   push:
     branches: [main]
@@ -17,22 +25,89 @@ jobs:
     permissions:
       # Only to create the draft release for a tag.
       contents: write
+      # SignPath reads the workflow run and downloads the artifacts.
+      actions: read
     env:
       SHERPA_ONNX_LIB_DIR: ${{ github.workspace }}\assets\sherpa-onnx\lib
+      SIGN: ${{ startsWith(github.ref, 'refs/tags/v') && vars.SIGNPATH_ORGANIZATION_ID != '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           cache-directories: target/sherpa-onnx-prebuilt
+      - name: Check the tag matches the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ("v$version" -ne $env:GITHUB_REF_NAME) { throw "tag $env:GITHUB_REF_NAME does not match version $version" }
+          "VERSION=$version" >> $env:GITHUB_ENV
       - name: Fetch assets
         run: python scripts/fetch-assets.py --windows
       - name: Build
         run: cargo build --release --locked -p kyrr -p kyrr-apo
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
-      - name: Package
-        run: python scripts/package.py
+      - name: Stage
+        run: python scripts/package.py --stage-only
+
+      - name: Upload binaries for signing
+        id: unsigned-binaries
+        if: env.SIGN == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: kyrr-unsigned-binaries
+          path: |
+            dist/stage/kyrr.exe
+            dist/stage/kyrr_apo.dll
+      - name: Sign binaries
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: binaries
+          github-artifact-id: ${{ steps.unsigned-binaries.outputs.artifact-id }}
+          parameters: |
+            version: "${{ env.VERSION }}"
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: dist/signed-binaries
+      - name: Use the signed binaries
+        if: env.SIGN == 'true'
+        run: Copy-Item dist\signed-binaries\kyrr.exe, dist\signed-binaries\kyrr_apo.dll dist\stage -Force
+
+      - name: Build the installer
+        run: python scripts/package.py --installer-only
+
+      - name: Upload installer for signing
+        id: unsigned-installer
+        if: env.SIGN == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: kyrr-unsigned-installer
+          path: dist/kyrr-setup-*.exe
+      - name: Sign installer
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: installer
+          github-artifact-id: ${{ steps.unsigned-installer.outputs.artifact-id }}
+          parameters: |
+            version: "${{ env.VERSION }}"
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: dist/signed-installer
+      - name: Use the signed installer
+        if: env.SIGN == 'true'
+        run: Copy-Item dist\signed-installer\kyrr-setup-*.exe dist -Force
+
+      - name: Checksum
+        run: python scripts/package.py --checksum-only
       - uses: actions/upload-artifact@v7
         with:
           name: kyrr-installer

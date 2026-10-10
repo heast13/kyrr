@@ -5,6 +5,10 @@ Run `python scripts/fetch-assets.py --windows` and, with SHERPA_ONNX_LIB_DIR
 set to assets/sherpa-onnx/lib, `cargo build --release -p kyrr -p kyrr-apo`
 first. The binaries are checked (scripts/check-binaries.py) before staging.
 
+  --stage-only      only stage (CI signs the binaries in dist/stage next)
+  --installer-only  only build the installer from dist/stage
+  --checksum-only   only write the .sha256 (CI, after signing the installer)
+
   dist/stage/                       everything the installer ships
   dist/kyrr-setup-<version>.exe     the installer (needs Inno Setup 6)
   dist/kyrr-setup-<version>.exe.sha256
@@ -90,19 +94,29 @@ def build_installer(ver: str) -> Path:
         [str(iscc), f"/DAppVersion={ver}", f"/DStage={STAGE}", str(ROOT / "installer" / "kyrr.iss")],
         check=True,
     )
-    exe = DIST / f"kyrr-setup-{ver}.exe"
+    return DIST / f"kyrr-setup-{ver}.exe"
+
+
+def write_checksum(exe: Path) -> None:
     digest = hashlib.sha256(exe.read_bytes()).hexdigest()
     # LF line ending so `sha256sum -c` works everywhere.
     (DIST / f"{exe.name}.sha256").write_text(f"{digest}  {exe.name}\n", encoding="utf-8", newline="\n")
-    return exe
 
 
 def main() -> None:
-    stage()
-    if "--stage-only" in sys.argv[1:]:
-        print(STAGE)
+    args = sys.argv[1:]
+    if "--checksum-only" in args:
+        write_checksum(DIST / f"kyrr-setup-{version()}.exe")
         return
-    print(build_installer(version()))
+    if "--installer-only" not in args:
+        stage()
+        if "--stage-only" in args:
+            print(STAGE)
+            return
+    exe = build_installer(version())
+    if "--installer-only" not in args:
+        write_checksum(exe)
+    print(exe)
 
 
 if __name__ == "__main__":

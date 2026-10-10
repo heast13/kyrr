@@ -12,6 +12,11 @@
 AppId={{6B7C2E0A-4F1D-4C8B-9A5E-2D3F1B6C7A90}
 AppName=kyrr
 AppVersion={#AppVersion}
+; Version info in the setup file itself; the code signing service checks it.
+VersionInfoVersion={#AppVersion}
+VersionInfoProductName=kyrr
+VersionInfoProductTextVersion={#AppVersion}
+VersionInfoCopyright=Copyright (c) 2026 heast13
 AppPublisher=heast13
 AppPublisherURL=https://github.com/heast13/kyrr
 DefaultDirName={autopf}\kyrr

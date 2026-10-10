@@ -38,3 +38,7 @@ windows = { version = "0.62", features = [
 ] }
 # The `implement` macro expands to paths in windows-core.
 windows-core = "0.62"
+
+[build-dependencies]
+# Version info in kyrr_apo.dll (needs the Windows resource compiler).
+winresource = "0.1"
