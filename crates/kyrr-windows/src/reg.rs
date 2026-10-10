@@ -6,8 +6,8 @@ use windows::Win32::Security::Authorization::{ConvertStringSecurityDescriptorToS
 use windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
 use windows::Win32::System::Registry::{
     RegCloseKey, RegCreateKeyExW, RegDeleteTreeW, RegDeleteValueW, RegEnumKeyExW, RegGetValueW, RegOpenKeyExW,
-    RegSetValueExW, HKEY, KEY_ALL_ACCESS, KEY_READ, REG_DWORD, REG_OPTION_BACKUP_RESTORE, REG_OPTION_NON_VOLATILE,
-    REG_SAM_FLAGS, REG_SZ, RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
+    RegSetValueExW, HKEY, KEY_ALL_ACCESS, KEY_READ, KEY_SET_VALUE, REG_DWORD, REG_OPTION_BACKUP_RESTORE,
+    REG_OPTION_NON_VOLATILE, REG_SAM_FLAGS, REG_SZ, RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
 };
 
 pub fn wide(s: &str) -> Vec<u16> {
@@ -46,6 +46,11 @@ impl Key {
     /// Opens an existing key for reading.
     pub fn open(root: HKEY, path: &str) -> Option<Key> {
         Key::open_with(root, path, KEY_READ)
+    }
+
+    /// Opens an existing key for reading and writing values.
+    pub fn open_writable(root: HKEY, path: &str) -> Option<Key> {
+        Key::open_with(root, path, KEY_READ | KEY_SET_VALUE)
     }
 
     /// Opens or creates a key for writing. `sddl` sets the security of a newly
