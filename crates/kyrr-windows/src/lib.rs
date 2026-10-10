@@ -1,5 +1,6 @@
 //! Windows integration for kyrr: installing the audio filter and attaching
-//! it to a microphone (elevated), the filter's settings and status, the
+//! it to a microphone (elevated), the filter's settings, status and live
+//! monitor, the
 //! push-to-talk key, typing text, and app plumbing (single instance,
 //! autostart, elevation).
 
@@ -11,6 +12,7 @@ pub mod elevate;
 pub mod filter;
 pub mod hotkey;
 pub mod instance;
+pub mod monitor;
 mod privilege;
 mod reg;
 pub mod service;
@@ -18,14 +20,19 @@ pub mod setup;
 pub mod typing;
 
 /// Runs an elevated setup command and returns the process exit code:
-/// `install <dll>`, `uninstall`, `attach <guid>`, `detach <guid>`.
-/// Attach and detach restart the audio service so the change applies.
+/// `install` (the DLL next to this exe), `uninstall`, `move <guid>`,
+/// `detach <guid>`. All but install restart the audio service so the
+/// change applies; the restart happens even when the change failed.
 pub fn run_setup_command(args: &[String]) -> i32 {
+    let restart = |r: Result<(), String>| {
+        let restarted = service::restart_audio();
+        r.and(restarted)
+    };
     let result = match args {
-        [cmd, dll] if cmd == "install" => setup::install(std::path::Path::new(dll)),
-        [cmd] if cmd == "uninstall" => setup::uninstall().and_then(|()| service::restart_audio()),
-        [cmd, guid] if cmd == "attach" => setup::attach(guid).and_then(|()| service::restart_audio()),
-        [cmd, guid] if cmd == "detach" => setup::detach(guid).and_then(|()| service::restart_audio()),
+        [cmd] if cmd == "install" => setup::installed_dll().and_then(|dll| setup::install(&dll)),
+        [cmd] if cmd == "uninstall" => restart(setup::uninstall()),
+        [cmd, guid] if cmd == "move" => restart(setup::move_to(guid)),
+        [cmd, guid] if cmd == "detach" => restart(setup::detach(guid)),
         _ => Err(format!("unknown setup command: {args:?}")),
     };
     match result {

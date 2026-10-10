@@ -1,11 +1,11 @@
 //! Live filter settings. A watcher thread waits for changes to the app's
 //! settings key and copies them into atomics the audio thread reads.
 
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::OnceLock;
 use std::time::Duration;
 
-use kyrr_common::{filter, FilterSettings, REG_FILTER};
+use kyrr_common::{FilterSettings, REG_FILTER};
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::ERROR_SUCCESS;
 use windows::Win32::System::Registry::{
@@ -16,25 +16,37 @@ use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject, INFIN
 
 use crate::registry::{read_dword, wide};
 
+/// Number of stored values, see [`FilterSettings::to_dwords`].
+const VALUES: usize = 11;
+
+/// The settings as their stored DWORDs, in the order of `to_dwords`.
 pub struct Live {
-    enabled: AtomicBool,
-    limit_db: AtomicU32,
-    light_model: AtomicBool,
+    values: [AtomicU32; VALUES],
 }
 
 impl Live {
+    fn new(s: FilterSettings) -> Live {
+        let live = Live {
+            values: std::array::from_fn(|_| AtomicU32::new(0)),
+        };
+        live.set(s);
+        live
+    }
+
+    /// Lock-free, for the audio thread. A change arriving meanwhile may be
+    /// seen half; the next block sees all of it.
     pub fn get(&self) -> FilterSettings {
-        FilterSettings {
-            enabled: self.enabled.load(Ordering::Relaxed),
-            limit_db: self.limit_db.load(Ordering::Relaxed),
-            light_model: self.light_model.load(Ordering::Relaxed),
-        }
+        let names = FilterSettings::default().to_dwords();
+        FilterSettings::from_dwords(|name| {
+            let i = names.iter().position(|(n, _)| *n == name)?;
+            Some(self.values[i].load(Ordering::Relaxed))
+        })
     }
 
     fn set(&self, s: FilterSettings) {
-        self.enabled.store(s.enabled, Ordering::Relaxed);
-        self.limit_db.store(s.limit_db, Ordering::Relaxed);
-        self.light_model.store(s.light_model, Ordering::Relaxed);
+        for (slot, (_, value)) in self.values.iter().zip(s.to_dwords()) {
+            slot.store(value, Ordering::Relaxed);
+        }
     }
 }
 
@@ -42,12 +54,7 @@ impl Live {
 pub fn live() -> &'static Live {
     static LIVE: OnceLock<Live> = OnceLock::new();
     LIVE.get_or_init(|| {
-        let defaults = FilterSettings::default();
-        let live = Live {
-            enabled: AtomicBool::new(defaults.enabled),
-            limit_db: AtomicU32::new(defaults.limit_db),
-            light_model: AtomicBool::new(defaults.light_model),
-        };
+        let live = Live::new(FilterSettings::default());
         if let Some(key) = open_key() {
             live.set(read(key));
             unsafe {
@@ -77,12 +84,7 @@ fn open_key() -> Option<HKEY> {
 }
 
 fn read(key: HKEY) -> FilterSettings {
-    let d = FilterSettings::default();
-    FilterSettings {
-        enabled: read_dword(key, "", filter::ENABLED).map_or(d.enabled, |v| v != 0),
-        limit_db: read_dword(key, "", filter::LIMIT_DB).map_or(d.limit_db, |v| v.min(100)),
-        light_model: read_dword(key, "", filter::MODEL).map_or(d.light_model, |v| v == 1),
-    }
+    FilterSettings::from_dwords(|name| read_dword(key, "", name))
 }
 
 /// Waits for changes for the life of the process. Without the key (not
@@ -101,12 +103,34 @@ fn watch() {
             if armed != ERROR_SUCCESS {
                 break;
             }
-            live().set(read(key));
+            let settings = read(key);
+            live().set(settings);
+            crate::swap::settings_changed(settings.light_model);
             unsafe { WaitForSingleObject(event, INFINITE) };
         }
         unsafe {
             let _ = RegCloseKey(key);
         }
         std::thread::sleep(Duration::from_secs(1));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kyrr_common::{Amount, Look};
+
+    #[test]
+    fn live_values_round_trip() {
+        let mut s = FilterSettings {
+            enabled: false,
+            ..FilterSettings::default()
+        };
+        s.voice.enabled = true;
+        s.voice.look = Look::Custom;
+        s.voice.air = -35;
+        s.voice.compressor = Amount::Strong;
+        assert_eq!(Live::new(s).get(), s);
+        assert_eq!(s.to_dwords().len(), VALUES);
     }
 }

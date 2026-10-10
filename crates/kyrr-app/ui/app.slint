@@ -2,20 +2,49 @@
 // first-run setup or the main panel. All texts are English source strings
 // translated through the bundled translations in ui/lang.
 
-import { Button, ComboBox, Switch, ProgressIndicator, VerticalBox, HorizontalBox, Palette } from "std-widgets.slint";
+import { Button, ComboBox, Switch, Slider, ProgressIndicator, ScrollView, Palette } from "std-widgets.slint";
 
-export enum FilterState { checking, running, off, passthrough, not-attached, not-installed, setting-up, error }
+// detached: Windows (an update, a driver) took kyrr off the microphone.
+export enum FilterState { checking, running, off, passthrough, not-attached, not-installed, setting-up, error, detached }
 export enum DictationState { off, no-model, downloading, loading, ready, recording, transcribing, error }
+export enum ProbeState { idle, recording, before, after }
 
 export global AppState {
-    // Clean microphone
+    // Noise removal
     in-out property <bool> filter-enabled: true;
-    in-out property <int> strength-index: 2; // 0 gentle, 1 medium, 2 strong
+    in-out property <int> strength-index: 1; // 0 gentle, 1 medium, 2 strong
+    in-out property <int> model-index;       // 0 thorough (large), 1 lean (small)
+    in property <bool> model-switching;
+    // The filter fell back to ONNX Runtime: the CPU lacks AVX2, Lean suits it.
+    in property <bool> old-cpu;
     in property <FilterState> filter-state: FilterState.checking;
     in property <string> filter-detail; // technical, not translated
     in property <[string]> microphones;
     in-out property <int> mic-index;
     in property <string> attached-mic;
+    // The filtered microphone is unplugged; this one could take over ("" if none).
+    in property <string> move-to;
+
+    // Live: level and the before/after probe
+    in property <bool> mic-active;
+    // The microphone is in use but delivers nothing at all: muted, most likely.
+    in property <bool> mic-silent;
+    in property <float> level-before; // 0..1
+    in property <float> level-after;
+    in property <ProbeState> probe-state: ProbeState.idle;
+    in property <bool> has-probe;
+    in property <string> probe-error;
+
+    // Voice: sound, S sounds and volume, shaped in the audio filter
+    in-out property <bool> voice-enabled: true;
+    in-out property <int> look-index;    // neutral, warm, clear, bright, custom
+    in-out property <float> body-db;     // the custom sound, -6..6 dB
+    in-out property <float> presence-db;
+    in-out property <float> air-db;
+    in-out property <bool> low-cut: true;
+    in-out property <int> deesser-index;       // off, light, medium, strong
+    in-out property <int> compressor-index: 1; // off, light, medium, strong
+    in property <bool> voice-is-default: true;
 
     // Dictation
     in-out property <bool> dictation-enabled: true;
@@ -24,12 +53,38 @@ export global AppState {
     in property <float> download-progress;
     in property <string> download-size;
     in property <string> last-text;
+    // What dictation has to say (an error, a hint); "" for nothing.
+    in property <string> dictation-message;
+    in-out property <int> key-index: 1; // F8, F9, Pause, right Ctrl
+    in-out property <bool> key-toggle;  // tap to start and stop instead of holding
+    in property <string> key-name: "F9";
+    // Model credits, as their licenses ask.
+    in property <string> credits;
 
+    in-out property <bool> autostart;
     in property <string> error-text;
     in property <string> version;
 
+    // 0 is the main view, 1 the settings page.
+    in-out property <int> page;
+    // Counts up every few seconds; the status line picks its next phrase
+    // from it, so one state does not repeat the same sentence.
+    in property <int> phrase;
+    // False for a moment before the next phrase, so it fades out and in.
+    in property <bool> phrase-visible: true;
+
     callback filter-toggled(bool);
     callback strength-changed(int);
+    callback model-changed(int);
+    callback probe-record();
+    callback probe-play(bool); // false before, true after
+    callback voice-toggled(bool);
+    callback look-changed(int);
+    callback band-changed(int, float); // 0 body, 1 presence, 2 air
+    callback low-cut-toggled(bool);
+    callback deesser-changed(int);
+    callback compressor-changed(int);
+    callback voice-reset();
     callback attach-microphone(int);
     callback dictation-toggled(bool);
     callback language-changed(int);
@@ -37,7 +92,16 @@ export global AppState {
     callback cancel-download();
     callback finish-setup();
     callback change-microphone();
+    callback autostart-toggled(bool);
     callback quit();
+    callback page-changed();
+    callback dictation-retry();
+    callback repair();
+    callback move-to-default();
+    callback key-changed(int);
+    callback key-toggle-changed(bool);
+    callback open-licenses();
+    callback skip-setup();
 }
 
 // The tray has its own properties: globals are per component instance, so
@@ -46,13 +110,18 @@ export component Tray inherits SystemTrayIcon {
     in property <bool> recording;
     in property <bool> active;
     in property <bool> filter-enabled;
+    in property <bool> voice-enabled;
     in property <bool> dictation-enabled;
+    in property <bool> dictation-ready;
+    in property <string> key-name: "F9";
     callback open();
     callback toggle-filter();
+    callback toggle-voice();
     callback toggle-dictation();
     callback quit();
     icon: recording ? @image-url("icons/kyrr-recording-32.png") : active ? @image-url("icons/kyrr-32.png") : @image-url("icons/kyrr-off-32.png");
-    tooltip: "kyrr";
+    tooltip: "kyrr · " + (root.filter-enabled ? @tr("noise filter on") : @tr("noise filter off"))
+        + (root.dictation-ready ? " · " + @tr("{} ready", root.key-name) : "");
     clicked => { root.open(); }
     Menu {
         MenuItem {
@@ -60,8 +129,12 @@ export component Tray inherits SystemTrayIcon {
             activated => { root.open(); }
         }
         MenuItem {
-            title: root.filter-enabled ? @tr("Turn clean microphone off") : @tr("Turn clean microphone on");
+            title: root.filter-enabled ? @tr("Noise removal: on") : @tr("Noise removal: off");
             activated => { root.toggle-filter(); }
+        }
+        MenuItem {
+            title: root.voice-enabled ? @tr("Voice: on") : @tr("Voice: off");
+            activated => { root.toggle-voice(); }
         }
         MenuItem {
             title: root.dictation-enabled ? @tr("Turn dictation off") : @tr("Turn dictation on");
@@ -80,6 +153,14 @@ component Caption inherits Text {
     wrap: word-wrap;
 }
 
+// A short, plain explanation of the option chosen above it.
+component Hint inherits Text {
+    // 0.7 keeps small text readable (contrast), still quieter than captions.
+    color: Palette.foreground.with-alpha(0.7);
+    font-size: 11px;
+    wrap: word-wrap;
+}
+
 component Heading inherits Text {
     font-size: 15px;
     font-weight: 600;
@@ -95,82 +176,325 @@ component Card inherits Rectangle {
     }
 }
 
-component Segmented {
+component Separator inherits Rectangle {
+    height: 1px;
+    background: Palette.border.with-alpha(0.6);
+}
+
+// A row of choices, one selected. Tab focuses it, the arrow keys move the
+// choice; screen readers hear each option as a radio button.
+component Segmented inherits FocusScope {
     in property <[string]> options;
     in-out property <int> selected;
     callback changed(int);
+
+    function choose(i: int) {
+        if (root.enabled && i >= 0 && i < root.options.length && i != root.selected) {
+            root.selected = i;
+            root.changed(i);
+        }
+    }
+
+    key-pressed(event) => {
+        if (event.text == Key.LeftArrow) {
+            root.choose(root.selected - 1);
+            return accept;
+        }
+        if (event.text == Key.RightArrow) {
+            root.choose(root.selected + 1);
+            return accept;
+        }
+        return reject;
+    }
+
     HorizontalLayout {
         spacing: 6px;
-        for option[i] in options: Rectangle {
+        for option[i] in root.options: Rectangle {
             height: 28px;
             border-radius: 6px;
-            background: i == selected ? Palette.accent-background : Palette.control-background;
-            border-width: 1px;
-            border-color: Palette.border;
+            background: i == root.selected ? Palette.accent-background : Palette.control-background;
+            border-width: root.has-focus && i == root.selected ? 2px : 1px;
+            border-color: root.has-focus && i == root.selected ? Palette.foreground : Palette.border;
+            opacity: root.enabled ? 1 : 0.5;
+            accessible-role: radio-button;
+            accessible-label: option;
+            accessible-checkable: true;
+            accessible-checked: i == root.selected;
+            accessible-action-default => { root.choose(i); }
             Text {
                 text: option;
-                color: i == selected ? Palette.accent-foreground : Palette.control-foreground;
+                color: i == root.selected ? Palette.accent-foreground : Palette.control-foreground;
                 horizontal-alignment: center;
                 vertical-alignment: center;
             }
             TouchArea {
+                enabled: root.enabled;
                 clicked => {
-                    selected = i;
-                    changed(i);
+                    root.focus();
+                    root.choose(i);
                 }
             }
         }
     }
 }
 
-component FilterCard inherits Card {
-    HorizontalLayout {
-        Heading { text: @tr("Clean microphone"); vertical-alignment: center; }
-        Rectangle { }
-        Switch {
-            checked <=> AppState.filter-enabled;
-            enabled: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed;
-            toggled => { AppState.filter-toggled(self.checked); }
+// Grey: what the microphone hears. Accent line: what apps get.
+component Meter inherits Rectangle {
+    in property <float> before;
+    in property <float> after;
+    height: 10px;
+    border-radius: 5px;
+    background: Palette.control-background;
+    border-width: 1px;
+    border-color: Palette.border;
+    Rectangle {
+        x: 0;
+        width: parent.width * clamp(root.before, 0, 1);
+        height: parent.height;
+        border-radius: 5px;
+        background: Palette.foreground.with-alpha(0.18);
+        animate width { duration: 90ms; }
+    }
+    Rectangle {
+        x: 0;
+        y: (parent.height - self.height) / 2;
+        width: parent.width * clamp(root.after, 0, 1);
+        height: 4px;
+        border-radius: 2px;
+        background: Palette.accent-background;
+        animate width { duration: 90ms; }
+    }
+}
+
+// A small wave in the logo's colour next to the status line: it sways
+// slowly while kyrr works, barely breathes while it waits, and lies still
+// when everything is off (then nothing is redrawn at all).
+component Pulse inherits Rectangle {
+    in property <bool> working;
+    in property <bool> waiting;
+    property <bool> moving: root.working || root.waiting;
+    // Milliseconds since start, only while moving.
+    property <float> t: root.moving ? animation-tick() / 1ms : 0;
+    // Seconds per sway; slow on purpose, this is kyrr after all.
+    property <float> period: root.working ? 2200 : 4500;
+    property <float> depth: root.working ? 1 : 0.3;
+    width: 14px;
+    height: 16px;
+    for bar[i] in 4: Rectangle {
+        property <float> level: root.moving ? root.depth * (0.5 + 0.5 * sin(root.t / root.period * 360deg + i * 75deg)) : 0;
+        x: i * 4px;
+        width: 2px;
+        height: 2px + 10px * self.level;
+        y: (root.height - self.height) / 2;
+        border-radius: 1px;
+        background: Palette.color-scheme == ColorScheme.dark ? #5eead4 : #14b8a6;
+        opacity: root.moving ? 0.85 : 0.4;
+    }
+}
+
+// What kyrr is up to right now, in one loose sentence under the name, small
+// and in italics so it reads as a remark, not a setting. Long-lasting states
+// rotate through a few phrases to pass the time; errors and setup stay put.
+component StatusLine inherits HorizontalLayout {
+    pure function pick(list: [string]) -> string {
+        return list[AppState.phrase.mod(list.length)];
+    }
+    property <float> percent: round(AppState.download-progress * 100);
+
+    pure function status() -> string {
+        if (AppState.filter-state == FilterState.setting-up) { return @tr("Setting things up… sound takes a short break."); }
+        if (AppState.mic-active && AppState.mic-silent) { return @tr("Your mic delivers pure silence. Muted?"); }
+        if (AppState.probe-state == ProbeState.recording) {
+            return pick([
+                @tr("Five seconds of fame."),
+                @tr("Noise for science."),
+                @tr("Open-mic night, short edition."),
+                @tr("Shopping-list reading hour."),
+            ]);
         }
+        if (AppState.probe-state == ProbeState.before) { return @tr("Before: this is you without kyrr."); }
+        if (AppState.probe-state == ProbeState.after) { return @tr("After: same take, with kyrr."); }
+        if (AppState.dictation-state == DictationState.recording) {
+            return pick([
+                @tr("All ears."),
+                @tr("Mumbling permitted."),
+                @tr("Listening intently."),
+            ]);
+        }
+        if (AppState.dictation-state == DictationState.transcribing) {
+            return pick([
+                @tr("Mumble translation."),
+                @tr("Speed typing."),
+                @tr("Word sorting."),
+            ]);
+        }
+        if (AppState.dictation-state == DictationState.downloading) {
+            return pick([
+                @tr("{}% · Patience test.", percent),
+                @tr("{}% · Coffee-break length.", percent),
+                @tr("{}% · Progress-bar hypnosis.", percent),
+                @tr("{}% · Chunky delivery.", percent),
+            ]);
+        }
+        if (AppState.model-switching) {
+            return pick([
+                @tr("Brain transplant."),
+                @tr("Neuron relocation."),
+                @tr("Model swap break."),
+            ]);
+        }
+        if (AppState.filter-state == FilterState.not-installed) { return @tr("The kyrr filter is missing. Reinstall, please."); }
+        if (AppState.filter-state == FilterState.detached) { return @tr("Windows took kyrr off the mic. Repair below."); }
+        if (AppState.filter-state == FilterState.not-attached) { return @tr("Pick a microphone and off we go."); }
+        if (AppState.filter-state == FilterState.error) { return @tr("Oops, something went wrong. Details below."); }
+        if (AppState.filter-state == FilterState.passthrough) { return @tr("Oops, the filter is stuck. Your mic passes through as it is."); }
+        if (!AppState.filter-enabled && !AppState.voice-enabled) { return @tr("Day off. Everything is off."); }
+        if (AppState.mic-active) {
+            if (!AppState.filter-enabled) { return @tr("Noise allowed, voice polished."); }
+            return pick([
+                @tr("Noise bouncer on duty."),
+                @tr("Dog eraser."),
+                @tr("Fan whisperer."),
+                @tr("Keyboard clatter ban."),
+                @tr("Quiet zone management."),
+                @tr("Drill defence."),
+                @tr("Voice-first policy."),
+                @tr("Coffee machine censorship."),
+                @tr("Noise disposal."),
+                @tr("Chair creak swallower."),
+                @tr("Noise quarantine."),
+            ]);
+        }
+        return pick([
+            @tr("On-call napping."),
+            @tr("Mic waiting room."),
+            @tr("Thumb-twiddling mode."),
+            @tr("Idle serenity."),
+            @tr("Alert nap."),
+            @tr("Stockpiling silence."),
+        ]);
+    }
+
+    // The text lines up with the name and sits close under it (pulled up
+    // into the page layout's spacing); the wave follows right after it.
+    padding-left: 38px;
+    padding-top: -10px;
+    spacing: 8px;
+    property <bool> working: AppState.mic-active || AppState.probe-state != ProbeState.idle || AppState.model-switching
+        || AppState.dictation-state == DictationState.recording || AppState.dictation-state == DictationState.transcribing
+        || AppState.dictation-state == DictationState.downloading || AppState.filter-state == FilterState.setting-up;
+    property <bool> waiting: (AppState.filter-enabled || AppState.voice-enabled)
+        && (AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking);
+    Text {
+        horizontal-stretch: 0;
+        text: root.status();
+        font-size: 12px;
+        font-italic: true;
+        color: Palette.foreground;
+        opacity: AppState.phrase-visible ? 0.6 : 0;
+        animate opacity { duration: 450ms; easing: ease-in-out; }
+        wrap: word-wrap;
+        vertical-alignment: top;
+        // One line always, so the cards below do not move when it is empty;
+        // two for a long message (Slint measures wrapped text in this row as
+        // one line, so the room is made here).
+        min-height: root.status().character-count > 44 ? 32px : 16px;
+    }
+    Pulse {
+        working: root.working;
+        waiting: root.waiting;
+    }
+    Rectangle { }
+}
+
+// A main function's name and its switch. The one-line state below it is a
+// direct child of the card (see the note in MainWindow).
+component RowHead inherits HorizontalLayout {
+    in property <string> title;
+    in property <bool> enabled: true;
+    in-out property <bool> checked;
+    callback toggled(bool);
+    Heading { text: root.title; vertical-alignment: center; }
+    Rectangle { }
+    Switch {
+        checked <=> root.checked;
+        enabled: root.enabled;
+        accessible-label: root.title;
+        toggled => { root.toggled(self.checked); }
+    }
+}
+
+component NoiseCard inherits Card {
+    property <bool> attached: AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking;
+    RowHead {
+        title: @tr("Remove background noise");
+        enabled: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed;
+        checked <=> AppState.filter-enabled;
+        toggled(on) => { AppState.filter-toggled(on); }
     }
     Caption {
-        text: AppState.filter-state == FilterState.running ? (AppState.filter-enabled ? @tr("Noise is filtered on {}.", AppState.attached-mic) : @tr("Off. {} passes through unchanged.", AppState.attached-mic))
-            : AppState.filter-state == FilterState.checking ? @tr("Waiting for an app to use the microphone…")
+        text: root.attached ? (AppState.filter-enabled ? @tr("{}: keyboard, fan and dog stay outside.", AppState.attached-mic) : @tr("Off. Your mic passes through as it is."))
+            : AppState.filter-state == FilterState.detached ? @tr("Windows took kyrr off {} (an update, most likely).", AppState.attached-mic)
             : AppState.filter-state == FilterState.passthrough ? @tr("The filter could not start and passes the microphone through.")
             : AppState.filter-state == FilterState.not-attached ? @tr("No microphone set up yet.")
             : AppState.filter-state == FilterState.not-installed ? @tr("kyrr's audio filter is not installed. Please reinstall kyrr.")
             : AppState.filter-state == FilterState.setting-up ? @tr("Setting up… sound pauses for a moment.")
             : AppState.error-text;
     }
-    if AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking: VerticalLayout {
-        spacing: 6px;
-        Caption { text: @tr("Strength"); }
-        Segmented {
-            options: [@tr("Gentle"), @tr("Medium"), @tr("Strong")];
-            selected <=> AppState.strength-index;
-            changed(i) => { AppState.strength-changed(i); }
-        }
+    if AppState.filter-state == FilterState.not-attached: Button {
+        text: @tr("Set up microphone");
+        primary: true;
+        clicked => { AppState.change-microphone(); }
+    }
+    if AppState.filter-state == FilterState.detached: Button {
+        text: @tr("Repair");
+        primary: true;
+        clicked => { AppState.repair(); }
+    }
+    if AppState.move-to != "": Hint { text: @tr("Your microphone is not plugged in."); }
+    if AppState.move-to != "": Button {
+        text: @tr("Use {} instead", AppState.move-to);
+        clicked => { AppState.move-to-default(); }
+    }
+}
+
+component VoiceCard inherits Card {
+    property <bool> available: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed;
+    RowHead {
+        title: @tr("Voice");
+        enabled: root.available;
+        checked <=> AppState.voice-enabled;
+        toggled(on) => { AppState.voice-toggled(on); }
+    }
+    Caption {
+        text: !root.available ? @tr("Needs a microphone first.")
+            : AppState.voice-enabled ? @tr("A bit of polish for your voice.")
+            : @tr("Off. Your voice stays as it is.");
     }
 }
 
 component DictationCard inherits Card {
-    HorizontalLayout {
-        Heading { text: @tr("Dictation (hold F9)"); vertical-alignment: center; }
-        Rectangle { }
-        Switch {
-            checked <=> AppState.dictation-enabled;
-            toggled => { AppState.dictation-toggled(self.checked); }
-        }
+    RowHead {
+        title: @tr("Dictation");
+        checked <=> AppState.dictation-enabled;
+        toggled(on) => { AppState.dictation-toggled(on); }
     }
     Caption {
-        text: AppState.dictation-state == DictationState.off ? @tr("Off.")
-            : AppState.dictation-state == DictationState.no-model ? @tr("The speech model ({}) needs to be downloaded once.", AppState.download-size)
+        text: AppState.dictation-state == DictationState.off ? @tr("Off. {} does nothing.", AppState.key-name)
+            : AppState.dictation-state == DictationState.no-model ? @tr("One download first ({}), then it is yours.", AppState.download-size)
             : AppState.dictation-state == DictationState.downloading ? @tr("Downloading the speech model… {}%", round(AppState.download-progress * 100))
             : AppState.dictation-state == DictationState.loading ? @tr("Loading the speech model…")
-            : AppState.dictation-state == DictationState.ready ? @tr("Hold F9, speak, release. The text appears where your cursor is.")
+            : AppState.dictation-state == DictationState.ready ? (AppState.key-toggle ? @tr("Tap {}, talk, tap again. The text lands at your cursor.", AppState.key-name) : @tr("Hold {}, talk, let go. The text lands at your cursor.", AppState.key-name))
             : AppState.dictation-state == DictationState.recording ? @tr("Listening…")
             : AppState.dictation-state == DictationState.transcribing ? @tr("Writing…")
-            : AppState.error-text;
+            : AppState.dictation-message;
+    }
+    if AppState.dictation-state != DictationState.error && AppState.dictation-message != "": Hint {
+        text: AppState.dictation-message;
+    }
+    if AppState.dictation-state == DictationState.error: Button {
+        text: @tr("Try again");
+        clicked => { AppState.dictation-retry(); }
     }
     if AppState.dictation-state == DictationState.downloading: HorizontalLayout {
         spacing: 12px;
@@ -187,50 +511,313 @@ component DictationCard inherits Card {
     }
 }
 
-component SetupPage {
+// One band of the custom sound: name, slider, value.
+component BandRow {
+    in property <string> label;
+    in-out property <float> value;
+    callback changed(float);
+    HorizontalLayout {
+        spacing: 8px;
+        Caption { text: root.label; width: 64px; vertical-alignment: center; }
+        Slider {
+            minimum: -6;
+            maximum: 6;
+            step: 0.5;
+            value <=> root.value;
+            changed(v) => { root.changed(v); }
+        }
+        Caption {
+            text: (root.value > 0 ? "+" : "") + round(root.value * 10) / 10 + " dB";
+            width: 52px;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// Settings: the choices behind the noise switch.
+component NoiseSettings inherits Card {
+    pure function strength-hint(i: int) -> string {
+        if (i == 0) { return @tr("Takes the worst out and leaves a bit of room. Natural."); }
+        if (i == 1) { return @tr("The sweet spot for most rooms."); }
+        return @tr("Out with everything but you. Bouncer mode.");
+    }
+    pure function model-hint(i: int) -> string {
+        if (i == 1) { return @tr("A third of the CPU, barely less clean. For old laptops."); }
+        return @tr("Cleanest result, a bit more CPU. Default for a reason.");
+    }
+    property <bool> attached: AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking;
+
+    Heading { text: @tr("Background noise"); }
+    if !root.attached: Hint { text: @tr("Set up a microphone first."); }
+    if root.attached: Caption { text: @tr("Strength"); }
+    if root.attached: Segmented {
+        options: [@tr("Gentle"), @tr("Medium"), @tr("Strong")];
+        selected <=> AppState.strength-index;
+        changed(i) => { AppState.strength-changed(i); }
+    }
+    if root.attached: Hint { text: root.strength-hint(AppState.strength-index); }
+    if root.attached: Caption { text: @tr("Model"); }
+    if root.attached: Segmented {
+        options: [@tr("Thorough"), @tr("Lean")];
+        selected <=> AppState.model-index;
+        changed(i) => { AppState.model-changed(i); }
+    }
+    if root.attached: Hint { text: root.model-hint(AppState.model-index); }
+    if root.attached && AppState.old-cpu: Hint { text: @tr("This processor is a bit older: Lean runs smoother on it."); }
+}
+
+// Settings: the dictation key and how it works.
+component DictationSettings inherits Card {
+    Heading { text: @tr("Dictation"); }
+    Caption { text: @tr("Key"); }
+    Segmented {
+        options: ["F8", "F9", "Pause", @tr("Right Ctrl")];
+        selected <=> AppState.key-index;
+        changed(i) => { AppState.key-changed(i); }
+    }
+    Hint { text: @tr("With Ctrl, Alt or Shift held, the key stays with your app."); }
+    Caption { text: @tr("How"); }
+    Segmented {
+        options: [@tr("Hold"), @tr("Tap")];
+        selected: AppState.key-toggle ? 1 : 0;
+        changed(i) => { AppState.key-toggle-changed(i == 1); }
+    }
+    Hint {
+        text: AppState.key-toggle ? @tr("Tap once to start, once more to stop. For long thoughts.")
+            : @tr("Hold while you talk, let go when you are done. Walkie-talkie style.");
+    }
+    Hint { text: @tr("Say “new line” or “new paragraph” for line breaks."); }
+}
+
+// Settings: who made what.
+component AboutSettings inherits Card {
+    Heading { text: @tr("About"); }
+    Hint { text: AppState.credits; }
+    HorizontalLayout {
+        Rectangle { }
+        Button { text: @tr("Licenses"); clicked => { AppState.open-licenses(); } }
+    }
+}
+
+// The quit button with what it does and does not stop.
+component QuitRow inherits HorizontalLayout {
+    spacing: 8px;
+    Hint {
+        text: @tr("Noise filter and voice keep running without this window.");
+        vertical-alignment: center;
+    }
+    Button {
+        text: @tr("Quit");
+        horizontal-stretch: 0;
+        clicked => { AppState.quit(); }
+    }
+}
+
+// Settings: everything about how the voice sounds.
+component VoiceSettings inherits Card {
+    pure function look-hint(i: int) -> string {
+        if (i == 1) { return @tr("A bit more belly, less edge. Cosy."); }
+        if (i == 2) { return @tr("Takes the boxiness out, speech moves forward."); }
+        if (i == 3) { return @tr("More sparkle on top. Rescues dull mics."); }
+        if (i == 4) { return @tr("Your own mix. Kept when you switch back and forth."); }
+        return @tr("No make-up. Your voice as it is.");
+    }
+    pure function compressor-hint(i: int) -> string {
+        if (i == 1) { return @tr("Smooths a little. You will hardly notice, your listeners will."); }
+        if (i == 2) { return @tr("Quiet words come through better. Good for calls."); }
+        if (i == 3) { return @tr("Nearly constant volume. For streams and noisy rooms."); }
+        return @tr("Loud stays loud, quiet stays quiet. As nature intended.");
+    }
+    pure function deesser-hint(i: int) -> string {
+        if (i == 1) { return @tr("Takes the edge off hissing S sounds."); }
+        if (i == 2) { return @tr("Tames S and SH clearly. Good for bright mics."); }
+        if (i == 3) { return @tr("Heavy. Can sound lispy close to the mic."); }
+        return @tr("S sounds stay as they are.");
+    }
+    property <bool> shown: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed && AppState.voice-enabled;
+
+    Heading { text: @tr("Voice"); }
+    if !root.shown: Hint { text: @tr("Voice is off, so there is nothing to turn. Switch it on in the main view."); }
+    if root.shown: Caption { text: @tr("Sound"); }
+    if root.shown: Segmented {
+        options: [@tr("Neutral"), @tr("Warm"), @tr("Clear"), @tr("Bright"), @tr("Custom")];
+        selected <=> AppState.look-index;
+        changed(i) => { AppState.look-changed(i); }
+    }
+    if root.shown: Hint { text: root.look-hint(AppState.look-index); }
+    if root.shown && AppState.look-index == 4: VerticalLayout {
+        spacing: 2px;
+        BandRow {
+            label: @tr("Body");
+            value <=> AppState.body-db;
+            changed(v) => { AppState.band-changed(0, v); }
+        }
+        BandRow {
+            label: @tr("Presence");
+            value <=> AppState.presence-db;
+            changed(v) => { AppState.band-changed(1, v); }
+        }
+        BandRow {
+            label: @tr("Air");
+            value <=> AppState.air-db;
+            changed(v) => { AppState.band-changed(2, v); }
+        }
+    }
+    if root.shown: Caption { text: @tr("Even out volume"); }
+    if root.shown: Segmented {
+        options: [@tr("Off"), @tr("Light"), @tr("Medium"), @tr("Strong")];
+        selected <=> AppState.compressor-index;
+        changed(i) => { AppState.compressor-changed(i); }
+    }
+    if root.shown: Hint { text: root.compressor-hint(AppState.compressor-index); }
+    if root.shown: Caption { text: @tr("Soften S sounds"); }
+    if root.shown: Segmented {
+        options: [@tr("Off"), @tr("Light"), @tr("Medium"), @tr("Strong")];
+        selected <=> AppState.deesser-index;
+        changed(i) => { AppState.deesser-changed(i); }
+    }
+    if root.shown: Hint { text: root.deesser-hint(AppState.deesser-index); }
+    if root.shown: HorizontalLayout {
+        Caption { text: @tr("Cut low rumble"); vertical-alignment: center; }
+        Rectangle { }
+        Switch {
+            checked <=> AppState.low-cut;
+            toggled => { AppState.low-cut-toggled(self.checked); }
+        }
+    }
+    if root.shown: Hint {
+        text: AppState.low-cut ? @tr("Swallows footsteps, desk bumps and wind below {} Hz.", AppState.look-index == 3 ? 100 : 80)
+            : @tr("Off. Rumble, wind and desk bumps get through.");
+    }
+    if root.shown && !AppState.voice-is-default: HorizontalLayout {
+        Rectangle { }
+        Button { text: @tr("Reset"); clicked => { AppState.voice-reset(); } }
+    }
+}
+
+// Settings: the level meter and the before/after test.
+component ToolsSettings inherits Card {
+    property <bool> attached: AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking;
+    property <bool> busy: AppState.probe-state != ProbeState.idle;
+
+    Heading { text: @tr("Check"); }
+    Meter {
+        before: AppState.level-before;
+        after: AppState.level-after;
+        opacity: AppState.mic-active ? 1 : 0.4;
+    }
+    HorizontalLayout {
+        spacing: 6px;
+        alignment: start;
+        Rectangle { width: 10px; height: 10px; y: 3px; border-radius: 5px; background: Palette.foreground.with-alpha(0.18); }
+        Hint { text: @tr("your mic"); horizontal-stretch: 0; }
+        Rectangle { width: 14px; }
+        Rectangle { width: 14px; height: 4px; y: 6px; border-radius: 2px; background: Palette.accent-background; }
+        Hint { text: @tr("what your apps get"); horizontal-stretch: 0; }
+    }
+    Hint { text: @tr("Moves while an app uses the mic."); }
+    HorizontalLayout {
+        spacing: 6px;
+        Button {
+            text: @tr("Test: before / after");
+            enabled: root.attached && !root.busy;
+            clicked => { AppState.probe-record(); }
+        }
+        Rectangle { }
+        if AppState.has-probe: Button {
+            text: @tr("Before");
+            enabled: !root.busy;
+            clicked => { AppState.probe-play(false); }
+        }
+        if AppState.has-probe: Button {
+            text: @tr("After");
+            enabled: !root.busy;
+            clicked => { AppState.probe-play(true); }
+        }
+    }
+    Hint { text: @tr("Records five seconds and plays them twice: raw, then with kyrr. Nothing is saved, promise."); }
+    if AppState.probe-error != "": Caption { text: AppState.probe-error; color: #e5484d; }
+}
+
+// Settings: the rest.
+component GeneralSettings inherits Card {
+    Heading { text: @tr("General"); }
+    HorizontalLayout {
+        spacing: 8px;
+        Caption { text: @tr("Language"); vertical-alignment: center; }
+        Segmented {
+            options: ["Deutsch", "English"];
+            selected <=> AppState.language-index;
+            changed(i) => { AppState.language-changed(i); }
+        }
+    }
+    Hint { text: @tr("Also the language dictation listens for."); }
+    Separator { }
+    HorizontalLayout {
+        Caption { text: @tr("Start with Windows"); vertical-alignment: center; }
+        Rectangle { }
+        Switch {
+            checked <=> AppState.autostart;
+            toggled => { AppState.autostart-toggled(self.checked); }
+        }
+    }
+    Separator { }
+    HorizontalLayout {
+        spacing: 8px;
+        Caption { text: AppState.attached-mic != "" ? AppState.attached-mic : @tr("Microphone"); overflow: elide; wrap: no-wrap; vertical-alignment: center; }
+        Button { text: @tr("Change microphone"); clicked => { AppState.change-microphone(); } }
+    }
+}
+
+component SetupPage inherits VerticalLayout {
     in property <int> step;
-    VerticalLayout {
-        spacing: 12px;
-        if step == 0: VerticalLayout {
-            spacing: 12px;
-            Heading { text: @tr("Welcome to kyrr"); font-size: 20px; }
-            Caption { text: @tr("kyrr removes background noise from your microphone, for every app. Which microphone do you use?"); }
-            ComboBox {
-                model: AppState.microphones;
-                current-index <=> AppState.mic-index;
-            }
-            Caption { text: @tr("Windows will ask for permission. Sound pauses for a moment while kyrr sets up."); }
-            Button {
-                text: AppState.filter-state == FilterState.setting-up ? @tr("Setting up…") : @tr("Set up microphone");
-                primary: true;
-                enabled: AppState.filter-state != FilterState.setting-up && AppState.microphones.length > 0;
-                clicked => { AppState.attach-microphone(AppState.mic-index); }
-            }
-            if AppState.filter-state == FilterState.error: Caption { text: AppState.error-text; color: #e5484d; }
-        }
-        if step == 1: VerticalLayout {
-            spacing: 12px;
-            Heading { text: @tr("Dictation"); font-size: 20px; }
-            Caption { text: @tr("Hold F9 anywhere, speak, release: kyrr types what you said. It runs on your computer, nothing is sent anywhere."); }
-            Caption { text: @tr("Language"); }
-            Segmented {
-                options: ["Deutsch", "English"];
-                selected <=> AppState.language-index;
-                changed(i) => { AppState.language-changed(i); }
-            }
-            DictationCard { }
-            Button {
-                text: @tr("Done");
-                primary: AppState.dictation-state != DictationState.no-model;
-                clicked => { AppState.finish-setup(); }
-            }
-        }
+    spacing: 12px;
+    // Every element carries its own `if`: Slint measures wrapped text
+    // wrongly inside a nested layout that is itself conditional.
+    if step == 0: Hint { text: @tr("Step 1 of 2"); }
+    if step == 0: Heading { text: @tr("Welcome to kyrr"); font-size: 20px; }
+    if step == 0: Caption { text: @tr("kyrr removes background noise from your microphone, for every app. Which microphone do you use?"); }
+    if step == 0: ComboBox {
+        model: AppState.microphones;
+        current-index <=> AppState.mic-index;
+    }
+    if step == 0: Caption { text: @tr("Windows will ask for permission. Sound pauses for a moment while kyrr sets up."); }
+    if step == 0: Button {
+        text: AppState.filter-state == FilterState.setting-up ? @tr("Setting up…") : @tr("Set up microphone");
+        primary: true;
+        enabled: AppState.filter-state != FilterState.setting-up && AppState.microphones.length > 0;
+        clicked => { AppState.attach-microphone(AppState.mic-index); }
+    }
+    if step == 0 && AppState.filter-state == FilterState.error: Caption { text: AppState.error-text; color: #e5484d; }
+    if step == 0: Button {
+        text: @tr("Not now, just dictation");
+        enabled: AppState.filter-state != FilterState.setting-up;
+        clicked => { AppState.skip-setup(); }
+    }
+
+    if step == 1: Hint { text: @tr("Step 2 of 2"); }
+    if step == 1: Heading { text: @tr("Talk instead of typing"); font-size: 20px; }
+    if step == 1: Caption { text: @tr("Hold {} anywhere, speak, release: kyrr types what you said. It runs on your computer, nothing is sent anywhere.", AppState.key-name); }
+    if step == 1: Caption { text: @tr("Language"); }
+    if step == 1: Segmented {
+        options: ["Deutsch", "English"];
+        selected <=> AppState.language-index;
+        changed(i) => { AppState.language-changed(i); }
+    }
+    if step == 1: DictationCard { }
+    if step == 1: Hint { text: @tr("kyrr starts with Windows and lives in the tray, bottom right (maybe behind the little arrow). Both can be changed in the settings."); }
+    if step == 1: Button {
+        text: @tr("Done");
+        primary: AppState.dictation-state != DictationState.no-model;
+        clicked => { AppState.finish-setup(); }
     }
 }
 
 export component MainWindow inherits Window {
     in property <bool> setup-mode;
     in property <int> setup-step;
+    // The height the content wants; the app caps the window and scrolls.
     out property <length> content-height: layout.preferred-height;
     title: "kyrr";
     icon: @image-url("icons/kyrr-256.png");
@@ -238,36 +825,74 @@ export component MainWindow inherits Window {
     min-width: 380px;
     max-width: 380px;
 
-    layout := VerticalLayout {
-        padding: 18px;
-        spacing: 12px;
-        if setup-mode: SetupPage { step: root.setup-step; }
-        if !setup-mode: VerticalLayout {
+    // A new page starts at the top, not where the last one was scrolled to.
+    public function reset-scroll() {
+        scroll.content-y = 0;
+    }
+
+    property <bool> main-page: !setup-mode && AppState.page == 0;
+    property <bool> settings-page: !setup-mode && AppState.page == 1;
+
+    scroll := ScrollView {
+        content-width: self.visible-width;
+        content-height: layout.preferred-height;
+        layout := VerticalLayout {
+            width: scroll.visible-width;
+            padding: 18px;
             spacing: 12px;
-            HorizontalLayout {
+            // Direct children, not a nested layout in an `if`: Slint then
+            // measures wrapped text at its real width.
+            if setup-mode: SetupPage { step: root.setup-step; }
+
+            // Main view: the status line and the three switches.
+            if main-page: HorizontalLayout {
                 spacing: 10px;
                 Image { source: @image-url("icons/kyrr-256.png"); width: 28px; height: 28px; }
                 Heading { text: "kyrr"; font-size: 20px; vertical-alignment: center; }
-            }
-            FilterCard { }
-            DictationCard { }
-            HorizontalLayout {
-                spacing: 8px;
-                Caption { text: @tr("Language"); vertical-alignment: center; }
-                Segmented {
-                    options: ["Deutsch", "English"];
-                    selected <=> AppState.language-index;
-                    changed(i) => { AppState.language-changed(i); }
+                Rectangle { }
+                Button {
+                    text: @tr("Settings");
+                    horizontal-stretch: 0;
+                    clicked => {
+                        AppState.page = 1;
+                        AppState.page-changed();
+                    }
                 }
             }
-            HorizontalLayout {
-                spacing: 8px;
-                Button { text: @tr("Change microphone"); clicked => { AppState.change-microphone(); } }
+            if main-page: StatusLine { }
+            if main-page: NoiseCard { }
+            if main-page: VoiceCard { }
+            if main-page: DictationCard { }
+            if main-page: QuitRow { }
+
+            // Settings page: the deeper options.
+            if settings-page: HorizontalLayout {
+                spacing: 10px;
+                Button {
+                    text: @tr("← Back");
+                    horizontal-stretch: 0;
+                    clicked => {
+                        AppState.page = 0;
+                        AppState.page-changed();
+                    }
+                }
+                Heading { text: @tr("Settings"); font-size: 20px; vertical-alignment: center; }
                 Rectangle { }
-                Button { text: @tr("Quit"); clicked => { AppState.quit(); } }
             }
-            Caption {
-                text: "kyrr " + AppState.version + " · Made with Slint";
+            if settings-page: NoiseSettings { }
+            if settings-page: VoiceSettings { }
+            if settings-page: DictationSettings { }
+            if settings-page: ToolsSettings { }
+            if settings-page: GeneralSettings { }
+            if settings-page: AboutSettings { }
+            if settings-page: Caption {
+                text: @tr("By heast13 and Claude Opus. Built in silence.");
+                horizontal-alignment: center;
+                font-size: 11px;
+                font-italic: true;
+            }
+            if settings-page: Caption {
+                text: "kyrr " + AppState.version;
                 horizontal-alignment: center;
                 font-size: 11px;
             }

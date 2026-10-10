@@ -5,101 +5,20 @@ msgstr ""
 "Language: de\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "Cancel"
-msgstr "Abbrechen"
-
-msgid "Change microphone"
-msgstr "Mikrofon wechseln"
-
-msgid "Clean microphone"
-msgstr "Sauberes Mikrofon"
-
-msgid "Dictation"
-msgstr "Diktieren"
-
-msgid "Dictation (hold F9)"
-msgstr "Diktieren (F9 halten)"
-
-msgid "Done"
-msgstr "Fertig"
-
-msgid "Download"
-msgstr "Herunterladen"
-
-msgid "Downloading the speech model… {}%"
-msgstr "Sprachmodell wird geladen … {} %"
-
-msgid "Gentle"
-msgstr "Sanft"
-
-msgid "Hold F9 anywhere, speak, release: kyrr types what you said. It runs on your computer, nothing is sent anywhere."
-msgstr "F9 halten, sprechen, loslassen: kyrr tippt, was du gesagt hast. Alles läuft auf deinem Computer, nichts wird irgendwohin geschickt."
-
-msgid "Hold F9, speak, release. The text appears where your cursor is."
-msgstr "F9 halten, sprechen, loslassen. Der Text erscheint dort, wo dein Cursor steht."
-
-msgid "kyrr removes background noise from your microphone, for every app. Which microphone do you use?"
-msgstr "kyrr entfernt Hintergrundgeräusche aus deinem Mikrofon, für jede App. Welches Mikrofon verwendest du?"
-
-msgid "kyrr's audio filter is not installed. Please reinstall kyrr."
-msgstr "Der Audiofilter von kyrr ist nicht installiert. Bitte installiere kyrr neu."
-
-msgid "Language"
-msgstr "Sprache"
-
-msgid "Listening…"
-msgstr "Hört zu …"
-
-msgid "Loading the speech model…"
-msgstr "Sprachmodell wird gestartet …"
-
-msgid "Medium"
-msgstr "Mittel"
-
-msgid "Noise is filtered on {}."
-msgstr "Rauschen wird gefiltert: {}."
-
-msgid "No microphone set up yet."
-msgstr "Noch kein Mikrofon eingerichtet."
-
-msgid "Off."
-msgstr "Aus."
-
-msgid "Off. {} passes through unchanged."
-msgstr "Aus. {} läuft unverändert durch."
-
 msgid "Open kyrr"
 msgstr "kyrr öffnen"
 
-msgid "Quit"
-msgstr "Beenden"
+msgid "Noise removal: on"
+msgstr "Störgeräusche entfernen: an"
 
-msgid "Setting up…"
-msgstr "Wird eingerichtet …"
+msgid "Noise removal: off"
+msgstr "Störgeräusche entfernen: aus"
 
-msgid "Setting up… sound pauses for a moment."
-msgstr "Wird eingerichtet … der Ton setzt kurz aus."
+msgid "Voice: on"
+msgstr "Stimme: an"
 
-msgid "Set up microphone"
-msgstr "Mikrofon einrichten"
-
-msgid "Strength"
-msgstr "Stärke"
-
-msgid "Strong"
-msgstr "Stark"
-
-msgid "The filter could not start and passes the microphone through."
-msgstr "Der Filter konnte nicht starten und lässt das Mikrofon unverändert durch."
-
-msgid "The speech model ({}) needs to be downloaded once."
-msgstr "Das Sprachmodell ({}) muss einmal heruntergeladen werden."
-
-msgid "Turn clean microphone off"
-msgstr "Sauberes Mikrofon ausschalten"
-
-msgid "Turn clean microphone on"
-msgstr "Sauberes Mikrofon einschalten"
+msgid "Voice: off"
+msgstr "Stimme: aus"
 
 msgid "Turn dictation off"
 msgstr "Diktieren ausschalten"
@@ -107,14 +26,543 @@ msgstr "Diktieren ausschalten"
 msgid "Turn dictation on"
 msgstr "Diktieren einschalten"
 
-msgid "Waiting for an app to use the microphone…"
-msgstr "Wartet, bis eine App das Mikrofon benutzt …"
+msgid "Quit"
+msgstr "Beenden"
+
+msgid "Setting things up… sound takes a short break."
+msgstr "Richte alles ein … der Ton macht kurz Pause."
+
+
+
+
+
+
+msgid "Before: this is you without kyrr."
+msgstr "Vorher: So klingst du ohne kyrr."
+
+msgid "After: same take, with kyrr."
+msgstr "Nachher: Gleiche Aufnahme, mit kyrr."
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+msgid "Pick a microphone and off we go."
+msgstr "Such dir ein Mikro aus, dann geht's los."
+
+msgid "Oops, something went wrong. Details below."
+msgstr "Hoppla, da ging was schief. Details unten."
+
+msgid "Oops, the filter is stuck. Your mic passes through as it is."
+msgstr "Hoppla, der Filter hakt. Dein Mikro läuft unverändert durch."
+
+msgid "Day off. Everything is off."
+msgstr "Feierabend. Alles aus."
+
+msgid "Noise allowed, voice polished."
+msgstr "Lärm erlaubt, Stimme poliert."
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+msgid "Remove background noise"
+msgstr "Störgeräusche entfernen"
+
+
+msgid "Off. Your mic passes through as it is."
+msgstr "Aus. Dein Mikro läuft unverändert durch."
+
+msgid "The filter could not start and passes the microphone through."
+msgstr "Der Filter konnte nicht starten und lässt das Mikrofon unverändert durch."
+
+msgid "No microphone set up yet."
+msgstr "Noch kein Mikrofon eingerichtet."
+
+msgid "kyrr's audio filter is not installed. Please reinstall kyrr."
+msgstr "Der Audiofilter von kyrr ist nicht installiert. Bitte installiere kyrr neu."
+
+msgid "Setting up… sound pauses for a moment."
+msgstr "Wird eingerichtet … der Ton setzt kurz aus."
+
+msgid "Set up microphone"
+msgstr "Mikrofon einrichten"
+
+msgid "Voice"
+msgstr "Stimme"
+
+msgid "Needs a microphone first."
+msgstr "Braucht zuerst ein Mikrofon."
+
+msgid "A bit of polish for your voice."
+msgstr "Ein bisschen Politur für deine Stimme."
+
+msgid "Off. Your voice stays as it is."
+msgstr "Aus. Deine Stimme bleibt, wie sie ist."
+
+msgid "Dictation"
+msgstr "Diktieren"
+
+
+msgid "One download first ({}), then it is yours."
+msgstr "Erst ein Download ({}), dann gehört es dir."
+
+msgid "Downloading the speech model… {}%"
+msgstr "Sprachmodell wird heruntergeladen … {} %"
+
+msgid "Loading the speech model…"
+msgstr "Sprachmodell wird gestartet …"
+
+
+msgid "Listening…"
+msgstr "Hört zu …"
+
+msgid "Writing…"
+msgstr "Schreibt …"
+
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgid "Download"
+msgstr "Herunterladen"
+
+msgid "Takes the worst out and leaves a bit of room. Natural."
+msgstr "Nimmt das Gröbste raus, ein Hauch Raum bleibt. Natürlich."
+
+msgid "The sweet spot for most rooms."
+msgstr "Der goldene Mittelweg für die meisten Räume."
+
+msgid "Out with everything but you. Bouncer mode."
+msgstr "Alles raus außer dir. Türsteher-Modus."
+
+msgid "A third of the CPU, barely less clean. For old laptops."
+msgstr "Ein Drittel der Rechenleistung, kaum weniger sauber. Für alte Laptops."
+
+msgid "Cleanest result, a bit more CPU. Default for a reason."
+msgstr "Sauberstes Ergebnis, etwas mehr Rechenleistung. Nicht umsonst die Vorgabe."
+
+msgid "Background noise"
+msgstr "Störgeräusche"
+
+msgid "Set up a microphone first."
+msgstr "Richte zuerst ein Mikrofon ein."
+
+msgid "Strength"
+msgstr "Stärke"
+
+msgid "Gentle"
+msgstr "Sanft"
+
+msgid "Medium"
+msgstr "Mittel"
+
+msgid "Strong"
+msgstr "Stark"
+
+msgid "Model"
+msgstr "Modell"
+
+msgid "Thorough"
+msgstr "Gründlich"
+
+msgid "Lean"
+msgstr "Sparsam"
+
+msgid "A bit more belly, less edge. Cosy."
+msgstr "Etwas mehr Bauch, weniger Schärfe. Gemütlich."
+
+msgid "Takes the boxiness out, speech moves forward."
+msgstr "Nimmt das Dumpfe raus, Sprache rückt nach vorn."
+
+msgid "More sparkle on top. Rescues dull mics."
+msgstr "Mehr Glanz obenrum. Rettet dumpfe Mikros."
+
+msgid "Your own mix. Kept when you switch back and forth."
+msgstr "Deine eigene Mischung. Bleibt erhalten, auch wenn du hin und her wechselst."
+
+msgid "No make-up. Your voice as it is."
+msgstr "Kein Make-up. Deine Stimme, wie sie ist."
+
+msgid "Smooths a little. You will hardly notice, your listeners will."
+msgstr "Glättet ein wenig. Du merkst es kaum, die anderen schon."
+
+msgid "Quiet words come through better. Good for calls."
+msgstr "Leise Wörter kommen besser an. Gut für Calls."
+
+msgid "Nearly constant volume. For streams and noisy rooms."
+msgstr "Fast gleichbleibende Lautstärke. Für Streams und laute Räume."
+
+msgid "Loud stays loud, quiet stays quiet. As nature intended."
+msgstr "Laut bleibt laut, leise bleibt leise. Wie die Natur es wollte."
+
+msgid "Takes the edge off hissing S sounds."
+msgstr "Nimmt zischenden S-Lauten die Spitze."
+
+msgid "Tames S and SH clearly. Good for bright mics."
+msgstr "Zähmt S und Sch deutlich. Gut für helle Mikros."
+
+msgid "Heavy. Can sound lispy close to the mic."
+msgstr "Kräftig. Kann nah am Mikro nach Lispeln klingen."
+
+msgid "S sounds stay as they are."
+msgstr "S-Laute bleiben, wie sie sind."
+
+msgid "Voice is off, so there is nothing to turn. Switch it on in the main view."
+msgstr "Stimme ist aus, also gibt es nichts zu drehen. Schalte sie auf der Startseite ein."
+
+msgid "Sound"
+msgstr "Klang"
+
+msgid "Neutral"
+msgstr "Neutral"
+
+msgid "Warm"
+msgstr "Warm"
+
+msgid "Clear"
+msgstr "Klar"
+
+msgid "Bright"
+msgstr "Hell"
+
+msgid "Custom"
+msgstr "Eigener"
+
+msgid "Body"
+msgstr "Fülle"
+
+msgid "Presence"
+msgstr "Präsenz"
+
+msgid "Air"
+msgstr "Luft"
+
+msgid "Even out volume"
+msgstr "Lautstärke ausgleichen"
+
+msgid "Off"
+msgstr "Aus"
+
+msgid "Light"
+msgstr "Leicht"
+
+msgid "Soften S sounds"
+msgstr "S-Laute dämpfen"
+
+msgid "Cut low rumble"
+msgstr "Tiefes Rumpeln filtern"
+
+msgid "Swallows footsteps, desk bumps and wind below {} Hz."
+msgstr "Schluckt Trittschall, Tischrempler und Wind unter {} Hz."
+
+msgid "Off. Rumble, wind and desk bumps get through."
+msgstr "Aus. Rumpeln, Wind und Tischrempler kommen durch."
+
+msgid "Reset"
+msgstr "Zurücksetzen"
+
+
+
+msgid "Test: before / after"
+msgstr "Test: vorher / nachher"
+
+msgid "Before"
+msgstr "Vorher"
+
+msgid "After"
+msgstr "Nachher"
+
+msgid "Records five seconds and plays them twice: raw, then with kyrr. Nothing is saved, promise."
+msgstr "Nimmt fünf Sekunden auf und spielt sie zweimal ab: roh, dann mit kyrr. Gespeichert wird nichts, versprochen."
+
+msgid "General"
+msgstr "Allgemein"
+
+msgid "Language"
+msgstr "Sprache"
+
+msgid "Also the language dictation listens for."
+msgstr "Gilt auch fürs Diktieren."
+
+msgid "Start with Windows"
+msgstr "Mit Windows starten"
+
+msgid "Microphone"
+msgstr "Mikrofon"
+
+msgid "Change microphone"
+msgstr "Mikrofon wechseln"
 
 msgid "Welcome to kyrr"
 msgstr "Willkommen bei kyrr"
 
+msgid "kyrr removes background noise from your microphone, for every app. Which microphone do you use?"
+msgstr "kyrr entfernt Hintergrundgeräusche aus deinem Mikrofon, für jede App. Welches Mikrofon verwendest du?"
+
 msgid "Windows will ask for permission. Sound pauses for a moment while kyrr sets up."
 msgstr "Windows fragt gleich um Erlaubnis. Während kyrr sich einrichtet, setzt der Ton kurz aus."
 
-msgid "Writing…"
-msgstr "Schreibt …"
+msgid "Setting up…"
+msgstr "Wird eingerichtet …"
+
+msgid "Talk instead of typing"
+msgstr "Reden statt tippen"
+
+
+msgid "Done"
+msgstr "Fertig"
+
+msgid "Settings"
+msgstr "Einstellungen"
+
+msgid "← Back"
+msgstr "← Zurück"
+
+msgid "Five seconds of fame."
+msgstr "Fünfsekundenruhm."
+
+msgid "Noise for science."
+msgstr "Krach für die Wissenschaft."
+
+msgid "Open-mic night, short edition."
+msgstr "Probesprechstunde."
+
+msgid "Shopping-list reading hour."
+msgstr "Einkaufslistenvorlesezeit."
+
+msgid "All ears."
+msgstr "Ganzohrigkeit."
+
+msgid "Mumbling permitted."
+msgstr "Nuschelerlaubnis."
+
+msgid "Listening intently."
+msgstr "Zuhörhochbetrieb."
+
+msgid "Mumble translation."
+msgstr "Gemurmelübersetzung."
+
+msgid "Speed typing."
+msgstr "Schnelltipperei."
+
+msgid "Word sorting."
+msgstr "Wortsortierung."
+
+msgid "{}% · Patience test."
+msgstr "{} % · Geduldsprobe."
+
+msgid "{}% · Coffee-break length."
+msgstr "{} % · Kaffeepausenlänge."
+
+msgid "{}% · Progress-bar hypnosis."
+msgstr "{} % · Balkenhypnose."
+
+msgid "{}% · Chunky delivery."
+msgstr "{} % · Brockenlieferung."
+
+msgid "Brain transplant."
+msgstr "Gehirntransplantation."
+
+msgid "Neuron relocation."
+msgstr "Neuronenumzug."
+
+msgid "Model swap break."
+msgstr "Modellwechselpause."
+
+msgid "Noise bouncer on duty."
+msgstr "Lärmtürsteher."
+
+msgid "Dog eraser."
+msgstr "Hundeausblender."
+
+msgid "Fan whisperer."
+msgstr "Lüfterflüsterer."
+
+msgid "Keyboard clatter ban."
+msgstr "Tastaturgeklapperverbot."
+
+msgid "Quiet zone management."
+msgstr "Ruhezonenverwaltung."
+
+msgid "Drill defence."
+msgstr "Bohrmaschinenabwehr."
+
+msgid "Voice-first policy."
+msgstr "Stimmenvorzugsbehandlung."
+
+msgid "Coffee machine censorship."
+msgstr "Kaffeemaschinenzensur."
+
+msgid "Noise disposal."
+msgstr "Störgeräuschentsorgung."
+
+msgid "Chair creak swallower."
+msgstr "Stuhlknarzschlucker."
+
+msgid "Noise quarantine."
+msgstr "Lärmquarantäne."
+
+msgid "On-call napping."
+msgstr "Bereitschaftsdösen."
+
+msgid "Mic waiting room."
+msgstr "Mikrofonwartezimmer."
+
+msgid "Thumb-twiddling mode."
+msgstr "Däumchendrehmodus."
+
+msgid "Idle serenity."
+msgstr "Leerlaufgelassenheit."
+
+msgid "Alert nap."
+msgstr "Wachsamkeitsnickerchen."
+
+msgid "Stockpiling silence."
+msgstr "Ruhevorratshaltung."
+
+msgid "By heast13 and Claude Opus. Built in silence."
+msgstr "Von heast13 und Claude Opus. In aller Stille gebaut."
+
+msgid "Your mic delivers pure silence. Muted?"
+msgstr "Dein Mikro liefert nur Stille. Stumm geschaltet?"
+
+msgid "About"
+msgstr "Über kyrr"
+
+msgid "Check"
+msgstr "Prüfen"
+
+msgid "Hold"
+msgstr "Halten"
+
+msgid "Hold while you talk, let go when you are done. Walkie-talkie style."
+msgstr "Halten, solange du redest, loslassen, wenn du fertig bist. Wie beim Funkgerät."
+
+msgid "Hold {} anywhere, speak, release: kyrr types what you said. It runs on your computer, nothing is sent anywhere."
+msgstr "Halte {} irgendwo, sprich, lass los: kyrr tippt, was du gesagt hast. Läuft auf deinem Rechner, nichts wird verschickt."
+
+msgid "Hold {}, talk, let go. The text lands at your cursor."
+msgstr "{} halten, reden, loslassen. Der Text landet an deinem Cursor."
+
+msgid "How"
+msgstr "Wie"
+
+msgid "Key"
+msgstr "Taste"
+
+msgid "Licenses"
+msgstr "Lizenzen"
+
+msgid "Moves while an app uses the mic."
+msgstr "Bewegt sich, solange eine App das Mikro nutzt."
+
+msgid "Noise filter and voice keep running without this window."
+msgstr "Störgeräusche-Filter und Stimme laufen auch ohne dieses Fenster weiter."
+
+msgid "Not now, just dictation"
+msgstr "Nicht jetzt, nur diktieren"
+
+msgid "Off. {} does nothing."
+msgstr "Aus. {} tut nichts."
+
+msgid "Repair"
+msgstr "Reparieren"
+
+msgid "Right Ctrl"
+msgstr "Strg rechts"
+
+msgid "Say “new line” or “new paragraph” for line breaks."
+msgstr "Sag „neue Zeile“ oder „neuer Absatz“ für Zeilenumbrüche."
+
+msgid "Step 1 of 2"
+msgstr "Schritt 1 von 2"
+
+msgid "Step 2 of 2"
+msgstr "Schritt 2 von 2"
+
+msgid "Tap"
+msgstr "Antippen"
+
+msgid "Tap once to start, once more to stop. For long thoughts."
+msgstr "Einmal tippen zum Starten, nochmal zum Stoppen. Für lange Gedanken."
+
+msgid "Tap {}, talk, tap again. The text lands at your cursor."
+msgstr "{} tippen, reden, nochmal tippen. Der Text landet an deinem Cursor."
+
+msgid "The kyrr filter is missing. Reinstall, please."
+msgstr "Der kyrr-Filter fehlt. Bitte neu installieren."
+
+msgid "This processor is a bit older: Lean runs smoother on it."
+msgstr "Dieser Prozessor ist etwas älter: Sparsam läuft darauf runder."
+
+msgid "Try again"
+msgstr "Nochmal versuchen"
+
+msgid "Use {} instead"
+msgstr "Stattdessen {} nehmen"
+
+msgid "Windows took kyrr off the mic. Repair below."
+msgstr "Windows hat kyrr vom Mikro genommen. Reparieren unten."
+
+msgid "Windows took kyrr off {} (an update, most likely)."
+msgstr "Windows hat kyrr von {} genommen (vermutlich ein Update)."
+
+msgid "With Ctrl, Alt or Shift held, the key stays with your app."
+msgstr "Mit Strg, Alt oder Umschalt bleibt die Taste bei deiner App."
+
+msgid "Your microphone is not plugged in."
+msgstr "Dein Mikrofon steckt nicht."
+
+msgid "kyrr starts with Windows and lives in the tray, bottom right (maybe behind the little arrow). Both can be changed in the settings."
+msgstr "kyrr startet mit Windows und wohnt unten rechts im Infobereich (vielleicht hinter dem kleinen Pfeil). Beides lässt sich in den Einstellungen ändern."
+
+msgid "noise filter off"
+msgstr "Störgeräusche-Filter aus"
+
+msgid "noise filter on"
+msgstr "Störgeräusche-Filter an"
+
+msgid "what your apps get"
+msgstr "was deine Apps bekommen"
+
+msgid "your mic"
+msgstr "dein Mikro"
+
+msgid "{} ready"
+msgstr "{} bereit"
+
+msgid "{}: keyboard, fan and dog stay outside."
+msgstr "{}: Tastatur, Lüfter und Hund bleiben draußen."

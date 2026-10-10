@@ -14,7 +14,18 @@ pub struct Config {
     pub dictation: bool,
     /// First-run setup finished.
     pub setup_done: bool,
+    /// The dictation key, see [`DICTATION_KEYS`].
+    pub dictation_key: u32,
+    /// Tap once to start and once to stop, instead of holding the key.
+    pub dictation_toggle: bool,
+    /// The large noise model was swapped for the small one once because the
+    /// CPU lacks AVX2; never again, so the user's later choice holds.
+    pub lean_suggested: bool,
 }
+
+/// Keys dictation can use, as Windows virtual-key codes: F8, F9, Pause and
+/// right Ctrl. The index is what the settings page shows.
+pub const DICTATION_KEYS: [u32; 4] = [0x77, 0x78, 0x13, 0xA3];
 
 impl Default for Config {
     fn default() -> Self {
@@ -22,6 +33,9 @@ impl Default for Config {
             language: system_language().code().into(),
             dictation: true,
             setup_done: false,
+            dictation_key: DICTATION_KEYS[1],
+            dictation_toggle: false,
+            lean_suggested: false,
         }
     }
 }
@@ -39,8 +53,12 @@ impl Config {
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
+        // Written next to it and renamed, so a crash never leaves half a file.
         if let Ok(json) = serde_json::to_string_pretty(self) {
-            let _ = std::fs::write(path, json);
+            let tmp = path.with_extension("json.tmp");
+            if std::fs::write(&tmp, json).is_ok() {
+                let _ = std::fs::rename(&tmp, &path);
+            }
         }
     }
 

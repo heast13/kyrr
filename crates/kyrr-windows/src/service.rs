@@ -10,6 +10,8 @@ use windows::Win32::System::Services::{
     SERVICE_STATUS_CURRENT_STATE, SERVICE_STOP, SERVICE_STOPPED,
 };
 
+use windows::Win32::Foundation::ERROR_SERVICE_ALREADY_RUNNING;
+
 use crate::reg::wide;
 
 const TIMEOUT: Duration = Duration::from_secs(20);
@@ -55,27 +57,39 @@ fn open(manager: &Handle, name: &str) -> Result<Handle, String> {
 }
 
 /// Restarts AudioEndpointBuilder (which reads the endpoint effect settings)
-/// and the audio service that depends on it.
+/// and the audio service that depends on it. Whatever goes wrong while
+/// stopping, both are started again: a failed restart must never leave
+/// Windows without sound.
 pub fn restart_audio() -> Result<(), String> {
     let manager = unsafe { OpenSCManagerW(PCWSTR::null(), PCWSTR::null(), SC_MANAGER_CONNECT) }
         .map(Handle)
         .map_err(|e| format!("service manager: {e}"))?;
     let audio = open(&manager, "Audiosrv")?;
     let builder = open(&manager, "AudioEndpointBuilder")?;
+    let mut first_error = None;
     for service in [&audio, &builder] {
         if state(service) != Some(SERVICE_STOPPED) {
             let mut status = SERVICE_STATUS::default();
             let _ = unsafe { ControlService(service.0, SERVICE_CONTROL_STOP, &mut status) };
             if !wait_for(service, SERVICE_STOPPED) {
-                return Err("audio service did not stop".into());
+                first_error = Some("audio service did not stop".to_string());
+                break;
             }
         }
     }
     for service in [&builder, &audio] {
-        unsafe { StartServiceW(service.0, None) }.map_err(|e| format!("audio service start: {e}"))?;
+        if state(service) == Some(SERVICE_RUNNING) {
+            continue;
+        }
+        if let Err(e) = unsafe { StartServiceW(service.0, None) } {
+            if e.code() != ERROR_SERVICE_ALREADY_RUNNING.to_hresult() {
+                first_error.get_or_insert(format!("audio service start: {e}"));
+                continue;
+            }
+        }
         if !wait_for(service, SERVICE_RUNNING) {
-            return Err("audio service did not start".into());
+            first_error.get_or_insert("audio service did not start".to_string());
         }
     }
-    Ok(())
+    first_error.map_or(Ok(()), Err)
 }

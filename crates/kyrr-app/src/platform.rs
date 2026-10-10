@@ -19,6 +19,27 @@ pub enum FilterStatus {
     Waiting(String),
     Running(String, String),
     Passthrough(String, String),
+    /// Attached, but the effect slot no longer holds kyrr (a Windows or
+    /// driver update reset it).
+    Detached(String),
+}
+
+/// The microphone level the audio filter publishes.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Levels {
+    /// Changes while an app uses the microphone.
+    pub heartbeat: u32,
+    /// Peak before and after kyrr, linear.
+    pub before: f32,
+    pub after: f32,
+}
+
+/// The same five seconds before and after kyrr, mono.
+#[derive(Debug)]
+pub struct Take {
+    pub rate: u32,
+    pub before: Vec<f32>,
+    pub after: Vec<f32>,
 }
 
 #[derive(Debug)]
@@ -51,6 +72,9 @@ mod imp {
         let Some(guid) = setup::attached().into_iter().next() else {
             return FilterStatus::NotAttached;
         };
+        if !setup::slot_holds_kyrr(&guid) {
+            return FilterStatus::Detached(guid);
+        }
         match filter::status() {
             Some(s) if s.state == "running" => FilterStatus::Running(guid, format!("{}, {}", s.engine, s.format)),
             Some(s) if s.state.starts_with("passthrough") => FilterStatus::Passthrough(guid, s.state),
@@ -62,16 +86,14 @@ mod imp {
         filter::settings()
     }
 
-    pub fn set_filter_settings(s: &FilterSettings) -> Result<(), String> {
-        filter::set_settings(s)
+    pub fn set_filter_values(values: &[(&str, u32)]) -> Result<(), String> {
+        filter::set_values(values)
     }
 
-    /// Moves the filter to microphone `guid` (asks Windows for permission).
+    /// Moves the filter to microphone `guid`, or puts it back there: one
+    /// permission prompt, one short audio restart.
     pub fn attach(guid: &str) -> Result<(), SetupError> {
-        for old in setup::attached().into_iter().filter(|g| g != guid) {
-            run(&["--setup", "detach", &old])?;
-        }
-        run(&["--setup", "attach", guid])
+        run(&["--setup", "move", guid])
     }
 
     fn run(args: &[&str]) -> Result<(), SetupError> {
@@ -85,6 +107,26 @@ mod imp {
 
     pub fn type_text(text: &str) -> bool {
         typing::type_text(text)
+    }
+
+    pub fn copy_to_clipboard(text: &str) -> bool {
+        typing::copy_to_clipboard(text)
+    }
+
+    pub fn set_hotkey_key(vk: u32) {
+        hotkey::set_key(vk);
+    }
+
+    /// Shows the license notices that ship in the install folder.
+    pub fn open_licenses() {
+        if let Some(dir) = std::env::current_exe()
+            .ok()
+            .and_then(|e| e.parent().map(|d| d.to_path_buf()))
+        {
+            let _ = std::process::Command::new("notepad.exe")
+                .arg(dir.join("THIRD_PARTY.md"))
+                .spawn();
+        }
     }
 
     /// Push-to-talk events; `None` when the key could not be hooked.
@@ -102,7 +144,45 @@ mod imp {
         }
     }
 
+    pub fn autostart_enabled() -> bool {
+        autostart::is_enabled()
+    }
+
+    pub fn set_autostart(on: bool) {
+        let _ = if on { autostart::enable() } else { autostart::disable() };
+    }
+
     pub use kyrr_windows::hotkey::KeyEvent;
+
+    /// The live monitor the audio filter shares; `None` until it ran once.
+    pub struct Monitor(kyrr_windows::monitor::Monitor);
+
+    impl Monitor {
+        pub fn open() -> Option<Monitor> {
+            kyrr_windows::monitor::Monitor::open().map(Monitor)
+        }
+
+        pub fn levels(&self) -> Levels {
+            let l = self.0.levels();
+            Levels {
+                heartbeat: l.heartbeat,
+                before: l.before,
+                after: l.after,
+            }
+        }
+
+        pub fn request_probe(&self) -> u32 {
+            self.0.request_probe()
+        }
+
+        pub fn probe(&self, id: u32) -> Option<Take> {
+            self.0.probe(id).map(|p| Take {
+                rate: p.rate,
+                before: p.before,
+                after: p.after,
+            })
+        }
+    }
 }
 
 #[cfg(not(windows))]
@@ -132,7 +212,7 @@ mod imp {
         FilterSettings::default()
     }
 
-    pub fn set_filter_settings(_: &FilterSettings) -> Result<(), String> {
+    pub fn set_filter_values(_: &[(&str, u32)]) -> Result<(), String> {
         Ok(())
     }
 
@@ -146,6 +226,14 @@ mod imp {
         println!("{text}");
         true
     }
+
+    pub fn copy_to_clipboard(_: &str) -> bool {
+        false
+    }
+
+    pub fn set_hotkey_key(_: u32) {}
+
+    pub fn open_licenses() {}
 
     #[derive(Clone, Copy, Debug)]
     #[allow(dead_code)]
@@ -161,6 +249,33 @@ mod imp {
     pub fn set_hotkey_active(_: bool) {}
 
     pub fn enable_autostart() {}
+
+    pub fn autostart_enabled() -> bool {
+        false
+    }
+
+    pub fn set_autostart(_: bool) {}
+
+    pub struct Monitor;
+
+    #[allow(dead_code)]
+    impl Monitor {
+        pub fn open() -> Option<Monitor> {
+            None
+        }
+
+        pub fn levels(&self) -> Levels {
+            Levels::default()
+        }
+
+        pub fn request_probe(&self) -> u32 {
+            0
+        }
+
+        pub fn probe(&self, _: u32) -> Option<Take> {
+            None
+        }
+    }
 }
 
 pub use imp::*;

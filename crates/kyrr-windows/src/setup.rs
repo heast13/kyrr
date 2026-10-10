@@ -12,7 +12,9 @@
 //! Attaching a microphone puts kyrr into the endpoint's stream-effect slot
 //! and records the driver's effect it replaced, which kyrr then runs first.
 
-use kyrr_common::{endpoint, guid_string, APO_CLSID, APO_NAME, REG_ENDPOINTS, REG_FILTER, REG_ROOT, REG_STATUS};
+use kyrr_common::{
+    endpoint, guid_string, status, APO_CLSID, APO_DLL, APO_NAME, REG_ENDPOINTS, REG_FILTER, REG_ROOT, REG_STATUS,
+};
 use windows::core::Interface;
 use windows::Win32::Media::Audio::Apo::IAudioProcessingObject;
 use windows::Win32::System::Registry::HKEY_LOCAL_MACHINE;
@@ -56,6 +58,28 @@ fn apo_key() -> String {
 
 fn fx_value(slot: u32) -> String {
     format!("{FX_GUID},{slot}")
+}
+
+/// The APO DLL next to this executable, if that is an install folder only
+/// administrators can write to (Program Files). Setup commands take no
+/// path: a path from the command line would let any program that gets the
+/// user to accept a "kyrr" permission prompt plant its own DLL in the
+/// audio engine.
+pub fn installed_dll() -> Result<std::path::PathBuf, String> {
+    use windows::Win32::UI::Shell::{FOLDERID_ProgramFiles, SHGetKnownFolderPath, KF_FLAG_DEFAULT};
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let dir = exe.parent().ok_or("no install folder")?;
+    let program_files =
+        unsafe { SHGetKnownFolderPath(&FOLDERID_ProgramFiles, KF_FLAG_DEFAULT, None) }.map_err(|e| e.to_string())?;
+    let program_files = std::path::PathBuf::from(unsafe { program_files.to_string() }.map_err(|e| e.to_string())?);
+    if !dir.starts_with(&program_files) {
+        return Err(format!("kyrr is not installed under {}", program_files.display()));
+    }
+    let dll = dir.join(APO_DLL);
+    if !dll.is_file() {
+        return Err(format!("{} missing", dll.display()));
+    }
+    Ok(dll)
 }
 
 /// Registers the APO DLL at `dll` and prepares kyrr's registry keys.
@@ -103,23 +127,97 @@ pub fn install(dll: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Equalizer APO's settings key: when it is installed, it needs
+/// `DisableProtectedAudioDG` as much as kyrr did.
+const EQUALIZER_APO_KEY: &str = r"SOFTWARE\EqualizerAPO";
+
 /// Detaches every microphone and removes everything [`install`] added.
+/// Every step runs even when an earlier one failed, so a single problem
+/// does not leave a half-removed filter behind; the errors are reported
+/// together.
 pub fn uninstall() -> Result<(), String> {
+    let mut errors = Vec::new();
+    let mut step = |r: Result<(), String>| {
+        if let Err(e) = r {
+            errors.push(e);
+        }
+    };
     for guid in attached() {
-        detach(&guid)?;
+        step(detach(&guid));
     }
-    delete_tree(HKEY_LOCAL_MACHINE, &apo_key())?;
-    delete_tree(HKEY_LOCAL_MACHINE, &com_key())?;
-    if let Some(root) = Key::open(HKEY_LOCAL_MACHINE, REG_ROOT) {
-        if let Some(prior) = root.get_dword(PRIOR_PROTECTED_AUDIO) {
-            let audio = Key::create(HKEY_LOCAL_MACHINE, AUDIO_KEY, None)?;
-            match prior {
-                ABSENT => audio.delete_value(PROTECTED_AUDIO)?,
-                v => audio.set_dword(PROTECTED_AUDIO, v)?,
-            }
+    step(delete_tree(HKEY_LOCAL_MACHINE, &apo_key()));
+    step(delete_tree(HKEY_LOCAL_MACHINE, &com_key()));
+    step(restore_protected_audio());
+    step(delete_tree(HKEY_LOCAL_MACHINE, REG_ROOT));
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("; "))
+    }
+}
+
+/// Puts `DisableProtectedAudioDG` back as it was before kyrr, unless
+/// someone changed it since or another audio tool (Equalizer APO) relies
+/// on it now.
+fn restore_protected_audio() -> Result<(), String> {
+    let Some(prior) = Key::open(HKEY_LOCAL_MACHINE, REG_ROOT).and_then(|r| r.get_dword(PRIOR_PROTECTED_AUDIO)) else {
+        return Ok(());
+    };
+    let audio = Key::create(HKEY_LOCAL_MACHINE, AUDIO_KEY, None)?;
+    if audio.get_dword(PROTECTED_AUDIO) != Some(1) || Key::open(HKEY_LOCAL_MACHINE, EQUALIZER_APO_KEY).is_some() {
+        return Ok(());
+    }
+    match prior {
+        ABSENT => audio.delete_value(PROTECTED_AUDIO),
+        1 => Ok(()),
+        v => audio.set_dword(PROTECTED_AUDIO, v),
+    }
+}
+
+/// Whether `s` is an endpoint GUID as the registry names it:
+/// `{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}`. Setup commands take nothing else.
+pub fn is_endpoint_guid(s: &str) -> bool {
+    let Some(inner) = s.strip_prefix('{').and_then(|s| s.strip_suffix('}')) else {
+        return false;
+    };
+    let groups: Vec<&str> = inner.split('-').collect();
+    groups.len() == 5
+        && groups
+            .iter()
+            .zip([8, 4, 4, 4, 12])
+            .all(|(g, n)| g.len() == n && g.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
+/// Whether microphone `guid`'s effect slot still holds kyrr. Windows
+/// updates, driver updates or a sound-settings reset can take it out.
+/// Reads only, no admin rights needed.
+pub fn slot_holds_kyrr(guid: &str) -> bool {
+    let Some(record) = Key::open(HKEY_LOCAL_MACHINE, &format!(r"{REG_ENDPOINTS}\{guid}")) else {
+        return false;
+    };
+    let slot = record.get_dword(SLOT).unwrap_or(5);
+    Key::open(HKEY_LOCAL_MACHINE, &format!(r"{CAPTURE_KEY}\{guid}\FxProperties"))
+        .and_then(|fx| fx.get_string(&fx_value(slot)))
+        .is_some_and(|v| v.eq_ignore_ascii_case(&clsid()))
+}
+
+/// Forgets what the filter last reported, so a status from another
+/// microphone or an earlier run is not taken for the new one.
+fn clear_status() {
+    if let Some(key) = Key::open_writable(HKEY_LOCAL_MACHINE, REG_STATUS) {
+        for name in [status::STATE, status::ENGINE, status::FORMAT, status::UPDATED] {
+            let _ = key.delete_value(name);
         }
     }
-    delete_tree(HKEY_LOCAL_MACHINE, REG_ROOT)
+}
+
+/// Moves the filter to microphone `guid`: detaches it from every other one
+/// and attaches it there, in one elevated step.
+pub fn move_to(guid: &str) -> Result<(), String> {
+    for old in attached().into_iter().filter(|g| !g.eq_ignore_ascii_case(guid)) {
+        detach(&old)?;
+    }
+    attach(guid)
 }
 
 /// Endpoint GUIDs kyrr is attached to.
@@ -134,9 +232,16 @@ pub fn is_installed() -> bool {
 
 /// Puts kyrr into the stream-effect slot of microphone `guid`.
 pub fn attach(guid: &str) -> Result<(), String> {
+    if !is_endpoint_guid(guid) {
+        return Err(format!("not a microphone id: {guid}"));
+    }
     if !is_installed() {
         return Err("kyrr's audio filter is not installed".into());
     }
+    if Key::open(HKEY_LOCAL_MACHINE, &format!(r"{CAPTURE_KEY}\{guid}")).is_none() {
+        return Err(format!("no such microphone: {guid}"));
+    }
+    clear_status();
     enable_backup_restore()?;
     let ours = clsid();
     let base = format!(r"{CAPTURE_KEY}\{guid}");
@@ -170,12 +275,22 @@ pub fn attach(guid: &str) -> Result<(), String> {
 }
 
 /// Takes kyrr out of microphone `guid` and puts the driver's effect back.
+/// A microphone Windows no longer knows is only forgotten: no keys are
+/// created for it.
 pub fn detach(guid: &str) -> Result<(), String> {
+    if !is_endpoint_guid(guid) {
+        return Err(format!("not a microphone id: {guid}"));
+    }
     let Some(record) = Key::open(HKEY_LOCAL_MACHINE, &format!(r"{REG_ENDPOINTS}\{guid}")) else {
         return Ok(());
     };
-    enable_backup_restore()?;
+    clear_status();
     let base = format!(r"{CAPTURE_KEY}\{guid}");
+    if Key::open(HKEY_LOCAL_MACHINE, &format!(r"{base}\FxProperties")).is_none() {
+        drop(record);
+        return delete_tree(HKEY_LOCAL_MACHINE, &format!(r"{REG_ENDPOINTS}\{guid}"));
+    }
+    enable_backup_restore()?;
     let fx = Key::create_privileged(HKEY_LOCAL_MACHINE, &format!(r"{base}\FxProperties"))?;
     let slot = record.get_dword(SLOT).unwrap_or(5);
     let name = fx_value(slot);
@@ -192,4 +307,19 @@ pub fn detach(guid: &str) -> Result<(), String> {
     }
     drop(record);
     delete_tree(HKEY_LOCAL_MACHINE, &format!(r"{REG_ENDPOINTS}\{guid}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn endpoint_guids_only() {
+        assert!(is_endpoint_guid("{f6416a4b-9da5-464c-826e-b821adca8e78}"));
+        assert!(is_endpoint_guid("{F6416A4B-9DA5-464C-826E-B821ADCA8E78}"));
+        assert!(!is_endpoint_guid("f6416a4b-9da5-464c-826e-b821adca8e78"));
+        assert!(!is_endpoint_guid("{f6416a4b-9da5-464c-826e-b821adca8e7}"));
+        assert!(!is_endpoint_guid(r"{f6416a4b-9da5-464c-826e-b821adca8e78}\..\x"));
+        assert!(!is_endpoint_guid("{zz416a4b-9da5-464c-826e-b821adca8e78}"));
+    }
 }

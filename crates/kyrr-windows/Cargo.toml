@@ -5,6 +5,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+publish = false
 
 [target.'cfg(windows)'.dependencies]
 kyrr-common = { path = "../kyrr-common" }
@@ -18,7 +19,10 @@ windows = { version = "0.62", features = [
     "Win32_Security_Authorization",
     "Win32_System_Com",
     "Win32_System_Com_StructuredStorage",
+    "Win32_System_DataExchange",
     "Win32_System_LibraryLoader",
+    "Win32_System_Ole",
+    "Win32_System_Memory",
     "Win32_System_Registry",
     "Win32_System_Services",
     "Win32_System_Threading",

@@ -1,0 +1,8 @@
+# Link the C runtime statically (Rust code and, through the cc crate, the
+# native C engine): kyrr_apo.dll then needs no Visual C++ Redistributable
+# inside audiodg.exe, and kyrr.exe matches sherpa-onnx's static libraries.
+# onnxruntime.dll (only the fallback engine on CPUs without AVX2/FMA) does
+# need the runtime; the installer ships it next to the DLL and the filter
+# loads it from there. `scripts/check-binaries.py` guards both.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

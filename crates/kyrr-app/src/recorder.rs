@@ -8,7 +8,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, SizedSample};
 
 /// Longest recording kept; dictation is meant for sentences, not lectures.
-const MAX_SECONDS: usize = 120;
+pub const MAX_SECONDS: usize = 120;
 
 pub struct Recording {
     _stream: cpal::Stream,

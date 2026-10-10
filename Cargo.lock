@@ -2853,6 +2853,7 @@ version = "0.1.0"
 dependencies = [
  "kyrr-common",
  "kyrr-denoise",
+ "kyrr-voice",
  "windows",
  "windows-core",
 ]
@@ -2880,6 +2881,13 @@ dependencies = [
  "sha2",
  "sherpa-onnx",
  "ureq 3.4.2",
+]
+
+[[package]]
+name = "kyrr-voice"
+version = "0.1.0"
+dependencies = [
+ "kyrr-common",
 ]
 
 [[package]]

@@ -1,0 +1,11 @@
+[package]
+name = "kyrr-voice"
+description = "Voice shaping after the noise filter: low cut, sound, de-esser, compressor, limiter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+kyrr-common = { path = "../kyrr-common" }

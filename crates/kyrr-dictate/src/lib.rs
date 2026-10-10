@@ -90,7 +90,48 @@ fn resample(rate: u32, samples: &[f32]) -> Result<Vec<f32>, String> {
 
 /// Collapses whitespace runs and trims, so the text can be typed as is.
 fn tidy(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+    commands(&text.split_whitespace().collect::<Vec<_>>().join(" "))
+}
+
+/// Spoken line breaks, in both languages: what is said and what is typed.
+const COMMANDS: [(&str, &str); 4] = [
+    ("neuer absatz", "\n\n"),
+    ("neue zeile", "\n"),
+    ("new paragraph", "\n\n"),
+    ("new line", "\n"),
+];
+
+/// Replaces spoken commands ("neue Zeile", "new paragraph") with line
+/// breaks. The model writes them as words with punctuation around them
+/// ("Hallo. Neue Zeile. Wie geht's?"); that punctuation goes too.
+pub fn commands(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let lower: Vec<char> = chars.iter().map(|c| c.to_lowercase().next().unwrap_or(*c)).collect();
+    let boundary = |i: usize| i >= chars.len() || !chars[i].is_alphanumeric();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    'outer: while i < chars.len() {
+        if i == 0 || boundary(i - 1) {
+            for (spoken, typed) in COMMANDS {
+                let n = spoken.chars().count();
+                if i + n <= chars.len() && lower[i..i + n].iter().copied().eq(spoken.chars()) && boundary(i + n) {
+                    // A comma before the command goes; a full stop stays.
+                    while out.ends_with([' ', ',']) {
+                        out.pop();
+                    }
+                    out.push_str(typed);
+                    i += n;
+                    while i < chars.len() && matches!(chars[i], '.' | ',' | '!' | '?' | ';' | ':' | ' ') {
+                        i += 1;
+                    }
+                    continue 'outer;
+                }
+            }
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out.trim_matches(' ').to_string()
 }
 
 #[cfg(test)]
@@ -103,6 +144,18 @@ mod tests {
         assert_eq!(Language::from_code("en_US"), Some(Language::English));
         assert_eq!(Language::from_code("EN"), Some(Language::English));
         assert_eq!(Language::from_code("fr-FR"), None);
+    }
+
+    #[test]
+    fn spoken_line_breaks() {
+        assert_eq!(commands("Hallo. Neue Zeile. Wie geht's?"), "Hallo.\nWie geht's?");
+        assert_eq!(commands("Liebe Grüße, neuer Absatz Flo"), "Liebe Grüße\n\nFlo");
+        assert_eq!(
+            commands("First point. New line. Second point."),
+            "First point.\nSecond point."
+        );
+        assert_eq!(commands("Die neue Zeilenlänge passt."), "Die neue Zeilenlänge passt.");
+        assert_eq!(commands("Kein Befehl hier."), "Kein Befehl hier.");
     }
 
     #[test]

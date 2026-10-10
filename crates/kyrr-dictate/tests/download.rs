@@ -44,7 +44,7 @@ fn downloads_verifies_and_cancels() {
 
     let err = download(&TAMPERED, &root, &mut |_| {}, &never).unwrap_err();
     assert!(
-        matches!(err, DownloadError::Failed(ref e) if e.contains("checksum")),
+        matches!(err, DownloadError::Corrupt(ref e) if e.contains("checksum")),
         "{err}"
     );
     assert!(!TAMPERED.is_installed(&root));

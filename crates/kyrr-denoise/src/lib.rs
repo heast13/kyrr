@@ -332,7 +332,14 @@ impl VoiceFilter {
         }
 
         match self.bridge.as_mut() {
-            None => self.out.extend(self.stream.process(&self.mono).iter().copied()),
+            // Hop-sized pieces keep the stream's buffers at their initial
+            // size, so a large first block does not allocate on the audio
+            // thread.
+            None => {
+                for piece in self.mono.chunks(HOP) {
+                    self.out.extend(self.stream.process(piece).iter().copied());
+                }
+            }
             Some(b) => b.process(&self.mono, &mut self.stream, &mut self.out),
         }
 

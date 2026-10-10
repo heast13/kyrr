@@ -1,30 +1,34 @@
 //! The app's side of the filter: writing its settings (users may write the
 //! key, see `setup.rs`) and reading what the APO reports.
 
-use kyrr_common::{filter, status, FilterSettings, REG_FILTER, REG_STATUS};
+use kyrr_common::{status, FilterSettings, REG_FILTER, REG_STATUS};
 use windows::Win32::System::Registry::HKEY_LOCAL_MACHINE;
 
 use crate::reg::Key;
 
 /// The settings as stored, defaults for missing values.
 pub fn settings() -> FilterSettings {
-    let d = FilterSettings::default();
-    let Some(key) = Key::open(HKEY_LOCAL_MACHINE, REG_FILTER) else {
-        return d;
-    };
-    FilterSettings {
-        enabled: key.get_dword(filter::ENABLED).map_or(d.enabled, |v| v != 0),
-        limit_db: key.get_dword(filter::LIMIT_DB).map_or(d.limit_db, |v| v.min(100)),
-        light_model: key.get_dword(filter::MODEL).map_or(d.light_model, |v| v == 1),
-    }
+    let key = Key::open(HKEY_LOCAL_MACHINE, REG_FILTER);
+    FilterSettings::from_dwords(|name| key.as_ref()?.get_dword(name))
 }
 
 /// Stores the settings; the APO picks them up within milliseconds.
 pub fn set_settings(s: &FilterSettings) -> Result<(), String> {
     let key = Key::open_writable(HKEY_LOCAL_MACHINE, REG_FILTER).ok_or("filter settings key missing")?;
-    key.set_dword(filter::ENABLED, s.enabled as u32)?;
-    key.set_dword(filter::LIMIT_DB, s.limit_db.min(100))?;
-    key.set_dword(filter::MODEL, s.light_model as u32)
+    for (name, value) in s.to_dwords() {
+        key.set_dword(name, value)?;
+    }
+    Ok(())
+}
+
+/// Stores just these values (the ones that changed): every write wakes the
+/// filter's settings watcher.
+pub fn set_values(values: &[(&str, u32)]) -> Result<(), String> {
+    let key = Key::open_writable(HKEY_LOCAL_MACHINE, REG_FILTER).ok_or("filter settings key missing")?;
+    for (name, value) in values {
+        key.set_dword(name, *value)?;
+    }
+    Ok(())
 }
 
 /// What the APO last reported.

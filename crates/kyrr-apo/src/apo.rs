@@ -5,20 +5,21 @@
 //! would take down `audiodg.exe` and with it all sound on the machine. When
 //! anything is wrong the microphone passes through unchanged.
 
+use std::os::windows::ffi::OsStrExt;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, PoisonError, TryLockError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use kyrr_common::{endpoint, status, APO_CLSID, APO_NAME, REG_ENDPOINTS, REG_STATUS};
 use kyrr_denoise::{Mode, Model, VoiceFilter};
-use windows::core::{implement, Ref, Result, GUID, HRESULT};
+use kyrr_voice::Voice;
+use windows::core::{Ref, Result, GUID, HRESULT};
 use windows::Win32::Foundation::{E_FAIL, E_INVALIDARG, E_POINTER};
 use windows::Win32::Media::Audio::Apo::{
-    APOInitSystemEffects, IAudioMediaType, IAudioProcessingObject, IAudioProcessingObjectConfiguration,
-    IAudioProcessingObjectConfiguration_Impl, IAudioProcessingObjectRT, IAudioProcessingObjectRT_Impl,
-    IAudioProcessingObject_Impl, IAudioSystemEffects, IAudioSystemEffects_Impl, APOERR_ALREADY_INITIALIZED,
+    APOInitSystemEffects, IAudioMediaType, IAudioProcessingObject, IAudioProcessingObjectConfiguration_Impl,
+    IAudioProcessingObjectRT_Impl, IAudioProcessingObject_Impl, IAudioSystemEffects_Impl, APOERR_ALREADY_INITIALIZED,
     APOERR_FORMAT_NOT_SUPPORTED, APOERR_NOT_INITIALIZED, APO_CONNECTION_DESCRIPTOR, APO_CONNECTION_PROPERTY, APO_FLAG,
     APO_FLAG_DEFAULT, APO_FLAG_INPLACE, APO_REG_PROPERTIES, BUFFER_SILENT, BUFFER_VALID, UNCOMPRESSEDAUDIOFORMAT,
 };
@@ -29,8 +30,11 @@ use windows::Win32::System::Com::StructuredStorage::PropVariantToBSTR;
 
 use crate::child::Child;
 use crate::log::log;
+use crate::monitor::{monitor, peak, Probe};
+use crate::object::Object;
 use crate::registry::{read_string, write_values, Value};
 use crate::settings::live;
+use crate::swap::{model_for, Swap};
 
 /// Live APO objects, for `DllCanUnloadNow`.
 pub static OBJECTS: AtomicUsize = AtomicUsize::new(0);
@@ -47,39 +51,62 @@ struct State {
     child: Option<Child>,
     /// Set while locked for processing.
     filter: Option<VoiceFilter>,
+    /// Set while locked for processing; runs even when the filter failed.
+    voice: Option<Voice>,
+    /// The before/after probe this instance is recording.
+    probe: Option<Probe>,
     locked: bool,
     channels: usize,
     rate: u32,
 }
 
-#[implement(
-    IAudioProcessingObject,
-    IAudioProcessingObjectRT,
-    IAudioProcessingObjectConfiguration,
-    IAudioSystemEffects
-)]
+/// The APO's state and logic; `object.rs` wraps it into the COM object the
+/// audio engine sees, whose interface methods are implemented below.
 pub struct KyrrApo {
     state: Mutex<State>,
+    /// Hand-over of a filter with another model, see `swap.rs`.
+    swap: Arc<Swap>,
+    /// Channel count while locked, readable when the state is busy.
+    channels: AtomicUsize,
+    /// Declared last so it counts down after everything else is dropped.
+    _count: ObjectCount,
+}
+
+/// Counts live objects for `DllCanUnloadNow`.
+struct ObjectCount;
+
+impl ObjectCount {
+    fn new() -> ObjectCount {
+        OBJECTS.fetch_add(1, Ordering::SeqCst);
+        ObjectCount
+    }
+}
+
+impl Drop for ObjectCount {
+    fn drop(&mut self) {
+        OBJECTS.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 impl KyrrApo {
     pub fn new() -> KyrrApo {
-        OBJECTS.fetch_add(1, Ordering::SeqCst);
+        // The settings watcher and model loaders run DLL code for the life
+        // of the process; the DLL must never be unloaded under them.
+        crate::pin_module();
         // Read the settings and start their watcher outside the audio thread.
         let _ = live();
         KyrrApo {
             state: Mutex::new(State::default()),
+            swap: Swap::new(),
+            channels: AtomicUsize::new(0),
+            _count: ObjectCount::new(),
         }
     }
 
+    /// The state, also after a panic poisoned the lock: every entry point
+    /// catches panics, and the state stays usable.
     fn state(&self) -> Result<std::sync::MutexGuard<'_, State>> {
-        self.state.lock().map_err(|_| E_FAIL.into())
-    }
-}
-
-impl Drop for KyrrApo {
-    fn drop(&mut self) {
-        OBJECTS.fetch_sub(1, Ordering::SeqCst);
+        Ok(self.state.lock().unwrap_or_else(PoisonError::into_inner))
     }
 }
 
@@ -156,7 +183,11 @@ fn endpoint_guid(init: &[u8]) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
-fn report(state: &str, engine: &str, format: &str) {
+pub fn format_label(rate: u32, channels: usize) -> String {
+    format!("{rate} Hz, {channels} ch")
+}
+
+pub fn report(state: &str, engine: &str, format: &str) {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs());
     write_values(
         REG_STATUS,
@@ -169,15 +200,38 @@ fn report(state: &str, engine: &str, format: &str) {
     );
 }
 
-/// Loads the model chosen in the settings and builds the filter.
-fn build_filter(rate: u32, channels: usize, max_frames: usize) -> std::result::Result<(VoiceFilter, String), String> {
+/// onnxruntime.dll needs the Visual C++ runtime, which audiodg.exe would
+/// look for in System32 only. The installer ships it next to the DLL;
+/// loading it from there first satisfies onnxruntime.dll's imports.
+fn preload_vc_runtime(dir: &std::path::Path) {
+    use windows::Win32::System::LibraryLoader::LoadLibraryW;
+    for name in [
+        "vcruntime140.dll",
+        "vcruntime140_1.dll",
+        "msvcp140.dll",
+        "msvcp140_1.dll",
+    ] {
+        let path = dir.join(name);
+        if path.is_file() {
+            let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+            // Kept loaded for the life of the process, like onnxruntime.dll.
+            let _ = unsafe { LoadLibraryW(windows::core::PCWSTR(wide.as_ptr())) };
+        }
+    }
+}
+
+/// Loads `model` and builds the filter (slow; never on the audio thread).
+pub fn build_filter(
+    rate: u32,
+    channels: usize,
+    max_frames: usize,
+    model: Model,
+) -> std::result::Result<(VoiceFilter, String), String> {
     let dir = dll_dir().ok_or("install folder not found")?;
-    let model = if live().get().light_model {
-        Model::Light
-    } else {
-        Model::Quality
-    };
     let ort = dir.join("onnxruntime.dll");
+    if !kyrr_denoise::native_possible(&dir.join(model.file_name())) {
+        preload_vc_runtime(&dir);
+    }
     let denoiser = kyrr_denoise::load(&dir, model, Some(&ort))?;
     #[cfg(feature = "native")]
     let engine = format!("{}, {}", denoiser.engine(), model.label());
@@ -187,7 +241,7 @@ fn build_filter(rate: u32, channels: usize, max_frames: usize) -> std::result::R
     Ok((filter, engine))
 }
 
-impl IAudioProcessingObject_Impl for KyrrApo_Impl {
+impl IAudioProcessingObject_Impl for Object {
     fn Reset(&self) -> Result<()> {
         guarded("Reset", || {
             let mut st = self.state()?;
@@ -196,6 +250,9 @@ impl IAudioProcessingObject_Impl for KyrrApo_Impl {
             }
             if let Some(filter) = st.filter.as_mut() {
                 filter.reset();
+            }
+            if let Some(voice) = st.voice.as_mut() {
+                voice.reset();
             }
             Ok(())
         })
@@ -320,7 +377,7 @@ impl IAudioProcessingObject_Impl for KyrrApo_Impl {
     }
 }
 
-impl IAudioProcessingObjectConfiguration_Impl for KyrrApo_Impl {
+impl IAudioProcessingObjectConfiguration_Impl for Object {
     fn LockForProcess(
         &self,
         u32numinputconnections: u32,
@@ -359,21 +416,29 @@ impl IAudioProcessingObjectConfiguration_Impl for KyrrApo_Impl {
             }
             let (rate, channels) = in_fmt;
             let max_frames = input.u32MaxFrameCount.max(output.u32MaxFrameCount) as usize;
-            let format = format!("{rate} Hz, {channels} ch");
-            match build_filter(rate, channels, max_frames) {
+            let format = format_label(rate, channels);
+            let model = model_for(live().get().light_model);
+            match build_filter(rate, channels, max_frames, model) {
                 Ok((filter, engine)) => {
                     log(&format!("locked: {format}, up to {max_frames} frames, engine {engine}"));
                     report("running", &engine, &format);
                     st.filter = Some(filter);
+                    self.swap.locked(rate, channels, max_frames, Some(model));
                 }
                 Err(e) => {
                     log(&format!("locked: {format}, passing audio through: {e}"));
                     report(&format!("passthrough: {e}"), "", &format);
                     st.filter = None;
+                    self.swap.locked(rate, channels, max_frames, None);
                 }
             }
+            st.voice = Some(Voice::new(rate, channels));
+            st.probe = None;
+            // Create the shared monitor here, not on the audio thread.
+            let _ = monitor();
             st.rate = rate;
             st.channels = channels;
+            self.channels.store(channels, Ordering::Relaxed);
             st.locked = true;
             Ok(())
         })
@@ -385,14 +450,18 @@ impl IAudioProcessingObjectConfiguration_Impl for KyrrApo_Impl {
             if let Some(child) = &st.child {
                 child.unlock();
             }
+            self.swap.unlocked();
             st.filter = None;
+            st.voice = None;
+            st.probe = None;
             st.locked = false;
+            self.channels.store(0, Ordering::Relaxed);
             Ok(())
         })
     }
 }
 
-impl IAudioProcessingObjectRT_Impl for KyrrApo_Impl {
+impl IAudioProcessingObjectRT_Impl for Object {
     fn APOProcess(
         &self,
         u32numinputconnections: u32,
@@ -419,7 +488,7 @@ impl IAudioProcessingObjectRT_Impl for KyrrApo_Impl {
     }
 }
 
-impl IAudioSystemEffects_Impl for KyrrApo_Impl {}
+impl IAudioSystemEffects_Impl for Object {}
 
 impl KyrrApo {
     /// Runs on the audio engine's real-time thread: no allocation, no
@@ -437,9 +506,13 @@ impl KyrrApo {
         let (Some(input), Some(output)) = (unsafe { (*pp_in).as_ref() }, unsafe { (*pp_out).as_mut() }) else {
             return;
         };
-        let Ok(mut st) = self.state.try_lock() else {
-            unsafe { pass_through(input, output, 0) };
-            return;
+        let mut st = match self.state.try_lock() {
+            Ok(st) => st,
+            Err(TryLockError::Poisoned(p)) => p.into_inner(),
+            Err(TryLockError::WouldBlock) => {
+                unsafe { pass_through(input, output, self.channels.load(Ordering::Relaxed)) };
+                return;
+            }
         };
         let channels = st.channels;
         if !st.locked || channels == 0 {
@@ -458,13 +531,43 @@ impl KyrrApo {
             input.u32ValidFrameCount as usize
         };
 
-        if let Some(filter) = st.filter.as_mut() {
+        if output.pBuffer != 0 && frames > 0 {
+            let buf = unsafe { std::slice::from_raw_parts_mut(output.pBuffer as *mut f32, frames * channels) };
             let s = live().get();
-            filter.set_mode(if s.enabled { Mode::Process } else { Mode::Bypass });
-            filter.set_limit_db(s.limit_db as f32);
-            if output.pBuffer != 0 && frames > 0 {
-                let buf = unsafe { std::slice::from_raw_parts_mut(output.pBuffer as *mut f32, frames * channels) };
+            let st = &mut *st;
+            self.swap.take(&mut st.filter);
+            let monitor = monitor();
+            if let Some(m) = monitor {
+                if st.probe.is_none() {
+                    st.probe = m.claim_probe(st.rate);
+                }
+                if let Some(p) = &st.probe {
+                    m.record(p, 0, buf, channels);
+                }
+            }
+            let before = peak(buf);
+
+            if let Some(voice) = st.voice.as_mut() {
+                voice.set(&s.voice);
+                voice.pre(buf);
+            }
+            if let Some(filter) = st.filter.as_mut() {
+                filter.set_mode(if s.enabled { Mode::Process } else { Mode::Bypass });
+                filter.set_limit_db(s.limit_db as f32);
                 filter.process_in_place(buf);
+            }
+            if let Some(voice) = st.voice.as_mut() {
+                voice.post(buf);
+            }
+
+            if let Some(m) = monitor {
+                m.levels(before, peak(buf));
+                if let Some(p) = st.probe.as_mut() {
+                    m.record(p, 1, buf, channels);
+                    if !m.advance(p, frames) {
+                        st.probe = None;
+                    }
+                }
             }
         }
         output.u32ValidFrameCount = frames as u32;

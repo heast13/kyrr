@@ -6,7 +6,7 @@ use windows::Win32::Media::Audio::{
 };
 use windows::Win32::System::Com::StructuredStorage::PropVariantToBSTR;
 use windows::Win32::System::Com::{
-    CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_ALL, COINIT_MULTITHREADED, STGM_READ,
+    CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_ALL, COINIT_APARTMENTTHREADED, STGM_READ,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -40,8 +40,9 @@ fn name_of(device: &IMMDevice) -> Option<String> {
 /// Active microphones, the default one first.
 pub fn microphones() -> Result<Vec<Microphone>, String> {
     unsafe {
-        // Already initialized (in any mode) is fine.
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        // Called on the UI thread, which must stay single-threaded (STA): winit's
+        // OleInitialize fails later otherwise. Already initialized is fine.
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
     }
     let enumerator: IMMDeviceEnumerator =
         unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) }.map_err(|e| format!("devices: {e}"))?;
