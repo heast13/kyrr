@@ -105,7 +105,7 @@ mod imp {
         }
     }
 
-    pub fn type_text(text: &str) -> bool {
+    pub fn type_text(text: &str) -> usize {
         typing::type_text(text)
     }
 
@@ -227,9 +227,9 @@ mod imp {
         ))
     }
 
-    pub fn type_text(text: &str) -> bool {
+    pub fn type_text(text: &str) -> usize {
         println!("{text}");
-        true
+        text.len()
     }
 
     pub fn copy_to_clipboard(_: &str) -> bool {

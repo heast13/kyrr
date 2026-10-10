@@ -7,6 +7,8 @@
   stray word. kyrr fetches the corrected speech model by itself (about
   900 MB) and deletes the old one.
 - The before/after test records ten seconds instead of five.
+- Dictated text arrives word by word in a quick wave instead of in one
+  block. If the window changes on the way, the rest goes to the clipboard.
 - The installer thanks the projects kyrr builds on, on its last page and in
   the NOTICE file next to the app.
 

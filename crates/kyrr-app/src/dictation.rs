@@ -63,8 +63,9 @@ pub enum Command {
 
 pub type Notify = Arc<dyn Fn(Event) + Send + Sync>;
 
-/// Types the text into the focused window. Returns false if that failed.
-pub type Typer = fn(&str) -> bool;
+/// Types the text into the focused window. Returns how many bytes of it
+/// were typed; fewer than all when typing was blocked or the focus moved.
+pub type Typer = fn(&str) -> usize;
 
 /// Puts text on the clipboard. Returns false if that failed.
 pub type Clipboard = fn(&str) -> bool;
@@ -90,6 +91,8 @@ fn say(language: Language, what: &str) -> String {
         ("crash", false) => "That did not work. Say it again?",
         ("clipboard", true) => "Konnte hier nicht tippen. Der Text liegt in der Zwischenablage: Strg+V.",
         ("clipboard", false) => "Could not type here. The text is on the clipboard: Ctrl+V.",
+        ("rest", true) => "Das Fenster hat gewechselt. Der Rest liegt in der Zwischenablage: Strg+V.",
+        ("rest", false) => "The window changed. The rest is on the clipboard: Ctrl+V.",
         ("blocked", true) => "Konnte hier nicht tippen (Fenster mit Adminrechten?).",
         ("blocked", false) => "Could not type here (a window running as administrator?).",
         ("cut", true) => "Nach zwei Minuten ist Schluss: Der Rest kam nicht mit.",
@@ -341,10 +344,11 @@ impl Worker {
             } else {
                 format!("{text} ")
             };
-            if (self.typer)(&typed) {
+            let done = (self.typer)(&typed);
+            if done >= typed.len() {
                 (self.notify)(Event::Typed(text));
-            } else if (self.clipboard)(&text) {
-                self.tell("clipboard");
+            } else if (self.clipboard)(typed[done..].trim_end_matches(' ')) {
+                self.tell(if done == 0 { "clipboard" } else { "rest" });
             } else {
                 self.tell("blocked");
             }
