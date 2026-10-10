@@ -27,7 +27,7 @@ def linked_crates(root):
         out += subprocess.run(
             ["cargo", "tree", "-p", package, "-e", "normal", "--target", TARGET,
              "--prefix", "none", "--format", "{p}"],
-            cwd=root, check=True, capture_output=True, text=True).stdout
+            cwd=root, check=True, capture_output=True, text=True, encoding="utf-8").stdout
     crates = set()
     for line in out.splitlines():
         parts = line.split()
@@ -120,7 +120,7 @@ def main():
     out_dir = sys.argv[1]
     meta = json.loads(subprocess.run(
         ["cargo", "metadata", "--format-version", "1", "--filter-platform", TARGET],
-        cwd=root, check=True, capture_output=True, text=True).stdout)
+        cwd=root, check=True, capture_output=True, text=True, encoding="utf-8").stdout)
     packages = {(p["name"], p["version"]): p for p in meta["packages"]}
     workspace = set(meta["workspace_members"])
 
