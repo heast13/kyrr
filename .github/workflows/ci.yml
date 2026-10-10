@@ -16,7 +16,7 @@ jobs:
       # sherpa-onnx without text-to-speech, fetched by fetch-assets.py.
       SHERPA_ONNX_LIB_DIR: ${{ github.workspace }}\assets\sherpa-onnx\lib
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -41,7 +41,7 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: System libraries
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libfontconfig1-dev libxkbcommon-dev libssl-dev
       - uses: dtolnay/rust-toolchain@stable
