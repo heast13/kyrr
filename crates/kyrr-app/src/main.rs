@@ -583,7 +583,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         language,
         config.dictation,
         notify,
-        platform::type_text,
+        platform::paste_text,
         platform::copy_to_clipboard,
     );
 
