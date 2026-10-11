@@ -8,7 +8,13 @@
 
 [![Made with Slint](https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png)](https://slint.dev)
 
-A small, free Windows app for your microphone:
+A small, free Windows app for your microphone.
+
+> **Everything runs on your PC.** Your voice and your dictated text never
+> leave your computer: no cloud, no account, no telemetry. Once the speech
+> model is downloaded, kyrr works fully offline. [Details](#privacy)
+
+What it does:
 
 - **Remove background noise.** Real-time neural noise suppression
   ([DPDFNet](https://github.com/ceva-ip/DPDFNet)) on your microphone, for
@@ -19,7 +25,7 @@ A small, free Windows app for your microphone:
   low rumble.
 - **Dictation.** Hold F9 (or F8, Pause, right Ctrl; or tap to start and
   stop), speak, release. The text appears where your cursor is. German and
-  English, on your computer, no account, no cloud. Say "new line" or "neue
+  English, transcribed on your PC. Say "new line" or "neue
   Zeile" for a line break.
 - **Check.** A live level of what the microphone hears and what apps get,
   and a ten-second test that plays the same take before and after kyrr.
