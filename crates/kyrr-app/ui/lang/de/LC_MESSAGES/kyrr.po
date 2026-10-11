@@ -180,8 +180,8 @@ msgstr "Störgeräusche"
 msgid "Set up a microphone first."
 msgstr "Richte zuerst ein Mikrofon ein."
 
-msgid "Strength"
-msgstr "Stärke"
+msgid "Filter strength"
+msgstr "Filterstärke"
 
 msgid "Gentle"
 msgstr "Sanft"
@@ -270,8 +270,8 @@ msgstr "Präsenz"
 msgid "Air"
 msgstr "Luft"
 
-msgid "Even out volume"
-msgstr "Lautstärke ausgleichen"
+msgid "Compressor"
+msgstr "Kompressor"
 
 msgid "Off"
 msgstr "Aus"
@@ -291,6 +291,36 @@ msgstr "Schluckt Trittschall, Tischrempler und Wind unter {} Hz."
 msgid "Off. Rumble, wind and desk bumps get through."
 msgstr "Aus. Rumpeln, Wind und Tischrempler kommen durch."
 
+msgid "Pop protection"
+msgstr "Popschutz"
+
+msgid "Takes the thump out of P and B when you are close to the mic."
+msgstr "Nimmt den Plopp aus P und B, wenn du nah am Mikro bist."
+
+msgid "Off. P and B can thump."
+msgstr "Aus. P und B können ploppen."
+
+msgid "Automatic volume"
+msgstr "Automatische Lautstärke"
+
+msgid "Always the same volume, however your mic is set. If your call app does that too, switch one off."
+msgstr "Immer gleich laut, egal wie dein Mikro eingestellt ist. Macht deine Call-App das auch, schalte eins davon aus."
+
+msgid "Off. Your mic as loud as Windows sets it."
+msgstr "Aus. Dein Mikro so laut, wie Windows es einstellt."
+
+msgid "Shows what it evens out while an app uses the mic."
+msgstr "Zeigt, was sie ausgleicht, solange eine App das Mikro nutzt."
+
+msgid "Right now {} dB louder."
+msgstr "Gerade {} dB lauter."
+
+msgid "Right now {} dB quieter."
+msgstr "Gerade {} dB leiser."
+
+msgid "Right now unchanged: your mic is just right."
+msgstr "Gerade unverändert: Dein Mikro passt genau."
+
 msgid "Reset"
 msgstr "Zurücksetzen"
 
@@ -305,8 +335,8 @@ msgstr "Vorher"
 msgid "After"
 msgstr "Nachher"
 
-msgid "Records ten seconds. Then compare: Before is raw, After is with kyrr. Nothing is saved, promise."
-msgstr "Nimmt zehn Sekunden auf. Dann vergleichen: Vorher ist roh, Nachher mit kyrr. Gespeichert wird nichts, versprochen."
+msgid "Records ten seconds, then compare. Nothing is saved."
+msgstr "Nimmt zehn Sekunden auf, dann vergleichen. Gespeichert wird nichts."
 
 msgid "kyrr is mostly just very good at plugging things together. Built on the work of many."
 msgstr "kyrr ist eigentlich nur sehr gut im Zusammenstecken. Gebaut auf der Arbeit vieler."
@@ -428,6 +458,18 @@ msgstr "Fertig"
 
 msgid "Settings"
 msgstr "Einstellungen"
+
+msgid "Simple"
+msgstr "Einfach"
+
+msgid "Advanced"
+msgstr "Erweitert"
+
+msgid "Credits"
+msgstr "Danksagungen"
+
+msgid "Less"
+msgstr "Weniger"
 
 msgid "← Back"
 msgstr "← Zurück"

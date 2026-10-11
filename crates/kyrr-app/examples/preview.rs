@@ -120,7 +120,7 @@ fn main() {
     state.set_phrase(2);
     render(&window, &ui, &format!("{out}/download-{lang}.rgba"));
 
-    // Settings with the custom sound, so the sliders and Reset show.
+    // Settings as most people see them: the basics.
     state.set_dictation_state(DictationState::Ready);
     state.set_page(1);
     state.set_probe_state(ProbeState::Idle);
@@ -128,12 +128,21 @@ fn main() {
     state.set_mic_active(true);
     state.set_level_before(0.72);
     state.set_level_after(0.55);
+    state.set_look_index(2);
+    state.set_voice_is_default(false);
+    render(&window, &ui, &format!("{out}/settings-{lang}.rgba"));
+
+    // Everything, with the custom sound so the sliders show.
+    state.set_advanced(true);
+    state.set_auto_level(true);
+    state.set_level_gain(8.6);
     state.set_look_index(4);
     state.set_body_db(1.5);
     state.set_presence_db(-2.0);
     state.set_deesser_index(2);
-    state.set_voice_is_default(false);
-    render(&window, &ui, &format!("{out}/settings-{lang}.rgba"));
+    render(&window, &ui, &format!("{out}/settings-advanced-{lang}.rgba"));
+    state.set_advanced(false);
+    state.set_auto_level(false);
 
     // Settings with voice off and the defaults.
     state.set_voice_enabled(false);

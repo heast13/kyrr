@@ -8,7 +8,7 @@
 use std::os::windows::ffi::OsStrExt;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, TryLockError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -42,6 +42,11 @@ pub static OBJECTS: AtomicUsize = AtomicUsize::new(0);
 /// Latency reported before the format is known: 70 ms, kyrr's value at the
 /// common rates other than 48 kHz.
 const DEFAULT_LATENCY_100NS: i64 = 70 * 10_000;
+
+/// The automatic level's gain (dB, `f32` bits) as the last stream left it,
+/// so the next call starts there instead of at the microphone's raw
+/// level. NaN until a stream ran. audiodg keeps it as long as it runs.
+static LEVEL_DB: AtomicU32 = AtomicU32::new(0x7fc0_0000);
 
 #[derive(Default)]
 struct State {
@@ -432,7 +437,10 @@ impl IAudioProcessingObjectConfiguration_Impl for Object {
                     self.swap.locked(rate, channels, max_frames, None);
                 }
             }
-            st.voice = Some(Voice::new(rate, channels));
+            let mut voice = Voice::new(rate, channels);
+            voice.set_delay(st.filter.as_ref().map_or(0, VoiceFilter::latency_frames), max_frames);
+            voice.resume_level(f32::from_bits(LEVEL_DB.load(Ordering::Relaxed)) as f64);
+            st.voice = Some(voice);
             st.probe = None;
             // Create the shared monitor here, not on the audio thread.
             let _ = monitor();
@@ -558,10 +566,12 @@ impl KyrrApo {
             }
             if let Some(voice) = st.voice.as_mut() {
                 voice.post(buf);
+                LEVEL_DB.store((voice.level_db() as f32).to_bits(), Ordering::Relaxed);
             }
 
             if let Some(m) = monitor {
-                m.levels(before, peak(buf));
+                let gain = st.voice.as_ref().map_or(0.0, |v| v.level_db() as f32);
+                m.levels(before, peak(buf), gain);
                 if let Some(p) = st.probe.as_mut() {
                     m.record(p, 1, buf, channels);
                     if !m.advance(p, frames) {

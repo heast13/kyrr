@@ -88,10 +88,12 @@ fn strength_index(limit_db: u32) -> i32 {
     STRENGTHS.iter().position(|&s| s >= limit_db).unwrap_or(2) as i32
 }
 
-/// The voice settings with their defaults, keeping only whether it is on.
-fn voice_defaults(enabled: bool) -> VoiceSettings {
+/// The voice shaping with its defaults. Whether it is on and the automatic
+/// level (a main switch of its own) stay as they are.
+fn voice_defaults(v: &VoiceSettings) -> VoiceSettings {
     VoiceSettings {
-        enabled,
+        enabled: v.enabled,
+        auto_level: v.auto_level,
         ..VoiceSettings::default()
     }
 }
@@ -108,9 +110,11 @@ fn show_voice(state: &AppState, v: &VoiceSettings) {
     state.set_presence_db(v.presence as f32 / 10.0);
     state.set_air_db(v.air as f32 / 10.0);
     state.set_low_cut(v.low_cut);
+    state.set_pops(v.pops);
+    state.set_auto_level(v.auto_level);
     state.set_deesser_index(v.deesser as i32);
     state.set_compressor_index(v.compressor as i32);
-    state.set_voice_is_default(*v == voice_defaults(v.enabled));
+    state.set_voice_is_default(*v == voice_defaults(v));
 }
 
 /// Tallest the window gets, screen permitting; more content scrolls. Room
@@ -363,6 +367,7 @@ impl App {
         state.set_filter_enabled(filter.enabled && supported);
         if !supported {
             state.set_voice_enabled(false);
+            state.set_auto_level(false);
         }
         tray.set_filter_enabled(filter.enabled && supported);
         tray.set_voice_enabled(filter.voice.enabled && supported);
@@ -476,6 +481,11 @@ impl App {
         state.set_mic_silent(silent >= SILENCE_TICKS);
         state.set_level_before(if active { meter(levels.before) } else { 0.0 });
         state.set_level_after(if active { meter(levels.after) } else { 0.0 });
+        state.set_level_gain(if levels.gain_db.is_finite() {
+            levels.gain_db
+        } else {
+            0.0
+        });
 
         let switching = match self.model_changed.get() {
             Some(at) if at.elapsed() < MODEL_SWITCH_TIMEOUT => {
@@ -901,6 +911,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_model_index(filter.light_model as i32);
     state.set_autostart(platform::autostart_enabled());
     state.set_update_auto(app.config.borrow().update_check);
+    state.set_advanced(app.config.borrow().advanced_settings);
     app.apply_key();
     show_voice(&state, &filter.voice);
     tray.set_dictation_enabled(app.config.borrow().dictation);
@@ -927,6 +938,17 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             let mut config = app.config.borrow_mut();
             config.update_check = on;
             config.save();
+        }
+    });
+    state.on_advanced_toggled({
+        let app = Rc::clone(&app);
+        move |on| {
+            {
+                let mut config = app.config.borrow_mut();
+                config.advanced_settings = on;
+                config.save();
+            }
+            fit(&app.window);
         }
     });
     state.on_dismiss_update({
@@ -1124,6 +1146,14 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         let app = Rc::clone(&app);
         move |on| app.set_voice(|v| v.low_cut = on)
     });
+    state.on_pops_toggled({
+        let app = Rc::clone(&app);
+        move |on| app.set_voice(|v| v.pops = on)
+    });
+    state.on_auto_level_toggled({
+        let app = Rc::clone(&app);
+        move |on| app.set_voice(|v| v.auto_level = on)
+    });
     state.on_deesser_changed({
         let app = Rc::clone(&app);
         move |i| app.set_voice(|v| v.deesser = amount(i))
@@ -1134,7 +1164,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     });
     state.on_voice_reset({
         let app = Rc::clone(&app);
-        move || app.set_voice(|v| *v = voice_defaults(v.enabled))
+        move || app.set_voice(|v| *v = voice_defaults(v))
     });
     state.on_attach_microphone({
         let app = Rc::clone(&app);

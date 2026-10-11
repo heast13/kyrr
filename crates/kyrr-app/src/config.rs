@@ -27,6 +27,8 @@ pub struct Config {
     pub update_checked: u64,
     /// The version whose note the user closed; it stays away until the next.
     pub update_dismissed: String,
+    /// The settings page shows everything, not just the basics.
+    pub advanced_settings: bool,
 }
 
 /// Keys dictation can use, as Windows virtual-key codes: F8, F9, Pause and
@@ -45,6 +47,7 @@ impl Default for Config {
             update_check: true,
             update_checked: 0,
             update_dismissed: String::new(),
+            advanced_settings: false,
         }
     }
 }

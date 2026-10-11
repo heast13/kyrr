@@ -23,6 +23,8 @@ pub struct Levels {
     /// Peak before and after kyrr, linear.
     pub before: f32,
     pub after: f32,
+    /// What the automatic volume adds right now, in dB.
+    pub gain_db: f32,
 }
 
 /// A finished probe: the same take before and after kyrr, mono.
@@ -60,6 +62,7 @@ impl Monitor {
             heartbeat: h.heartbeat.load(Ordering::Relaxed),
             before: f32::from_bits(h.level_in.load(Ordering::Relaxed)),
             after: f32::from_bits(h.level_out.load(Ordering::Relaxed)),
+            gain_db: f32::from_bits(h.level_gain.load(Ordering::Relaxed)),
         }
     }
 

@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Automatic volume, in Settings below Voice: brings your voice to the same
+  level however your microphone is set, with or without the voice shaping.
+  Off by default; the advanced view shows what it evens out right now.
+- Pop protection: softens the thump of P and B when you are close to the
+  mic, without touching the voice. Off by default, under Settings, Advanced.
+- Settings come in Simple and Advanced. Simple shows the basics; the model,
+  the custom sound, the compressor (formerly "Even out volume"), S sounds,
+  low cut, pop protection and checking for updates are under Advanced (a new
+  version still shows in the main window). Noise "Strength" is now "Filter
+  strength".
+  The credits fold away behind a button in Simple.
+- Settings: the update check moved to General, a long microphone name
+  wraps instead of being cut off, shorter texts.
+
 ## 0.3.1 (2026-10-11)
 
 - Updates in one click. Once a day kyrr asks GitHub for the newest version

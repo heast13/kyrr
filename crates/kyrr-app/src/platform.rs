@@ -34,6 +34,8 @@ pub struct Levels {
     /// Peak before and after kyrr, linear.
     pub before: f32,
     pub after: f32,
+    /// What the automatic volume adds right now, in dB.
+    pub gain_db: f32,
 }
 
 /// The same take before and after kyrr, mono.
@@ -207,6 +209,7 @@ mod imp {
                 heartbeat: l.heartbeat,
                 before: l.before,
                 after: l.after,
+                gain_db: l.gain_db,
             }
         }
 

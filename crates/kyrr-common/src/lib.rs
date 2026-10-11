@@ -50,6 +50,10 @@ pub mod filter {
     pub const VOICE_DEESSER: &str = "VoiceDeEsser";
     /// How much the volume is evened out (compressor), see [`crate::Amount`].
     pub const VOICE_COMPRESSOR: &str = "VoiceCompressor";
+    /// 1 = soften the thump of P and B (pop protection).
+    pub const VOICE_POPS: &str = "VoicePops";
+    /// 1 = bring the voice to a steady level, whatever the mic's gain.
+    pub const VOICE_AUTO_LEVEL: &str = "VoiceAutoLevel";
 }
 
 /// Value names below [`REG_STATUS`].
@@ -116,12 +120,17 @@ impl FilterSettings {
                 low_cut: flag(filter::VOICE_LOW_CUT, d.voice.low_cut),
                 deesser: amount(filter::VOICE_DEESSER, d.voice.deesser),
                 compressor: amount(filter::VOICE_COMPRESSOR, d.voice.compressor),
+                pops: flag(filter::VOICE_POPS, d.voice.pops),
+                auto_level: flag(filter::VOICE_AUTO_LEVEL, d.voice.auto_level),
             },
         }
     }
 
+    /// How many values [`FilterSettings::to_dwords`] stores.
+    pub const VALUES: usize = 13;
+
     /// The DWORDs to store, by value name.
-    pub fn to_dwords(&self) -> [(&'static str, u32); 11] {
+    pub fn to_dwords(&self) -> [(&'static str, u32); Self::VALUES] {
         let v = &self.voice;
         [
             (filter::ENABLED, self.enabled as u32),
@@ -135,6 +144,8 @@ impl FilterSettings {
             (filter::VOICE_LOW_CUT, v.low_cut as u32),
             (filter::VOICE_DEESSER, v.deesser as u32),
             (filter::VOICE_COMPRESSOR, v.compressor as u32),
+            (filter::VOICE_POPS, v.pops as u32),
+            (filter::VOICE_AUTO_LEVEL, v.auto_level as u32),
         ]
     }
 }
@@ -162,6 +173,10 @@ pub struct VoiceSettings {
     pub deesser: Amount,
     /// Evens out the volume: quiet words louder, loud ones softer.
     pub compressor: Amount,
+    /// Softens the thump of P and B when air hits the capsule.
+    pub pops: bool,
+    /// Slowly brings the voice to one level, however loud the mic is set.
+    pub auto_level: bool,
 }
 
 impl Default for VoiceSettings {
@@ -175,6 +190,8 @@ impl Default for VoiceSettings {
             low_cut: true,
             deesser: Amount::Off,
             compressor: Amount::Medium,
+            pops: false,
+            auto_level: false,
         }
     }
 }
@@ -222,8 +239,8 @@ pub mod monitor {
 
     /// Name and magic change with the layout, so an app and a filter of
     /// different versions do not read each other's buffers.
-    pub const NAME: &str = r"Global\kyrr-monitor-2";
-    pub const MAGIC: u32 = u32::from_le_bytes(*b"kyr2");
+    pub const NAME: &str = r"Global\kyrr-monitor-3";
+    pub const MAGIC: u32 = u32::from_le_bytes(*b"kyr3");
     /// Length of the probe recording.
     pub const PROBE_SECONDS: u32 = 10;
     /// Mono samples per probe buffer: the probe at up to 96 kHz.
@@ -250,6 +267,8 @@ pub mod monitor {
         pub probe_done: AtomicU32,
         pub probe_rate: AtomicU32,
         pub probe_frames: AtomicU32,
+        /// What the automatic volume adds right now, dB as `f32` bits.
+        pub level_gain: AtomicU32,
     }
 
     const _: () = assert!(std::mem::size_of::<Header>() <= HEADER_SIZE);
@@ -286,6 +305,8 @@ mod tests {
                 low_cut: false,
                 deesser: Amount::Strong,
                 compressor: Amount::Medium,
+                pops: false,
+                auto_level: true,
             },
             ..FilterSettings::default()
         };

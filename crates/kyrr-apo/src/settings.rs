@@ -17,7 +17,7 @@ use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject, INFIN
 use crate::registry::{read_dword, wide};
 
 /// Number of stored values, see [`FilterSettings::to_dwords`].
-const VALUES: usize = 11;
+const VALUES: usize = FilterSettings::VALUES;
 
 /// The settings as their stored DWORDs, in the order of `to_dwords`.
 pub struct Live {

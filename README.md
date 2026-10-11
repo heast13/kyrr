@@ -21,8 +21,10 @@ What it does:
   every app: Teams, Zoom, Discord, OBS, the browser. A large model for the
   cleanest result, a small one for older laptops.
 - **Voice.** Shaping after the noise is gone: a sound (Neutral, Warm,
-  Clear, Bright or your own), even volume, softer S sounds and a cut for
-  low rumble.
+  Clear, Bright or your own), a compressor, softer S sounds, pop protection
+  and a cut for low rumble.
+- **Automatic volume.** Brings your voice to the same level however loud
+  your microphone is set, with or without the voice shaping.
 - **Dictation.** Hold F9 (or F8, Pause, right Ctrl; or tap to start and
   stop), speak, release. The text appears where your cursor is. German and
   English, transcribed on your PC. Say "new line" or "neue
@@ -93,14 +95,29 @@ then three EQ bands (body at 250 Hz, presence at 3 kHz, air above 8 kHz), a
 de-esser on the band above 4 kHz, a compressor (light, medium or strong) and
 a limiter at −1 dBFS. It works with the noise filter switched off too, and
 adds no latency. On by default with a neutral sound, medium compression and
-the low cut; Reset brings back the defaults.
+the low cut; pop protection is off by default. Reset brings back the defaults.
+
+kyrr adds two stages of its own. *Pop protection* listens to the raw
+microphone for the thump of a P or B: energy below 60 Hz that jumps above
+the voice's own bass (100–400 Hz) and above the room's steady rumble. A
+voice stays about 20 dB below that line, close to the mic too. While it is
+crossed, everything below 120 Hz is turned down, up to 30 dB. The cut
+happens after the noise filter, whose delay lets it start 10 ms before the
+thump arrives. *Automatic volume* (in Settings below Voice, off by default,
+works with the voice shaping switched off too; the advanced view shows what
+it adds right now) measures the voice only while someone speaks and moves it
+slowly (5 dB/s up, 10 dB/s down, at most +24/−12 dB) to −23 dBFS, before the
+de-esser and compressor; pauses, clicks and steady noise leave it alone.
+Call apps that adjust the volume themselves can work against it, so use one
+of the two.
 
 **Check.** The filter shares a small block of memory with the app
-(`Global\kyrr-monitor-2`): the level before and after kyrr, and on request
-one ten-second take, unprocessed and processed. The audio service writes
-it; users signed in at this computer can read it and ask for a take, which
-only records while an app already uses the microphone. The app plays the
-take, keeps it only in memory and clears it from the shared block.
+(`Global\kyrr-monitor-3`): the level before and after kyrr, what the
+automatic volume adds, and on request one ten-second take, unprocessed and
+processed. The audio service writes it; users signed in at this computer can
+read it and ask for a take, which only records while an app already uses the
+microphone. The app plays the take, keeps it only in memory and clears it
+from the shared block.
 
 **Dictation.** kyrr records while the key is held and transcribes locally
 with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (its build without
