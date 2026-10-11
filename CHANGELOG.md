@@ -1,33 +1,31 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-10-11)
 
 - Listen to yourself: a new button under Check plays your microphone live
   on your headphones, the way your apps hear it.
 - The before/after test only records now; play the take with Before and
   After whenever you like, and delete it with Delete recording.
+- The settings show in two columns side by side, in a wider window that
+  grows up to 900 pixels tall where the screen has room and moves instead
+  of hiding behind the taskbar. The main view stays narrow.
 - Even out volume starts at Medium. Who never changed it gets Medium too.
-- The window opened from the tray always fits its content. Started with
-  Windows, it used to come up too small.
-- The button at the bottom of the window only puts it away, like the close
-  button. Quit kyrr from the tray icon's menu (right-click).
-- The settings show in two columns side by side, in a wider window; the
-  main view stays narrow.
-- The settings get more room: the window grows up to 900 pixels where the
-  screen has space, and moves up instead of hiding behind the taskbar.
-- The level meter only runs while the window is open.
-- Opening kyrr from the tray always brings its window to the front; it
-  sometimes opened behind the current one.
 - With noise removal on, the main view says "Just your voice." instead of
   the microphone's name.
-- The speech models download from kyrr's own mirrors, on Hugging Face and,
-  if that fails, on GitHub; the English model no longer depends on someone
-  else's repository (that stays the last resort). Each file is still
-  checked against its built-in SHA256.
+- The button at the bottom of the window only puts it away, like the close
+  button. Quit kyrr from the tray icon's menu (right-click).
+- Opening kyrr from the tray always brings its window to the front, at the
+  size its content needs. It sometimes opened behind the current window,
+  or too small after starting with Windows.
 - Windows on ARM (Snapdragon and other ARM processors): kyrr no longer sets
   up its noise filter there, which the audio engine cannot load and which
   could leave the microphone silent. Dictation works; installing this
   version also removes the filter an earlier one put there.
+- The speech models download from kyrr's own mirrors, on Hugging Face and,
+  if that fails, on GitHub; the English model no longer depends on someone
+  else's repository (that stays the last resort). Each file is still
+  checked against its built-in SHA256.
+- The level meter only runs while the window is open.
 
 ## 0.2.1 (2026-10-10)
 
