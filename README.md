@@ -9,8 +9,8 @@
 [![Made with Slint](https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png)](https://slint.dev)
 
 Noise removal on the level of paid tools, and dictation that works really
-well in English and, finally, in German too. A small Windows app: free,
-open source, everything on your own PC.
+well in English and, finally, in German too. A small Windows app, set up
+in a few clicks: free, open source, everything on your own PC.
 
 > **Everything runs on your PC.** Your voice and your dictated text never
 > leave your computer: no cloud, no account, no telemetry. Once the speech
@@ -35,6 +35,12 @@ software that got it right without fuss. kyrr uses a German fine-tune of
 Parakeet by primeLine AI, and for me it is the first that just works. Both
 are quick: on a current desktop, a ten-second sentence is text in well
 under a second.
+
+**Simple on purpose.** Install, pick your microphone, done: every app
+gets the clean voice, with nothing to change in Teams, Zoom or anywhere
+else. The window has three switches, dictation is one key, and kyrr waits
+quietly in the tray. The settings are there if you want them; you don't
+have to touch them.
 
 **Free, local, open source.** No subscription, no account, no cloud. Your
 voice and your text stay on your computer, and after the one-time model
