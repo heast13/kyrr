@@ -8,9 +8,9 @@
 
 [![Made with Slint](https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png)](https://slint.dev)
 
-Background noise removal on par with paid tools, and accurate dictation in
-English and, at last, in German too. A small Windows app, set up in a few
-clicks, free and open source.
+kyrr takes the background noise out of your microphone as well as paid
+tools do, and turns what you say into text, in English and German. A small
+Windows app, free and open source, set up in a few clicks.
 
 > **Everything runs on your PC.** Your voice and your dictated text never
 > leave your computer: no cloud, no account, no telemetry. Once the speech
