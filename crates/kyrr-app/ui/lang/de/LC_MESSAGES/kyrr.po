@@ -618,5 +618,5 @@ msgstr "dein Mikro"
 msgid "{} ready"
 msgstr "{} bereit"
 
-msgid "{}: keyboard, fan and dog stay outside."
-msgstr "{}: Tastatur, Lüfter und Hund bleiben draußen."
+msgid "Just your voice. Keyboard, fan and dog stay outside."
+msgstr "Nur deine Stimme. Tastatur, Lüfter und Hund bleiben draußen."

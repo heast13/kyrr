@@ -162,6 +162,17 @@ mod imp {
         let _ = if on { autostart::enable() } else { autostart::disable() };
     }
 
+    /// Puts the window in front of everything and makes it the active one.
+    pub fn bring_to_front(window: &slint::Window) {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        let handle = window.window_handle();
+        if let Ok(h) = handle.window_handle() {
+            if let RawWindowHandle::Win32(w) = h.as_raw() {
+                kyrr_windows::window::bring_to_front(w.hwnd.get());
+            }
+        }
+    }
+
     /// Top and bottom of the free screen at a point, in physical pixels.
     pub fn work_area(x: i32, y: i32) -> Option<(i32, i32)> {
         kyrr_windows::screen::work_area(x, y)
@@ -278,6 +289,8 @@ mod imp {
     pub fn work_area(_: i32, _: i32) -> Option<(i32, i32)> {
         None
     }
+
+    pub fn bring_to_front(_: &slint::Window) {}
 
     pub struct Monitor;
 

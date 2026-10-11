@@ -19,6 +19,7 @@ pub mod screen;
 pub mod service;
 pub mod setup;
 pub mod typing;
+pub mod window;
 
 /// Runs an elevated setup command and returns the process exit code:
 /// `install` (the DLL next to this exe), `uninstall`, `move <guid>`,

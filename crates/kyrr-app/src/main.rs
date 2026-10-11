@@ -217,15 +217,24 @@ const SILENCE_TICKS: u32 = 20;
 /// new model or this long has passed.
 const MODEL_SWITCH_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// Brings the window up at the size its content wants. A window kyrr
-/// started with in the background never had a size, and content changes
-/// while it was hidden; both used to show it too small.
+/// Brings the window up at the size its content wants, in front of
+/// everything. A window kyrr started with in the background never had a
+/// size, and content changes while it was hidden; both used to show it too
+/// small. Showing alone left it behind the current window at times.
 fn show(window: &MainWindow) {
     if !window.window().is_visible() {
         resize(window, wanted_height(window));
     }
     let _ = window.show();
     window.window().set_minimized(false);
+    platform::bring_to_front(window.window());
+    // Once more when the window has really come up.
+    let weak = window.as_weak();
+    slint::Timer::single_shot(Duration::from_millis(50), move || {
+        if let Some(w) = weak.upgrade() {
+            platform::bring_to_front(w.window());
+        }
+    });
     fit(&window.as_weak());
     window.invoke_shown();
 }

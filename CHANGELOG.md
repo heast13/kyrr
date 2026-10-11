@@ -14,6 +14,10 @@
 - The settings get more room: the window grows up to 900 pixels where the
   screen has space, and moves up instead of hiding behind the taskbar.
 - The level meter only runs while the window is open.
+- Opening kyrr from the tray always brings its window to the front; it
+  sometimes opened behind the current one.
+- With noise removal on, the main view says "Just your voice." instead of
+  the microphone's name.
 - Windows on ARM (Snapdragon and other ARM processors): kyrr no longer sets
   up its noise filter there, which the audio engine cannot load and which
   could leave the microphone silent. Dictation works; installing this

@@ -445,7 +445,7 @@ component NoiseCard inherits Card {
         toggled(on) => { AppState.filter-toggled(on); }
     }
     Caption {
-        text: root.attached ? (AppState.filter-enabled ? @tr("{}: keyboard, fan and dog stay outside.", AppState.attached-mic) : @tr("Off. Your mic passes through as it is."))
+        text: root.attached ? (AppState.filter-enabled ? @tr("Just your voice. Keyboard, fan and dog stay outside.") : @tr("Off. Your mic passes through as it is."))
             : AppState.filter-state == FilterState.detached ? @tr("Windows took kyrr off {} (an update, most likely).", AppState.attached-mic)
             : AppState.filter-state == FilterState.passthrough ? @tr("The filter could not start and passes the microphone through.")
             : AppState.filter-state == FilterState.not-attached ? @tr("No microphone set up yet.")
