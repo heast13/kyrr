@@ -61,3 +61,34 @@ fn english() {
         "Ask not what your country can do for you, ask what you can do for your country.",
     );
 }
+
+/// Windows user names with umlauts or other scripts end up in the model
+/// path (%LOCALAPPDATA%). The model folder is hard-linked there, no copy.
+#[test]
+fn model_path_with_umlauts() {
+    let models = root().join("models");
+    let wav = root().join("assets/test-audio/de.wav");
+    let spec = Language::German.model();
+    if !spec.is_installed(&models) || !wav.is_file() {
+        eprintln!("de model or test audio missing, skipped");
+        return;
+    }
+    let odd = std::env::temp_dir().join(format!("kyrr-Jürgen-Ærøskøbing-日本-{}", std::process::id()));
+    let dir = spec.dir(&odd);
+    std::fs::create_dir_all(&dir).unwrap();
+    for entry in std::fs::read_dir(spec.dir(&models)).unwrap() {
+        let entry = entry.unwrap();
+        let to = dir.join(entry.file_name());
+        if std::fs::hard_link(entry.path(), &to).is_err() {
+            std::fs::copy(entry.path(), &to).unwrap();
+        }
+    }
+    let loaded = Dictation::load(&odd, Language::German, 4);
+    let _ = std::fs::remove_dir_all(&odd);
+    let dictation = loaded.expect("model loads from a path with umlauts");
+    let (rate, samples) = read_mono(&wav);
+    assert_eq!(
+        dictation.transcribe(rate, &samples),
+        "Alles hat ein Ende, nur die Wurst hat zwei."
+    );
+}

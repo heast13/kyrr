@@ -133,3 +133,57 @@ fn non_finite_input_stays_finite() {
     f.process_in_place(&mut buf);
     assert!(buf.iter().all(|x| x.is_finite()));
 }
+
+/// Both engines, both models, at the formats common devices use: noise
+/// goes, nothing runs dry, and the CPU it takes is printed. CPUs without
+/// AVX2/FMA (older Core i, Celeron and Pentium Silver, Atom) run ONNX
+/// Runtime; this machine would pick the native engine, so for ONNX the test
+/// hides the packed weights by putting only the .onnx files in a folder of
+/// their own.
+#[test]
+fn every_engine_and_model() {
+    let Some(dir) = assets() else {
+        eprintln!("assets missing, skipped");
+        return;
+    };
+    let ort = dir.join("onnxruntime.dll");
+    let only_onnx = std::env::temp_dir().join(format!("kyrr-onnx-test-{}", std::process::id()));
+    std::fs::create_dir_all(&only_onnx).unwrap();
+    let mut seed = 11;
+    for model in [Model::Light, Model::Quality] {
+        std::fs::copy(dir.join(model.file_name()), only_onnx.join(model.file_name())).unwrap();
+        let mut engines = vec![];
+        if kyrr_denoise::native_possible(&dir.join(model.file_name())) {
+            engines.push(("native", &dir, None));
+        }
+        if cfg!(windows) && ort.is_file() {
+            assert!(!kyrr_denoise::native_possible(&only_onnx.join(model.file_name())));
+            engines.push(("onnx", &only_onnx, Some(ort.as_path())));
+        }
+        for (engine, from, runtime) in engines {
+            // A built-in mic array at 16 kHz with four channels, a USB mic
+            // at 44.1 kHz, the usual 48 kHz stereo, an interface at 96 kHz.
+            for (rate, channels) in [(16_000, 4), (44_100, 1), (48_000, 2), (96_000, 1)] {
+                let denoiser = load(from, model, runtime).expect("model loads");
+                let mut f = VoiceFilter::new(denoiser, rate, channels, rate as usize / 50).expect("format accepted");
+                let seconds = 3;
+                let input = noise(rate as usize * seconds * channels, 0.05, &mut seed);
+                let mut output = vec![0.0; input.len()];
+                let block = rate as usize / 100 * channels;
+                let started = std::time::Instant::now();
+                for (i, o) in input.chunks(block).zip(output.chunks_mut(block)) {
+                    f.process(i, o);
+                }
+                let load = started.elapsed().as_secs_f64() / seconds as f64;
+                let what = format!("{engine} {model:?}, {rate} Hz, {channels} ch");
+                assert!(output.iter().all(|x| x.is_finite()), "{what}");
+                assert_eq!(f.underruns(), 0, "{what}");
+                let tail = output.len() / 3;
+                let gain_db = 20.0 * (rms(&output[tail..]) / rms(&input[tail..])).log10();
+                assert!(gain_db < -20.0, "{what}: noise only reduced by {gain_db:.1} dB");
+                println!("{what}: noise {gain_db:.1} dB, {:.1} % of real time", load * 100.0);
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(&only_onnx);
+}
