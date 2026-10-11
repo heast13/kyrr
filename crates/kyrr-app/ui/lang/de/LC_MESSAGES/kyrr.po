@@ -308,8 +308,8 @@ msgstr "Nachher"
 msgid "Records ten seconds. Then compare: Before is raw, After is with kyrr. Nothing is saved, promise."
 msgstr "Nimmt zehn Sekunden auf. Dann vergleichen: Vorher ist roh, Nachher mit kyrr. Gespeichert wird nichts, versprochen."
 
-msgid "kyrr is mostly just very good at plugging things together."
-msgstr "kyrr ist eigentlich nur sehr gut im Zusammenstecken."
+msgid "kyrr is mostly just very good at plugging things together. Built on the work of many."
+msgstr "kyrr ist eigentlich nur sehr gut im Zusammenstecken. Gebaut auf der Arbeit vieler."
 
 msgid "Noise removal: DPDFNet by Ceva (Apache-2.0), via Fovty's HushMic."
 msgstr "Störgeräusche: DPDFNet von Ceva (Apache-2.0), über HushMic von Fovty."
