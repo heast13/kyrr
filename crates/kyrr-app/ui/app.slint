@@ -1015,6 +1015,12 @@ export component MainWindow inherits Window {
         scroll.content-y = 0;
     }
 
+    // Dark, whatever Windows says. Only for the README screenshots: the
+    // headless preview has no system theme to follow.
+    public function use-dark-scheme() {
+        Palette.color-scheme = ColorScheme.dark;
+    }
+
     property <bool> main-page: !setup-mode && AppState.page == 0;
     property <bool> settings-page: !setup-mode && AppState.page == 1;
 

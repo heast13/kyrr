@@ -1,5 +1,6 @@
 //! Renders the window headless into raw RGBA files for checking the layout
-//! without a display: `cargo run --example preview -- <out-dir> [de|en] [scale]`.
+//! without a display: `cargo run --example preview -- <out-dir> [de|en] [scale] [dark]`.
+//! The README shots are `en` in `dark`.
 //! The scale defaults to 1.5 (the README shots); the social preview's window
 //! is 1.2711 (483 px wide).
 //! Convert with ImageMagick: `magick -size WxH -depth 8 rgba:main.rgba main.png`.
@@ -50,6 +51,9 @@ fn main() {
     window.dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: scale });
 
     let ui = MainWindow::new().unwrap();
+    if args.iter().any(|a| a == "dark") {
+        ui.invoke_use_dark_scheme();
+    }
     if let Err(e) = slint::select_bundled_translation(&lang) {
         eprintln!("translation {lang}: {e}");
     }
