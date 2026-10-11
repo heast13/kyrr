@@ -227,6 +227,7 @@ fn show(window: &MainWindow) {
     let _ = window.show();
     window.window().set_minimized(false);
     fit(&window.as_weak());
+    window.invoke_shown();
 }
 
 struct App {
@@ -235,6 +236,8 @@ struct App {
     /// Endpoint GUID of the microphone the filter is on.
     attached: RefCell<Option<String>>,
     monitor: RefCell<Option<platform::Monitor>>,
+    /// Runs `tick` while the window is open; nobody sees the meter otherwise.
+    meter: slint::Timer,
     heartbeat: Cell<u32>,
     ticks: Cell<u32>,
     /// Ticks in a row the microphone was in use but silent.
@@ -379,6 +382,36 @@ impl App {
         }
     }
 
+    /// Starts the meter when the window comes up. The heartbeat is taken as
+    /// it is now, so time spent closed does not read as an active mic.
+    fn start_meter(self: &Rc<Self>) {
+        if self.meter.running() {
+            return;
+        }
+        if let Some(m) = self.monitor.borrow().as_ref() {
+            self.heartbeat.set(m.levels().heartbeat);
+        }
+        let app = Rc::downgrade(self);
+        self.meter
+            .start(slint::TimerMode::Repeated, Duration::from_millis(100), move || {
+                if let Some(app) = app.upgrade() {
+                    app.tick();
+                }
+            });
+    }
+
+    /// The window went away: no meter, no listening.
+    fn window_closed(&self) {
+        self.meter.stop();
+        self.stop_listening();
+        if let Some(w) = self.window.upgrade() {
+            let state = w.global::<AppState>();
+            state.set_mic_active(false);
+            state.set_level_before(0.0);
+            state.set_level_after(0.0);
+        }
+    }
+
     /// Every 100 ms: the meter, whether an app uses the microphone, the
     /// probe's progress and whether a model switch is still under way.
     fn tick(&self) {
@@ -388,6 +421,10 @@ impl App {
         let Some(w) = self.window.upgrade() else {
             return;
         };
+        // Minimized, nobody looks either.
+        if w.window().is_minimized() {
+            return;
+        }
         let ticks = self.ticks.get().wrapping_add(1);
         self.ticks.set(ticks);
         if self.monitor.borrow().is_none() && ticks.is_multiple_of(10) {
@@ -735,6 +772,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         filter: RefCell::new(filter),
         attached: RefCell::new(None),
         monitor: RefCell::new(None),
+        meter: slint::Timer::default(),
         heartbeat: Cell::new(0),
         ticks: Cell::new(0),
         silent_ticks: Cell::new(0),
@@ -891,23 +929,27 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         let weak = window.as_weak();
         move || grow(&weak)
     });
-    // Closing only hides the window; listening ends with it. The button
-    // in the window does the same; quitting is in the tray menu.
+    // Closing only hides the window; listening and the meter end with it.
+    // The button in the window does the same; quitting is in the tray menu.
     window.window().on_close_requested({
         let app = Rc::clone(&app);
         move || {
-            app.stop_listening();
+            app.window_closed();
             slint::CloseRequestResponse::HideWindow
         }
     });
     state.on_hide({
         let app = Rc::clone(&app);
         move || {
-            app.stop_listening();
+            app.window_closed();
             if let Some(w) = app.window.upgrade() {
                 let _ = w.hide();
             }
         }
+    });
+    window.on_shown({
+        let app = Rc::clone(&app);
+        move || app.start_meter()
     });
     state.on_voice_toggled({
         let app = Rc::clone(&app);
@@ -1043,12 +1085,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         let app = Rc::clone(&app);
         move || app.refresh_filter()
     });
-    let meter_timer = slint::Timer::default();
-    meter_timer.start(slint::TimerMode::Repeated, Duration::from_millis(100), {
-        let app = Rc::clone(&app);
-        move || app.tick()
-    });
-
     if let Some(requests) = show_requests {
         let weak = window.as_weak();
         std::thread::spawn(move || {

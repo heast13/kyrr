@@ -890,6 +890,8 @@ export component MainWindow inherits Window {
     // The height the content wants; the app caps the window and scrolls.
     out property <length> content-height: layout.preferred-height;
     callback content-height-changed();
+    // The window came up (from the tray, at start); the app starts the meter.
+    callback shown();
     changed content-height => { root.content-height-changed(); }
     title: "kyrr";
     icon: @image-url("icons/kyrr-256.png");

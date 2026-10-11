@@ -13,6 +13,7 @@
   button. Quit kyrr from the tray icon's menu (right-click).
 - The settings get more room: the window grows up to 900 pixels where the
   screen has space, and moves up instead of hiding behind the taskbar.
+- The level meter only runs while the window is open.
 - Windows on ARM (Snapdragon and other ARM processors): kyrr no longer sets
   up its noise filter there, which the audio engine cannot load and which
   could leave the microphone silent. Dictation works; installing this
