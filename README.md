@@ -10,7 +10,7 @@
 
 Background noise removal on the level of paid tools, and dictation that
 works really well in English and, finally, in German too. A small Windows
-app, set up in a few clicks: free, open source, everything on your own PC.
+app, set up in a few clicks, free and open source.
 
 > **Everything runs on your PC.** Your voice and your dictated text never
 > leave your computer: no cloud, no account, no telemetry. Once the speech
