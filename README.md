@@ -8,59 +8,20 @@
 
 [![Made with Slint](https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png)](https://slint.dev)
 
-kyrr takes the background noise out of your microphone as well as paid
-tools do, and turns what you say into text, in English and German. A small
-Windows app, free and open source, set up in a few clicks.
+Noise suppression and dictation for Windows. Free, open source, and
+entirely on your PC.
 
-> **Everything runs on your PC.** Your voice and your dictated text never
-> leave your computer: no cloud, no account, no telemetry. Once the speech
-> model is downloaded, kyrr works fully offline. [Details](#privacy)
-
-## Why kyrr
-
-**Background noise gone, like with Krisp, without the subscription.** That
-was the goal from day one: keyboard, fan, traffic or the dog stay out,
-your voice comes through. kyrr uses
-[DPDFNet](https://github.com/ceva-ip/DPDFNet), a current neural model,
-right inside Windows audio. In my own side-by-side listening it keeps up
-with the paid tools I know, Krisp included. That is my ear, not a lab
-benchmark, so judge for yourself: the built-in before/after test takes ten
-seconds. It is fast, too: 60 ms latency, and on a current desktop
-processor about 5 to 11 % of one core.
-
-**Dictation you can rely on, in English and German.** Hold a key, talk,
-let go, and the text appears where your cursor is, with punctuation and
-capitals. English runs on NVIDIA's Parakeet, one of the most accurate
-open speech models; in a small test on LibriSpeech it got about one
-word in a hundred wrong. German was the hard part: I never found dictation
-software that got it right without fuss. kyrr uses a German fine-tune of
-Parakeet by primeLine AI, and for me it is the first that just works. Both
-are quick: on a current desktop, a ten-second sentence is text in well
-under a second.
-
-**Simple on purpose.** Install, pick your microphone, done: every app
-gets the clean voice, with nothing to change in Teams, Zoom or anywhere
-else. The window has three switches, dictation is one key, and kyrr waits
-quietly in the tray. The settings are there if you want them; you don't
-have to touch them.
-
-**Free, local, open source.** No subscription, no account, no cloud. Your
-voice and your text stay on your computer, and after the one-time model
-download kyrr needs no internet at all. The code is here for anyone to
-read.
-
-## What it does
-
-- **Remove background noise** on the microphone itself, for every app:
-  Teams, Zoom, Discord, OBS, the browser. A large model for the cleanest
-  result, a small one for older laptops.
-- **Voice.** A bit of polish after the noise is gone: a sound (Neutral,
-  Warm, Clear, Bright or your own), even volume, softer S sounds and a cut
-  for low rumble.
-- **Dictation.** Hold F9 (or F8, Pause, right Ctrl; or tap to start and
-  stop), speak, release. Say "new line" or "neue Zeile" for a line break.
-- **Check.** A live level, a ten-second before/after test and listening to
-  yourself on headphones.
+- **Noise suppression for every app.** kyrr filters the microphone itself,
+  so Teams, Zoom, Discord, OBS and the browser all get a clean voice
+  without any setup. To our ears on par with paid tools such as Krisp (a
+  listening impression, not a formal benchmark); try the built-in
+  before/after test.
+- **Dictation in English and German.** Hold F9, speak, release: the text
+  appears at the cursor, with punctuation. Accurate in English, and the
+  first dictation we found that is reliable in German too.
+- **Private.** No cloud, no account, no telemetry. After the one-time
+  model download kyrr works offline.
+- **Simple.** Three switches, one key. Everything else is optional.
 
 <p align="center">
   <img src="docs/screenshots/main.png" width="380" alt="kyrr's window: noise filter, voice and dictation, each with one switch">
@@ -69,91 +30,72 @@ read.
   <img src="docs/screenshots/settings.png" width="760" alt="Settings in two columns: noise strength and model, voice sound, volume, S sounds, low cut, language and autostart; dictation key, level check with before/after test and listening, about">
 </p>
 
-A young project that its author uses every day. Feedback and bug reports
-are welcome in the [issues](https://github.com/heast13/kyrr/issues).
+## Features
+
+| | |
+|---|---|
+| Noise suppression | Neural ([DPDFNet](https://github.com/ceva-ip/DPDFNet)), 60 ms latency, 5 to 11 % of one CPU core on a current desktop. A large and a small model, three strengths. |
+| Voice | Sound presets (Neutral, Warm, Clear, Bright, custom EQ), compressor, de-esser, low cut. |
+| Dictation | F9, F8, Pause or right Ctrl; hold or tap. A ten-second sentence is text in well under a second. "New line" and "neue Zeile" for line breaks. |
+| Check | Live level, ten-second before/after recording, listening to yourself on headphones. |
 
 ## Compared with
 
 | | kyrr | NVIDIA Broadcast | Krisp |
 |---|---|---|---|
 | Price | free, open source | free | subscription after a free trial |
-| Needs | any 64-bit Intel or AMD PC with Windows 10 or 11 | an NVIDIA RTX graphics card | an account |
-| Where it works | on the microphone itself: every app, nothing to choose | apps set to its virtual microphone | apps set to its virtual microphone |
+| Needs | 64-bit Intel or AMD PC, Windows 10 or 11 | NVIDIA RTX graphics card | an account |
+| Works in | every app, on the microphone itself | apps set to its virtual microphone | apps set to its virtual microphone |
 
-On top, kyrr dictates into any app, on your computer. As far as I know in
-October 2026; corrections welcome.
+kyrr also dictates into any app, on your PC. As far as we know in October
+2026; corrections welcome.
 
 ## Install
 
-Download and run the [installer](https://github.com/heast13/kyrr/releases/latest/download/kyrr-setup.exe)
-(all versions on the [releases page](https://github.com/heast13/kyrr/releases)).
-Windows 10 22H2 or Windows 11, 64-bit. Setup asks for administrator rights,
-and sound drops out for a second while kyrr sets up its filter.
+Download and run the [installer](https://github.com/heast13/kyrr/releases/latest/download/kyrr-setup.exe).
+It needs Windows 10 22H2 or 11 (64-bit) and administrator rights; sound
+drops out for a second while the filter is set up.
 
-- Until the installer is [code-signed](#code-signing-policy), Windows
-  SmartScreen warns about it ("More info", "Run anyway"). Compare it with
-  the `.sha256` file from the release page first if you like.
-- On Windows on ARM (Snapdragon and other ARM processors) kyrr only
-  dictates: its noise filter is built for Intel and AMD processors, and the
-  audio engine there cannot load it.
-- Uninstalling takes the filter off the microphone, puts the Windows
-  setting below back and asks whether to delete the speech models.
+- Until the installer is [code-signed](#code-signing-policy), SmartScreen
+  warns about it ("More info", "Run anyway"). Each release has a `.sha256`
+  file to check it against.
+- On Windows on ARM, kyrr offers dictation only: the noise filter is built
+  for Intel and AMD processors.
+- Uninstalling removes the filter, restores the Windows setting below and
+  offers to delete the speech models.
 
 ## How it works
 
-**Remove background noise.** kyrr installs an audio processing object (APO),
-a filter the Windows audio engine runs on the microphone itself, the way
-Equalizer APO does. Every app gets the cleaned signal without choosing a
-virtual device. If the microphone's driver has its own effect (for example
-beamforming), kyrr keeps it and runs after it. On processors without AVX2
-the filter falls back to ONNX Runtime and kyrr switches to the small model
-once.
+**Noise suppression** runs as an audio processing object (APO) that the
+Windows audio engine applies to the microphone, as Equalizer APO does. The
+microphone driver's own effects stay in place, before kyrr. Loading an APO
+not signed by Microsoft needs `DisableProtectedAudioDG`; the installer sets
+it and uninstalling restores the previous value. If a Windows update removes
+kyrr from the microphone, the app offers to repair it. Without AVX2, kyrr
+uses ONNX Runtime and the small model.
 
-Windows only loads audio filters signed by Microsoft unless the setting
-`DisableProtectedAudioDG` is on. kyrr's installer switches it on, as
-Equalizer APO's does, says so before it starts, and restores the previous
-value on uninstall (unless Equalizer APO is installed and still needs it).
-If a Windows or driver update takes kyrr off the microphone, the app notices
-and offers to repair it.
+**Voice** shaping runs in the same filter, after noise suppression, with no
+added latency: low cut, three-band EQ, de-esser, compressor and limiter.
 
-**Voice.** The same filter shapes the voice, with the chain of
-[Omavoice DPDFNet](https://github.com/heast13/omarchy-omavoice-dpdfnet): a low
-cut (80 Hz) before the noise filter, then three EQ bands (body at 250 Hz,
-presence at 3 kHz, air above 8 kHz), a de-esser above 4 kHz, a compressor
-and a limiter at −1 dBFS. No added latency, and it works with the noise
-filter off too. Default: neutral sound, medium compression, low cut on.
+**Dictation** records while the key is held and transcribes locally with
+[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). The text is pasted at
+the cursor and the clipboard restored. The model is downloaded on first use
+and unloaded after 15 minutes without dictation.
 
-**Check.** The filter shares a small block of memory with the app
-(`Global\kyrr-monitor-2`): the level before and after kyrr, and on request
-one ten-second take, unprocessed and processed. The audio service writes
-it; users signed in at this computer can read it and ask for a take, which
-only records while an app already uses the microphone. The app keeps the
-take only in memory and clears it from the shared block.
-
-**Dictation.** kyrr records while the key is held and transcribes locally
-with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (its build without
-text-to-speech). The text is pasted at the cursor; the clipboard is put back
-afterwards. The speech model is downloaded once on first use and let go of
-after a quarter of an hour without dictation:
-
-| Language | Model | Size |
+| Language | Model | Download |
 |---|---|---|
-| German | [primeline/parakeet-primeline](https://huggingface.co/primeline/parakeet-primeline), a German fine-tune of NVIDIA Parakeet; also handles English | 900 MB |
+| German | [primeline/parakeet-primeline](https://huggingface.co/primeline/parakeet-primeline), a German fine-tune of NVIDIA Parakeet | 900 MB |
 | English | [NVIDIA parakeet-unified-en-0.6b](https://huggingface.co/nvidia/parakeet-unified-en-0.6b) | 663 MB |
 
 ## Privacy
 
-Audio never leaves your computer. The app connects to the internet only to
-download the speech model and, when you click "Check for updates", to ask
-GitHub for the newest version number. Nothing is downloaded or installed by
-itself. No telemetry.
-
-The models come from kyrr's own mirrors
-([Hugging Face](https://huggingface.co/heast13/kyrr-models), else
+Audio and text never leave your computer. kyrr connects to the internet only
+to download a speech model and, when you click "Check for updates", to ask
+GitHub for the latest version. Models come from kyrr's own mirrors
+([Hugging Face](https://huggingface.co/heast13/kyrr-models), then
 [GitHub](https://github.com/heast13/kyrr-assets); the English model last
-from the sherpa-onnx project's Hugging Face page), and every file is checked
-against a SHA256 hash built into kyrr. Building kyrr downloads its assets
-and libraries too, from kyrr's mirror on GitHub first.
+from the sherpa-onnx project) and are checked against SHA256 hashes built
+into kyrr. No telemetry.
 
 ## Code signing policy
 
@@ -186,47 +128,24 @@ cargo build --release -p kyrr -p kyrr-apo
 python scripts/package.py
 ```
 
-`SHERPA_ONNX_LIB_DIR` points the build at sherpa-onnx's libraries without
-text-to-speech; the default ones bundle espeak-ng (GPL-3.0).
-`scripts/check-binaries.py` (run by `package.py` and CI) refuses a build
-that contains it, or a filter DLL that needs the Visual C++ runtime.
-
-The cores (`kyrr-denoise`, `kyrr-voice`, `kyrr-dictate`) build and test on
-Linux too; `cargo run -p kyrr --example preview -- <dir>` renders the window
-headless.
+`SHERPA_ONNX_LIB_DIR` selects sherpa-onnx's libraries without
+text-to-speech (the default ones bundle GPL-3.0 code);
+`scripts/check-binaries.py` rejects builds that contain it. The cores
+(`kyrr-denoise`, `kyrr-voice`, `kyrr-dictate`) also build and test on Linux.
 
 ## License
 
-kyrr is licensed under either of
+MIT or Apache-2.0, at your option ([LICENSE-MIT](LICENSE-MIT),
+[LICENSE-APACHE](LICENSE-APACHE)). Third-party components and models keep
+their own licenses, see [THIRD_PARTY.md](THIRD_PARTY.md) and
+[NOTICE](NOTICE). The UI is made with [Slint](https://slint.dev) under its
+royalty-free license. Security issues: [SECURITY.md](SECURITY.md).
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT license ([LICENSE-MIT](LICENSE-MIT))
+## Acknowledgements
 
-at your option. Third-party components and models keep their own licenses,
-see [THIRD_PARTY.md](THIRD_PARTY.md); the app shows the model credits under
-Settings, About. kyrr's window is made with [Slint](https://slint.dev) under
-its royalty-free license, which asks for the badge at the top of this page.
-Security issues: see [SECURITY.md](SECURITY.md).
-
-If you build on kyrr, please keep the copyright notice and
-[NOTICE](NOTICE) (the licenses ask for it) and, if you like, mention
-heast13 with a link to this repository.
-
-## Thanks
-
-kyrr stands on the work of others. Thank you to
-
-- [Fovty](https://github.com/Fovty) for HushMic, whose DPDFNet runtime
-  kyrr's filter is built on,
-- [Ceva](https://github.com/ceva-ip/DPDFNet) for DPDFNet and for releasing
-  its models openly,
-- [primeLine AI](https://huggingface.co/primeline/parakeet-primeline) for
-  the German speech model,
-- NVIDIA for Parakeet, the model family behind both languages,
-- csukuangfj and the [k2-fsa](https://github.com/k2-fsa/sherpa-onnx) team
-  for sherpa-onnx and the English model in ONNX,
-- [Equalizer APO](https://sourceforge.net/projects/equalizerapo/), which
-  showed how a filter can live inside Windows audio,
-- [Slint](https://slint.dev) for the UI toolkit,
-
-and to the many more whose work kyrr builds on.
+kyrr builds on [DPDFNet](https://github.com/ceva-ip/DPDFNet) by Ceva,
+[HushMic](https://github.com/Fovty/HushMic) by Fovty, NVIDIA's Parakeet,
+[primeLine AI](https://huggingface.co/primeline/parakeet-primeline)'s German
+model, [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) by csukuangfj and
+the k2-fsa team, [Equalizer APO](https://sourceforge.net/projects/equalizerapo/),
+[Slint](https://slint.dev) and many more. Thank you.
