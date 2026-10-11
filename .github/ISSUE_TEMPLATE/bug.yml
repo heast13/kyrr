@@ -24,6 +24,6 @@ body:
     attributes:
       label: Details from kyrr
       description: >
-        Settings, Tools: what the status line says. If the filter is involved, the log
+        The status line in kyrr's main window. If the filter is involved, the log
         C:\Windows\ServiceProfiles\LocalService\AppData\Local\Temp\kyrr-apo.log
         (needs admin rights to open) helps a lot. It contains events only, no audio.

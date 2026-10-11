@@ -35,7 +35,7 @@ What it does:
   <img src="docs/screenshots/main.png" width="380" alt="kyrr's window: noise filter, voice and dictation, each with one switch">
 </p>
 <p align="center">
-  <img src="docs/screenshots/settings.png" width="760" alt="Settings in two columns: noise strength and model, voice sound, volume, S sounds, low cut, language and autostart; dictation key, level check with before/after test and listening, about">
+  <img src="docs/screenshots/settings.png" width="760" alt="Settings in two columns: noise strength and model, voice sound, volume, S sounds, low cut, language, autostart, updates and microphone; dictation key, level check with before/after test and listening, about">
 </p>
 
 Status: young and in active development.
@@ -44,7 +44,7 @@ Status: young and in active development.
 
 | | kyrr | NVIDIA Broadcast | Krisp |
 |---|---|---|---|
-| Price | free, open source | free | subscription after a free trial |
+| Price | free, open source | free | free for 60 minutes a day, subscription beyond |
 | Needs | any 64-bit Intel or AMD PC with Windows 10 or 11 | an NVIDIA RTX graphics card | an account |
 | Where it works | on the microphone itself: every app, nothing to choose | apps set to its virtual microphone | apps set to its virtual microphone |
 
@@ -88,7 +88,7 @@ and offers to repair it.
 
 **Voice.** The same filter can shape the voice, with the chain of
 [Omavoice DPDFNet](https://github.com/heast13/omarchy-omavoice-dpdfnet) and
-its sounds and de-esser levels: a low cut (80 Hz) before the noise filter,
+its sounds and de-esser levels: a low cut (80 Hz, 100 Hz for the bright sound) before the noise filter,
 then three EQ bands (body at 250 Hz, presence at 3 kHz, air above 8 kHz), a
 de-esser on the band above 4 kHz, a compressor (light, medium or strong) and
 a limiter at −1 dBFS. It works with the noise filter switched off too, and
@@ -138,6 +138,9 @@ assets and libraries, from kyrr's mirror on GitHub first.)
 
 Free code signing provided by [SignPath.io](https://about.signpath.io),
 certificate by [SignPath Foundation](https://signpath.org).
+
+*Not active yet: releases up to now are unsigned. The list below is what
+will be signed once the setup is finished.*
 
 - Signed are kyrr's own files: `kyrr.exe`, `kyrr_apo.dll` and the installer
   `kyrr-setup-<version>.exe`, each built by the [release
@@ -207,4 +210,5 @@ kyrr stands on the work of others. Thank you to
   for sherpa-onnx and the English model in ONNX,
 - [Equalizer APO](https://sourceforge.net/projects/equalizerapo/), which
   showed how a filter can live inside Windows audio,
-- [Slint](https://slint.dev) for the UI toolkit.
+- [Slint](https://slint.dev) for the UI toolkit,
+- [SignPath Foundation](https://signpath.org) for free code signing.
