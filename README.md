@@ -8,9 +8,9 @@
 
 [![Made with Slint](https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png)](https://slint.dev)
 
-Noise removal on the level of paid tools, and dictation that finally works
-well in German. A small Windows app: free, open source, everything on your
-own PC.
+Noise removal on the level of paid tools, and dictation that works really
+well in English and, finally, in German too. A small Windows app: free,
+open source, everything on your own PC.
 
 > **Everything runs on your PC.** Your voice and your dictated text never
 > leave your computer: no cloud, no account, no telemetry. Once the speech
@@ -26,12 +26,20 @@ my ear, not a lab benchmark, so judge for yourself: the built-in
 before/after test takes ten seconds. It is fast, too: 60 ms latency, and on
 a current desktop processor about 5 to 11 % of one core.
 
-**Dictation you can rely on, also in German.** I never found dictation
-software that got German right without fuss. kyrr uses a German fine-tune
-of NVIDIA's Parakeet by primeLine AI: hold a key, talk, let go, and the
-text appears where your cursor is, with punctuation and capitals. Fast
-(about 50 times real time on a current desktop) and for me the first that
-just works. English has its own model.
+**Dictation you can rely on, in English and German.** Hold a key, talk,
+let go, and the text appears where your cursor is, with punctuation and
+capitals. English runs on NVIDIA's Parakeet, one of the most accurate
+open speech models; in a small test on LibriSpeech it got about one
+word in a hundred wrong. German was the hard part: I never found dictation
+software that got it right without fuss. kyrr uses a German fine-tune of
+Parakeet by primeLine AI, and for me it is the first that just works. Both
+are quick: on a current desktop, a ten-second sentence is text in well
+under a second.
+
+**Free, local, open source.** No subscription, no account, no cloud. Your
+voice and your text stay on your computer, and after the one-time model
+download kyrr needs no internet at all. The code is here for anyone to
+read.
 
 ## What it does
 
