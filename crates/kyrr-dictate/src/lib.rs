@@ -187,7 +187,10 @@ mod tests {
             assert_eq!(spec.files.len(), 4);
             for f in spec.files {
                 assert_eq!(f.sha256.len(), 64);
-                assert!(f.url.ends_with(f.name));
+                assert!(f.urls.len() >= 2, "{}: one host only", f.name);
+                for url in f.urls {
+                    assert!(url.ends_with(f.name), "{url}");
+                }
             }
         }
     }

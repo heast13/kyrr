@@ -41,7 +41,9 @@ impl Language {
 #[derive(Debug)]
 pub struct ModelFile {
     pub name: &'static str,
-    pub url: &'static str,
+    /// Where to get it, tried in order: kyrr's own mirrors first, so a
+    /// download never depends on one host alone.
+    pub urls: &'static [&'static str],
     pub size: u64,
     pub sha256: &'static str,
 }
@@ -60,6 +62,36 @@ pub struct ModelSpec {
     pub replaces: &'static [&'static str],
 }
 
+/// A file in kyrr's model repository on Hugging Face, at a pinned revision.
+macro_rules! hf {
+    ($path:literal) => {
+        concat!(
+            "https://huggingface.co/heast13/kyrr-models/resolve/fcb7ff4db50300b95f9301fb5f8c62c56c4e69ea/",
+            $path
+        )
+    };
+}
+
+/// The same files in a release of kyrr's mirror repository on GitHub.
+macro_rules! github {
+    ($name:literal) => {
+        concat!(
+            "https://github.com/heast13/kyrr-assets/releases/download/models-1/",
+            $name
+        )
+    };
+}
+
+/// The English model where the sherpa-onnx project published it.
+macro_rules! sherpa {
+    ($name:literal) => {
+        concat!(
+            "https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7/",
+            $name
+        )
+    };
+}
+
 /// primeline/parakeet-primeline, converted with `tools/export-primeline`.
 /// `de-primeline` had signed int8 weights, which ONNX Runtime gets wrong on
 /// x86 CPUs without VNNI (see the tool's README).
@@ -70,25 +102,34 @@ static GERMAN: ModelSpec = ModelSpec {
     files: &[
         ModelFile {
             name: "encoder.int8.onnx",
-            url: "https://huggingface.co/heast13/kyrr-models/resolve/060909ddfa399aa1036c33b23c79096f7a882c4f/de-primeline-u8/encoder.int8.onnx",
+            urls: &[
+                hf!("de-primeline-u8/encoder.int8.onnx"),
+                github!("de-primeline-u8.encoder.int8.onnx"),
+            ],
             size: 881_596_736,
             sha256: "49596a2c9c20a224fd087b2c1dc8cdc5dfe3fb8d3ddd4eefb070d81e492c93d8",
         },
         ModelFile {
             name: "decoder.int8.onnx",
-            url: "https://huggingface.co/heast13/kyrr-models/resolve/060909ddfa399aa1036c33b23c79096f7a882c4f/de-primeline-u8/decoder.int8.onnx",
+            urls: &[
+                hf!("de-primeline-u8/decoder.int8.onnx"),
+                github!("de-primeline-u8.decoder.int8.onnx"),
+            ],
             size: 11_845_274,
             sha256: "6b32c9339900086afd3d282eb40688ae19f3d106281e7731ee27ead1add8b29d",
         },
         ModelFile {
             name: "joiner.int8.onnx",
-            url: "https://huggingface.co/heast13/kyrr-models/resolve/060909ddfa399aa1036c33b23c79096f7a882c4f/de-primeline-u8/joiner.int8.onnx",
+            urls: &[
+                hf!("de-primeline-u8/joiner.int8.onnx"),
+                github!("de-primeline-u8.joiner.int8.onnx"),
+            ],
             size: 6_355_277,
             sha256: "c84fcf848108531a7309ef65308dc5dc610091ce0fbde134f76bb0f6c42ca530",
         },
         ModelFile {
             name: "tokens.txt",
-            url: "https://huggingface.co/heast13/kyrr-models/resolve/060909ddfa399aa1036c33b23c79096f7a882c4f/de-primeline-u8/tokens.txt",
+            urls: &[hf!("de-primeline-u8/tokens.txt"), github!("de-primeline-u8.tokens.txt")],
             size: 93_939,
             sha256: "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
         },
@@ -97,7 +138,7 @@ static GERMAN: ModelSpec = ModelSpec {
 };
 
 /// nvidia/parakeet-unified-en-0.6b as packaged by sherpa-onnx (int8,
-/// non-streaming), from the sherpa-onnx author's Hugging Face mirror.
+/// non-streaming), mirrored unchanged in kyrr's repositories.
 static ENGLISH: ModelSpec = ModelSpec {
     id: "en-unified",
     attribution: "English: NVIDIA parakeet-unified-en-0.6b, licensed by NVIDIA Corporation under the \
@@ -105,25 +146,41 @@ static ENGLISH: ModelSpec = ModelSpec {
     files: &[
         ModelFile {
             name: "encoder.int8.onnx",
-            url: "https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7/encoder.int8.onnx",
+            urls: &[
+                hf!("en-unified/encoder.int8.onnx"),
+                github!("en-unified.encoder.int8.onnx"),
+                sherpa!("encoder.int8.onnx"),
+            ],
             size: 654_040_552,
             sha256: "6716910b7a0833997fec7a410494c995d70124001a0e9b66d6370d6aced577e0",
         },
         ModelFile {
             name: "decoder.int8.onnx",
-            url: "https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7/decoder.int8.onnx",
+            urls: &[
+                hf!("en-unified/decoder.int8.onnx"),
+                github!("en-unified.decoder.int8.onnx"),
+                sherpa!("decoder.int8.onnx"),
+            ],
             size: 7_257_753,
             sha256: "a5e223392c90e75f8144cdb5eb95af7625db389e39edef2bd1a9c872b3298fe6",
         },
         ModelFile {
             name: "joiner.int8.onnx",
-            url: "https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7/joiner.int8.onnx",
+            urls: &[
+                hf!("en-unified/joiner.int8.onnx"),
+                github!("en-unified.joiner.int8.onnx"),
+                sherpa!("joiner.int8.onnx"),
+            ],
             size: 1_735_860,
             sha256: "869f43f7d24595c55581ad3bf249a935fb8a71389fbdaa7504b9f46f93140f8a",
         },
         ModelFile {
             name: "tokens.txt",
-            url: "https://huggingface.co/csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming/resolve/8c3a10fb13408c7a7054f6898958bf1c64a8d6c7/tokens.txt",
+            urls: &[
+                hf!("en-unified/tokens.txt"),
+                github!("en-unified.tokens.txt"),
+                sherpa!("tokens.txt"),
+            ],
             size: 8_952,
             sha256: "dc0b4584ab2e4ddbf888425c076c61b736e7356a015250db7d307e6f1a8188ff",
         },

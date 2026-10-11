@@ -49,3 +49,10 @@ is identical to the int8 model's. On a CPU with VNNI the U8U8 kernel is about a 
 
 The first upload, `de-primeline`, still had int8 weights; kyrr now uses
 `de-primeline-u8`.
+
+The Hugging Face repository's `README.md` is [`MODEL_CARD.md`](MODEL_CARD.md)
+and its `LICENSE.md` is [`MODEL_LICENSE.md`](MODEL_LICENSE.md). It also
+holds the English model, mirrored unchanged in `en-unified/` with a copy of
+NVIDIA's license. Every file is attached to the `models-*` releases of
+[heast13/kyrr-assets](https://github.com/heast13/kyrr-assets) as well,
+named `<folder>.<file>`.

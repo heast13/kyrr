@@ -87,15 +87,36 @@ pub fn download(
     Ok(())
 }
 
+/// Tries the file's sources in order until one delivers it intact. Being
+/// offline, a missing file or a damaged copy moves on to the next source;
+/// cancelling or a full disk stops at once.
 fn fetch_file(
     file: &ModelFile,
     dest: &Path,
     progress: &mut dyn FnMut(u64),
     cancel: &AtomicBool,
 ) -> Result<(), DownloadError> {
+    let mut last = DownloadError::Server(format!("{}: no source", file.name));
+    for url in file.urls {
+        match fetch_from(file, url, dest, progress, cancel) {
+            Ok(()) => return Ok(()),
+            Err(e @ (DownloadError::Cancelled | DownloadError::Disk(_))) => return Err(e),
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
+}
+
+fn fetch_from(
+    file: &ModelFile,
+    url: &str,
+    dest: &Path,
+    progress: &mut dyn FnMut(u64),
+    cancel: &AtomicBool,
+) -> Result<(), DownloadError> {
     let named = |e: &dyn std::fmt::Display| format!("{}: {e}", file.name);
     let part = dest.with_extension("part");
-    let response = agent().get(file.url).call().map_err(|e| match e {
+    let response = agent().get(url).call().map_err(|e| match e {
         ureq::Error::StatusCode(_) => DownloadError::Server(named(&e)),
         _ => DownloadError::Offline(named(&e)),
     })?;

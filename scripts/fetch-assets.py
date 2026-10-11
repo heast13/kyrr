@@ -12,6 +12,10 @@
 - two short speech clips from the sherpa-onnx test assets for the dictation
   tests; only with --test
 
+Every file comes from kyrr's own mirror (the build-1 release of
+heast13/kyrr-assets) first and from its original home only when that
+fails, so a build does not depend on others keeping their releases.
+
 Standard library only, so it runs the same on Linux and Windows.
 """
 
@@ -28,6 +32,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "assets"
+MIRROR = "https://github.com/heast13/kyrr-assets/releases/download/build-1"
 HUSHMIC = "https://github.com/Fovty/HushMic/releases/download/v0.10.2"
 
 MODELS = [
@@ -66,21 +71,28 @@ def sha256(path: Path) -> str:
 
 
 def fetch(name: str, url: str, digest: str, folder: Path = ASSETS) -> Path:
+    """`name` from kyrr's mirror, else from `url`, checked against `digest`."""
     folder.mkdir(exist_ok=True)
     dest = folder / name
     if dest.is_file() and sha256(dest) == digest:
         print(f"OK  {name}")
         return dest
-    print(f"Downloading {name} ...")
     tmp = dest.with_suffix(dest.suffix + ".part")
-    with urllib.request.urlopen(url) as r, tmp.open("wb") as f:
-        shutil.copyfileobj(r, f)
-    if sha256(tmp) != digest:
-        tmp.unlink()
-        sys.exit(f"checksum mismatch: {name}")
-    tmp.replace(dest)
-    print(f"OK  {name}")
-    return dest
+    for source in (f"{MIRROR}/{name}", url):
+        print(f"Downloading {name} from {source} ...")
+        try:
+            with urllib.request.urlopen(source) as r, tmp.open("wb") as f:
+                shutil.copyfileobj(r, f)
+        except OSError as e:
+            print(f"    failed: {e}")
+            continue
+        if sha256(tmp) == digest:
+            tmp.replace(dest)
+            print(f"OK  {name}")
+            return dest
+        print("    checksum mismatch")
+    tmp.unlink(missing_ok=True)
+    sys.exit(f"could not fetch {name}")
 
 
 def extract_ort(zip_path: Path) -> None:

@@ -20,6 +20,10 @@
   sometimes opened behind the current one.
 - With noise removal on, the main view says "Just your voice." instead of
   the microphone's name.
+- The speech models download from kyrr's own mirrors, on Hugging Face and,
+  if that fails, on GitHub; the English model no longer depends on someone
+  else's repository (that stays the last resort). Each file is still
+  checked against its built-in SHA256.
 - Windows on ARM (Snapdragon and other ARM processors): kyrr no longer sets
   up its noise filter there, which the audio engine cannot load and which
   could leave the microphone silent. Dictation works; installing this
