@@ -22,8 +22,9 @@ const SCALE: f32 = 1.5;
 
 fn render(window: &MinimalSoftwareWindow, ui: &MainWindow, path: &str) {
     ui.show().unwrap();
-    window.set_size(PhysicalSize::new((380.0 * SCALE) as u32, 100));
-    let (w, h) = ((380.0 * SCALE) as u32, (ui.get_content_height() * SCALE).ceil() as u32);
+    let w = (ui.get_page_width() * SCALE) as u32;
+    window.set_size(PhysicalSize::new(w, 100));
+    let h = (ui.get_content_height() * SCALE).ceil() as u32;
     window.set_size(PhysicalSize::new(w, h));
     let mut buf = vec![PremultipliedRgbaColor::default(); (w * h) as usize];
     window.request_redraw();

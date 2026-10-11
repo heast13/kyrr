@@ -173,8 +173,9 @@ mod imp {
         }
     }
 
-    /// Top and bottom of the free screen at a point, in physical pixels.
-    pub fn work_area(x: i32, y: i32) -> Option<(i32, i32)> {
+    /// Left, top, right and bottom of the free screen at a point, in
+    /// physical pixels.
+    pub fn work_area(x: i32, y: i32) -> Option<(i32, i32, i32, i32)> {
         kyrr_windows::screen::work_area(x, y)
     }
 
@@ -286,7 +287,7 @@ mod imp {
 
     pub fn set_autostart(_: bool) {}
 
-    pub fn work_area(_: i32, _: i32) -> Option<(i32, i32)> {
+    pub fn work_area(_: i32, _: i32) -> Option<(i32, i32, i32, i32)> {
         None
     }
 

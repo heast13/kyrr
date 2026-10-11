@@ -122,35 +122,49 @@ const FALLBACK_HEIGHT: f32 = 660.0;
 const MIN_HEIGHT: f32 = 400.0;
 /// Title bar and borders, about, plus a little air.
 const FRAME: f32 = 40.0;
-/// The window's fixed width (as in the .slint file).
-const WIDTH: f32 = 380.0;
+/// Borders left and right, about.
+const FRAME_SIDES: f32 = 16.0;
 
-/// Top and bottom of the free screen the window is on, in physical pixels.
-fn screen(w: &MainWindow) -> Option<(i32, i32)> {
+/// Left, top, right and bottom of the free screen the window is on, in
+/// physical pixels.
+fn screen(w: &MainWindow) -> Option<(i32, i32, i32, i32)> {
     let pos = w.window().position();
     platform::work_area(pos.x, pos.y)
 }
 
 /// The height the content wants, up to what the screen has room for.
 fn wanted_height(w: &MainWindow) -> f32 {
-    let cap = screen(w).map_or(FALLBACK_HEIGHT, |(top, bottom)| {
+    let cap = screen(w).map_or(FALLBACK_HEIGHT, |(_, top, _, bottom)| {
         ((bottom - top) as f32 / w.window().scale_factor() - FRAME).clamp(MIN_HEIGHT, MAX_HEIGHT)
     });
     w.get_content_height().min(cap)
 }
 
-/// Sets the window's height and moves it up when its bottom would end up
-/// behind the taskbar or off the screen.
+/// Sets the window's height (its width is the page's) and moves it up or
+/// left when it would end up behind the taskbar or off the screen.
 fn resize(w: &MainWindow, height: f32) {
     let win = w.window();
-    win.set_size(LogicalSize::new(WIDTH, height));
-    let Some((top, bottom)) = screen(w) else {
+    let width = w.get_page_width();
+    win.set_size(LogicalSize::new(width, height));
+    let Some((left, top, right, bottom)) = screen(w) else {
         return;
     };
     let pos = win.position();
-    let outer = ((height + FRAME) * win.scale_factor()).round() as i32;
-    if pos.y + outer > bottom {
-        win.set_position(PhysicalPosition::new(pos.x, (bottom - outer).max(top)));
+    let scale = win.scale_factor();
+    let outer_width = ((width + FRAME_SIDES) * scale).round() as i32;
+    let outer_height = ((height + FRAME) * scale).round() as i32;
+    let x = if pos.x + outer_width > right {
+        (right - outer_width).max(left)
+    } else {
+        pos.x
+    };
+    let y = if pos.y + outer_height > bottom {
+        (bottom - outer_height).max(top)
+    } else {
+        pos.y
+    };
+    if (x, y) != (pos.x, pos.y) {
+        win.set_position(PhysicalPosition::new(x, y));
     }
 }
 

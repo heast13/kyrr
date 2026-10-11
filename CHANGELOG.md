@@ -11,6 +11,8 @@
   Windows, it used to come up too small.
 - The button at the bottom of the window only puts it away, like the close
   button. Quit kyrr from the tray icon's menu (right-click).
+- The settings show in two columns side by side, in a wider window; the
+  main view stays narrow.
 - The settings get more room: the window grows up to 900 pixels where the
   screen has space, and moves up instead of hiding behind the taskbar.
 - The level meter only runs while the window is open.

@@ -893,11 +893,13 @@ export component MainWindow inherits Window {
     // The window came up (from the tray, at start); the app starts the meter.
     callback shown();
     changed content-height => { root.content-height-changed(); }
+    // One column, 380 px; the settings in two side by side.
+    out property <length> page-width: settings-page ? 760px : 380px;
     title: "kyrr";
     icon: @image-url("icons/kyrr-256.png");
-    preferred-width: 380px;
-    min-width: 380px;
-    max-width: 380px;
+    preferred-width: page-width;
+    min-width: page-width;
+    max-width: page-width;
 
     // A new page starts at the top, not where the last one was scrolled to.
     public function reset-scroll() {
@@ -953,12 +955,27 @@ export component MainWindow inherits Window {
                 Heading { text: @tr("Settings"); font-size: 20px; vertical-alignment: center; }
                 Rectangle { }
             }
-            if settings-page: NoiseSettings { }
-            if settings-page: VoiceSettings { }
-            if settings-page: DictationSettings { }
-            if settings-page: ToolsSettings { }
-            if settings-page: GeneralSettings { }
-            if settings-page: AboutSettings { }
+            // Two columns of about equal length. Fixed column widths, so
+            // wrapped text is measured at its real width.
+            if settings-page: HorizontalLayout {
+                spacing: 36px;
+                VerticalLayout {
+                    width: 344px;
+                    spacing: 12px;
+                    alignment: start;
+                    NoiseSettings { }
+                    VoiceSettings { }
+                    GeneralSettings { }
+                }
+                VerticalLayout {
+                    width: 344px;
+                    spacing: 12px;
+                    alignment: start;
+                    DictationSettings { }
+                    ToolsSettings { }
+                    AboutSettings { }
+                }
+            }
             if settings-page: Caption {
                 // English in every language, on purpose.
                 text: "Proudly presented by heast13 and Claude “Silent but deadly” Opus. No microphones were harmed.";
