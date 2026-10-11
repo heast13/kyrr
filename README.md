@@ -8,9 +8,9 @@
 
 [![Made with Slint](https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png)](https://slint.dev)
 
-Noise removal on the level of paid tools, and dictation that works really
-well in English and, finally, in German too. A small Windows app, set up
-in a few clicks: free, open source, everything on your own PC.
+Background noise removal on the level of paid tools, and dictation that
+works really well in English and, finally, in German too. A small Windows
+app, set up in a few clicks: free, open source, everything on your own PC.
 
 > **Everything runs on your PC.** Your voice and your dictated text never
 > leave your computer: no cloud, no account, no telemetry. Once the speech
@@ -18,12 +18,14 @@ in a few clicks: free, open source, everything on your own PC.
 
 ## Why kyrr
 
-**Noise removal like Krisp, without the subscription.** That was the goal
-from day one. kyrr uses [DPDFNet](https://github.com/ceva-ip/DPDFNet), a
-current neural model, right inside Windows audio. In my own side-by-side
-listening it keeps up with the paid tools I know, Krisp included. That is
-my ear, not a lab benchmark, so judge for yourself: the built-in
-before/after test takes ten seconds. It is fast, too: 60 ms latency, and on
+**Background noise gone, like with Krisp, without the subscription.** That
+was the goal from day one: keyboard, fan, traffic or the dog stay out,
+your voice comes through. kyrr uses
+[DPDFNet](https://github.com/ceva-ip/DPDFNet), a current neural model,
+right inside Windows audio. In my own side-by-side listening it keeps up
+with the paid tools I know, Krisp included. That is my ear, not a lab
+benchmark, so judge for yourself: the built-in before/after test takes ten
+seconds. It is fast, too: 60 ms latency, and on
 a current desktop processor about 5 to 11 % of one core.
 
 **Dictation you can rely on, in English and German.** Hold a key, talk,
