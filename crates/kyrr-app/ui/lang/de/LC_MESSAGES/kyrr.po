@@ -534,8 +534,8 @@ msgstr "Bewegt sich, solange eine App das Mikro nutzt."
 msgid "Everything keeps running in the tray, bottom right. Quit there with a right-click."
 msgstr "Alles läuft unten rechts im Tray weiter. Beenden geht dort per Rechtsklick."
 
-msgid "Get lost"
-msgstr "Verzieh dich"
+msgid "Off to the corner"
+msgstr "Ab in die Ecke"
 
 msgid "Not now, just dictation"
 msgstr "Nicht jetzt, nur diktieren"
