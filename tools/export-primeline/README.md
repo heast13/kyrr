@@ -23,14 +23,30 @@ venv/bin/python quantize.py fp32 de-primeline
 
 ## Accuracy
 
-Word error rate on 100 clips of Multilingual LibriSpeech German (test) and
-73 clips of LibriSpeech English (validation, clean), lower is better:
+Word error rate (lower is better), measured on 2026-10-11 with the models as
+kyrr ships them (`de-primeline-u8`, `en-unified`), through kyrr's own
+transcription code (sherpa-onnx 1.13.8, 4 threads, CPU). Test clips: the first
+100 of Multilingual LibriSpeech German (test) and the first 73 of LibriSpeech
+English (validation, clean), from Hugging Face's datasets server. Text is
+compared lowercase and without punctuation.
+
+| Model | German (100 clips, 2,676 words) | English (73 clips, 1,198 words) |
+|---|---|---|
+| `de-primeline-u8` (German in kyrr) | 6.35 % | 1.75 % |
+| `en-unified` (English in kyrr) | not tested | 1.09 % |
+
+Speed on a Ryzen 7 9800X3D: about 51x real time for `de-primeline-u8`, 35x
+for `en-unified`.
+
+An earlier comparison of quantization variants, on the same clips but with a
+different text normalization (so its numbers are not comparable with the table
+above), is why MatMul/Gemm are quantized per channel:
 
 | Variant | German | English |
 |---|---|---|
 | fp32 | 6.92 % | 3.74 % |
 | int8, every op, per tensor (sherpa-onnx default) | 7.76 % | 4.35 % |
-| int8, MatMul/Gemm per channel (kyrr) | 6.84 % | 4.17 % |
+| int8, MatMul/Gemm per channel | 6.84 % | 4.17 % |
 
 ## Why uint8 weights
 
