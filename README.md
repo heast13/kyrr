@@ -25,8 +25,8 @@ your voice comes through. kyrr uses
 right inside Windows audio. In my own side-by-side listening it keeps up
 with the paid tools I know, Krisp included. That is my ear, not a lab
 benchmark, so judge for yourself: the built-in before/after test takes ten
-seconds. It is fast, too: 60 ms latency, and on
-a current desktop processor about 5 to 11 % of one core.
+seconds. It is fast, too: 60 ms latency, and on a current desktop
+processor about 5 to 11 % of one core.
 
 **Dictation you can rely on, in English and German.** Hold a key, talk,
 let go, and the text appears where your cursor is, with punctuation and
