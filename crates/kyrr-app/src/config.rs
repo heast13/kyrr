@@ -21,6 +21,12 @@ pub struct Config {
     /// The large noise model was swapped for the small one once because the
     /// CPU lacks AVX2; never again, so the user's later choice holds.
     pub lean_suggested: bool,
+    /// Ask GitHub once a day whether there is a newer kyrr.
+    pub update_check: bool,
+    /// When kyrr last asked, in seconds since 1970.
+    pub update_checked: u64,
+    /// The version whose note the user closed; it stays away until the next.
+    pub update_dismissed: String,
 }
 
 /// Keys dictation can use, as Windows virtual-key codes: F8, F9, Pause and
@@ -36,6 +42,9 @@ impl Default for Config {
             dictation_key: DICTATION_KEYS[1],
             dictation_toggle: false,
             lean_suggested: false,
+            update_check: true,
+            update_checked: 0,
+            update_dismissed: String::new(),
         }
     }
 }

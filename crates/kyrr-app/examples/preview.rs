@@ -76,6 +76,16 @@ fn main() {
     state.set_phrase(4);
     render(&window, &ui, &format!("{out}/main-{lang}.rgba"));
 
+    // A new version is out: the note above the bottom row.
+    state.set_update_version("0.4.0".into());
+    state.set_update_installable(true);
+    state.set_update_state(UpdateState::Available);
+    render(&window, &ui, &format!("{out}/main-update-{lang}.rgba"));
+    state.set_update_state(UpdateState::Downloading);
+    state.set_update_progress(0.37);
+    render(&window, &ui, &format!("{out}/main-updating-{lang}.rgba"));
+    state.set_update_state(UpdateState::Idle);
+
     // Nothing uses the microphone: standing by, with the meter at rest.
     state.set_mic_active(false);
     state.set_level_before(0.0);

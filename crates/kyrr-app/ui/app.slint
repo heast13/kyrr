@@ -71,6 +71,9 @@ export global AppState {
     // The release's installer; "" when it has none (then only the page).
     in property <bool> update-installable;
     in property <float> update-progress; // 0..1
+    // The daily check is on; the user closed the note for this version.
+    in-out property <bool> update-auto: true;
+    in property <bool> update-dismissed;
 
     in-out property <bool> autostart;
     in property <string> error-text;
@@ -118,6 +121,8 @@ export global AppState {
     callback check-updates();
     callback open-update();
     callback install-update();
+    callback update-auto-toggled(bool);
+    callback dismiss-update();
     callback skip-setup();
 }
 
@@ -131,14 +136,18 @@ export component Tray inherits SystemTrayIcon {
     in property <bool> dictation-enabled;
     in property <bool> dictation-ready;
     in property <string> key-name: "F9";
+    // A newer version found ("" for none).
+    in property <string> update-version;
     callback open();
+    callback install-update();
     callback toggle-filter();
     callback toggle-voice();
     callback toggle-dictation();
     callback quit();
     icon: recording ? @image-url("icons/kyrr-recording-32.png") : active ? @image-url("icons/kyrr-32.png") : @image-url("icons/kyrr-off-32.png");
     tooltip: "kyrr · " + (root.filter-enabled ? @tr("noise filter on") : @tr("noise filter off"))
-        + (root.dictation-ready ? " · " + @tr("{} ready", root.key-name) : "");
+        + (root.dictation-ready ? " · " + @tr("{} ready", root.key-name) : "")
+        + (root.update-version != "" ? " · " + @tr("update available") : "");
     clicked => { root.open(); }
     Menu {
         MenuItem {
@@ -156,6 +165,10 @@ export component Tray inherits SystemTrayIcon {
         MenuItem {
             title: root.dictation-enabled ? @tr("Turn dictation off") : @tr("Turn dictation on");
             activated => { root.toggle-dictation(); }
+        }
+        if root.update-version != "": MenuItem {
+            title: @tr("Install update {}", root.update-version);
+            activated => { root.install-update(); }
         }
         MenuItem {
             title: @tr("Quit");
@@ -635,7 +648,7 @@ component AboutSettings inherits Card {
         Button { text: @tr("Licenses"); clicked => { AppState.open-licenses(); } }
     }
     if AppState.update-state == UpdateState.idle: Hint {
-        text: @tr("kyrr only asks GitHub when you click.");
+        text: AppState.update-auto ? @tr("kyrr also looks once a day (Settings, General).") : @tr("kyrr only asks GitHub when you click.");
     }
     if AppState.update-state == UpdateState.checking: Hint { text: @tr("Having a look…"); }
     if AppState.update-state == UpdateState.current: Hint { text: @tr("You have the newest version. Nothing to do."); }
@@ -670,6 +683,63 @@ component AboutSettings inherits Card {
     if AppState.update-state == UpdateState.downloading: ProgressIndicator { progress: AppState.update-progress; height: 6px; }
     if AppState.update-state == UpdateState.installing: Hint {
         text: @tr("Installing. Windows asks for permission once, then kyrr restarts by itself.");
+    }
+}
+
+// The main view's quiet note that a new version is out, with the one click
+// that installs it. Closing it hides it until the next version.
+component UpdateBanner inherits Rectangle {
+    property <bool> busy: AppState.update-state == UpdateState.downloading || AppState.update-state == UpdateState.installing;
+    background: #2ea043.with-alpha(0.12);
+    border-color: #2ea043.with-alpha(0.45);
+    border-width: 1px;
+    border-radius: 10px;
+    HorizontalLayout {
+        padding: 8px;
+        padding-left: 12px;
+        spacing: 8px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle { width: 8px; height: 8px; border-radius: 4px; background: #2ea043; }
+        }
+        Text {
+            text: AppState.update-state == UpdateState.downloading ? @tr("Downloading the update… {}%", round(AppState.update-progress * 100))
+                : AppState.update-state == UpdateState.installing ? @tr("Installing, kyrr restarts in a moment.")
+                : AppState.update-state == UpdateState.download-failed ? @tr("The update did not download.")
+                : @tr("Version {} is out.", AppState.update-version);
+            font-size: 12px;
+            wrap: word-wrap;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        if !root.busy && AppState.update-installable: Button {
+            text: AppState.update-state == UpdateState.download-failed ? @tr("Try again") : @tr("Update");
+            primary: true;
+            horizontal-stretch: 0;
+            clicked => { AppState.install-update(); }
+        }
+        if !root.busy && !AppState.update-installable: Button {
+            text: @tr("Download page");
+            horizontal-stretch: 0;
+            clicked => { AppState.open-update(); }
+        }
+        if !root.busy: Rectangle {
+            width: 24px;
+            horizontal-stretch: 0;
+            accessible-role: button;
+            accessible-label: @tr("Not now");
+            accessible-action-default => { AppState.dismiss-update(); }
+            Text {
+                // × (not ✕): every font has it.
+                text: "×";
+                font-size: 20px;
+                color: close.has-hover ? Palette.foreground : Palette.foreground.with-alpha(0.55);
+            }
+            close := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { AppState.dismiss-update(); }
+            }
+        }
     }
 }
 
@@ -858,6 +928,19 @@ component GeneralSettings inherits Card {
             toggled => { AppState.autostart-toggled(self.checked); }
         }
     }
+    Separator { }
+    HorizontalLayout {
+        Caption { text: @tr("Look for updates"); vertical-alignment: center; }
+        Rectangle { }
+        Switch {
+            checked <=> AppState.update-auto;
+            toggled => { AppState.update-auto-toggled(self.checked); }
+        }
+    }
+    Hint {
+        text: AppState.update-auto ? @tr("Once a day kyrr asks GitHub for the newest version number. Nothing about you is sent; GitHub sees your IP address, as with any website. Installing is always your click.")
+            : @tr("Off. kyrr only asks GitHub when you click “Check for updates”.");
+    }
     if AppState.filter-state != FilterState.unsupported: Separator { }
     if AppState.filter-state != FilterState.unsupported: HorizontalLayout {
         spacing: 8px;
@@ -965,6 +1048,9 @@ export component MainWindow inherits Window {
             if main-page: NoiseCard { }
             if main-page: VoiceCard { }
             if main-page: DictationCard { }
+            if main-page && !AppState.update-dismissed && (AppState.update-state == UpdateState.available
+                || AppState.update-state == UpdateState.downloading || AppState.update-state == UpdateState.installing
+                || AppState.update-state == UpdateState.download-failed): UpdateBanner { }
             if main-page: HideRow { }
 
             // Settings page: the deeper options.

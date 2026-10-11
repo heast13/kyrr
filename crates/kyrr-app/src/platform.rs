@@ -162,7 +162,7 @@ mod imp {
         let _ = if on { autostart::enable() } else { autostart::disable() };
     }
 
-    /// Runs a downloaded kyrr installer as an update: quietly, with only its
+    /// Runs a downloaded kyrr installer as an update: no wizard, only its
     /// progress window, and kyrr starts again when it is done. Windows asks
     /// for permission. Blocks: the installer ends this kyrr on its way, so
     /// coming back means nothing was installed (permission declined).

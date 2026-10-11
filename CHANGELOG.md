@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Updates without hunting for files: once a day kyrr asks GitHub for the
+  newest version number (Settings, General, "Look for updates"; switch it
+  off and kyrr only asks when you click). A new version shows as a small
+  green note at the bottom of the main window and in the tray menu; the
+  note's × hides it until the next version.
 - Update now: when "Check for updates" finds a new version, one click
   downloads it, checks it against the release's SHA256 and installs it
   quietly; Windows asks for permission once and kyrr restarts by itself.

@@ -114,18 +114,25 @@ of after a quarter of an hour without dictation:
 
 ## Privacy
 
-Audio never leaves your computer. The app makes network connections only to
-download the speech model, from kyrr's own mirrors
-([Hugging Face](https://huggingface.co/heast13/kyrr-models), else
-[GitHub](https://github.com/heast13/kyrr-assets); the English model last
-from the sherpa-onnx project's Hugging Face page), with every file checked
-against a SHA256 hash built into kyrr, and when you click "Check for
-updates", one request to GitHub for the newest version number; "Update
-now" then downloads that version's installer from GitHub, checks it
-against its SHA256 file and runs it. Nothing is downloaded or installed by
-itself. No telemetry.
-(Building kyrr also downloads its assets and libraries, from kyrr's mirror
-on GitHub first.)
+Audio and text never leave your computer. No telemetry. kyrr connects to
+the internet for exactly these things:
+
+- **The speech model**, once, when you first use dictation: from kyrr's own
+  mirrors ([Hugging Face](https://huggingface.co/heast13/kyrr-models), else
+  [GitHub](https://github.com/heast13/kyrr-assets); the English model last
+  from the sherpa-onnx project's Hugging Face page), every file checked
+  against a SHA256 hash built into kyrr.
+- **The update check**: once a day, one request to the GitHub API for the
+  newest version number of kyrr (`api.github.com/repos/heast13/kyrr/releases/latest`).
+  It sends nothing about you beyond what any web request carries: your IP
+  address and "kyrr/<version>" as the program's name. It can be switched
+  off under Settings, General ("Look for updates"); then kyrr only asks
+  when you click "Check for updates".
+- **An update**, only when you click "Update": the installer of the new
+  version from this repository's releases, checked against its SHA256 file.
+
+Nothing is installed without your click. (Building kyrr also downloads its
+assets and libraries, from kyrr's mirror on GitHub first.)
 
 ## Code signing policy
 
@@ -141,9 +148,10 @@ certificate by [SignPath Foundation](https://signpath.org).
   Approvers, who approve every signing request: [heast13](https://github.com/heast13).
 - Privacy policy: see [Privacy](#privacy). kyrr sends no data about you or
   your computer anywhere; it only downloads the speech model from Hugging
-  Face (or, if that fails, GitHub) and, when you click "Check for updates",
-  asks GitHub for the newest version number (and on "Update now" downloads
-  its installer from there). Their privacy policies apply to those requests:
+  Face (or, if that fails, GitHub), asks GitHub once a day for the newest
+  version number (can be switched off) and, when you click "Update",
+  downloads the new installer from there. Their privacy policies apply to
+  those requests:
   [Hugging Face](https://huggingface.co/privacy),
   [GitHub](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
 

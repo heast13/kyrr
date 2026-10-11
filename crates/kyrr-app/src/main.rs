@@ -564,6 +564,69 @@ impl App {
         probe::replay(take, half, self.probe_notify());
     }
 
+    /// Asks GitHub for a newer kyrr on a thread of its own. The button
+    /// (`manual`) shows every outcome; the daily check only speaks up when
+    /// there is a new version, and never interrupts an update under way.
+    fn check_updates(&self, manual: bool) {
+        let dismissed = {
+            let mut config = self.config.borrow_mut();
+            config.update_checked = now();
+            config.save();
+            config.update_dismissed.clone()
+        };
+        if manual {
+            if let Some(w) = self.window.upgrade() {
+                w.global::<AppState>().set_update_state(UpdateState::Checking);
+            }
+        }
+        let (window, tray) = (self.window.clone(), self.tray.clone());
+        std::thread::spawn(move || {
+            let outcome = update::check();
+            let _ = slint::invoke_from_event_loop(move || {
+                let Some(w) = window.upgrade() else { return };
+                let state = w.global::<AppState>();
+                if matches!(
+                    state.get_update_state(),
+                    UpdateState::Downloading | UpdateState::Installing
+                ) {
+                    return;
+                }
+                match outcome {
+                    update::Outcome::UpToDate if manual => state.set_update_state(UpdateState::Current),
+                    update::Outcome::Failed if manual => state.set_update_state(UpdateState::Failed),
+                    update::Outcome::UpToDate | update::Outcome::Failed => {}
+                    update::Outcome::Available {
+                        version,
+                        url,
+                        installer,
+                    } => {
+                        state.set_update_dismissed(version == dismissed);
+                        state.set_update_version(version.as_str().into());
+                        state.set_update_url(url.into());
+                        state.set_update_installable(installer.is_some());
+                        *pending_installer().lock().unwrap_or_else(|e| e.into_inner()) = installer;
+                        state.set_update_state(UpdateState::Available);
+                        if let Some(t) = tray.upgrade() {
+                            t.set_update_version(version.into());
+                        }
+                    }
+                }
+            });
+        });
+    }
+
+    /// The daily check: when it is on and a day has passed since kyrr last
+    /// asked.
+    fn check_updates_daily(&self) {
+        let due = {
+            let config = self.config.borrow();
+            config.update_check && now().saturating_sub(config.update_checked) >= UPDATE_INTERVAL.as_secs()
+        };
+        if due {
+            self.check_updates(false);
+        }
+    }
+
     /// Listening on or off. The window's state decides, not the handle: a
     /// start that failed leaves a dead one behind.
     fn toggle_listening(&self) {
@@ -705,6 +768,16 @@ impl App {
     }
 }
 
+/// How often kyrr asks GitHub for a newer version, when that is on.
+const UPDATE_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// Seconds since 1970.
+fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
 /// The installer the last update check found, for "Update now".
 fn pending_installer() -> &'static std::sync::Mutex<Option<update::Installer>> {
     static PENDING: std::sync::Mutex<Option<update::Installer>> = std::sync::Mutex::new(None);
@@ -826,6 +899,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_strength_index(strength_index(filter.limit_db));
     state.set_model_index(filter.light_model as i32);
     state.set_autostart(platform::autostart_enabled());
+    state.set_update_auto(app.config.borrow().update_check);
     app.apply_key();
     show_voice(&state, &filter.voice);
     tray.set_dictation_enabled(app.config.borrow().dictation);
@@ -843,32 +917,29 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.on_autostart_toggled(platform::set_autostart);
     state.on_open_licenses(platform::open_licenses);
     state.on_check_updates({
-        let weak = window.as_weak();
+        let app = Rc::clone(&app);
+        move || app.check_updates(true)
+    });
+    state.on_update_auto_toggled({
+        let app = Rc::clone(&app);
+        move |on| {
+            let mut config = app.config.borrow_mut();
+            config.update_check = on;
+            config.save();
+        }
+    });
+    state.on_dismiss_update({
+        let app = Rc::clone(&app);
         move || {
-            let Some(w) = weak.upgrade() else { return };
-            w.global::<AppState>().set_update_state(UpdateState::Checking);
-            let weak = weak.clone();
-            std::thread::spawn(move || {
-                let outcome = update::check();
-                let _ = weak.upgrade_in_event_loop(move |w| {
-                    let state = w.global::<AppState>();
-                    match outcome {
-                        update::Outcome::UpToDate => state.set_update_state(UpdateState::Current),
-                        update::Outcome::Failed => state.set_update_state(UpdateState::Failed),
-                        update::Outcome::Available {
-                            version,
-                            url,
-                            installer,
-                        } => {
-                            state.set_update_version(version.into());
-                            state.set_update_url(url.into());
-                            state.set_update_installable(installer.is_some());
-                            *pending_installer().lock().unwrap_or_else(|e| e.into_inner()) = installer;
-                            state.set_update_state(UpdateState::Available);
-                        }
-                    }
-                });
-            });
+            let Some(w) = app.window.upgrade() else { return };
+            let state = w.global::<AppState>();
+            {
+                let mut config = app.config.borrow_mut();
+                config.update_dismissed = state.get_update_version().into();
+                config.save();
+            }
+            state.set_update_dismissed(true);
+            fit(&app.window);
         }
     });
     state.on_install_update({
@@ -880,6 +951,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             let Some(w) = weak.upgrade() else { return };
             let state = w.global::<AppState>();
             state.set_update_progress(0.0);
+            state.set_update_dismissed(false);
             state.set_update_state(UpdateState::Downloading);
             let weak = weak.clone();
             std::thread::spawn(move || {
@@ -1124,6 +1196,15 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         }
     };
     tray.on_quit(quit);
+    tray.on_install_update({
+        let weak = window.as_weak();
+        move || {
+            if let Some(w) = weak.upgrade() {
+                show(&w);
+                w.global::<AppState>().invoke_install_update();
+            }
+        }
+    });
     tray.on_open({
         let app = Rc::clone(&app);
         move || {
@@ -1157,6 +1238,21 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     });
 
     // The filter's state can change outside the app (stream starts, errors).
+    // The daily look for a new version: a minute after the start (not in
+    // the busy moments of signing in), then whenever a day has passed.
+    let update_timer = slint::Timer::default();
+    update_timer.start(slint::TimerMode::Repeated, Duration::from_secs(30 * 60), {
+        let app = Rc::clone(&app);
+        move || app.check_updates_daily()
+    });
+    slint::Timer::single_shot(Duration::from_secs(60), {
+        let app = Rc::downgrade(&app);
+        move || {
+            if let Some(app) = app.upgrade() {
+                app.check_updates_daily();
+            }
+        }
+    });
     let poll = slint::Timer::default();
     poll.start(slint::TimerMode::Repeated, Duration::from_secs(2), {
         let app = Rc::clone(&app);

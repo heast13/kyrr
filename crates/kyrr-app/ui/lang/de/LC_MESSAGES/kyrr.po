@@ -350,6 +350,39 @@ msgstr "Lade das Update… {}%"
 msgid "Installing. Windows asks for permission once, then kyrr restarts by itself."
 msgstr "Wird installiert. Windows fragt einmal nach der Berechtigung, dann startet kyrr von selbst neu."
 
+msgid "update available"
+msgstr "Update verfügbar"
+
+msgid "Install update {}"
+msgstr "Update {} installieren"
+
+msgid "Look for updates"
+msgstr "Nach Updates schauen"
+
+msgid "Once a day kyrr asks GitHub for the newest version number. Nothing about you is sent; GitHub sees your IP address, as with any website. Installing is always your click."
+msgstr "Einmal am Tag fragt kyrr bei GitHub nach der neuesten Versionsnummer. Über dich wird nichts gesendet; GitHub sieht deine IP-Adresse, wie bei jeder Webseite. Installiert wird immer erst auf deinen Klick."
+
+msgid "Off. kyrr only asks GitHub when you click “Check for updates”."
+msgstr "Aus. kyrr fragt GitHub nur, wenn du auf „Nach Updates suchen“ klickst."
+
+msgid "kyrr also looks once a day (Settings, General)."
+msgstr "kyrr schaut außerdem einmal am Tag nach (Einstellungen, Allgemein)."
+
+msgid "Installing, kyrr restarts in a moment."
+msgstr "Wird installiert, kyrr startet gleich neu."
+
+msgid "The update did not download."
+msgstr "Das Update ließ sich nicht laden."
+
+msgid "Version {} is out."
+msgstr "Version {} ist da."
+
+msgid "Update"
+msgstr "Aktualisieren"
+
+msgid "Not now"
+msgstr "Jetzt nicht"
+
 msgid "Delete recording"
 msgstr "Aufnahme löschen"
 
