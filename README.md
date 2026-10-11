@@ -35,7 +35,7 @@ What it does:
   <img src="docs/screenshots/main.png" width="380" alt="kyrr's window: noise filter, voice and dictation, each with one switch">
 </p>
 <p align="center">
-  <img src="docs/screenshots/settings.png" width="760" alt="Settings: noise strength and model, voice sound, volume, S sounds, low cut, dictation key, level check with before/after test, language and autostart">
+  <img src="docs/screenshots/settings.png" width="760" alt="Settings in two columns: noise strength and model, voice sound, volume, S sounds, low cut, language and autostart; dictation key, level check with before/after test and listening, about">
 </p>
 
 Status: early, first public release (0.2.0).

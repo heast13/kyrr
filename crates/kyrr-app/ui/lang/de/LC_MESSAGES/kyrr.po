@@ -320,8 +320,8 @@ msgstr "Diktat DE: parakeet-primeline von primeLine AI (CC-BY-4.0), auf Basis vo
 msgid "English dictation: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX by sherpa-onnx."
 msgstr "Diktat EN: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX von sherpa-onnx."
 
-msgid "Raising a beer to you all."
-msgstr "Ein Bier auf euch."
+msgid "Plus the work of many more not named here. Raising a beer to you all."
+msgstr "Dazu die Arbeit vieler weiterer, die hier nicht stehen. Ein Bier auf euch alle."
 
 msgid "Not on ARM processors yet, sorry. Dictation works."
 msgstr "Auf ARM-Prozessoren leider noch nicht. Diktieren geht."

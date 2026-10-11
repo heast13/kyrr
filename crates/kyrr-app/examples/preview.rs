@@ -1,5 +1,7 @@
 //! Renders the window headless into raw RGBA files for checking the layout
-//! without a display: `cargo run --example preview -- <out-dir> [de|en]`.
+//! without a display: `cargo run --example preview -- <out-dir> [de|en] [scale]`.
+//! The scale defaults to 1.5 (the README shots); the social preview's window
+//! is 1.2711 (483 px wide).
 //! Convert with ImageMagick: `magick -size WxH -depth 8 rgba:main.rgba main.png`.
 
 use std::rc::Rc;
@@ -18,13 +20,14 @@ impl Platform for Headless {
     }
 }
 
-const SCALE: f32 = 1.5;
+const DEFAULT_SCALE: f32 = 1.5;
 
 fn render(window: &MinimalSoftwareWindow, ui: &MainWindow, path: &str) {
+    let scale = ui.window().scale_factor();
     ui.show().unwrap();
-    let w = (ui.get_page_width() * SCALE) as u32;
+    let w = (ui.get_page_width() * scale) as u32;
     window.set_size(PhysicalSize::new(w, 100));
-    let h = (ui.get_content_height() * SCALE).ceil() as u32;
+    let h = (ui.get_content_height() * scale).ceil() as u32;
     window.set_size(PhysicalSize::new(w, h));
     let mut buf = vec![PremultipliedRgbaColor::default(); (w * h) as usize];
     window.request_redraw();
@@ -43,7 +46,8 @@ fn main() {
     let lang = args.get(2).cloned().unwrap_or_else(|| "de".into());
     let window = MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
     slint::platform::set_platform(Box::new(Headless(window.clone()))).unwrap();
-    window.dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: SCALE });
+    let scale = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(DEFAULT_SCALE);
+    window.dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: scale });
 
     let ui = MainWindow::new().unwrap();
     if let Err(e) = slint::select_bundled_translation(&lang) {
