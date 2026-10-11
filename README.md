@@ -126,8 +126,8 @@ the internet for exactly these things:
   newest version number of kyrr (`api.github.com/repos/heast13/kyrr/releases/latest`).
   It sends nothing about you beyond what any web request carries: your IP
   address and "kyrr/<version>" as the program's name. It can be switched
-  off under Settings, General ("Look for updates"); then kyrr only asks
-  when you click "Check for updates".
+  off under Settings, General ("Check for updates automatically"); then
+  kyrr only asks when you click "Check for updates".
 - **An update**, only when you click "Update": the installer of the new
   version from this repository's releases, checked against its SHA256 file.
 

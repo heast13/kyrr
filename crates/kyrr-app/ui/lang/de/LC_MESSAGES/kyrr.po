@@ -356,17 +356,11 @@ msgstr "Update verfügbar"
 msgid "Install update {}"
 msgstr "Update {} installieren"
 
-msgid "Look for updates"
-msgstr "Nach Updates schauen"
+msgid "Check for updates automatically"
+msgstr "Automatisch nach Updates suchen"
 
-msgid "Once a day kyrr asks GitHub for the newest version number. Nothing about you is sent; GitHub sees your IP address, as with any website. Installing is always your click."
-msgstr "Einmal am Tag fragt kyrr bei GitHub nach der neuesten Versionsnummer. Über dich wird nichts gesendet; GitHub sieht deine IP-Adresse, wie bei jeder Webseite. Installiert wird immer erst auf deinen Klick."
-
-msgid "Off. kyrr only asks GitHub when you click “Check for updates”."
-msgstr "Aus. kyrr fragt GitHub nur, wenn du auf „Nach Updates suchen“ klickst."
-
-msgid "kyrr also looks once a day (Settings, General)."
-msgstr "kyrr schaut außerdem einmal am Tag nach (Einstellungen, Allgemein)."
+msgid "kyrr asks GitHub once a day. Nothing about you is sent, installing is always your click."
+msgstr "kyrr fragt einmal am Tag bei GitHub nach. Über dich wird nichts gesendet, installiert wird nur auf deinen Klick."
 
 msgid "Installing, kyrr restarts in a moment."
 msgstr "Wird installiert, kyrr startet gleich neu."

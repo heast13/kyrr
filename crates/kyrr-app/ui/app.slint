@@ -626,7 +626,7 @@ component DictationSettings inherits Card {
     Hint { text: @tr("Say “new line” or “new paragraph” for line breaks."); }
 }
 
-// Settings: who made what, and whether there is something newer.
+// Settings: who made what.
 component AboutSettings inherits Card {
     Heading { text: @tr("About"); }
     // The models' credits, as their licenses ask. NVIDIA's sentence stays
@@ -637,52 +637,8 @@ component AboutSettings inherits Card {
     Hint { text: @tr("English dictation: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX by sherpa-onnx."); }
     Hint { text: @tr("Plus the work of many more not named here. Raising a beer to you all."); }
     HorizontalLayout {
-        spacing: 8px;
         Rectangle { }
-        Button {
-            text: @tr("Check for updates");
-            enabled: AppState.update-state != UpdateState.checking && AppState.update-state != UpdateState.downloading
-                && AppState.update-state != UpdateState.installing;
-            clicked => { AppState.check-updates(); }
-        }
         Button { text: @tr("Licenses"); clicked => { AppState.open-licenses(); } }
-    }
-    if AppState.update-state == UpdateState.idle: Hint {
-        text: AppState.update-auto ? @tr("kyrr also looks once a day (Settings, General).") : @tr("kyrr only asks GitHub when you click.");
-    }
-    if AppState.update-state == UpdateState.checking: Hint { text: @tr("Having a look…"); }
-    if AppState.update-state == UpdateState.current: Hint { text: @tr("You have the newest version. Nothing to do."); }
-    if AppState.update-state == UpdateState.failed: Hint { text: @tr("Could not check right now. Offline?"); }
-    // Text and button separately: wrapped text inside a nested layout
-    // under `if` is measured as one line.
-    if AppState.update-state == UpdateState.available && AppState.update-installable: Hint {
-        text: @tr("Version {} is out. One click and kyrr updates itself, your settings stay.", AppState.update-version);
-    }
-    if AppState.update-state == UpdateState.available && !AppState.update-installable: Hint {
-        text: @tr("Version {} is out. Download it and run the installer, your settings stay.", AppState.update-version);
-    }
-    if AppState.update-state == UpdateState.download-failed: Hint {
-        text: @tr("The download did not work. Try again, or get it from the download page.");
-    }
-    if AppState.update-state == UpdateState.available || AppState.update-state == UpdateState.download-failed: HorizontalLayout {
-        spacing: 8px;
-        Rectangle { }
-        Button {
-            text: @tr("Download page");
-            clicked => { AppState.open-update(); }
-        }
-        if AppState.update-installable: Button {
-            text: @tr("Update now");
-            primary: true;
-            clicked => { AppState.install-update(); }
-        }
-    }
-    if AppState.update-state == UpdateState.downloading: Hint {
-        text: @tr("Downloading the update… {}%", round(AppState.update-progress * 100));
-    }
-    if AppState.update-state == UpdateState.downloading: ProgressIndicator { progress: AppState.update-progress; height: 6px; }
-    if AppState.update-state == UpdateState.installing: Hint {
-        text: @tr("Installing. Windows asks for permission once, then kyrr restarts by itself.");
     }
 }
 
@@ -930,7 +886,7 @@ component GeneralSettings inherits Card {
     }
     Separator { }
     HorizontalLayout {
-        Caption { text: @tr("Look for updates"); vertical-alignment: center; }
+        Caption { text: @tr("Check for updates automatically"); vertical-alignment: center; }
         Rectangle { }
         Switch {
             checked <=> AppState.update-auto;
@@ -938,13 +894,56 @@ component GeneralSettings inherits Card {
         }
     }
     Hint {
-        text: AppState.update-auto ? @tr("Once a day kyrr asks GitHub for the newest version number. Nothing about you is sent; GitHub sees your IP address, as with any website. Installing is always your click.")
-            : @tr("Off. kyrr only asks GitHub when you click “Check for updates”.");
+        text: AppState.update-auto ? @tr("kyrr asks GitHub once a day. Nothing about you is sent, installing is always your click.")
+            : @tr("kyrr only asks GitHub when you click.");
+    }
+    HorizontalLayout {
+        Rectangle { }
+        Button {
+            text: @tr("Check for updates");
+            enabled: AppState.update-state != UpdateState.checking && AppState.update-state != UpdateState.downloading
+                && AppState.update-state != UpdateState.installing;
+            clicked => { AppState.check-updates(); }
+        }
+    }
+    if AppState.update-state == UpdateState.checking: Hint { text: @tr("Having a look…"); }
+    if AppState.update-state == UpdateState.current: Hint { text: @tr("You have the newest version. Nothing to do."); }
+    if AppState.update-state == UpdateState.failed: Hint { text: @tr("Could not check right now. Offline?"); }
+    // Text and button separately: wrapped text inside a nested layout
+    // under `if` is measured as one line.
+    if AppState.update-state == UpdateState.available && AppState.update-installable: Hint {
+        text: @tr("Version {} is out. One click and kyrr updates itself, your settings stay.", AppState.update-version);
+    }
+    if AppState.update-state == UpdateState.available && !AppState.update-installable: Hint {
+        text: @tr("Version {} is out. Download it and run the installer, your settings stay.", AppState.update-version);
+    }
+    if AppState.update-state == UpdateState.download-failed: Hint {
+        text: @tr("The download did not work. Try again, or get it from the download page.");
+    }
+    if AppState.update-state == UpdateState.available || AppState.update-state == UpdateState.download-failed: HorizontalLayout {
+        spacing: 8px;
+        Rectangle { }
+        Button {
+            text: @tr("Download page");
+            clicked => { AppState.open-update(); }
+        }
+        if AppState.update-installable: Button {
+            text: @tr("Update now");
+            primary: true;
+            clicked => { AppState.install-update(); }
+        }
+    }
+    if AppState.update-state == UpdateState.downloading: Hint {
+        text: @tr("Downloading the update… {}%", round(AppState.update-progress * 100));
+    }
+    if AppState.update-state == UpdateState.downloading: ProgressIndicator { progress: AppState.update-progress; height: 6px; }
+    if AppState.update-state == UpdateState.installing: Hint {
+        text: @tr("Installing. Windows asks for permission once, then kyrr restarts by itself.");
     }
     if AppState.filter-state != FilterState.unsupported: Separator { }
     if AppState.filter-state != FilterState.unsupported: HorizontalLayout {
         spacing: 8px;
-        Caption { text: AppState.attached-mic != "" ? AppState.attached-mic : @tr("Microphone"); overflow: elide; wrap: no-wrap; vertical-alignment: center; }
+        Caption { text: AppState.attached-mic != "" ? AppState.attached-mic : @tr("Microphone"); horizontal-stretch: 1; vertical-alignment: center; }
         Button { text: @tr("Change microphone"); clicked => { AppState.change-microphone(); } }
     }
 }
