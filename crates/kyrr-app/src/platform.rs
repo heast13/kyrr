@@ -162,6 +162,18 @@ mod imp {
         let _ = if on { autostart::enable() } else { autostart::disable() };
     }
 
+    /// Runs a downloaded kyrr installer as an update: quietly, with only its
+    /// progress window, and kyrr starts again when it is done. Windows asks
+    /// for permission. Blocks: the installer ends this kyrr on its way, so
+    /// coming back means nothing was installed (permission declined).
+    pub fn run_installer(path: &std::path::Path) -> Result<(), SetupError> {
+        match elevate::run(path, &["/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/restart=1"]) {
+            Ok(_) => Ok(()),
+            Err(elevate::ElevateError::Declined) => Err(SetupError::Declined),
+            Err(elevate::ElevateError::Failed(e)) => Err(SetupError::Failed(e)),
+        }
+    }
+
     /// Puts the window in front of everything and makes it the active one.
     pub fn bring_to_front(window: &slint::Window) {
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -292,6 +304,10 @@ mod imp {
     }
 
     pub fn bring_to_front(_: &slint::Window) {}
+
+    pub fn run_installer(_: &std::path::Path) -> Result<(), SetupError> {
+        Err(SetupError::Failed("updates install on Windows only".into()))
+    }
 
     pub struct Monitor;
 

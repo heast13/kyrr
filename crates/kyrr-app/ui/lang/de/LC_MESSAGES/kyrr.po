@@ -332,6 +332,24 @@ msgstr "Auf ARM-Prozessoren auch noch nicht."
 msgid "Not on ARM processors yet, sorry."
 msgstr "Auf ARM-Prozessoren leider noch nicht."
 
+msgid "Version {} is out. One click and kyrr updates itself, your settings stay."
+msgstr "Version {} ist da. Ein Klick, und kyrr aktualisiert sich selbst, deine Einstellungen bleiben."
+
+msgid "The download did not work. Try again, or get it from the download page."
+msgstr "Der Download hat nicht geklappt. Nochmal versuchen oder von der Download-Seite holen."
+
+msgid "Download page"
+msgstr "Download-Seite"
+
+msgid "Update now"
+msgstr "Jetzt aktualisieren"
+
+msgid "Downloading the update… {}%"
+msgstr "Lade das Update… {}%"
+
+msgid "Installing. Windows asks for permission once, then kyrr restarts by itself."
+msgstr "Wird installiert. Windows fragt einmal nach der Berechtigung, dann startet kyrr von selbst neu."
+
 msgid "Delete recording"
 msgstr "Aufnahme löschen"
 

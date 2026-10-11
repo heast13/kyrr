@@ -120,8 +120,10 @@ download the speech model, from kyrr's own mirrors
 [GitHub](https://github.com/heast13/kyrr-assets); the English model last
 from the sherpa-onnx project's Hugging Face page), with every file checked
 against a SHA256 hash built into kyrr, and when you click "Check for
-updates", one request to GitHub for the newest version number. Nothing is
-downloaded or installed by itself. No telemetry.
+updates", one request to GitHub for the newest version number; "Update
+now" then downloads that version's installer from GitHub, checks it
+against its SHA256 file and runs it. Nothing is downloaded or installed by
+itself. No telemetry.
 (Building kyrr also downloads its assets and libraries, from kyrr's mirror
 on GitHub first.)
 
@@ -140,7 +142,8 @@ certificate by [SignPath Foundation](https://signpath.org).
 - Privacy policy: see [Privacy](#privacy). kyrr sends no data about you or
   your computer anywhere; it only downloads the speech model from Hugging
   Face (or, if that fails, GitHub) and, when you click "Check for updates",
-  asks GitHub for the newest version number. Their privacy policies apply to those requests:
+  asks GitHub for the newest version number (and on "Update now" downloads
+  its installer from there). Their privacy policies apply to those requests:
   [Hugging Face](https://huggingface.co/privacy),
   [GitHub](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
 

@@ -1,11 +1,11 @@
 //! Running kyrr's own executable elevated (Windows asks the user) for setup
-//! commands, and waiting for it.
+//! commands, and waiting for it; starting an update's installer.
 
 use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{CloseHandle, ERROR_CANCELLED};
 use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject, INFINITE};
 use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
-use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
+use windows::Win32::UI::WindowsAndMessaging::{SW_HIDE, SW_SHOWNORMAL};
 
 use crate::reg::wide;
 
@@ -72,6 +72,39 @@ pub fn run_self_elevated(args: &[&str]) -> Result<u32, ElevateError> {
         WaitForSingleObject(info.hProcess, INFINITE);
         let _ = GetExitCodeProcess(info.hProcess, &mut code);
         let _ = CloseHandle(info.hProcess);
+    }
+    Ok(code)
+}
+
+/// Runs `file` with `args` the way a double click would and waits for it.
+/// A program that needs administrator rights (kyrr's installer) asks for
+/// them itself, so it keeps a link to the signed-in user and can start kyrr
+/// again as that user, not as administrator.
+pub fn run(file: &std::path::Path, args: &[&str]) -> Result<u32, ElevateError> {
+    let file = wide(&file.to_string_lossy());
+    let params = wide(&args.iter().map(|a| quote(a)).collect::<Vec<_>>().join(" "));
+    let mut info = SHELLEXECUTEINFOW {
+        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        fMask: SEE_MASK_NOCLOSEPROCESS,
+        lpFile: PCWSTR(file.as_ptr()),
+        lpParameters: PCWSTR(params.as_ptr()),
+        nShow: SW_SHOWNORMAL.0,
+        ..Default::default()
+    };
+    if let Err(e) = unsafe { ShellExecuteExW(&mut info) } {
+        return Err(if e.code() == ERROR_CANCELLED.to_hresult() {
+            ElevateError::Declined
+        } else {
+            ElevateError::Failed(e.message())
+        });
+    }
+    let mut code = 1u32;
+    if !info.hProcess.is_invalid() {
+        unsafe {
+            WaitForSingleObject(info.hProcess, INFINITE);
+            let _ = GetExitCodeProcess(info.hProcess, &mut code);
+            let _ = CloseHandle(info.hProcess);
+        }
     }
     Ok(code)
 }

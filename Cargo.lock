@@ -2842,6 +2842,7 @@ dependencies = [
  "raw-window-handle",
  "serde",
  "serde_json",
+ "sha2",
  "slint",
  "slint-build",
  "ureq 3.4.2",

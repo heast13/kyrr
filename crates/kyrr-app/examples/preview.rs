@@ -127,8 +127,12 @@ fn main() {
     state.set_voice_is_default(true);
     state.set_has_probe(false);
     state.set_update_state(UpdateState::Available);
-    state.set_update_version("0.2.0".into());
+    state.set_update_version("0.4.0".into());
+    state.set_update_installable(true);
     render(&window, &ui, &format!("{out}/settings-off-{lang}.rgba"));
+    state.set_update_state(UpdateState::Downloading);
+    state.set_update_progress(0.37);
+    render(&window, &ui, &format!("{out}/update-{lang}.rgba"));
     state.set_update_state(UpdateState::Idle);
 
     // Windows on ARM: no filter, dictation only.

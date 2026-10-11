@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Update now: when "Check for updates" finds a new version, one click
+  downloads it, checks it against the release's SHA256 and installs it
+  quietly; Windows asks for permission once and kyrr restarts by itself.
+  The download page stays one click away. Works from this version on, so
+  coming from 0.3.0 the update is installed by hand once more.
+
 ## 0.3.0 (2026-10-11)
 
 - Listen to yourself: a new button under Check plays your microphone live

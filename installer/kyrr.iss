@@ -89,6 +89,9 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\kyrr.exe"; Description: "{cm:StartKyrr}"; Flags: postinstall nowait runasoriginaluser skipifsilent
+; "Update now" in kyrr runs Setup with /SILENT /restart=1: kyrr comes back
+; by itself. Other silent installs (winget) start nothing.
+Filename: "{app}\kyrr.exe"; Flags: nowait runasoriginaluser; Check: RestartAfterUpdate
 
 [Code]
 const
@@ -121,6 +124,11 @@ begin
   ThanksLabel.Height := ScaleY(64);
   ThanksLabel.Top := WizardForm.FinishedPage.ClientHeight - ThanksLabel.Height - ScaleY(8);
   ThanksLabel.Caption := CustomMessage('Thanks');
+end;
+
+function RestartAfterUpdate(): Boolean;
+begin
+  Result := WizardSilent and (ExpandConstant('{param:restart|0}') = '1');
 end;
 
 // On an update the audio engine keeps kyrr_apo.dll loaded: stop it (and a

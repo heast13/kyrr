@@ -705,6 +705,12 @@ impl App {
     }
 }
 
+/// The installer the last update check found, for "Update now".
+fn pending_installer() -> &'static std::sync::Mutex<Option<update::Installer>> {
+    static PENDING: std::sync::Mutex<Option<update::Installer>> = std::sync::Mutex::new(None);
+    &PENDING
+}
+
 fn dictation_state(s: State) -> DictationState {
     match s {
         State::Off => DictationState::Off,
@@ -721,6 +727,8 @@ fn dictation_state(s: State) -> DictationState {
 fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<(), slint::PlatformError> {
     let config = Config::load();
     let language = config.language();
+    // An installer downloaded for the last update is done with.
+    let _ = std::fs::remove_dir_all(update::folder());
     let window = MainWindow::new()?;
     let tray = Tray::new()?;
     let _ = slint::select_bundled_translation(language.code());
@@ -847,13 +855,59 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                     match outcome {
                         update::Outcome::UpToDate => state.set_update_state(UpdateState::Current),
                         update::Outcome::Failed => state.set_update_state(UpdateState::Failed),
-                        update::Outcome::Available { version, url } => {
+                        update::Outcome::Available {
+                            version,
+                            url,
+                            installer,
+                        } => {
                             state.set_update_version(version.into());
                             state.set_update_url(url.into());
+                            state.set_update_installable(installer.is_some());
+                            *pending_installer().lock().unwrap_or_else(|e| e.into_inner()) = installer;
                             state.set_update_state(UpdateState::Available);
                         }
                     }
                 });
+            });
+        }
+    });
+    state.on_install_update({
+        let weak = window.as_weak();
+        move || {
+            let Some(installer) = pending_installer().lock().unwrap_or_else(|e| e.into_inner()).clone() else {
+                return;
+            };
+            let Some(w) = weak.upgrade() else { return };
+            let state = w.global::<AppState>();
+            state.set_update_progress(0.0);
+            state.set_update_state(UpdateState::Downloading);
+            let weak = weak.clone();
+            std::thread::spawn(move || {
+                let progress_weak = weak.clone();
+                let result = update::download(&installer, &mut |p| {
+                    let _ = progress_weak.upgrade_in_event_loop(move |w| w.global::<AppState>().set_update_progress(p));
+                });
+                let set = |s: UpdateState| {
+                    let _ = weak.upgrade_in_event_loop(move |w| w.global::<AppState>().set_update_state(s));
+                };
+                let path = match result {
+                    Ok(path) => path,
+                    Err(e) => {
+                        eprintln!("kyrr: update: {e}");
+                        return set(UpdateState::DownloadFailed);
+                    }
+                };
+                set(UpdateState::Installing);
+                // The installer ends this kyrr and starts the new one. Back
+                // here means nothing was installed: Windows' permission was
+                // declined, so the offer stands again.
+                match platform::run_installer(&path) {
+                    Ok(()) | Err(SetupError::Declined) => set(UpdateState::Available),
+                    Err(SetupError::Failed(e)) => {
+                        eprintln!("kyrr: update: {e}");
+                        set(UpdateState::DownloadFailed);
+                    }
+                }
             });
         }
     });
