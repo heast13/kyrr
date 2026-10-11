@@ -210,5 +210,4 @@ kyrr stands on the work of others. Thank you to
   for sherpa-onnx and the English model in ONNX,
 - [Equalizer APO](https://sourceforge.net/projects/equalizerapo/), which
   showed how a filter can live inside Windows audio,
-- [Slint](https://slint.dev) for the UI toolkit,
-- [SignPath Foundation](https://signpath.org) for free code signing.
+- [Slint](https://slint.dev) for the UI toolkit.
