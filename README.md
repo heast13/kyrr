@@ -8,9 +8,9 @@
 
 [![Made with Slint](https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png)](https://slint.dev)
 
-Background noise removal on the level of paid tools, and dictation that
-works really well in English and, finally, in German too. A small Windows
-app, set up in a few clicks, free and open source.
+Background noise removal on par with paid tools, and accurate dictation in
+English and, at last, in German too. A small Windows app, set up in a few
+clicks, free and open source.
 
 > **Everything runs on your PC.** Your voice and your dictated text never
 > leave your computer: no cloud, no account, no telemetry. Once the speech
