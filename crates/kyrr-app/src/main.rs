@@ -287,6 +287,7 @@ impl App {
                 .unwrap_or_else(|| text(self.language(), "disconnected"))
         };
         let (fs, guid, detail) = match platform::filter_status() {
+            FilterStatus::Unsupported => (FilterState::Unsupported, None, String::new()),
             FilterStatus::NotInstalled => (FilterState::NotInstalled, None, String::new()),
             FilterStatus::NotAttached => (FilterState::NotAttached, None, String::new()),
             FilterStatus::Waiting(g) => (FilterState::Checking, Some(g), String::new()),
@@ -330,9 +331,14 @@ impl App {
         state.set_attached_mic(mic.into());
         state.set_filter_detail(detail.into());
         let filter = *self.filter.borrow();
-        state.set_filter_enabled(filter.enabled);
-        tray.set_filter_enabled(filter.enabled);
-        tray.set_voice_enabled(filter.voice.enabled);
+        // Without the filter both switches show off, whatever is stored.
+        let supported = fs != FilterState::Unsupported;
+        state.set_filter_enabled(filter.enabled && supported);
+        if !supported {
+            state.set_voice_enabled(false);
+        }
+        tray.set_filter_enabled(filter.enabled && supported);
+        tray.set_voice_enabled(filter.voice.enabled && supported);
         tray.set_active(filter.enabled && matches!(fs, FilterState::Running | FilterState::Checking));
     }
 
@@ -1059,6 +1065,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
 
     let setup_done = app.config.borrow().setup_done;
     window.set_setup_mode(!setup_done);
+    // No filter on this PC: the setup starts with dictation.
+    if state.get_filter_state() == FilterState::Unsupported {
+        window.set_setup_step(1);
+    }
     if !setup_done || !background {
         show(&window);
     }

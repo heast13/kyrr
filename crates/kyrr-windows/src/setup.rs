@@ -225,6 +225,18 @@ pub fn attached() -> Vec<String> {
     Key::open(HKEY_LOCAL_MACHINE, REG_ENDPOINTS).map_or_else(Vec::new, |k| k.subkeys())
 }
 
+/// Whether this PC can run the filter. The audio engine is native code and
+/// kyrr's DLL is x64: Windows on ARM runs kyrr.exe emulated, but its audio
+/// engine cannot load the DLL, and a microphone with it attached could stop
+/// working altogether.
+pub fn filter_supported() -> bool {
+    use windows::Win32::System::SystemInformation::{IMAGE_FILE_MACHINE, IMAGE_FILE_MACHINE_ARM64};
+    use windows::Win32::System::Threading::{GetCurrentProcess, IsWow64Process2};
+    let (mut process, mut native) = (IMAGE_FILE_MACHINE::default(), IMAGE_FILE_MACHINE::default());
+    let known = unsafe { IsWow64Process2(GetCurrentProcess(), &mut process, Some(&mut native)) }.is_ok();
+    !(known && native == IMAGE_FILE_MACHINE_ARM64)
+}
+
 /// Whether the APO is registered (the app checks this before attaching).
 pub fn is_installed() -> bool {
     Key::open(HKEY_LOCAL_MACHINE, &apo_key()).is_some()
@@ -234,6 +246,9 @@ pub fn is_installed() -> bool {
 pub fn attach(guid: &str) -> Result<(), String> {
     if !is_endpoint_guid(guid) {
         return Err(format!("not a microphone id: {guid}"));
+    }
+    if !filter_supported() {
+        return Err("kyrr's noise filter does not run on ARM processors yet".into());
     }
     if !is_installed() {
         return Err("kyrr's audio filter is not installed".into());
@@ -312,6 +327,13 @@ pub fn detach(guid: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Windows names the real processor here, also to emulated x64 programs.
+    #[test]
+    fn filter_supported_except_on_arm() {
+        let arm = std::env::var("PROCESSOR_IDENTIFIER").is_ok_and(|p| p.to_ascii_uppercase().contains("ARM"));
+        assert_eq!(filter_supported(), !arm);
+    }
 
     #[test]
     fn endpoint_guids_only() {

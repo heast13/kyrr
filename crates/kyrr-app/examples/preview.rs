@@ -126,6 +126,15 @@ fn main() {
     render(&window, &ui, &format!("{out}/settings-off-{lang}.rgba"));
     state.set_update_state(UpdateState::Idle);
 
+    // Windows on ARM: no filter, dictation only.
+    state.set_filter_enabled(false);
+    state.set_voice_enabled(false);
+    state.set_mic_active(false);
+    state.set_filter_state(FilterState::Unsupported);
+    render(&window, &ui, &format!("{out}/arm-settings-{lang}.rgba"));
+    state.set_page(0);
+    render(&window, &ui, &format!("{out}/arm-{lang}.rgba"));
+
     state.set_page(0);
     ui.set_setup_mode(true);
     state.set_filter_state(FilterState::NotAttached);

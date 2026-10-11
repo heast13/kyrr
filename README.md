@@ -45,7 +45,7 @@ Status: early, first public release (0.2.0).
 | | kyrr | NVIDIA Broadcast | Krisp |
 |---|---|---|---|
 | Price | free, open source | free | subscription after a free trial |
-| Needs | any 64-bit PC with Windows 10 or 11 | an NVIDIA RTX graphics card | an account |
+| Needs | any 64-bit Intel or AMD PC with Windows 10 or 11 | an NVIDIA RTX graphics card | an account |
 | Where it works | on the microphone itself: every app, nothing to choose | apps set to its virtual microphone | apps set to its virtual microphone |
 
 On top, kyrr dictates into any app, on your computer. As far as we know in
@@ -59,6 +59,9 @@ release](https://github.com/heast13/kyrr/releases/latest) and run it (see the
 
 Windows 10 22H2 or Windows 11, 64-bit. The installer needs administrator
 rights, and sound drops out for a second while kyrr sets up its filter.
+On Windows on ARM (Snapdragon and other ARM processors) kyrr only
+dictates: its noise filter is built for Intel and AMD processors, and the
+audio engine there cannot load it.
 Until the installer is code-signed, Windows SmartScreen warns about it
 ("More info", "Run anyway"); compare the installer with its `.sha256` file
 from the release page first.

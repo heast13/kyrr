@@ -5,7 +5,8 @@
 import { Button, ComboBox, Switch, Slider, ProgressIndicator, ScrollView, Palette } from "std-widgets.slint";
 
 // detached: Windows (an update, a driver) took kyrr off the microphone.
-export enum FilterState { checking, running, off, passthrough, not-attached, not-installed, setting-up, error, detached }
+// unsupported: this PC cannot run the filter (Windows on ARM).
+export enum FilterState { checking, running, off, passthrough, not-attached, not-installed, setting-up, error, detached, unsupported }
 export enum DictationState { off, no-model, downloading, loading, ready, recording, transcribing, error }
 export enum ProbeState { idle, recording, before, after }
 export enum UpdateState { idle, checking, current, available, failed }
@@ -358,7 +359,7 @@ component StatusLine inherits HorizontalLayout {
         if (AppState.filter-state == FilterState.not-attached) { return @tr("Pick a microphone and off we go."); }
         if (AppState.filter-state == FilterState.error) { return @tr("Oops, something went wrong. Details below."); }
         if (AppState.filter-state == FilterState.passthrough) { return @tr("Oops, the filter is stuck. Your mic passes through as it is."); }
-        if (!AppState.filter-enabled && !AppState.voice-enabled) { return @tr("Day off. Everything is off."); }
+        if (!AppState.filter-enabled && !AppState.voice-enabled && AppState.filter-state != FilterState.unsupported) { return @tr("Day off. Everything is off."); }
         if (AppState.mic-active) {
             if (!AppState.filter-enabled) { return @tr("Noise allowed, voice polished."); }
             return pick([
@@ -438,7 +439,8 @@ component NoiseCard inherits Card {
     property <bool> attached: AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking;
     RowHead {
         title: @tr("Remove background noise");
-        enabled: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed;
+        enabled: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed
+            && AppState.filter-state != FilterState.unsupported;
         checked <=> AppState.filter-enabled;
         toggled(on) => { AppState.filter-toggled(on); }
     }
@@ -448,6 +450,7 @@ component NoiseCard inherits Card {
             : AppState.filter-state == FilterState.passthrough ? @tr("The filter could not start and passes the microphone through.")
             : AppState.filter-state == FilterState.not-attached ? @tr("No microphone set up yet.")
             : AppState.filter-state == FilterState.not-installed ? @tr("kyrr's audio filter is not installed. Please reinstall kyrr.")
+            : AppState.filter-state == FilterState.unsupported ? @tr("Not on ARM processors yet, sorry. Dictation works.")
             : AppState.filter-state == FilterState.setting-up ? @tr("Setting up… sound pauses for a moment.")
             : AppState.error-text;
     }
@@ -469,7 +472,8 @@ component NoiseCard inherits Card {
 }
 
 component VoiceCard inherits Card {
-    property <bool> available: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed;
+    property <bool> available: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed
+        && AppState.filter-state != FilterState.unsupported;
     RowHead {
         title: @tr("Voice");
         enabled: root.available;
@@ -477,7 +481,8 @@ component VoiceCard inherits Card {
         toggled(on) => { AppState.voice-toggled(on); }
     }
     Caption {
-        text: !root.available ? @tr("Needs a microphone first.")
+        text: AppState.filter-state == FilterState.unsupported ? @tr("Not on ARM processors yet either.")
+            : !root.available ? @tr("Needs a microphone first.")
             : AppState.voice-enabled ? @tr("A bit of polish for your voice.")
             : @tr("Off. Your voice stays as it is.");
     }
@@ -559,7 +564,9 @@ component NoiseSettings inherits Card {
     property <bool> attached: AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking;
 
     Heading { text: @tr("Background noise"); }
-    if !root.attached: Hint { text: @tr("Set up a microphone first."); }
+    if !root.attached: Hint {
+        text: AppState.filter-state == FilterState.unsupported ? @tr("Not on ARM processors yet, sorry.") : @tr("Set up a microphone first.");
+    }
     if root.attached: Caption { text: @tr("Strength"); }
     if root.attached: Segmented {
         options: [@tr("Gentle"), @tr("Medium"), @tr("Strong")];
@@ -675,10 +682,14 @@ component VoiceSettings inherits Card {
         if (i == 3) { return @tr("Heavy. Can sound lispy close to the mic."); }
         return @tr("S sounds stay as they are.");
     }
-    property <bool> shown: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed && AppState.voice-enabled;
+    property <bool> shown: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed
+        && AppState.filter-state != FilterState.unsupported && AppState.voice-enabled;
 
     Heading { text: @tr("Voice"); }
-    if !root.shown: Hint { text: @tr("Voice is off, so there is nothing to turn. Switch it on in the main view."); }
+    if !root.shown: Hint {
+        text: AppState.filter-state == FilterState.unsupported ? @tr("Not on ARM processors yet, sorry.")
+            : @tr("Voice is off, so there is nothing to turn. Switch it on in the main view.");
+    }
     if root.shown: Caption { text: @tr("Sound"); }
     if root.shown: Segmented {
         options: [@tr("Neutral"), @tr("Warm"), @tr("Clear"), @tr("Bright"), @tr("Custom")];
@@ -740,14 +751,16 @@ component VoiceSettings inherits Card {
 component ToolsSettings inherits Card {
     property <bool> attached: AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking;
     property <bool> busy: AppState.probe-state != ProbeState.idle;
+    // Level and test come from the filter; listening works without it.
+    property <bool> filter: AppState.filter-state != FilterState.unsupported;
 
     Heading { text: @tr("Check"); }
-    Meter {
+    if root.filter: Meter {
         before: AppState.level-before;
         after: AppState.level-after;
         opacity: AppState.mic-active ? 1 : 0.4;
     }
-    HorizontalLayout {
+    if root.filter: HorizontalLayout {
         spacing: 6px;
         alignment: start;
         Rectangle { width: 10px; height: 10px; y: 3px; border-radius: 5px; background: Palette.foreground.with-alpha(0.18); }
@@ -756,8 +769,8 @@ component ToolsSettings inherits Card {
         Rectangle { width: 14px; height: 4px; y: 6px; border-radius: 2px; background: Palette.accent-background; }
         Hint { text: @tr("what your apps get"); horizontal-stretch: 0; }
     }
-    Hint { text: @tr("Moves while an app uses the mic."); }
-    HorizontalLayout {
+    if root.filter: Hint { text: @tr("Moves while an app uses the mic."); }
+    if root.filter: HorizontalLayout {
         spacing: 6px;
         Button {
             text: @tr("Test: before / after");
@@ -784,7 +797,7 @@ component ToolsSettings inherits Card {
             clicked => { AppState.probe-reset(); }
         }
     }
-    Hint { text: @tr("Records ten seconds. Then compare: Before is raw, After is with kyrr. Nothing is saved, promise."); }
+    if root.filter: Hint { text: @tr("Records ten seconds. Then compare: Before is raw, After is with kyrr. Nothing is saved, promise."); }
     HorizontalLayout {
         Button {
             text: AppState.listening ? @tr("Stop listening") : @tr("Listen to yourself");
@@ -819,8 +832,8 @@ component GeneralSettings inherits Card {
             toggled => { AppState.autostart-toggled(self.checked); }
         }
     }
-    Separator { }
-    HorizontalLayout {
+    if AppState.filter-state != FilterState.unsupported: Separator { }
+    if AppState.filter-state != FilterState.unsupported: HorizontalLayout {
         spacing: 8px;
         Caption { text: AppState.attached-mic != "" ? AppState.attached-mic : @tr("Microphone"); overflow: elide; wrap: no-wrap; vertical-alignment: center; }
         Button { text: @tr("Change microphone"); clicked => { AppState.change-microphone(); } }

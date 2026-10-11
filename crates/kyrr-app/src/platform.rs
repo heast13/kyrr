@@ -13,6 +13,8 @@ pub struct Microphone {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(not(windows), allow(dead_code))]
 pub enum FilterStatus {
+    /// The PC cannot run the filter (Windows on ARM).
+    Unsupported,
     NotInstalled,
     NotAttached,
     /// Attached to this microphone (endpoint GUID); the APO reported nothing yet.
@@ -66,6 +68,9 @@ mod imp {
     }
 
     pub fn filter_status() -> FilterStatus {
+        if !setup::filter_supported() {
+            return FilterStatus::Unsupported;
+        }
         if !setup::is_installed() {
             return FilterStatus::NotInstalled;
         }

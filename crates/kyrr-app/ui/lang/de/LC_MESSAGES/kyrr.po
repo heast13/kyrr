@@ -323,6 +323,15 @@ msgstr "Diktat EN: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporati
 msgid "Raising a beer to you all."
 msgstr "Ein Bier auf euch."
 
+msgid "Not on ARM processors yet, sorry. Dictation works."
+msgstr "Auf ARM-Prozessoren leider noch nicht. Diktieren geht."
+
+msgid "Not on ARM processors yet either."
+msgstr "Auf ARM-Prozessoren auch noch nicht."
+
+msgid "Not on ARM processors yet, sorry."
+msgstr "Auf ARM-Prozessoren leider noch nicht."
+
 msgid "Delete recording"
 msgstr "Aufnahme löschen"
 
