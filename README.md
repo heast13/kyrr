@@ -136,27 +136,20 @@ assets and libraries, from kyrr's mirror on GitHub first.)
 
 ## Code signing policy
 
-Free code signing provided by [SignPath.io](https://about.signpath.io),
-certificate by [SignPath Foundation](https://signpath.org).
+kyrr's releases are not code-signed. A free certificate from the SignPath
+Foundation was applied for and declined for now, because kyrr is not known
+widely enough yet. That is why Windows SmartScreen warns about the installer
+("More info", "Run anyway").
 
-*Not active yet: releases up to now are unsigned. The list below is what
-will be signed once the setup is finished.*
+To check that a download is the one built from this repository, compare it
+with the `.sha256` file on the release page. Every release is built on
+GitHub by the [release workflow](.github/workflows/release.yml) from a
+version tag of this repository. Third-party files keep the signatures of
+their authors (ONNX Runtime and the Visual C++ runtime by Microsoft); models
+are data.
 
-- Signed are kyrr's own files: `kyrr.exe`, `kyrr_apo.dll` and the installer
-  `kyrr-setup-<version>.exe`, each built by the [release
-  workflow](.github/workflows/release.yml) on GitHub from a version tag of
-  this repository. Third-party files keep the signatures of their authors
-  (ONNX Runtime and the Visual C++ runtime by Microsoft); models are data.
-- Committers and reviewers: [heast13](https://github.com/heast13).
-  Approvers, who approve every signing request: [heast13](https://github.com/heast13).
-- Privacy policy: see [Privacy](#privacy). kyrr sends no data about you or
-  your computer anywhere; it only downloads the speech model from Hugging
-  Face (or, if that fails, GitHub), asks GitHub once a day for the newest
-  version number (can be switched off) and, when you click "Update",
-  downloads the new installer from there. Their privacy policies apply to
-  those requests:
-  [Hugging Face](https://huggingface.co/privacy),
-  [GitHub](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
+kyrr sends no data about you or your computer anywhere, see
+[Privacy](#privacy).
 
 ## Building
 
