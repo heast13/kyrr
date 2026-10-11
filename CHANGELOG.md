@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Listen to yourself: a new button under Check plays your microphone live
+  on your headphones, the way your apps hear it.
+- The before/after test only records now; play the take with Before and
+  After whenever you like, and delete it with Delete recording.
+- Even out volume starts at Medium. Who never changed it gets Medium too.
+- The window opened from the tray always fits its content. Started with
+  Windows, it used to come up too small.
+- The button at the bottom of the window only puts it away, like the close
+  button. Quit kyrr from the tray icon's menu (right-click).
+- The settings get more room: the window grows up to 900 pixels where the
+  screen has space, and moves up instead of hiding behind the taskbar.
+
 ## 0.2.1 (2026-10-10)
 
 - Dictation in German works on older processors too (Intel before

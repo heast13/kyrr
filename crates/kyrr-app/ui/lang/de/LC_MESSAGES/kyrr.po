@@ -305,8 +305,35 @@ msgstr "Vorher"
 msgid "After"
 msgstr "Nachher"
 
-msgid "Records ten seconds and plays them twice: raw, then with kyrr. Nothing is saved, promise."
-msgstr "Nimmt zehn Sekunden auf und spielt sie zweimal ab: roh, dann mit kyrr. Gespeichert wird nichts, versprochen."
+msgid "Records ten seconds. Then compare: Before is raw, After is with kyrr. Nothing is saved, promise."
+msgstr "Nimmt zehn Sekunden auf. Dann vergleichen: Vorher ist roh, Nachher mit kyrr. Gespeichert wird nichts, versprochen."
+
+msgid "kyrr is mostly just very good at plugging things together."
+msgstr "kyrr ist eigentlich nur sehr gut im Zusammenstecken."
+
+msgid "Noise removal: DPDFNet by Ceva (Apache-2.0), via Fovty's HushMic."
+msgstr "Störgeräusche: DPDFNet von Ceva (Apache-2.0), über HushMic von Fovty."
+
+msgid "German dictation: parakeet-primeline by primeLine AI (CC-BY-4.0), based on NVIDIA Parakeet."
+msgstr "Diktat DE: parakeet-primeline von primeLine AI (CC-BY-4.0), auf Basis von NVIDIA Parakeet."
+
+msgid "English dictation: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX by sherpa-onnx."
+msgstr "Diktat EN: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX von sherpa-onnx."
+
+msgid "Raising a beer to you all."
+msgstr "Ein Bier auf euch."
+
+msgid "Delete recording"
+msgstr "Aufnahme löschen"
+
+msgid "Listen to yourself"
+msgstr "Mithören"
+
+msgid "Stop listening"
+msgstr "Mithören beenden"
+
+msgid "Your mic live in your headphones, the way your apps hear it. On speakers it squeals."
+msgstr "Dein Mikro live im Kopfhörer, so wie deine Apps es hören. Über Lautsprecher pfeift’s."
 
 msgid "General"
 msgstr "Allgemein"
@@ -504,8 +531,11 @@ msgstr "Version {} ist da. Herunterladen und den Installer starten, deine Einste
 msgid "Moves while an app uses the mic."
 msgstr "Bewegt sich, solange eine App das Mikro nutzt."
 
-msgid "Noise filter and voice keep running without this window."
-msgstr "Störgeräusche-Filter und Stimme laufen auch ohne dieses Fenster weiter."
+msgid "Everything keeps running in the tray, bottom right. Quit there with a right-click."
+msgstr "Alles läuft unten rechts im Tray weiter. Beenden geht dort per Rechtsklick."
+
+msgid "Get lost"
+msgstr "Verzieh dich"
 
 msgid "Not now, just dictation"
 msgstr "Nicht jetzt, nur diktieren"

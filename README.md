@@ -28,7 +28,8 @@ What it does:
   English, transcribed on your PC. Say "new line" or "neue
   Zeile" for a line break.
 - **Check.** A live level of what the microphone hears and what apps get,
-  and a ten-second test that plays the same take before and after kyrr.
+  a ten-second test (record once, then play the take before and after kyrr)
+  and listening to yourself live on headphones.
 
 <p align="center">
   <img src="docs/screenshots/main.png" width="380" alt="kyrr's window: noise filter, voice and dictation, each with one switch">

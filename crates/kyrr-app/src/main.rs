@@ -8,6 +8,7 @@
 
 mod config;
 mod dictation;
+mod listen;
 mod platform;
 mod player;
 mod probe;
@@ -22,7 +23,7 @@ use std::time::{Duration, Instant};
 
 use kyrr_common::{Amount, FilterSettings, Look, VoiceSettings};
 use kyrr_dictate::Language;
-use slint::{ComponentHandle, LogicalSize, ModelRc, SharedString, VecModel, Weak};
+use slint::{ComponentHandle, LogicalSize, ModelRc, PhysicalPosition, SharedString, VecModel, Weak};
 
 use config::Config;
 use dictation::{Command, Event, State};
@@ -60,6 +61,7 @@ fn text(language: Language, english: &str) -> String {
         "setup failed" => "Die Einrichtung ist fehlgeschlagen:",
         "disconnected" => "nicht angeschlossen",
         "probe failed" => "Der Test hat nicht geklappt:",
+        "listen failed" => "Mithören hat nicht geklappt:",
         "right ctrl" => "Strg rechts",
         other => other,
     };
@@ -68,6 +70,7 @@ fn text(language: Language, english: &str) -> String {
         "setup failed" => "Setup failed:",
         "disconnected" => "disconnected",
         "probe failed" => "The test did not work:",
+        "listen failed" => "Listening did not work:",
         "right ctrl" => "Right Ctrl",
         other => other,
     };
@@ -110,17 +113,76 @@ fn show_voice(state: &AppState, v: &VoiceSettings) {
     state.set_voice_is_default(*v == voice_defaults(v.enabled));
 }
 
-/// Tallest the window gets; more content scrolls. Fits a 768-pixel-high
-/// laptop screen with the taskbar and title bar.
-const MAX_HEIGHT: f32 = 660.0;
+/// Tallest the window gets, screen permitting; more content scrolls.
+const MAX_HEIGHT: f32 = 900.0;
+/// Tallest when the screen is unknown: fits a 768-pixel-high laptop screen
+/// with the taskbar and title bar.
+const FALLBACK_HEIGHT: f32 = 660.0;
+/// Never smaller than this, however small the screen.
+const MIN_HEIGHT: f32 = 400.0;
+/// Title bar and borders, about, plus a little air.
+const FRAME: f32 = 40.0;
+/// The window's fixed width (as in the .slint file).
+const WIDTH: f32 = 380.0;
 
-/// Resizes the window to its content after the page changed.
+/// Top and bottom of the free screen the window is on, in physical pixels.
+fn screen(w: &MainWindow) -> Option<(i32, i32)> {
+    let pos = w.window().position();
+    platform::work_area(pos.x, pos.y)
+}
+
+/// The height the content wants, up to what the screen has room for.
+fn wanted_height(w: &MainWindow) -> f32 {
+    let cap = screen(w).map_or(FALLBACK_HEIGHT, |(top, bottom)| {
+        ((bottom - top) as f32 / w.window().scale_factor() - FRAME).clamp(MIN_HEIGHT, MAX_HEIGHT)
+    });
+    w.get_content_height().min(cap)
+}
+
+/// Sets the window's height and moves it up when its bottom would end up
+/// behind the taskbar or off the screen.
+fn resize(w: &MainWindow, height: f32) {
+    let win = w.window();
+    win.set_size(LogicalSize::new(WIDTH, height));
+    let Some((top, bottom)) = screen(w) else {
+        return;
+    };
+    let pos = win.position();
+    let outer = ((height + FRAME) * win.scale_factor()).round() as i32;
+    if pos.y + outer > bottom {
+        win.set_position(PhysicalPosition::new(pos.x, (bottom - outer).max(top)));
+    }
+}
+
+/// Resizes the window to its content, once the layout has caught up (after
+/// a page change, or the window just came up). Not while minimized: the
+/// size would land on the taskbar button, not the window.
 fn fit(window: &Weak<MainWindow>) {
     let window = window.clone();
     slint::Timer::single_shot(Duration::from_millis(10), move || {
         if let Some(w) = window.upgrade() {
-            w.window()
-                .set_size(LogicalSize::new(380.0, w.get_content_height().min(MAX_HEIGHT)));
+            if !w.window().is_minimized() {
+                resize(&w, wanted_height(&w));
+            }
+        }
+    });
+}
+
+/// Makes the open window taller when its content grew (a hint appeared, the
+/// status went to two lines). Never shrinks it on its own, so it does not
+/// jump with every phrase; the next fit tidies up.
+fn grow(window: &Weak<MainWindow>) {
+    let window = window.clone();
+    slint::Timer::single_shot(Duration::from_millis(10), move || {
+        let Some(w) = window.upgrade() else { return };
+        let win = w.window();
+        if !win.is_visible() || win.is_minimized() {
+            return;
+        }
+        let height = win.size().to_logical(win.scale_factor()).height;
+        let wanted = wanted_height(&w);
+        if wanted > height + 0.5 {
+            resize(&w, wanted);
         }
     });
 }
@@ -155,9 +217,16 @@ const SILENCE_TICKS: u32 = 20;
 /// new model or this long has passed.
 const MODEL_SWITCH_TIMEOUT: Duration = Duration::from_secs(20);
 
+/// Brings the window up at the size its content wants. A window kyrr
+/// started with in the background never had a size, and content changes
+/// while it was hidden; both used to show it too small.
 fn show(window: &MainWindow) {
+    if !window.window().is_visible() {
+        resize(window, wanted_height(window));
+    }
     let _ = window.show();
     window.window().set_minimized(false);
+    fit(&window.as_weak());
 }
 
 struct App {
@@ -175,6 +244,8 @@ struct App {
     probe_events: (mpsc::Sender<probe::Event>, mpsc::Receiver<probe::Event>),
     /// The last before/after take, for playing it again.
     take: RefCell<Option<Arc<platform::Take>>>,
+    /// The mic on the headphones, while on.
+    listening: RefCell<Option<listen::Listening>>,
     /// Tap mode for the dictation key, read by the key thread.
     key_toggle: Arc<AtomicBool>,
     microphones: RefCell<Vec<Microphone>>,
@@ -408,12 +479,56 @@ impl App {
         probe::record(self.attached.borrow().clone(), self.probe_notify());
     }
 
+    /// Forgets the take: Before and After go away until the next test.
+    fn probe_reset(&self) {
+        self.take.borrow_mut().take();
+        if let Some(w) = self.window.upgrade() {
+            let state = w.global::<AppState>();
+            state.set_has_probe(false);
+            state.set_probe_error("".into());
+        }
+        fit(&self.window);
+    }
+
     fn probe_play(&self, after: bool) {
         let Some(take) = self.take.borrow().clone() else {
             return;
         };
         let half = if after { probe::Half::After } else { probe::Half::Before };
         probe::replay(take, half, self.probe_notify());
+    }
+
+    /// Listening on or off. The window's state decides, not the handle: a
+    /// start that failed leaves a dead one behind.
+    fn toggle_listening(&self) {
+        let Some(w) = self.window.upgrade() else {
+            return;
+        };
+        let state = w.global::<AppState>();
+        let was_on = state.get_listening();
+        self.stop_listening();
+        if was_on {
+            return;
+        }
+        state.set_probe_error("".into());
+        state.set_listening(true);
+        let weak = self.window.clone();
+        let prefix = text(self.language(), "listen failed");
+        let listening = listen::start(self.attached.borrow().clone(), move |e| {
+            let _ = weak.upgrade_in_event_loop(move |w| {
+                let state = w.global::<AppState>();
+                state.set_listening(false);
+                state.set_probe_error(format!("{prefix} {e}").into());
+            });
+        });
+        *self.listening.borrow_mut() = Some(listening);
+    }
+
+    fn stop_listening(&self) {
+        self.listening.borrow_mut().take();
+        if let Some(w) = self.window.upgrade() {
+            w.global::<AppState>().set_listening(false);
+        }
     }
 
     /// The dictation key and mode, from the settings: to the hook, the
@@ -620,6 +735,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         model_changed: Cell::new(None),
         probe_events: mpsc::channel(),
         take: RefCell::new(None),
+        listening: RefCell::new(None),
         key_toggle,
         microphones: RefCell::new(Vec::new()),
         worker: worker.clone(),
@@ -635,14 +751,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_strength_index(strength_index(filter.limit_db));
     state.set_model_index(filter.light_model as i32);
     state.set_autostart(platform::autostart_enabled());
-    state.set_credits(
-        Language::ALL
-            .iter()
-            .map(|l| l.model().attribution)
-            .collect::<Vec<_>>()
-            .join("\n\n")
-            .into(),
-    );
     app.apply_key();
     show_voice(&state, &filter.voice);
     tray.set_dictation_enabled(app.config.borrow().dictation);
@@ -765,6 +873,36 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         let app = Rc::clone(&app);
         move |after| app.probe_play(after)
     });
+    state.on_probe_reset({
+        let app = Rc::clone(&app);
+        move || app.probe_reset()
+    });
+    state.on_listen_toggled({
+        let app = Rc::clone(&app);
+        move || app.toggle_listening()
+    });
+    window.on_content_height_changed({
+        let weak = window.as_weak();
+        move || grow(&weak)
+    });
+    // Closing only hides the window; listening ends with it. The button
+    // in the window does the same; quitting is in the tray menu.
+    window.window().on_close_requested({
+        let app = Rc::clone(&app);
+        move || {
+            app.stop_listening();
+            slint::CloseRequestResponse::HideWindow
+        }
+    });
+    state.on_hide({
+        let app = Rc::clone(&app);
+        move || {
+            app.stop_listening();
+            if let Some(w) = app.window.upgrade() {
+                let _ = w.hide();
+            }
+        }
+    });
     state.on_voice_toggled({
         let app = Rc::clone(&app);
         move |on| app.set_voice(|v| v.enabled = on)
@@ -860,7 +998,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             let _ = slint::quit_event_loop();
         }
     };
-    state.on_quit(quit.clone());
     tray.on_quit(quit);
     tray.on_open({
         let app = Rc::clone(&app);
@@ -924,7 +1061,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     window.set_setup_mode(!setup_done);
     if !setup_done || !background {
         show(&window);
-        fit(&window.as_weak());
     }
     tray.show()?;
     slint::run_event_loop_until_quit()

@@ -35,6 +35,8 @@ export global AppState {
     in property <ProbeState> probe-state: ProbeState.idle;
     in property <bool> has-probe;
     in property <string> probe-error;
+    // The mic plays live on the headphones.
+    in property <bool> listening;
 
     // Voice: sound, S sounds and volume, shaped in the audio filter
     in-out property <bool> voice-enabled: true;
@@ -44,7 +46,7 @@ export global AppState {
     in-out property <float> air-db;
     in-out property <bool> low-cut: true;
     in-out property <int> deesser-index;       // off, light, medium, strong
-    in-out property <int> compressor-index: 1; // off, light, medium, strong
+    in-out property <int> compressor-index: 2; // off, light, medium, strong
     in property <bool> voice-is-default: true;
 
     // Dictation
@@ -59,8 +61,6 @@ export global AppState {
     in-out property <int> key-index: 1; // F8, F9, Pause, right Ctrl
     in-out property <bool> key-toggle;  // tap to start and stop instead of holding
     in property <string> key-name: "F9";
-    // Model credits, as their licenses ask.
-    in property <string> credits;
     // "Check for updates", on request only.
     in property <UpdateState> update-state;
     in property <string> update-version;
@@ -83,6 +83,8 @@ export global AppState {
     callback model-changed(int);
     callback probe-record();
     callback probe-play(bool); // false before, true after
+    callback probe-reset();
+    callback listen-toggled();
     callback voice-toggled(bool);
     callback look-changed(int);
     callback band-changed(int, float); // 0 body, 1 presence, 2 air
@@ -98,7 +100,8 @@ export global AppState {
     callback finish-setup();
     callback change-microphone();
     callback autostart-toggled(bool);
-    callback quit();
+    // Puts the window away, like its close button; quitting is in the tray.
+    callback hide();
     callback page-changed();
     callback dictation-retry();
     callback repair();
@@ -600,7 +603,13 @@ component DictationSettings inherits Card {
 // Settings: who made what, and whether there is something newer.
 component AboutSettings inherits Card {
     Heading { text: @tr("About"); }
-    Hint { text: AppState.credits; }
+    // The models' credits, as their licenses ask. NVIDIA's sentence stays
+    // in English in every language: the license gives it word for word.
+    Hint { text: @tr("kyrr is mostly just very good at plugging things together."); }
+    Hint { text: @tr("Noise removal: DPDFNet by Ceva (Apache-2.0), via Fovty's HushMic."); }
+    Hint { text: @tr("German dictation: parakeet-primeline by primeLine AI (CC-BY-4.0), based on NVIDIA Parakeet."); }
+    Hint { text: @tr("English dictation: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX by sherpa-onnx."); }
+    Hint { text: @tr("Raising a beer to you all."); }
     HorizontalLayout {
         spacing: 8px;
         Rectangle { }
@@ -631,17 +640,17 @@ component AboutSettings inherits Card {
     }
 }
 
-// The quit button with what it does and does not stop.
-component QuitRow inherits HorizontalLayout {
+// Sends the window away; everything else keeps running in the tray.
+component HideRow inherits HorizontalLayout {
     spacing: 8px;
     Hint {
-        text: @tr("Noise filter and voice keep running without this window.");
+        text: @tr("Everything keeps running in the tray, bottom right. Quit there with a right-click.");
         vertical-alignment: center;
     }
     Button {
-        text: @tr("Quit");
+        text: @tr("Get lost");
         horizontal-stretch: 0;
-        clicked => { AppState.quit(); }
+        clicked => { AppState.hide(); }
     }
 }
 
@@ -752,7 +761,7 @@ component ToolsSettings inherits Card {
         spacing: 6px;
         Button {
             text: @tr("Test: before / after");
-            enabled: root.attached && !root.busy;
+            enabled: root.attached && !root.busy && !AppState.listening;
             clicked => { AppState.probe-record(); }
         }
         Rectangle { }
@@ -767,7 +776,24 @@ component ToolsSettings inherits Card {
             clicked => { AppState.probe-play(true); }
         }
     }
-    Hint { text: @tr("Records ten seconds and plays them twice: raw, then with kyrr. Nothing is saved, promise."); }
+    if AppState.has-probe: HorizontalLayout {
+        Rectangle { }
+        Button {
+            text: @tr("Delete recording");
+            enabled: !root.busy;
+            clicked => { AppState.probe-reset(); }
+        }
+    }
+    Hint { text: @tr("Records ten seconds. Then compare: Before is raw, After is with kyrr. Nothing is saved, promise."); }
+    HorizontalLayout {
+        Button {
+            text: AppState.listening ? @tr("Stop listening") : @tr("Listen to yourself");
+            enabled: !root.busy;
+            clicked => { AppState.listen-toggled(); }
+        }
+        Rectangle { }
+    }
+    Hint { text: @tr("Your mic live in your headphones, the way your apps hear it. On speakers it squeals."); }
     if AppState.probe-error != "": Caption { text: AppState.probe-error; color: #e5484d; }
 }
 
@@ -850,6 +876,8 @@ export component MainWindow inherits Window {
     in property <int> setup-step;
     // The height the content wants; the app caps the window and scrolls.
     out property <length> content-height: layout.preferred-height;
+    callback content-height-changed();
+    changed content-height => { root.content-height-changed(); }
     title: "kyrr";
     icon: @image-url("icons/kyrr-256.png");
     preferred-width: 380px;
@@ -894,7 +922,7 @@ export component MainWindow inherits Window {
             if main-page: NoiseCard { }
             if main-page: VoiceCard { }
             if main-page: DictationCard { }
-            if main-page: QuitRow { }
+            if main-page: HideRow { }
 
             // Settings page: the deeper options.
             if settings-page: HorizontalLayout {

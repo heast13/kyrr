@@ -2,7 +2,7 @@
 //! it to a microphone (elevated), the filter's settings, status and live
 //! monitor, the
 //! push-to-talk key, typing text, and app plumbing (single instance,
-//! autostart, elevation).
+//! autostart, elevation, screen size).
 
 #![cfg(windows)]
 
@@ -15,6 +15,7 @@ pub mod instance;
 pub mod monitor;
 mod privilege;
 mod reg;
+pub mod screen;
 pub mod service;
 pub mod setup;
 pub mod typing;

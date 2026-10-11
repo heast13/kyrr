@@ -174,7 +174,7 @@ impl Default for VoiceSettings {
             air: 0,
             low_cut: true,
             deesser: Amount::Off,
-            compressor: Amount::Light,
+            compressor: Amount::Medium,
         }
     }
 }

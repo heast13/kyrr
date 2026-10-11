@@ -1,7 +1,7 @@
 //! The before/after probe: kyrr opens the microphone for a few seconds, the
 //! audio filter records the same take unprocessed and processed, and kyrr
-//! plays both back. Nothing is saved; the take lives in memory until the
-//! next probe or quit.
+//! plays either half when asked. Nothing is saved; the take lives in memory
+//! until the next probe or quit.
 
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -33,21 +33,16 @@ pub enum Half {
     After,
 }
 
-/// Records a probe on `microphone` and plays it, before then after, on its
-/// own thread. `notify` gets every step.
+/// Records a probe on `microphone` on its own thread, without playing it:
+/// the before and after buttons do that. `notify` gets every step.
 pub fn record(microphone: Option<String>, notify: impl Fn(Event) + Send + 'static) {
     std::thread::spawn(move || match take(microphone.as_deref(), &notify) {
-        Ok(take) => {
-            let take = Arc::new(take);
-            play(&take, Half::Before, &notify);
-            play(&take, Half::After, &notify);
-            notify(Event::Done(take));
-        }
+        Ok(take) => notify(Event::Done(Arc::new(take))),
         Err(e) => notify(Event::Failed(e)),
     });
 }
 
-/// Plays one half of an earlier take on its own thread.
+/// Plays one half of a take on its own thread.
 pub fn replay(take: Arc<Take>, half: Half, notify: impl Fn(Event) + Send + 'static) {
     std::thread::spawn(move || {
         play(&take, half, &notify);

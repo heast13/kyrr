@@ -30,7 +30,7 @@ fn mono<T: SizedSample>(data: &[T], channels: usize, convert: fn(T) -> f32, out:
 
 /// The input device whose endpoint id ends with `guid` (the microphone kyrr
 /// is attached to, so dictation hears the cleaned signal), else the default.
-fn device(guid: Option<&str>) -> Option<cpal::Device> {
+pub fn device(guid: Option<&str>) -> Option<cpal::Device> {
     let host = cpal::default_host();
     if let Some(guid) = guid.filter(|g| !g.is_empty()) {
         let guid = guid.to_ascii_lowercase();

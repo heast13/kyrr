@@ -68,11 +68,6 @@ fn main() {
     state.set_level_before(0.72);
     state.set_level_after(0.55);
     state.set_download_size("880 MB".into());
-    state.set_credits(
-        "German: primeline/parakeet-primeline by primeLine AI (CC-BY-4.0), based on NVIDIA parakeet-tdt-0.6b-v3.\n\n\
-         English: NVIDIA parakeet-unified-en-0.6b, licensed by NVIDIA Corporation under the NVIDIA Open Model License."
-            .into(),
-    );
     state.set_phrase(4);
     render(&window, &ui, &format!("{out}/main-{lang}.rgba"));
 
