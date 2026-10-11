@@ -1,17 +1,19 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 (2026-10-11)
 
-- Updates without hunting for files: once a day kyrr asks GitHub for the
-  newest version number (Settings, General, "Look for updates"; switch it
-  off and kyrr only asks when you click). A new version shows as a small
-  green note at the bottom of the main window and in the tray menu; the
-  note's × hides it until the next version.
-- Update now: when "Check for updates" finds a new version, one click
-  downloads it, checks it against the release's SHA256 and installs it
-  quietly; Windows asks for permission once and kyrr restarts by itself.
-  The download page stays one click away. Works from this version on, so
-  coming from 0.3.0 the update is installed by hand once more.
+- Updates in one click. Once a day kyrr asks GitHub for the newest version
+  number (Settings, General, "Look for updates"; switched off, kyrr only
+  asks when you click "Check for updates"). A new version shows as a small
+  green note at the bottom of the main window and in the tray menu.
+  "Update" downloads it, checks it against the release's SHA256 and
+  installs it with only a progress window: Windows asks for permission
+  once, and kyrr restarts by itself. The note's × hides it until the next
+  version.
+- The settings page shows whole where the screen has room (up to 1100
+  pixels tall instead of 900), without scrolling.
+- This works from 0.3.1 on: coming from 0.3.0, install this version by hand
+  once more.
 
 ## 0.3.0 (2026-10-11)
 

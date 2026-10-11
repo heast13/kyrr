@@ -113,8 +113,9 @@ fn show_voice(state: &AppState, v: &VoiceSettings) {
     state.set_voice_is_default(*v == voice_defaults(v.enabled));
 }
 
-/// Tallest the window gets, screen permitting; more content scrolls.
-const MAX_HEIGHT: f32 = 900.0;
+/// Tallest the window gets, screen permitting; more content scrolls. Room
+/// for the whole two-column settings page.
+const MAX_HEIGHT: f32 = 1100.0;
 /// Tallest when the screen is unknown: fits a 768-pixel-high laptop screen
 /// with the taskbar and title bar.
 const FALLBACK_HEIGHT: f32 = 660.0;
