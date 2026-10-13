@@ -895,7 +895,7 @@ component LevelSettings inherits Card {
             : @tr("Right now: {} dB", root.signed);
         color: !AppState.mic-active || root.gain == 0 ? Palette.foreground.with-alpha(0.65)
             : root.gain > 0 ? (Palette.color-scheme == ColorScheme.dark ? #3fb950 : #1a7f37)
-            : #e5484d;
+            : (Palette.color-scheme == ColorScheme.dark ? #e5484d : #c62a2f);
     }
 }
 
