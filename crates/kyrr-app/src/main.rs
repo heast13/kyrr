@@ -30,7 +30,7 @@ use slint::{ComponentHandle, LogicalSize, ModelRc, PhysicalPosition, SharedStrin
 
 use config::Config;
 use dictation::{Command, Event, State};
-use platform::{FilterStatus, Microphone, SetupError};
+use platform::{FilterStatus, KeyNote, Microphone, SetupError};
 
 slint::include_modules!();
 
@@ -84,6 +84,29 @@ fn text(language: Language, english: &str) -> String {
     match language {
         Language::German => german.into(),
         Language::English => english.into(),
+    }
+}
+
+/// What to do so the dictation key reaches kyrr, in the user's language.
+fn key_note(language: Language) -> String {
+    let german = matches!(language, Language::German);
+    match platform::key_note() {
+        KeyNote::None => String::new(),
+        KeyNote::Desktop if german => {
+            "Die Taste legt dein Desktop fest: Er fragt einmal nach, ändern geht in seinen Tastatur-Einstellungen."
+                .into()
+        }
+        KeyNote::Desktop => {
+            "Your desktop decides the key: it asks once, and its keyboard settings can change it.".into()
+        }
+        KeyNote::Hyprland(line) if german => format!("Für Hyprland gehört diese Zeile in die hyprland.conf:\n{line}"),
+        KeyNote::Hyprland(line) => format!("For Hyprland, add this line to hyprland.conf:\n{line}"),
+        KeyNote::Command(command) if german => format!(
+            "Dieser Desktop reicht keine Taste an kyrr weiter. Leg in seinen Tastatur-Einstellungen diesen Befehl auf eine Taste, jeder Druck startet oder beendet das Diktat:\n{command}"
+        ),
+        KeyNote::Command(command) => format!(
+            "This desktop passes no key to kyrr. Put this command on a key in its keyboard settings, each press starts or ends dictation:\n{command}"
+        ),
     }
 }
 
@@ -792,6 +815,7 @@ impl App {
             state.set_key_index(index as i32);
             state.set_key_toggle(toggle);
             state.set_key_name(name.as_str().into());
+            state.set_key_note(key_note(self.language()).into());
         }
         if let Some(t) = tray() {
             t.set_key_name(name.into());
@@ -1015,6 +1039,8 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_model_index(filter.light_model as i32);
     state.set_autostart(platform::autostart_enabled());
     state.set_update_auto(app.config.borrow().update_check);
+    state.set_linux(cfg!(target_os = "linux"));
+    state.set_tray(platform::has_tray());
     state.set_advanced(app.config.borrow().advanced_settings);
     app.apply_key();
     show_voice(&state, &filter.voice);
@@ -1488,6 +1514,9 @@ fn retry_tray(app: &Rc<App>) -> Result<(), slint::PlatformError> {
     }
     new.show()?;
     TRAY.set(Some(new));
+    if let Some(w) = app.window.upgrade() {
+        w.global::<AppState>().set_tray(true);
+    }
     Ok(())
 }
 

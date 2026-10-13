@@ -722,3 +722,35 @@ msgstr "kyrr {} ist da"
 
 msgid "Close"
 msgstr "Schließen"
+
+# Linux
+
+msgid "PipeWire is not running, and kyrr needs it. Dictation works."
+msgstr "PipeWire läuft nicht, und kyrr braucht es. Diktieren geht."
+
+msgid "Needs PipeWire too."
+msgstr "Braucht auch PipeWire."
+
+msgid "Needs PipeWire, which is not running."
+msgstr "Braucht PipeWire, und das läuft nicht."
+
+msgid "Off. Your mic as loud as your system sets it."
+msgstr "Aus. Dein Mikro so laut, wie dein System es einstellt."
+
+msgid "Start when you sign in"
+msgstr "Beim Anmelden starten"
+
+msgid "Version {} is out. Update kyrr where you installed it from, your settings stay."
+msgstr "Version {} ist da. Aktualisiere kyrr dort, wo du es installiert hast, deine Einstellungen bleiben."
+
+msgid "Everything keeps running in the tray. Quit there with a right-click."
+msgstr "Alles läuft im Tray weiter. Beenden geht dort per Rechtsklick."
+
+msgid "No tray on this desktop: kyrr waits in the taskbar. Closing the window quits it."
+msgstr "Dieser Desktop hat kein Tray: kyrr wartet in der Taskleiste. Fenster schließen beendet es."
+
+msgid "kyrr adds a microphone called “kyrr” and makes it the default. Apps set to a particular microphone need to be switched to “kyrr”."
+msgstr "kyrr legt ein Mikrofon namens „kyrr“ an und macht es zum Standard. Apps, die auf ein bestimmtes Mikrofon eingestellt sind, stellst du auf „kyrr“ um."
+
+msgid "kyrr starts when you sign in and lives in the tray, if your desktop has one. Both can be changed in the settings."
+msgstr "kyrr startet beim Anmelden und wohnt im Tray, wenn dein Desktop eins hat. Beides lässt sich in den Einstellungen ändern."

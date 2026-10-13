@@ -46,6 +46,20 @@ pub struct Take {
     pub after: Vec<f32>,
 }
 
+/// What the user has to do so the dictation key reaches kyrr.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(windows, allow(dead_code))]
+pub enum KeyNote {
+    /// Nothing: kyrr catches the key itself.
+    None,
+    /// The desktop owns the key (its shortcut portal) and can change it.
+    Desktop,
+    /// Hyprland binds the key: this line belongs in hyprland.conf.
+    Hyprland(String),
+    /// Nothing catches keys: bind this command to a key.
+    Command(String),
+}
+
 #[derive(Debug)]
 #[cfg_attr(not(windows), allow(dead_code))]
 pub enum SetupError {
@@ -200,6 +214,10 @@ mod imp {
 
     pub fn has_tray() -> bool {
         true
+    }
+
+    pub fn key_note() -> KeyNote {
+        KeyNote::None
     }
 
     /// The live monitor the audio filter shares; `None` until it ran once.
@@ -367,12 +385,14 @@ mod imp {
         let s = state();
         let wanted = s.saved.microphone.clone().unwrap_or_default();
         match &s.filter {
-            Filter::Off if s.saved.microphone.is_none() => FilterStatus::NotInstalled,
+            // Nothing chosen yet: the setup asks for a microphone.
+            Filter::Off if s.saved.microphone.is_none() => FilterStatus::NotAttached,
             Filter::Off | Filter::Starting => FilterStatus::Waiting(wanted),
             Filter::Failed(_) => FilterStatus::Unsupported,
             Filter::On(engine) => match engine.status() {
                 Status::Starting => FilterStatus::Waiting(wanted),
-                Status::NoMicrophone => FilterStatus::NotAttached,
+                // Unplugged: shown as "disconnected" until it is back.
+                Status::NoMicrophone => FilterStatus::Waiting(wanted),
                 Status::Failed(e) => FilterStatus::Passthrough(wanted, e),
                 Status::Running(mic) => {
                     let label = engine.engine();
@@ -460,6 +480,35 @@ mod imp {
 
     pub fn set_hotkey_active(active: bool) {
         kyrr_linux::hotkey::set_active(active);
+    }
+
+    pub fn key_note() -> KeyNote {
+        use kyrr_linux::hotkey::{self, Backend};
+        let hyprland = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some()
+            || std::env::var("XDG_CURRENT_DESKTOP").is_ok_and(|d| d.to_ascii_lowercase().contains("hyprland"));
+        match hotkey::backend() {
+            Backend::X11 => KeyNote::None,
+            Backend::Portal if hyprland => KeyNote::Hyprland(format!(
+                "bind = , {}, global, io.github.heast13.kyrr:dictate",
+                hotkey::key_name()
+            )),
+            Backend::Portal => KeyNote::Desktop,
+            Backend::None => KeyNote::Command(dictate_command()),
+        }
+    }
+
+    /// How this kyrr is started with `--dictate`: through Flatpak, the
+    /// AppImage's path, or the program's own.
+    fn dictate_command() -> String {
+        if let Ok(id) = std::env::var("FLATPAK_ID") {
+            return format!("flatpak run {id} --dictate");
+        }
+        let program = std::env::var_os("APPIMAGE")
+            .map(PathBuf::from)
+            .or_else(|| std::env::current_exe().ok())
+            .filter(|p| !p.starts_with("/usr/bin"))
+            .map_or_else(|| "kyrr".to_string(), |p| p.display().to_string());
+        format!("{program} --dictate")
     }
 
     /// Shows the license notices that ship with kyrr.

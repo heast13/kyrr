@@ -90,6 +90,11 @@ pub fn set_active(active: bool) {
     }
 }
 
+/// The key's name for the portal and for Hyprland's binds, e.g. "F9".
+pub fn key_name() -> &'static str {
+    KEYS[KEY.load(Ordering::Relaxed)].2
+}
+
 /// Which way the key is caught; [`Backend::None`] until [`start`] succeeds.
 pub fn backend() -> Backend {
     BACKEND.get().copied().unwrap_or(Backend::None)

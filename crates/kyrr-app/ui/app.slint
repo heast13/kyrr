@@ -5,7 +5,8 @@
 import { Button, ComboBox, Switch, Slider, ProgressIndicator, ScrollView, Palette } from "std-widgets.slint";
 
 // detached: Windows (an update, a driver) took kyrr off the microphone.
-// unsupported: this PC cannot run the filter (Windows on ARM).
+// unsupported: this PC cannot run the filter (Windows on ARM, Linux without
+// PipeWire).
 export enum FilterState { checking, running, off, passthrough, not-attached, not-installed, setting-up, error, detached, unsupported }
 export enum DictationState { off, no-model, downloading, loading, ready, recording, transcribing, error }
 export enum ProbeState { idle, recording, before, after }
@@ -21,6 +22,10 @@ export global AppState {
     in property <bool> model-switching;
     // The filter fell back to ONNX Runtime: the CPU lacks AVX2, Lean suits it.
     in property <bool> old-cpu;
+    // Linux: the filter is kyrr's own microphone, there is no installer, and
+    // the desktop may have no tray.
+    in property <bool> linux;
+    in property <bool> tray: true;
     in property <FilterState> filter-state: FilterState.checking;
     in property <string> filter-detail; // technical, not translated
     in property <[string]> microphones;
@@ -72,6 +77,8 @@ export global AppState {
     in-out property <int> key-index: 1; // F8, F9, Pause, right Ctrl
     in-out property <bool> key-toggle;  // tap to start and stop instead of holding
     in property <string> key-name: "F9";
+    // What the user has to do so the key reaches kyrr (Linux); "" for nothing.
+    in property <string> key-note;
     // "Check for updates", on request only.
     in property <UpdateState> update-state;
     in property <string> update-version;
@@ -483,7 +490,7 @@ component NoiseCard inherits Card {
             : AppState.filter-state == FilterState.passthrough ? @tr("The filter could not start and passes the microphone through.")
             : AppState.filter-state == FilterState.not-attached ? @tr("No microphone set up yet.")
             : AppState.filter-state == FilterState.not-installed ? @tr("kyrr's audio filter is not installed. Please reinstall kyrr.")
-            : AppState.filter-state == FilterState.unsupported ? @tr("Not on ARM processors yet, sorry. Dictation works.")
+            : AppState.filter-state == FilterState.unsupported ? (AppState.linux ? @tr("PipeWire is not running, and kyrr needs it. Dictation works.") : @tr("Not on ARM processors yet, sorry. Dictation works."))
             : AppState.filter-state == FilterState.setting-up ? @tr("Setting up… sound pauses for a moment.")
             : AppState.error-text;
     }
@@ -514,7 +521,7 @@ component VoiceCard inherits Card {
         toggled(on) => { AppState.voice-toggled(on); }
     }
     Caption {
-        text: AppState.filter-state == FilterState.unsupported ? @tr("Not on ARM processors yet either.")
+        text: AppState.filter-state == FilterState.unsupported ? (AppState.linux ? @tr("Needs PipeWire too.") : @tr("Not on ARM processors yet either."))
             : !root.available ? @tr("Needs a microphone first.")
             : AppState.voice-enabled ? @tr("A bit of polish for your voice.")
             : @tr("Off. Your voice stays as it is.");
@@ -598,7 +605,7 @@ component NoiseSettings inherits Card {
 
     Heading { text: @tr("Background noise"); }
     if !root.attached: Hint {
-        text: AppState.filter-state == FilterState.unsupported ? @tr("Not on ARM processors yet, sorry.") : @tr("Set up a microphone first.");
+        text: AppState.filter-state == FilterState.unsupported ? (AppState.linux ? @tr("Needs PipeWire, which is not running.") : @tr("Not on ARM processors yet, sorry.")) : @tr("Set up a microphone first.");
     }
     if root.attached: Caption { text: @tr("Filter strength"); }
     if root.attached: Segmented {
@@ -627,6 +634,7 @@ component DictationSettings inherits Card {
         changed(i) => { AppState.key-changed(i); }
     }
     Hint { text: @tr("With Ctrl, Alt or Shift held, the key stays with your app."); }
+    if AppState.key-note != "": Hint { text: AppState.key-note; }
     Caption { text: @tr("How"); }
     Segmented {
         options: [@tr("Hold"), @tr("Tap")];
@@ -768,7 +776,9 @@ component AlertLine inherits Text {
 component HideRow inherits HorizontalLayout {
     spacing: 8px;
     Hint {
-        text: @tr("Everything keeps running in the tray, bottom right. Quit there with a right-click.");
+        text: !AppState.linux ? @tr("Everything keeps running in the tray, bottom right. Quit there with a right-click.")
+            : AppState.tray ? @tr("Everything keeps running in the tray. Quit there with a right-click.")
+            : @tr("No tray on this desktop: kyrr waits in the taskbar. Closing the window quits it.");
         vertical-alignment: center;
     }
     Button {
@@ -804,7 +814,7 @@ component VoiceSettings inherits Card {
 
     Heading { text: @tr("Voice"); }
     if !root.shown: Hint {
-        text: AppState.filter-state == FilterState.unsupported ? @tr("Not on ARM processors yet, sorry.")
+        text: AppState.filter-state == FilterState.unsupported ? (AppState.linux ? @tr("Needs PipeWire, which is not running.") : @tr("Not on ARM processors yet, sorry."))
             : @tr("Voice is off, so there is nothing to turn. Switch it on in the main view.");
     }
     if root.shown: Caption { text: @tr("Sound"); }
@@ -890,10 +900,10 @@ component LevelSettings inherits Card {
         toggled(on) => { AppState.auto-level-toggled(on); }
     }
     Hint {
-        text: AppState.filter-state == FilterState.unsupported ? @tr("Not on ARM processors yet, sorry.")
+        text: AppState.filter-state == FilterState.unsupported ? (AppState.linux ? @tr("Needs PipeWire, which is not running.") : @tr("Not on ARM processors yet, sorry."))
             : !root.available ? @tr("Set up a microphone first.")
             : AppState.auto-level ? @tr("Always the same volume, however your mic is set. If your call app does that too, switch one off.")
-            : @tr("Off. Your mic as loud as Windows sets it.");
+            : (AppState.linux ? @tr("Off. Your mic as loud as your system sets it.") : @tr("Off. Your mic as loud as Windows sets it."));
     }
     // What it adds right now: green when it boosts, red when it cuts.
     property <string> signed: root.gain > 0 ? "+" + root.gain : root.gain < 0 ? "−" + (-root.gain) : "0";
@@ -989,7 +999,7 @@ component GeneralSettings inherits Card {
     Hint { text: @tr("Also the language dictation listens for."); }
     Separator { }
     HorizontalLayout {
-        Caption { text: @tr("Start with Windows"); vertical-alignment: center; }
+        Caption { text: (AppState.linux ? @tr("Start when you sign in") : @tr("Start with Windows")); vertical-alignment: center; }
         Rectangle { }
         Switch {
             checked <=> AppState.autostart;
@@ -1027,7 +1037,7 @@ component GeneralSettings inherits Card {
         text: @tr("Version {} is out. One click and kyrr updates itself, your settings stay.", AppState.update-version);
     }
     if AppState.advanced && (AppState.update-state == UpdateState.available && !AppState.update-installable): Hint {
-        text: @tr("Version {} is out. Download it and run the installer, your settings stay.", AppState.update-version);
+        text: (AppState.linux ? @tr("Version {} is out. Update kyrr where you installed it from, your settings stay.", AppState.update-version) : @tr("Version {} is out. Download it and run the installer, your settings stay.", AppState.update-version));
     }
     if AppState.advanced && (AppState.update-state == UpdateState.download-failed): Hint {
         text: @tr("The download did not work. Try again, or get it from the download page.");
@@ -1072,7 +1082,7 @@ component SetupPage inherits VerticalLayout {
         model: AppState.microphones;
         current-index <=> AppState.mic-index;
     }
-    if step == 0: Caption { text: @tr("Windows will ask for permission. Sound pauses for a moment while kyrr sets up."); }
+    if step == 0: Caption { text: (AppState.linux ? @tr("kyrr adds a microphone called “kyrr” and makes it the default. Apps set to a particular microphone need to be switched to “kyrr”.") : @tr("Windows will ask for permission. Sound pauses for a moment while kyrr sets up.")); }
     if step == 0: Button {
         text: AppState.filter-state == FilterState.setting-up ? @tr("Setting up…") : @tr("Set up microphone");
         primary: true;
@@ -1096,7 +1106,8 @@ component SetupPage inherits VerticalLayout {
         changed(i) => { AppState.language-changed(i); }
     }
     if step == 1: DictationCard { }
-    if step == 1: Hint { text: @tr("kyrr starts with Windows and lives in the tray, bottom right (maybe behind the little arrow). Both can be changed in the settings."); }
+    if step == 1 && AppState.key-note != "": Hint { text: AppState.key-note; }
+    if step == 1: Hint { text: (AppState.linux ? @tr("kyrr starts when you sign in and lives in the tray, if your desktop has one. Both can be changed in the settings.") : @tr("kyrr starts with Windows and lives in the tray, bottom right (maybe behind the little arrow). Both can be changed in the settings.")); }
     if step == 1: Button {
         text: @tr("Done");
         primary: AppState.dictation-state != DictationState.no-model;
