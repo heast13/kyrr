@@ -140,7 +140,8 @@ the internet for exactly these things:
   from the sherpa-onnx project's Hugging Face page), every file checked
   against a SHA256 hash built into kyrr.
 - **The update check**: once a day, one request to the GitHub API for the
-  newest version number of kyrr (`api.github.com/repos/heast13/kyrr/releases/latest`).
+  newest version number of kyrr (`api.github.com/repos/heast13/kyrr/releases/latest`),
+  whose answer also carries the short "What's new" text of that version.
   It sends nothing about you beyond what any web request carries: your IP
   address and "kyrr/<version>" as the program's name. It can be switched
   off under Settings, General ("Check for updates automatically"); then
