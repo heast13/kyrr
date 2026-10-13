@@ -188,8 +188,9 @@ fn fit(window: &Weak<MainWindow>) {
 }
 
 /// Makes the open window taller when its content grew (a hint appeared, the
-/// status went to two lines). Never shrinks it on its own, so it does not
-/// jump with every phrase; the next fit tidies up.
+/// status went to two lines). Never shrinks it on its own (except the main
+/// page, whose height is fixed to its content), so it does not jump with
+/// every phrase; the next fit tidies up.
 fn grow(window: &Weak<MainWindow>) {
     let window = window.clone();
     slint::Timer::single_shot(Duration::from_millis(10), move || {
@@ -200,7 +201,11 @@ fn grow(window: &Weak<MainWindow>) {
         }
         let height = win.size().to_logical(win.scale_factor()).height;
         let wanted = wanted_height(&w);
-        if wanted > height + 0.5 {
+        // The main page has a fixed height that follows its content both
+        // ways (Slint applies it by itself); resizing still moves the window
+        // clear of the taskbar.
+        let fixed = !w.get_setup_mode() && w.global::<AppState>().get_page() == 0;
+        if wanted > height + 0.5 || (fixed && (wanted - height).abs() > 0.5) {
             resize(&w, wanted);
         }
     });
@@ -469,6 +474,7 @@ impl App {
         if let Some(w) = self.window.upgrade() {
             let state = w.global::<AppState>();
             state.set_mic_active(false);
+            state.set_alert(0);
             state.set_level_before(0.0);
             state.set_level_after(0.0);
         }
