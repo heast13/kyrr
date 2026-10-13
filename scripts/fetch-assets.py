@@ -7,7 +7,8 @@
   CPUs without AVX2/FMA; only with --windows
 - sherpa-onnx 1.13.8 static libraries *without* text-to-speech (Apache-2.0),
   so kyrr links no GPL code (the default build bundles espeak-ng);
-  only with --windows or --linux. Build with SHERPA_ONNX_LIB_DIR pointing
+  only with --windows or --linux. On Linux they hold ONNX Runtime 1.28.2,
+  whose license and notices come with --linux. Build with SHERPA_ONNX_LIB_DIR pointing
   at assets/sherpa-onnx/lib (CI and package.py check it)
 - two short speech clips from the sherpa-onnx test assets for the dictation
   tests; only with --test
@@ -61,6 +62,16 @@ SHERPA_LIB_LINUX = (
 # sherpa-onnx-sys always links these text-to-speech libraries; without
 # text-to-speech nothing references them, so empty stand-ins do.
 SHERPA_STUBS = ["espeak-ng", "piper_phonemize", "ucd"]
+# The ONNX Runtime inside the Linux libraries, for its license and notices.
+ORT_LINUX = "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.28.2"
+ORT_NOTICES_LINUX = [
+    ("LICENSE-onnxruntime-1.28.2.txt", "LICENSE", "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"),
+    (
+        "ThirdPartyNotices-onnxruntime-1.28.2.txt",
+        "ThirdPartyNotices.txt",
+        "0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2",
+    ),
+]
 ORT_ZIP = (
     "onnxruntime-win-x64-1.27.0.zip",
     "https://github.com/microsoft/onnxruntime/releases/download/v1.27.0/onnxruntime-win-x64-1.27.0.zip",
@@ -175,6 +186,8 @@ def main() -> None:
         extract_sherpa(fetch(*SHERPA_LIB))
     if "--linux" in sys.argv[1:]:
         extract_sherpa(fetch(*SHERPA_LIB_LINUX))
+        for name, original, digest in ORT_NOTICES_LINUX:
+            fetch(name, f"{ORT_LINUX}/{original}", digest)
     if "--test" in sys.argv[1:]:
         for name, digest in TEST_AUDIO:
             fetch(name, f"{SHERPA}/{name}", digest, ASSETS / "test-audio")

@@ -1,0 +1,23 @@
+pkgbase = kyrr-bin
+	pkgdesc = Noise suppression on a virtual PipeWire microphone, and push-to-talk dictation, all on your computer
+	pkgver = 0.4.0
+	pkgrel = 1
+	url = https://github.com/heast13/kyrr
+	arch = x86_64
+	license = MIT OR Apache-2.0
+	depends = alsa-lib
+	depends = fontconfig
+	depends = gcc-libs
+	depends = glibc
+	depends = hicolor-icon-theme
+	depends = libxkbcommon-x11
+	depends = openssl
+	depends = pipewire
+	optdepends = xdg-desktop-portal: push-to-talk key and typing on GNOME and KDE
+	optdepends = wireplumber: PipeWire session manager that makes the "kyrr" microphone appear
+	provides = kyrr
+	conflicts = kyrr
+	source = https://github.com/heast13/kyrr/releases/download/v0.4.0/kyrr-0.4.0-linux-x86_64.tar.gz
+	sha256sums = 3b022ad169cb2cfe0fb2f394fe523f76786bb2a8038ae16de539d76a445c5e3f
+
+pkgname = kyrr-bin

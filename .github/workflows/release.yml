@@ -1,7 +1,8 @@
 name: release
 
-# Builds the Windows installer on every push to main (as an artifact) and
-# for tags v* as a draft release.
+# Builds the Windows installer and the Linux AppImage and tarball on every
+# push to main (as artifacts) and for tags v* as one draft release, which the
+# last job creates once both are built.
 #
 # Tags are code signed through SignPath (free for open source, certificate by
 # SignPath Foundation) once the repository variable SIGNPATH_ORGANIZATION_ID
@@ -23,8 +24,6 @@ jobs:
   installer:
     runs-on: windows-latest
     permissions:
-      # Only to create the draft release for a tag.
-      contents: write
       # SignPath reads the workflow run and downloads the artifacts.
       actions: read
     env:
@@ -114,16 +113,77 @@ jobs:
           path: |
             dist/kyrr-setup-*.exe
             dist/kyrr-setup-*.exe.sha256
-      - name: Draft release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+
+  linux:
+    # The AppImage runs on the glibc of this runner (2.39) or newer: Ubuntu
+    # 24.04, Fedora 40, Debian 13, Arch. Move to an older runner image to
+    # reach older distributions.
+    runs-on: ubuntu-24.04
+    env:
+      SHERPA_ONNX_LIB_DIR: ${{ github.workspace }}/assets/sherpa-onnx/lib
+    steps:
+      - uses: actions/checkout@v7
+      - name: System libraries
         run: |
-          $signed = if ($env:SIGN -eq 'true') { '--signed' } else { $null }
-          python scripts/release-notes.py $env:VERSION $signed --out dist/notes.md
+          sudo apt-get update
+          # libxkbcommon-x11-0 is bundled into the AppImage (loaded at runtime).
+          sudo apt-get install -y libpipewire-0.3-dev libclang-dev libasound2-dev libfontconfig1-dev \
+            libxkbcommon-dev libxkbcommon-x11-0 libssl-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-directories: target/sherpa-onnx-prebuilt
+      - name: Check the tag matches the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME does not match version $version"; exit 1; }
+      - name: Fetch assets
+        run: python3 scripts/fetch-assets.py --linux
+      - name: Build
+        run: cargo build --release --locked -p kyrr
+      - name: Package
+        run: python3 scripts/package-linux.py
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kyrr-linux
+          path: |
+            dist/kyrr-*.AppImage
+            dist/kyrr-*.AppImage.sha256
+            dist/kyrr-*.tar.gz
+            dist/kyrr-*.tar.gz.sha256
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [installer, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      # Only to create the draft release.
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+      SIGNED: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+    steps:
+      - uses: actions/checkout@v7
+      # By name: the signing steps upload unsigned copies as artifacts too.
+      - uses: actions/download-artifact@v8
+        with:
+          name: kyrr-installer
+          path: dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: kyrr-linux
+          path: dist
+      - name: Draft release
+        run: |
+          version=${TAG#v}
+          signed=; [ "$SIGNED" = true ] && signed=--signed
+          python3 scripts/release-notes.py "$version" $signed --out dist/notes.md
           # Also without the version, so releases/latest/download/kyrr-setup.exe
           # always fetches the newest one.
-          Copy-Item "dist\kyrr-setup-$env:VERSION.exe" dist\kyrr-setup.exe
-          gh release create $env:TAG --draft --title "kyrr $env:TAG" --notes-file dist/notes.md `
-            "dist\kyrr-setup-$env:VERSION.exe" "dist\kyrr-setup-$env:VERSION.exe.sha256" dist\kyrr-setup.exe
+          cp "dist/kyrr-setup-$version.exe" dist/kyrr-setup.exe
+          gh release create "$TAG" --draft --title "kyrr $TAG" --notes-file dist/notes.md \
+            "dist/kyrr-setup-$version.exe" "dist/kyrr-setup-$version.exe.sha256" dist/kyrr-setup.exe \
+            "dist/kyrr-$version-x86_64.AppImage" "dist/kyrr-$version-x86_64.AppImage.sha256" \
+            "dist/kyrr-$version-linux-x86_64.tar.gz" "dist/kyrr-$version-linux-x86_64.tar.gz.sha256"

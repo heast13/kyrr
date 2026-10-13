@@ -1,0 +1,30 @@
+# Maintainer: heast13 <https://github.com/heast13>
+#
+# Installs the release tarball built by .github/workflows/release.yml. Every
+# release changes pkgver and the checksum: run `packaging/aur/update.sh <version>`
+# after the release is published, then push this folder to the AUR.
+pkgname=kyrr-bin
+pkgver=0.4.0
+pkgrel=1
+pkgdesc='Noise suppression on a virtual PipeWire microphone, and push-to-talk dictation, all on your computer'
+arch=('x86_64')
+url='https://github.com/heast13/kyrr'
+license=('MIT OR Apache-2.0')
+depends=('alsa-lib' 'fontconfig' 'gcc-libs' 'glibc' 'hicolor-icon-theme' 'libxkbcommon-x11' 'openssl' 'pipewire')
+optdepends=('xdg-desktop-portal: push-to-talk key and typing on GNOME and KDE'
+            'wireplumber: PipeWire session manager that makes the "kyrr" microphone appear')
+provides=('kyrr')
+conflicts=('kyrr')
+source=("https://github.com/heast13/kyrr/releases/download/v$pkgver/kyrr-$pkgver-linux-x86_64.tar.gz")
+sha256sums=('3b022ad169cb2cfe0fb2f394fe523f76786bb2a8038ae16de539d76a445c5e3f')
+
+package() {
+  cd "kyrr-$pkgver-linux-x86_64"
+  # The tarball is the install tree; kyrr finds its models in ../share/kyrr.
+  cp -a usr "$pkgdir/usr"
+  # MIT and Apache-2.0 texts carry the copyright, so they ship per package;
+  # the third-party notices stay in /usr/share/doc/kyrr, where the app looks.
+  install -Dm644 -t "$pkgdir/usr/share/licenses/$pkgname" \
+    usr/share/doc/kyrr/LICENSE-MIT usr/share/doc/kyrr/LICENSE-APACHE usr/share/doc/kyrr/NOTICE
+  ln -s /usr/share/doc/kyrr/licenses "$pkgdir/usr/share/licenses/$pkgname/third-party"
+}

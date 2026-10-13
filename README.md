@@ -186,6 +186,20 @@ text-to-speech; the default ones bundle espeak-ng (GPL-3.0).
 `scripts/check-binaries.py` (run by `package.py` and CI) refuses a build
 that contains it, or a filter DLL that needs the Visual C++ runtime.
 
+On Linux (the packages libpipewire-0.3-dev, libclang-dev, libasound2-dev,
+libfontconfig1-dev, libxkbcommon-dev and libssl-dev, or their names elsewhere):
+
+```sh
+python3 scripts/fetch-assets.py --linux
+SHERPA_ONNX_LIB_DIR=$PWD/assets/sherpa-onnx/lib cargo build --release -p kyrr
+python3 scripts/package-linux.py   # dist/: AppImage and tarball, each with a .sha256
+```
+
+`package-linux.py` downloads linuxdeploy and appimagetool (pinned by SHA256)
+and needs `libxkbcommon-x11` installed to bundle it. The AppImage runs on the
+glibc of the machine that built it or newer (the release is built on
+Ubuntu 24.04: glibc 2.39).
+
 The cores (`kyrr-denoise`, `kyrr-voice`, `kyrr-dictate`) build and test on Linux too;
 `cargo run -p kyrr --example preview -- <dir>` renders the window headless.
 
