@@ -760,3 +760,9 @@ msgstr "kyrr legt ein Mikrofon namens „kyrr“ an und macht es zum Standard. A
 
 msgid "kyrr starts when you sign in and lives in the tray, if your desktop has one. Both can be changed in the settings."
 msgstr "kyrr startet beim Anmelden und wohnt im Tray, wenn dein Desktop eins hat. Beides lässt sich in den Einstellungen ändern."
+
+msgid "Dictate with your key, the text lands at your cursor. Setting up the key: see Settings."
+msgstr "Diktieren per Taste, der Text landet an deinem Cursor. Taste einrichten: siehe Einstellungen."
+
+msgid "Start dictation with a key, speak, end it: kyrr types what you said. It runs on your computer, nothing is sent anywhere."
+msgstr "Diktat per Taste starten, sprechen, beenden: kyrr tippt, was du gesagt hast. Läuft auf deinem Rechner, nichts wird verschickt."

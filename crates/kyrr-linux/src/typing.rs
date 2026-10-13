@@ -12,6 +12,7 @@
 //!    remembers the answer through a restore token,
 //! 3. X11 XTest, when there is no Wayland session.
 
+mod layout;
 mod portal;
 mod wayland;
 mod x11;
@@ -41,8 +42,9 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 /// Types `text` into the focused window, line breaks as Return. Blocks until
 /// done; the first call under GNOME or KDE also waits for the permission
-/// dialog. Returns false when no backend could type, so the caller can put
-/// the text on the clipboard instead.
+/// dialog. Returns false when no backend could type, or the user's layout
+/// lacks a character the portal would then drop, so the caller can put the
+/// text on the clipboard instead.
 pub fn type_text(text: &str) -> bool {
     let keysyms: Vec<u32> = text.chars().filter_map(keysym).collect();
     if keysyms.is_empty() {
@@ -54,7 +56,13 @@ pub fn type_text(text: &str) -> bool {
     }
     let done = match backend.as_mut() {
         Some(Backend::Wayland(keyboard)) => keyboard.type_keysyms(&keysyms),
-        Some(Backend::Portal(keyboard)) => keyboard.type_keysyms(&keysyms),
+        Some(Backend::Portal(keyboard)) => {
+            let missing = layout::keysyms().is_some_and(|layout| keysyms.iter().any(|k| !layout.contains(k)));
+            if missing {
+                return false;
+            }
+            keyboard.type_keysyms(&keysyms)
+        }
         Some(Backend::X11(keyboard)) => keyboard.type_keysyms(&keysyms),
         None => false,
     };

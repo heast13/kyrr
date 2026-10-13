@@ -105,13 +105,13 @@ fn key_note(language: Language) -> String {
         KeyNote::Desktop => {
             "Your desktop decides the key: it asks once, and its keyboard settings can change it.".into()
         }
-        KeyNote::Hyprland(line) if german => format!("Für Hyprland gehört diese Zeile in die hyprland.conf:\n{line}"),
-        KeyNote::Hyprland(line) => format!("For Hyprland, add this line to hyprland.conf:\n{line}"),
-        KeyNote::HyprlandCommands(press, release) if german => format!(
-            "Hyprlands Tastenkürzel-Portal antwortet nicht. Mit diesen zwei Zeilen in der hyprland.conf diktierst du wie gewohnt mit gehaltener Taste:\n{press}\n{release}"
+        KeyNote::Hyprland { file, lines } if german => format!("Für Hyprland gehört das in die {file}:\n{lines}"),
+        KeyNote::Hyprland { file, lines } => format!("For Hyprland, add this to {file}:\n{lines}"),
+        KeyNote::HyprlandCommands { file, lines } if german => format!(
+            "Hyprlands Tastenkürzel-Portal antwortet nicht. Mit diesen Zeilen in der {file} diktierst du wie gewohnt mit gehaltener Taste:\n{lines}"
         ),
-        KeyNote::HyprlandCommands(press, release) => format!(
-            "Hyprland's shortcut portal does not answer. Add these two lines to hyprland.conf and holding the key dictates as usual:\n{press}\n{release}"
+        KeyNote::HyprlandCommands { file, lines } => format!(
+            "Hyprland's shortcut portal does not answer. Add these lines to {file} and holding the key dictates as usual:\n{lines}"
         ),
         KeyNote::Command(command) if german => format!(
             "Dieser Desktop reicht keine Taste an kyrr weiter. Leg in seinen Tastatur-Einstellungen diesen Befehl auf eine Taste, jeder Druck startet oder beendet das Diktat:\n{command}"
@@ -191,9 +191,20 @@ fn wanted_height(w: &MainWindow) -> f32 {
 fn resize(w: &MainWindow, height: f32) {
     let win = w.window();
     let width = w.get_page_width();
-    #[cfg(target_os = "linux")]
-    w.set_fit_height(height);
     win.set_size(LogicalSize::new(width, height));
+    #[cfg(target_os = "linux")]
+    {
+        w.set_fit_height(height);
+        // The new minimum reaches the compositor with the next frame; until
+        // then a smaller size is held at the old minimum (GNOME), so ask
+        // once more after it.
+        let weak = w.as_weak();
+        slint::Timer::single_shot(Duration::from_millis(50), move || {
+            if let Some(w) = weak.upgrade() {
+                w.window().set_size(LogicalSize::new(width, height));
+            }
+        });
+    }
     let Some((left, top, right, bottom)) = screen(w) else {
         return;
     };
@@ -321,6 +332,11 @@ const MODEL_SWITCH_TIMEOUT: Duration = Duration::from_secs(20);
 /// small. Showing alone left it behind the current window at times.
 fn show(window: &MainWindow) {
     if !window.window().is_visible() {
+        // The width first: until the window has one, text is measured as if
+        // it wrapped after every word, and the content seems far taller.
+        // Wayland compositors may keep the first size they saw.
+        let width = window.get_page_width();
+        window.window().set_size(LogicalSize::new(width, FALLBACK_HEIGHT));
         resize(window, wanted_height(window));
     }
     let _ = window.show();
@@ -1059,6 +1075,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_autostart(platform::autostart_enabled());
     state.set_update_auto(app.config.borrow().update_check);
     state.set_linux(cfg!(target_os = "linux"));
+    window.set_tiled(platform::tiled());
     state.set_tray(platform::has_tray());
     state.set_advanced(app.config.borrow().advanced_settings);
     app.apply_key();
@@ -1424,10 +1441,12 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     }
     if !setup_done || !background {
         show(&window);
-    } else if !platform::has_tray() {
+    } else if !platform::has_tray() && cfg!(windows) {
         // Started at login without a tray to sit in (or before the panel
         // that hosts it): give the panel a moment, then show up minimized
-        // rather than run where nobody can reach kyrr.
+        // rather than run where nobody can reach kyrr. Not on Linux: not
+        // every desktop can minimize (Hyprland would show the window), and
+        // starting kyrr from the app menu brings up the running one.
         let weak = window.as_weak();
         slint::Timer::single_shot(Duration::from_secs(10), move || {
             if let Some(w) = weak.upgrade() {

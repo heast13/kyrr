@@ -54,11 +54,11 @@ pub enum KeyNote {
     None,
     /// The desktop owns the key (its shortcut portal) and can change it.
     Desktop,
-    /// Hyprland binds the key: this line belongs in hyprland.conf.
-    Hyprland(String),
-    /// Hyprland without the shortcut portal: the first command on the key's
-    /// press, the second on its release.
-    HyprlandCommands(String, String),
+    /// Hyprland binds the key: these lines belong in this config file.
+    Hyprland { file: String, lines: String },
+    /// Hyprland without the shortcut portal: lines that run kyrr on the
+    /// key's press and release, for this config file.
+    HyprlandCommands { file: String, lines: String },
     /// Nothing catches keys: bind this command to a key.
     Command(String),
 }
@@ -222,6 +222,10 @@ mod imp {
 
     pub fn key_note() -> KeyNote {
         KeyNote::None
+    }
+
+    pub fn tiled() -> bool {
+        false
     }
 
     /// The live monitor the audio filter shares; `None` until it ran once.
@@ -509,7 +513,66 @@ mod imp {
     }
 
     pub fn start_hotkey() -> Option<std::sync::mpsc::Receiver<KeyEvent>> {
+        integrate_appimage();
         kyrr_linux::hotkey::start().ok()
+    }
+
+    /// Gives an AppImage the launcher a package would install. Without it the
+    /// desktop portal does not know kyrr's app id and refuses the shortcut;
+    /// it also puts kyrr in the app menu. Rewritten when the AppImage moves,
+    /// and hidden by the menu once the file is gone (TryExec).
+    fn integrate_appimage() {
+        if flatpak() {
+            return;
+        }
+        let (Some(appimage), Some(appdir)) = (std::env::var_os("APPIMAGE"), std::env::var_os("APPDIR")) else {
+            return;
+        };
+        let appimage = appimage.to_string_lossy().into_owned();
+        let usr = PathBuf::from(appdir).join("usr/share");
+        let data = crate::config::data_home();
+        let id = "io.github.heast13.kyrr";
+        let Ok(bundled) = std::fs::read_to_string(usr.join(format!("applications/{id}.desktop"))) else {
+            return;
+        };
+        let mut entry = String::with_capacity(bundled.len() + 2 * appimage.len());
+        for line in bundled.lines() {
+            if line.starts_with("Exec=") {
+                entry.push_str(&format!("TryExec={}\n", appimage.replace('\\', "\\\\")));
+                entry.push_str(&format!("Exec=\"{}\"\n", exec_quoted(&appimage)));
+            } else {
+                entry.push_str(line);
+                entry.push('\n');
+            }
+        }
+        for icon in [
+            "256x256/apps/io.github.heast13.kyrr.png",
+            "scalable/apps/io.github.heast13.kyrr.svg",
+        ] {
+            write_if_changed(
+                &data.join("icons/hicolor").join(icon),
+                std::fs::read(usr.join("icons/hicolor").join(icon)).ok(),
+            );
+        }
+        write_if_changed(
+            &data.join(format!("applications/{id}.desktop")),
+            Some(entry.into_bytes()),
+        );
+    }
+
+    fn write_if_changed(path: &std::path::Path, contents: Option<Vec<u8>>) {
+        let Some(contents) = contents else {
+            return;
+        };
+        if std::fs::read(path).is_ok_and(|old| old == contents) {
+            return;
+        }
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        if let Err(e) = std::fs::write(path, contents) {
+            eprintln!("kyrr: writing {}: {e}", path.display());
+        }
     }
 
     pub fn set_hotkey_active(active: bool) {
@@ -520,27 +583,74 @@ mod imp {
         use kyrr_linux::hotkey::{self, Backend};
         let hyprland = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some()
             || std::env::var("XDG_CURRENT_DESKTOP").is_ok_and(|d| d.to_ascii_lowercase().contains("hyprland"));
-        match hotkey::backend() {
-            Backend::X11 => KeyNote::None,
-            Backend::Portal if hyprland => KeyNote::Hyprland(format!(
-                "bind = , {}, global, io.github.heast13.kyrr:dictate",
-                hotkey::key_name()
-            )),
-            Backend::Portal => KeyNote::Desktop,
-            Backend::None if hyprland => KeyNote::HyprlandCommands(
+        let backend = hotkey::backend();
+        if !hyprland || backend == Backend::X11 {
+            return match backend {
+                Backend::X11 => KeyNote::None,
+                Backend::Portal => KeyNote::Desktop,
+                Backend::None => KeyNote::Command(dictate_command("--dictate")),
+            };
+        }
+        let key = hotkey::key_name();
+        let start = dictate_command("--dictate-start");
+        let stop = dictate_command("--dictate-stop");
+        let global = "io.github.heast13.kyrr:dictate";
+        // Hyprland reads hyprland.lua instead of hyprland.conf when it exists;
+        // Omarchy keeps its key bindings in a file of their own.
+        let hypr = crate::config::config_dir().with_file_name("hypr");
+        let lua = ["bindings.lua", "hyprland.lua"]
+            .into_iter()
+            .find(|f| hypr.join(f).is_file());
+        let (file, lines) = match (lua, backend) {
+            // Omarchy puts its own tools on some keys; unbinding frees the key.
+            (Some(f), Backend::Portal) => (
+                f,
+                format!("hl.unbind(\"{key}\")\nhl.bind(\"{key}\", hl.dsp.global(\"{global}\"))"),
+            ),
+            (Some(f), _) => (
+                f,
                 format!(
-                    "bind = , {}, exec, {}",
-                    hotkey::key_name(),
-                    dictate_command("--dictate-start")
-                ),
-                format!(
-                    "bindr = , {}, exec, {}",
-                    hotkey::key_name(),
-                    dictate_command("--dictate-stop")
+                    "hl.unbind(\"{key}\")\nhl.bind(\"{key}\", hl.dsp.exec_cmd(\"{}\"))\nhl.bind(\"{key}\", hl.dsp.exec_cmd(\"{}\"), {{ release = true }})",
+                    lua_quoted(&start),
+                    lua_quoted(&stop)
                 ),
             ),
-            Backend::None => KeyNote::Command(dictate_command("--dictate")),
+            (None, Backend::Portal) => ("hyprland.conf", format!("bind = , {key}, global, {global}")),
+            (None, _) => ("hyprland.conf", format!("bind = , {key}, exec, {start}\nbindr = , {key}, exec, {stop}")),
+        };
+        let file = match lua {
+            Some(f) => {
+                let path = hypr.join(f);
+                let home = std::env::var_os("HOME").map(PathBuf::from);
+                match home.as_deref().and_then(|h| path.strip_prefix(h).ok()) {
+                    Some(rest) => format!("~/{}", rest.display()),
+                    None => path.display().to_string(),
+                }
+            }
+            None => file.to_string(),
+        };
+        match backend {
+            Backend::Portal => KeyNote::Hyprland { file, lines },
+            _ => KeyNote::HyprlandCommands { file, lines },
         }
+    }
+
+    /// `s` for inside a double-quoted Lua string.
+    fn lua_quoted(s: &str) -> String {
+        s.replace('\\', "\\\\").replace('"', "\\\"")
+    }
+
+    /// Whether a tiling compositor places the window.
+    pub fn tiled() -> bool {
+        let desktop = std::env::var("XDG_CURRENT_DESKTOP")
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        ["HYPRLAND_INSTANCE_SIGNATURE", "SWAYSOCK", "NIRI_SOCKET"]
+            .iter()
+            .any(|v| std::env::var_os(v).is_some())
+            || ["hyprland", "sway", "niri", "river"]
+                .iter()
+                .any(|d| desktop.contains(d))
     }
 
     /// How this kyrr is started with `flag`: through Flatpak, the

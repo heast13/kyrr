@@ -321,13 +321,20 @@ component Meter inherits Rectangle {
 
 // A small wave in the logo's colour next to the status line: it sways
 // slowly while kyrr works, barely breathes while it waits, and lies still
-// when everything is off (then nothing is redrawn at all).
+// when everything is off (then nothing is redrawn at all). It steps on a
+// timer instead of every frame: a frame-by-frame wave kept a whole core of
+// an older laptop busy redrawing the window.
 component Pulse inherits Rectangle {
     in property <bool> working;
     in property <bool> waiting;
     property <bool> moving: root.working || root.waiting;
-    // Milliseconds since start, only while moving.
-    property <float> t: root.moving ? animation-tick() / 1ms : 0;
+    // Milliseconds of movement so far.
+    property <float> t: 0;
+    Timer {
+        interval: root.working ? 50ms : 200ms;
+        running: root.moving;
+        triggered => { root.t += self.interval / 1ms; }
+    }
     // Seconds per sway; slow on purpose, this is kyrr after all.
     property <float> period: root.working ? 2200 : 4500;
     property <float> depth: root.working ? 1 : 0.3;
@@ -541,6 +548,7 @@ component DictationCard inherits Card {
             : AppState.dictation-state == DictationState.no-model ? @tr("One download first ({}), then it is yours.", AppState.download-size)
             : AppState.dictation-state == DictationState.downloading ? @tr("Downloading the speech model… {}%", round(AppState.download-progress * 100))
             : AppState.dictation-state == DictationState.loading ? @tr("Loading the speech model…")
+            : AppState.dictation-state == DictationState.ready && AppState.key-note != "" ? @tr("Dictate with your key, the text lands at your cursor. Setting up the key: see Settings.")
             : AppState.dictation-state == DictationState.ready ? (AppState.key-toggle ? @tr("Tap {}, talk, tap again. The text lands at your cursor.", AppState.key-name) : @tr("Hold {}, talk, let go. The text lands at your cursor.", AppState.key-name))
             : AppState.dictation-state == DictationState.recording ? @tr("Listening…")
             : AppState.dictation-state == DictationState.transcribing ? @tr("Writing…")
@@ -1101,7 +1109,10 @@ component SetupPage inherits VerticalLayout {
 
     if step == 1: Hint { text: @tr("Step 2 of 2"); }
     if step == 1: Heading { text: @tr("Talk instead of typing"); font-size: 20px; }
-    if step == 1: Caption { text: @tr("Hold {} anywhere, speak, release: kyrr types what you said. It runs on your computer, nothing is sent anywhere.", AppState.key-name); }
+    if step == 1: Caption {
+        text: AppState.key-note == "" ? @tr("Hold {} anywhere, speak, release: kyrr types what you said. It runs on your computer, nothing is sent anywhere.", AppState.key-name)
+            : @tr("Start dictation with a key, speak, end it: kyrr types what you said. It runs on your computer, nothing is sent anywhere.");
+    }
     if step == 1: Caption { text: @tr("Language"); }
     if step == 1: Segmented {
         options: ["Deutsch", "English"];
@@ -1169,16 +1180,19 @@ export component MainWindow inherits Window {
     out property <length> page-width: settings-page ? 760px : 380px;
     title: "kyrr";
     icon: @image-url("icons/kyrr-256.png");
+    // A tiling compositor (Hyprland, Sway, niri) sizes the window to its
+    // tile; a fixed size would make it float like a dialog instead.
+    in property <bool> tiled;
     preferred-width: page-width;
-    min-width: page-width;
-    max-width: page-width;
+    min-width: tiled ? 0px : page-width;
+    max-width: tiled ? 16384px : page-width;
     // The main page has one height, fixed: its content's. The settings page
     // can be dragged taller or shorter and scrolls.
-    // Other pages: the height the app picked (Linux only). Tiling and
-    // floating Wayland compositors honour a minimum size, not a resize.
+    // Other pages: the height the app picked (Linux only). Floating Wayland
+    // compositors honour a minimum size, not a resize.
     in property <length> fit-height: 0px;
-    min-height: main-page ? layout.preferred-height : root.fit-height;
-    max-height: main-page ? layout.preferred-height : 16384px;
+    min-height: tiled ? 0px : main-page ? layout.preferred-height : root.fit-height;
+    max-height: main-page && !tiled ? layout.preferred-height : 16384px;
 
     // A new page starts at the top, not where the last one was scrolled to.
     public function reset-scroll() {

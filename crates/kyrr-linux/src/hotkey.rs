@@ -176,8 +176,15 @@ fn start_portal() -> Result<(), String> {
 async fn portal(ready: mpsc::Sender<Result<(), String>>) {
     // Outside Flatpak the portal cannot tell which app this is; it matters
     // for the shortcut's name in the compositor. Older portals lack the call.
-    if let Ok(id) = APP_ID.try_into() {
-        if let Err(e) = ashpd::register_host_app(id).await {
+    // The portal finds the app by its launcher; one an AppImage has just
+    // written may take the portal a moment to notice.
+    if let Ok(id) = ashpd::AppID::try_from(APP_ID) {
+        let mut registered = ashpd::register_host_app(id.clone()).await;
+        if registered.as_ref().is_err_and(|e| e.to_string().contains("not found")) {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            registered = ashpd::register_host_app(id).await;
+        }
+        if let Err(e) = registered {
             eprintln!("kyrr: registering with the desktop portal: {e}");
         }
     }

@@ -53,11 +53,19 @@ impl Default for Config {
 }
 
 impl Config {
+    /// The saved settings. A file that does not read is moved aside as
+    /// config.json.bak, so the next save does not overwrite what the user
+    /// might still want back.
     pub fn load() -> Config {
-        std::fs::read_to_string(config_file())
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
+        let path = config_file();
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            return Config::default();
+        };
+        serde_json::from_str(&text).unwrap_or_else(|e| {
+            eprintln!("kyrr: {} does not read ({e}); kept as config.json.bak", path.display());
+            let _ = std::fs::rename(&path, path.with_extension("json.bak"));
+            Config::default()
+        })
     }
 
     pub fn save(&self) {
@@ -118,6 +126,12 @@ pub fn config_dir() -> PathBuf {
 
 fn config_file() -> PathBuf {
     config_dir().join("config.json")
+}
+
+/// Where the desktop looks for a user's own launchers and icons.
+#[cfg(target_os = "linux")]
+pub fn data_home() -> PathBuf {
+    base_dir("XDG_DATA_HOME", ".local/share")
 }
 
 /// Where the dictation models are downloaded to.
