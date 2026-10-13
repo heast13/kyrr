@@ -56,6 +56,9 @@ pub enum KeyNote {
     Desktop,
     /// Hyprland binds the key: this line belongs in hyprland.conf.
     Hyprland(String),
+    /// Hyprland without the shortcut portal: the first command on the key's
+    /// press, the second on its release.
+    HyprlandCommands(String, String),
     /// Nothing catches keys: bind this command to a key.
     Command(String),
 }
@@ -203,8 +206,9 @@ mod imp {
 
     /// Left, top, right and bottom of the free screen at a point, in
     /// physical pixels.
-    pub fn work_area(x: i32, y: i32) -> Option<(i32, i32, i32, i32)> {
-        kyrr_windows::screen::work_area(x, y)
+    pub fn work_area(window: &slint::Window) -> Option<(i32, i32, i32, i32)> {
+        let pos = window.position();
+        kyrr_windows::screen::work_area(pos.x, pos.y)
     }
 
     pub use kyrr_windows::hotkey::KeyEvent;
@@ -291,11 +295,21 @@ mod imp {
             crate::config::config_dir().join("filter.json")
         }
 
+        /// A file that does not read is kept as filter.json.bak and kyrr
+        /// starts afresh: the setup asks for the microphone again.
         fn load() -> Saved {
-            std::fs::read(Saved::file())
-                .ok()
-                .and_then(|b| serde_json::from_slice(&b).ok())
-                .unwrap_or_default()
+            let path = Saved::file();
+            let Ok(bytes) = std::fs::read(&path) else {
+                return Saved::default();
+            };
+            match serde_json::from_slice(&bytes) {
+                Ok(saved) => saved,
+                Err(e) => {
+                    eprintln!("kyrr: {} does not read ({e}); kept as filter.json.bak", path.display());
+                    let _ = std::fs::rename(&path, path.with_extension("json.bak"));
+                    Saved::default()
+                }
+            }
         }
 
         fn save(&self) {
@@ -368,7 +382,10 @@ mod imp {
         };
         let filter = match Engine::start(Some(microphone), &settings) {
             Ok(engine) => Filter::On(engine),
-            Err(e) => Filter::Failed(e),
+            Err(e) => {
+                eprintln!("kyrr: the noise filter did not start: {e}");
+                Filter::Failed(e)
+            }
         };
         state().filter = filter;
     }
@@ -510,22 +527,34 @@ mod imp {
                 hotkey::key_name()
             )),
             Backend::Portal => KeyNote::Desktop,
-            Backend::None => KeyNote::Command(dictate_command()),
+            Backend::None if hyprland => KeyNote::HyprlandCommands(
+                format!(
+                    "bind = , {}, exec, {}",
+                    hotkey::key_name(),
+                    dictate_command("--dictate-start")
+                ),
+                format!(
+                    "bindr = , {}, exec, {}",
+                    hotkey::key_name(),
+                    dictate_command("--dictate-stop")
+                ),
+            ),
+            Backend::None => KeyNote::Command(dictate_command("--dictate")),
         }
     }
 
-    /// How this kyrr is started with `--dictate`: through Flatpak, the
+    /// How this kyrr is started with `flag`: through Flatpak, the
     /// AppImage's path, or the program's own.
-    fn dictate_command() -> String {
+    fn dictate_command(flag: &str) -> String {
         if let Ok(id) = std::env::var("FLATPAK_ID") {
-            return format!("flatpak run {id} --dictate");
+            return format!("flatpak run {id} {flag}");
         }
         let program = std::env::var_os("APPIMAGE")
             .map(PathBuf::from)
             .or_else(|| std::env::current_exe().ok())
             .filter(|p| !p.starts_with("/usr/bin"))
             .map_or_else(|| "kyrr".to_string(), |p| p.display().to_string());
-        format!("{program} --dictate")
+        format!("{program} {flag}")
     }
 
     /// Shows the license notices that ship with kyrr.
@@ -630,8 +659,17 @@ mod imp {
         let _ = std::fs::write(file, entry);
     }
 
-    pub fn work_area(_: i32, _: i32) -> Option<(i32, i32, i32, i32)> {
-        None
+    /// The screen the window is on (panels included; a Wayland app cannot
+    /// learn where they are), once the window exists.
+    pub fn work_area(window: &slint::Window) -> Option<(i32, i32, i32, i32)> {
+        use slint::winit_030::WinitWindowAccessor;
+        window
+            .with_winit_window(|w| {
+                let monitor = w.current_monitor()?;
+                let (pos, size) = (monitor.position(), monitor.size());
+                Some((pos.x, pos.y, pos.x + size.width as i32, pos.y + size.height as i32))
+            })
+            .flatten()
     }
 
     pub fn bring_to_front(_: &slint::Window) {}

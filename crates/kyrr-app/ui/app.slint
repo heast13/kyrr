@@ -169,6 +169,8 @@ export component Tray inherits SystemTrayIcon {
     tooltip: "kyrr · " + (root.filter-enabled ? @tr("noise filter on") : @tr("noise filter off"))
         + (root.dictation-ready ? " · " + @tr("{} ready", root.key-name) : "")
         + (root.update-version != "" ? " · " + @tr("update available") : "");
+    // Some panels list tray icons by title.
+    title: "kyrr";
     clicked => { root.open(); }
     Menu {
         MenuItem {
@@ -1172,7 +1174,10 @@ export component MainWindow inherits Window {
     max-width: page-width;
     // The main page has one height, fixed: its content's. The settings page
     // can be dragged taller or shorter and scrolls.
-    min-height: main-page ? layout.preferred-height : 0px;
+    // Other pages: the height the app picked (Linux only). Tiling and
+    // floating Wayland compositors honour a minimum size, not a resize.
+    in property <length> fit-height: 0px;
+    min-height: main-page ? layout.preferred-height : root.fit-height;
     max-height: main-page ? layout.preferred-height : 16384px;
 
     // A new page starts at the top, not where the last one was scrolled to.

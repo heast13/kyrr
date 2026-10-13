@@ -188,6 +188,7 @@ impl Engine {
                 Some(filter)
             }
             Err(e) => {
+                eprintln!("kyrr: noise model did not load, the microphone passes through: {e}");
                 *lock(&shared.engine) = format!("passthrough: {e}");
                 None
             }

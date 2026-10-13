@@ -54,7 +54,13 @@ fn main() {
         kyrr_linux::instance::Instance::Other => return,
     };
 
-    let background = args.iter().any(|a| a == "--background");
+    // A dictation key pressed while kyrr is not running starts it quietly.
+    let background = args.iter().any(|a| {
+        matches!(
+            a.as_str(),
+            "--background" | "--dictate" | "--dictate-start" | "--dictate-stop"
+        )
+    });
     if let Err(e) = run(background, show_requests) {
         eprintln!("kyrr: {e}");
     }
@@ -101,6 +107,12 @@ fn key_note(language: Language) -> String {
         }
         KeyNote::Hyprland(line) if german => format!("Für Hyprland gehört diese Zeile in die hyprland.conf:\n{line}"),
         KeyNote::Hyprland(line) => format!("For Hyprland, add this line to hyprland.conf:\n{line}"),
+        KeyNote::HyprlandCommands(press, release) if german => format!(
+            "Hyprlands Tastenkürzel-Portal antwortet nicht. Mit diesen zwei Zeilen in der hyprland.conf diktierst du wie gewohnt mit gehaltener Taste:\n{press}\n{release}"
+        ),
+        KeyNote::HyprlandCommands(press, release) => format!(
+            "Hyprland's shortcut portal does not answer. Add these two lines to hyprland.conf and holding the key dictates as usual:\n{press}\n{release}"
+        ),
         KeyNote::Command(command) if german => format!(
             "Dieser Desktop reicht keine Taste an kyrr weiter. Leg in seinen Tastatur-Einstellungen diesen Befehl auf eine Taste, jeder Druck startet oder beendet das Diktat:\n{command}"
         ),
@@ -163,8 +175,7 @@ const FRAME_SIDES: f32 = 16.0;
 /// Left, top, right and bottom of the free screen the window is on, in
 /// physical pixels.
 fn screen(w: &MainWindow) -> Option<(i32, i32, i32, i32)> {
-    let pos = w.window().position();
-    platform::work_area(pos.x, pos.y)
+    platform::work_area(w.window())
 }
 
 /// The height the content wants, up to what the screen has room for.
@@ -180,6 +191,8 @@ fn wanted_height(w: &MainWindow) -> f32 {
 fn resize(w: &MainWindow, height: f32) {
     let win = w.window();
     let width = w.get_page_width();
+    #[cfg(target_os = "linux")]
+    w.set_fit_height(height);
     win.set_size(LogicalSize::new(width, height));
     let Some((left, top, right, bottom)) = screen(w) else {
         return;

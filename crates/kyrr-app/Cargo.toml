@@ -21,6 +21,8 @@ ureq = { version = "3", default-features = false, features = ["native-tls"] }
 sha2 = "0.11"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+# The screen's size, for the window's height.
+slint = { version = "1.18", features = ["unstable-winit-030"] }
 # On Linux the filter runs inside the app, on a virtual microphone.
 kyrr-linux = { path = "../kyrr-linux" }
 kyrr-denoise = { path = "../kyrr-denoise" }

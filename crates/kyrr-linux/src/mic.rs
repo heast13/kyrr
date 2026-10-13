@@ -17,6 +17,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
@@ -216,6 +217,17 @@ struct Streams {
     source: StreamRc,
     capture: StreamRc,
     microphone: String,
+    /// The links from "kyrr" to the apps recording from it.
+    links: std::collections::HashSet<u32>,
+    /// Whether any app records from "kyrr"; read by the real-time thread.
+    in_use: Arc<AtomicBool>,
+}
+
+impl Streams {
+    fn set_links(&mut self, change: impl FnOnce(&mut std::collections::HashSet<u32>)) {
+        change(&mut self.links);
+        self.in_use.store(!self.links.is_empty(), Ordering::Relaxed);
+    }
 }
 
 impl Drop for Streams {
@@ -281,6 +293,17 @@ fn run(
                         connect_if_needed(&on_global);
                     }
                 }
+                pw::types::ObjectType::Link => {
+                    let output = props.get("link.output.node").and_then(|n| n.parse::<u32>().ok());
+                    let mut state = on_global.borrow_mut();
+                    if let Some(streams) = state.streams.as_mut() {
+                        if output.is_some() && output == Some(streams.source.node_id()) {
+                            streams.set_links(|links| {
+                                links.insert(global.id);
+                            });
+                        }
+                    }
+                }
                 pw::types::ObjectType::Metadata => {
                     if props.get("metadata.name") != Some("default") {
                         return;
@@ -312,8 +335,13 @@ fn run(
             }
         })
         .global_remove(move |id| {
-            let state = on_remove.borrow();
+            let mut state = on_remove.borrow_mut();
             lock(&state.shared).microphones.retain(|(i, _)| *i != id);
+            if let Some(streams) = state.streams.as_mut() {
+                streams.set_links(|links| {
+                    links.remove(&id);
+                });
+            }
         })
         .register();
 
@@ -521,10 +549,23 @@ fn create_streams(core: &pw::core::CoreRc, microphone: &str, process: Arc<Mutex<
     // A raw pointer, not the Rc: this runs on the real-time thread. The
     // source outlives the listener (see `Streams`).
     let source_ptr = source.as_raw_ptr();
+    // The capture side also runs while only others use the microphone (it
+    // is passive, not idle). The filter works only while an app records
+    // from "kyrr" (it is linked); otherwise the microphone's buffers go
+    // straight back.
+    let in_use = Arc::new(AtomicBool::new(false));
+    let linked = in_use.clone();
     let capture_listener = capture
         .add_local_listener::<()>()
         .process(move |_, _| unsafe {
-            pw_sys::pw_stream_trigger_process(source_ptr);
+            if linked.load(Ordering::Relaxed) {
+                pw_sys::pw_stream_trigger_process(source_ptr);
+            } else {
+                let buffer = newest_buffer(capture_ptr);
+                if !buffer.is_null() {
+                    pw_sys::pw_stream_queue_buffer(capture_ptr, buffer);
+                }
+            }
         })
         .register()
         .map_err(|e| e.to_string())?;
@@ -559,6 +600,8 @@ fn create_streams(core: &pw::core::CoreRc, microphone: &str, process: Arc<Mutex<
         source,
         capture,
         microphone: microphone.to_string(),
+        links: Default::default(),
+        in_use,
     })
 }
 

@@ -19,6 +19,8 @@ pub enum Instance {
 
 const SHOW: &[u8] = b"show";
 const DICTATE: &[u8] = b"dictate";
+const DICTATE_START: &[u8] = b"dictate-start";
+const DICTATE_STOP: &[u8] = b"dictate-stop";
 
 fn socket_path() -> PathBuf {
     let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from) else {
@@ -35,11 +37,17 @@ fn socket_path() -> PathBuf {
 }
 
 /// `args` are the program's arguments; `--dictate` asks the running kyrr to
-/// toggle dictation.
+/// toggle dictation, `--dictate-start` and `--dictate-stop` to start and end
+/// it (for a key's press and release).
 pub fn claim(args: &[String]) -> Instance {
     let path = socket_path();
-    let request = if args.iter().any(|a| a == "--dictate") {
+    let has = |flag: &str| args.iter().any(|a| a == flag);
+    let request = if has("--dictate") {
         DICTATE
+    } else if has("--dictate-start") {
+        DICTATE_START
+    } else if has("--dictate-stop") {
+        DICTATE_STOP
     } else {
         SHOW
     };
@@ -64,10 +72,15 @@ fn serve(listener: UnixListener, show: mpsc::Sender<()>) {
         let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
         let mut request = Vec::new();
         let _ = stream.take(16).read_to_end(&mut request);
-        if request == DICTATE {
-            crate::hotkey::toggle();
-        } else if show.send(()).is_err() {
-            break;
+        match request.as_slice() {
+            DICTATE => crate::hotkey::toggle(),
+            DICTATE_START => crate::hotkey::remote_press(),
+            DICTATE_STOP => crate::hotkey::remote_release(),
+            _ => {
+                if show.send(()).is_err() {
+                    break;
+                }
+            }
         }
     }
 }

@@ -66,6 +66,8 @@ const KEYS: [(u32, u32, &str); 4] = [
 static KEY: AtomicUsize = AtomicUsize::new(1);
 static ACTIVE: AtomicBool = AtomicBool::new(false);
 static HELD: AtomicBool = AtomicBool::new(false);
+/// The portal session came up but binding the shortcut failed.
+static UNBOUND: AtomicBool = AtomicBool::new(false);
 static SENDER: OnceLock<mpsc::Sender<KeyEvent>> = OnceLock::new();
 static BACKEND: OnceLock<Backend> = OnceLock::new();
 static X11: OnceLock<X11> = OnceLock::new();
@@ -97,7 +99,11 @@ pub fn key_name() -> &'static str {
 
 /// Which way the key is caught; [`Backend::None`] until [`start`] succeeds.
 pub fn backend() -> Backend {
-    BACKEND.get().copied().unwrap_or(Backend::None)
+    match BACKEND.get().copied() {
+        Some(Backend::Portal) if UNBOUND.load(Ordering::Relaxed) => Backend::None,
+        Some(backend) => backend,
+        None => Backend::None,
+    }
 }
 
 fn send(event: KeyEvent) {
@@ -145,6 +151,17 @@ pub fn toggle() {
     }
 }
 
+/// `kyrr --dictate-start` and `--dictate-stop`, bound to a key's press and
+/// release where the desktop can (Hyprland's `bind` and `bindr`): hold to
+/// talk without the portal.
+pub fn remote_press() {
+    press();
+}
+
+pub fn remote_release() {
+    release();
+}
+
 /// Returns once the session exists; whether the shortcut gets bound is up to
 /// the user, who may be asked and may take a while.
 fn start_portal() -> Result<(), String> {
@@ -160,7 +177,9 @@ async fn portal(ready: mpsc::Sender<Result<(), String>>) {
     // Outside Flatpak the portal cannot tell which app this is; it matters
     // for the shortcut's name in the compositor. Older portals lack the call.
     if let Ok(id) = APP_ID.try_into() {
-        let _ = ashpd::register_host_app(id).await;
+        if let Err(e) = ashpd::register_host_app(id).await {
+            eprintln!("kyrr: registering with the desktop portal: {e}");
+        }
     }
     let setup = async {
         let shortcuts = GlobalShortcuts::new().await?;
@@ -173,6 +192,7 @@ async fn portal(ready: mpsc::Sender<Result<(), String>>) {
     let (shortcuts, session, pressed, released) = match setup.await {
         Ok(setup) => setup,
         Err(e) => {
+            eprintln!("kyrr: shortcut portal: {e}");
             let _ = ready.send(Err(e.to_string()));
             return;
         }
@@ -181,11 +201,15 @@ async fn portal(ready: mpsc::Sender<Result<(), String>>) {
 
     let trigger = KEYS[KEY.load(Ordering::Relaxed)].2;
     let shortcut = NewShortcut::new(SHORTCUT, "Dictate (hold to talk)").preferred_trigger(trigger);
-    if shortcuts
-        .bind_shortcuts(&session, &[shortcut], None, Default::default())
-        .await
-        .is_err()
-    {
+    let bound = async {
+        shortcuts
+            .bind_shortcuts(&session, &[shortcut], None, Default::default())
+            .await?
+            .response()
+    };
+    if let Err(e) = bound.await {
+        eprintln!("kyrr: binding the dictation shortcut: {e}");
+        UNBOUND.store(true, Ordering::Relaxed);
         return;
     }
     let pressed = pressed.filter_map(|a| (a.shortcut_id() == SHORTCUT).then_some(KeyEvent::Pressed));
