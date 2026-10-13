@@ -40,6 +40,9 @@ export global AppState {
     in property <string> probe-error;
     // The mic plays live on the headphones.
     in property <bool> listening;
+    // The red note at the bottom of the main page, one at a time:
+    // 0 none, 1 mic too quiet, 2 mic too loud, 3 still listening.
+    in property <int> alert;
 
     // Voice: sound, S sounds and volume, shaped in the audio filter
     in-out property <bool> voice-enabled: true;
@@ -716,6 +719,44 @@ component UpdateBanner inherits Rectangle {
 }
 
 // Sends the window away; everything else keeps running in the tray.
+// A button in warning red, for something that is running and should not be
+// forgotten.
+component AlertButton inherits Rectangle {
+    in property <string> text;
+    callback clicked();
+    min-height: 32px;
+    min-width: label.preferred-width + 24px;
+    border-radius: 4px;
+    background: touch.pressed ? #b4282c : touch.has-hover ? #cf3338 : #e5484d;
+    label := Text {
+        text: root.text;
+        color: white;
+        font-size: 13px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea { clicked => { root.clicked(); } }
+}
+
+// The small red note at the bottom of the main page. Always one line high,
+// empty or not, so the window keeps its height however many notes there are.
+component AlertLine inherits Text {
+    pure function note() -> string {
+        if (AppState.alert == 1) { return @tr("Mic very quiet. Turn it up in Windows."); }
+        if (AppState.alert == 2) { return @tr("Mic too loud. Turn it down in Windows."); }
+        if (AppState.alert == 3) { return @tr("Still listening to you. Headphones only!"); }
+        return "";
+    }
+    text: root.note();
+    color: #e5484d;
+    font-size: 11px;
+    min-height: 16px;
+    vertical-alignment: center;
+    overflow: elide;
+    opacity: AppState.phrase-visible ? 1 : 0;
+    animate opacity { duration: 450ms; easing: ease-in-out; }
+}
+
 component HideRow inherits HorizontalLayout {
     spacing: 8px;
     Hint {
@@ -906,9 +947,13 @@ component ToolsSettings inherits Card {
     }
     if root.filter: Hint { text: @tr("Records ten seconds, then compare. Nothing is saved."); }
     HorizontalLayout {
-        Button {
-            text: AppState.listening ? @tr("Stop listening") : @tr("Listen to yourself");
+        if !AppState.listening: Button {
+            text: @tr("Listen to yourself");
             enabled: !root.busy;
+            clicked => { AppState.listen-toggled(); }
+        }
+        if AppState.listening: AlertButton {
+            text: @tr("Stop listening");
             clicked => { AppState.listen-toggled(); }
         }
         Rectangle { }
@@ -1063,6 +1108,10 @@ export component MainWindow inherits Window {
     preferred-width: page-width;
     min-width: page-width;
     max-width: page-width;
+    // The main page has one height, fixed: its content's. The settings page
+    // can be dragged taller or shorter and scrolls.
+    min-height: main-page ? layout.preferred-height : 0px;
+    max-height: main-page ? layout.preferred-height : 16384px;
 
     // A new page starts at the top, not where the last one was scrolled to.
     public function reset-scroll() {
@@ -1111,6 +1160,7 @@ export component MainWindow inherits Window {
             if main-page && !AppState.update-dismissed && (AppState.update-state == UpdateState.available
                 || AppState.update-state == UpdateState.downloading || AppState.update-state == UpdateState.installing
                 || AppState.update-state == UpdateState.download-failed): UpdateBanner { }
+            if main-page: AlertLine { }
             if main-page: HideRow { }
 
             // Settings page: the deeper options.

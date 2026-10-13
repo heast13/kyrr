@@ -84,6 +84,16 @@ fn main() {
     state.set_level_gain(8.6);
     render(&window, &ui, &format!("{out}/main-{lang}.rgba"));
 
+    // The red notes at the bottom: the mic is out of the automatic volume's
+    // reach, and the live listening is still on.
+    state.set_alert(1);
+    render(&window, &ui, &format!("{out}/main-alert-quiet-{lang}.rgba"));
+    state.set_alert(3);
+    state.set_listening(true);
+    render(&window, &ui, &format!("{out}/main-alert-listen-{lang}.rgba"));
+    state.set_alert(0);
+    state.set_listening(false);
+
     // A new version is out: the note above the bottom row.
     state.set_update_version("0.4.0".into());
     state.set_update_installable(true);
@@ -135,6 +145,10 @@ fn main() {
     state.set_look_index(2);
     state.set_voice_is_default(false);
     render(&window, &ui, &format!("{out}/settings-{lang}.rgba"));
+    // Listening to yourself: the button turns red.
+    state.set_listening(true);
+    render(&window, &ui, &format!("{out}/settings-listening-{lang}.rgba"));
+    state.set_listening(false);
 
     // Everything, with the custom sound so the sliders show.
     state.set_advanced(true);
