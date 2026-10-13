@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.0 (2026-10-13)
+
+- The main window keeps its height; it cannot be pulled taller or shorter
+  any more. Settings stay resizable.
+- A small red note at the bottom of the main page: when your microphone is
+  too quiet or too loud for the automatic volume to fix (turn it up or down
+  in Windows), or when "Listen to yourself" is still running. Several notes
+  take turns, one line at a time. The listen button is red while it runs.
+- Automatic volume, advanced view: "Right now: +9 dB" in green when it
+  raises your voice, "−9 dB" in red when it lowers it.
+- The advanced settings use the room better: the automatic volume sits in
+  the right column, and the window grows up to 1250 pixels where the screen
+  has room, so everything shows without scrolling.
+- "What's new": an update comes with a short summary in plain words, in the
+  update note's new button. kyrr reads it from the answer of its daily
+  update check, so there is no extra connection. It shows from the update
+  after this one on.
+
 ## 0.4.0 (2026-10-11)
 
 - Automatic volume, in Settings below Voice: brings your voice to the same
