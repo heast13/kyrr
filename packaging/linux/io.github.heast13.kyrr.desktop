@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=kyrr
+GenericName=Clean microphone and dictation
+GenericName[de]=Sauberes Mikrofon und Diktieren
+Comment=Removes background noise from your microphone and types what you say
+Comment[de]=Entfernt Störgeräusche vom Mikrofon und tippt, was du sagst
+Exec=kyrr
+Icon=io.github.heast13.kyrr
+Terminal=false
+Categories=AudioVideo;Audio;
+Keywords=noise;suppression;microphone;dictation;speech;transcription;voice;Rauschen;Mikrofon;Diktat;Sprache;
+StartupNotify=true
+StartupWMClass=kyrr

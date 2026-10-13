@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright heast13 -->
+<component type="desktop-application">
+  <id>io.github.heast13.kyrr</id>
+  <name>kyrr</name>
+  <summary>Clean microphone and dictation, on your computer</summary>
+  <summary xml:lang="de">Sauberes Mikrofon und Diktieren, auf deinem Computer</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <developer id="io.github.heast13">
+    <name>heast13</name>
+  </developer>
+  <description>
+    <p>
+      kyrr removes background noise from your microphone for every app, and
+      types what you say into any window. Everything runs on your computer:
+      no cloud, no account, no telemetry.
+    </p>
+    <p xml:lang="de">
+      kyrr entfernt Störgeräusche von deinem Mikrofon, für jede App, und
+      tippt, was du sagst, in jedes Fenster. Alles läuft auf deinem Computer:
+      keine Cloud, kein Konto, keine Telemetrie.
+    </p>
+    <ul>
+      <li>Neural noise suppression (DPDFNet) on a virtual microphone that becomes the default</li>
+      <li>Voice shaping: sound, compressor, softer S sounds, pop protection, automatic volume</li>
+      <li>Dictation in German and English: hold a key, speak, release</li>
+      <li>Level check, a before/after test and listening to yourself</li>
+    </ul>
+    <ul xml:lang="de">
+      <li>Neuronale Rauschunterdrückung (DPDFNet) auf einem virtuellen Mikrofon, das zum Standard wird</li>
+      <li>Stimme: Klang, Kompressor, weichere S-Laute, Popschutz, automatische Lautstärke</li>
+      <li>Diktieren auf Deutsch und Englisch: Taste halten, sprechen, loslassen</li>
+      <li>Pegelanzeige, Vorher/Nachher-Test und Mithören</li>
+    </ul>
+    <p>
+      The speech model (about 700 to 900 MB) is downloaded once on first use.
+    </p>
+    <p xml:lang="de">
+      Das Sprachmodell (etwa 700 bis 900 MB) wird beim ersten Diktieren einmal heruntergeladen.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.heast13.kyrr.desktop</launchable>
+  <url type="homepage">https://github.com/heast13/kyrr</url>
+  <url type="bugtracker">https://github.com/heast13/kyrr/issues</url>
+  <url type="vcs-browser">https://github.com/heast13/kyrr</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Noise filter, voice and dictation, each with one switch</caption>
+      <image>https://raw.githubusercontent.com/heast13/kyrr/main/docs/screenshots/main.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Settings</caption>
+      <image>https://raw.githubusercontent.com/heast13/kyrr/main/docs/screenshots/settings.png</image>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <internet>first-run</internet>
+  </supports>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+  </categories>
+  <keywords>
+    <keyword>noise suppression</keyword>
+    <keyword>microphone</keyword>
+    <keyword>dictation</keyword>
+    <keyword>speech to text</keyword>
+  </keywords>
+  <releases>
+    <release version="0.4.0" date="2026-10-11"/>
+  </releases>
+</component>
