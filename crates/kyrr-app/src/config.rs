@@ -106,12 +106,18 @@ fn base_dir(var: &str, fallback: &str) -> PathBuf {
     }
 }
 
-fn config_file() -> PathBuf {
+/// kyrr's settings folder.
+#[cfg_attr(windows, allow(dead_code))]
+pub fn config_dir() -> PathBuf {
     #[cfg(windows)]
     let dir = base_dir("APPDATA", "AppData/Roaming");
     #[cfg(not(windows))]
     let dir = base_dir("XDG_CONFIG_HOME", ".config");
-    dir.join("kyrr").join("config.json")
+    dir.join("kyrr")
+}
+
+fn config_file() -> PathBuf {
+    config_dir().join("config.json")
 }
 
 /// Where the dictation models are downloaded to.

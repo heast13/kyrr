@@ -8,6 +8,8 @@
 
 mod config;
 mod dictation;
+#[cfg(target_os = "linux")]
+mod engine;
 mod listen;
 mod platform;
 mod player;
@@ -52,6 +54,7 @@ fn main() {
     if let Err(e) = run(background, show_requests) {
         eprintln!("kyrr: {e}");
     }
+    platform::shutdown();
 }
 
 /// Texts set from Rust; everything else is translated in the .slint file.

@@ -1,6 +1,6 @@
-//! Everything the app needs from the operating system, behind one interface.
-//! Windows has the real thing; elsewhere there are stand-ins so the window
-//! can be developed and tried on Linux.
+//! Everything the app needs from the operating system, behind one interface:
+//! Windows (the filter is an APO in the audio service) and Linux (the filter
+//! runs in kyrr on a virtual PipeWire microphone).
 
 use kyrr_common::FilterSettings;
 
@@ -195,6 +195,9 @@ mod imp {
 
     pub use kyrr_windows::hotkey::KeyEvent;
 
+    /// The filter lives in the audio service; nothing to stop.
+    pub fn shutdown() {}
+
     /// The live monitor the audio filter shares; `None` until it ran once.
     pub struct Monitor(kyrr_windows::monitor::Monitor);
 
@@ -229,78 +232,285 @@ mod imp {
 
 #[cfg(not(windows))]
 mod imp {
+    //! Linux: the filter runs inside kyrr on the virtual microphone "kyrr"
+    //! (see `engine`); there is nothing to install, so "attaching" starts it
+    //! on the chosen microphone and remembers that.
+
     use super::*;
-    use cpal::traits::{DeviceTrait, HostTrait};
+    use std::collections::BTreeMap;
+    use std::path::PathBuf;
+    use std::sync::{Mutex, MutexGuard, OnceLock};
+
+    use kyrr_linux::mic::Status;
+    use serde::{Deserialize, Serialize};
+
+    use crate::engine::Engine;
+
+    pub use kyrr_linux::hotkey::KeyEvent;
+
+    /// What the filter needs across restarts.
+    #[derive(Default, Serialize, Deserialize)]
+    #[serde(default)]
+    struct Saved {
+        /// PipeWire node name of the microphone "kyrr" records from; none
+        /// until the first setup.
+        microphone: Option<String>,
+        /// The filter settings as their stored values.
+        filter: BTreeMap<String, u32>,
+        /// Lets the keyboard portal type without asking again.
+        portal_token: Option<String>,
+    }
+
+    impl Saved {
+        fn file() -> PathBuf {
+            crate::config::config_dir().join("filter.json")
+        }
+
+        fn load() -> Saved {
+            std::fs::read(Saved::file())
+                .ok()
+                .and_then(|b| serde_json::from_slice(&b).ok())
+                .unwrap_or_default()
+        }
+
+        fn save(&self) {
+            let path = Saved::file();
+            if let Some(dir) = path.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            if let Ok(json) = serde_json::to_vec_pretty(self) {
+                let _ = std::fs::write(path, json);
+            }
+        }
+
+        fn settings(&self) -> FilterSettings {
+            FilterSettings::from_dwords(|name| self.filter.get(name).copied())
+        }
+    }
+
+    enum Filter {
+        Off,
+        Starting,
+        On(Engine),
+        Failed(String),
+    }
+
+    struct State {
+        saved: Saved,
+        filter: Filter,
+    }
+
+    fn state() -> MutexGuard<'static, State> {
+        static STATE: OnceLock<Mutex<State>> = OnceLock::new();
+        let state = STATE.get_or_init(|| {
+            let saved = Saved::load();
+            kyrr_linux::typing::set_restore_token(saved.portal_token.clone());
+            let start = saved.microphone.clone();
+            let state = Mutex::new(State {
+                saved,
+                filter: Filter::Off,
+            });
+            if let Some(mic) = start {
+                std::thread::spawn(move || start_filter(mic));
+            }
+            state
+        });
+        state.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Starts the filter on `microphone`; loading the noise model takes a
+    /// moment, so this runs off the UI thread.
+    fn start_filter(microphone: String) {
+        let settings = {
+            let mut s = state();
+            if matches!(s.filter, Filter::Starting | Filter::On(_)) {
+                return;
+            }
+            s.filter = Filter::Starting;
+            s.saved.settings()
+        };
+        let filter = match Engine::start(Some(microphone), &settings) {
+            Ok(engine) => Filter::On(engine),
+            Err(e) => Filter::Failed(e),
+        };
+        state().filter = filter;
+    }
 
     pub fn microphones() -> Vec<Microphone> {
-        let host = cpal::default_host();
-        host.input_devices()
-            .map(|devs| {
-                devs.filter_map(|d| d.description().ok())
-                    .map(|d| Microphone {
-                        guid: d.name().to_string(),
-                        name: d.name().to_string(),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
+        match &state().filter {
+            Filter::On(engine) => engine
+                .microphones()
+                .into_iter()
+                .map(|m| Microphone {
+                    guid: m.name,
+                    name: m.description,
+                })
+                .collect(),
+            // Before the first setup: the microphones PipeWire offers, read
+            // without starting anything.
+            _ => kyrr_linux::mic::list()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|m| Microphone {
+                    guid: m.name,
+                    name: m.description,
+                })
+                .collect(),
+        }
     }
 
     pub fn filter_status() -> FilterStatus {
-        FilterStatus::NotInstalled
+        let s = state();
+        let wanted = s.saved.microphone.clone().unwrap_or_default();
+        match &s.filter {
+            Filter::Off if s.saved.microphone.is_none() => FilterStatus::NotInstalled,
+            Filter::Off | Filter::Starting => FilterStatus::Waiting(wanted),
+            Filter::Failed(_) => FilterStatus::Unsupported,
+            Filter::On(engine) => match engine.status() {
+                Status::Starting => FilterStatus::Waiting(wanted),
+                Status::NoMicrophone => FilterStatus::NotAttached,
+                Status::Failed(e) => FilterStatus::Passthrough(wanted, e),
+                Status::Running(mic) => {
+                    let label = engine.engine();
+                    if label.starts_with("passthrough") {
+                        FilterStatus::Passthrough(mic, label)
+                    } else {
+                        FilterStatus::Running(mic, format!("{label}, 48 kHz, 1 ch"))
+                    }
+                }
+            },
+        }
     }
 
     pub fn filter_settings() -> FilterSettings {
-        FilterSettings::default()
+        state().saved.settings()
     }
 
-    pub fn set_filter_values(_: &[(&str, u32)]) -> Result<(), String> {
+    pub fn set_filter_values(values: &[(&str, u32)]) -> Result<(), String> {
+        let mut s = state();
+        for (name, value) in values {
+            s.saved.filter.insert(name.to_string(), *value);
+        }
+        s.saved.save();
+        let settings = s.saved.settings();
+        if let Filter::On(engine) = &s.filter {
+            engine.set_settings(&settings);
+        }
         Ok(())
     }
 
-    pub fn attach(_: &str) -> Result<(), SetupError> {
-        Err(SetupError::Failed(
-            "the audio filter is only available on Windows".into(),
-        ))
+    /// Records from microphone `guid` (a PipeWire node name) from now on;
+    /// starts the filter the first time.
+    pub fn attach(guid: &str) -> Result<(), SetupError> {
+        {
+            let mut s = state();
+            s.saved.microphone = Some(guid.to_string());
+            s.saved.save();
+            if let Filter::On(engine) = &s.filter {
+                engine.use_microphone(guid);
+                return Ok(());
+            }
+            if matches!(s.filter, Filter::Failed(_)) {
+                s.filter = Filter::Off;
+            }
+        }
+        start_filter(guid.to_string());
+        match &state().filter {
+            Filter::Failed(e) => Err(SetupError::Failed(e.clone())),
+            _ => Ok(()),
+        }
+    }
+
+    /// Gives the default microphone back before kyrr ends.
+    pub fn shutdown() {
+        state().filter = Filter::Off;
     }
 
     pub fn paste_text(text: &str) -> bool {
-        println!("{text}");
-        true
+        let typed = kyrr_linux::typing::type_text(text);
+        let token = kyrr_linux::typing::restore_token();
+        let mut s = state();
+        if token != s.saved.portal_token {
+            s.saved.portal_token = token;
+            s.saved.save();
+        }
+        typed
     }
 
-    pub fn copy_to_clipboard(_: &str) -> bool {
-        false
+    pub fn copy_to_clipboard(text: &str) -> bool {
+        kyrr_linux::typing::copy_to_clipboard(text)
     }
 
-    pub fn set_hotkey_key(_: u32) {}
+    pub fn set_hotkey_key(vk: u32) {
+        kyrr_linux::hotkey::set_key(vk);
+    }
 
-    pub fn open_licenses() {}
+    pub fn start_hotkey() -> Option<std::sync::mpsc::Receiver<KeyEvent>> {
+        kyrr_linux::hotkey::start().ok()
+    }
+
+    pub fn set_hotkey_active(active: bool) {
+        kyrr_linux::hotkey::set_active(active);
+    }
+
+    /// Shows the license notices that ship with kyrr.
+    pub fn open_licenses() {
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|e| e.parent().map(|d| d.to_path_buf()));
+        let found = exe_dir
+            .iter()
+            .flat_map(|d| [d.join("../share/doc/kyrr/THIRD_PARTY.md"), d.join("THIRD_PARTY.md")])
+            .find(|p| p.is_file());
+        match found {
+            Some(path) => open_url(&path.to_string_lossy()),
+            None => open_url("https://github.com/heast13/kyrr/blob/main/THIRD_PARTY.md"),
+        }
+    }
 
     pub fn open_url(url: &str) {
         let _ = std::process::Command::new("xdg-open").arg(url).spawn();
     }
 
-    #[derive(Clone, Copy, Debug)]
-    #[allow(dead_code)]
-    pub enum KeyEvent {
-        Pressed,
-        Released,
+    fn autostart_file() -> PathBuf {
+        let config = crate::config::config_dir();
+        config
+            .parent()
+            .map(|d| d.join("autostart"))
+            .unwrap_or_default()
+            .join("io.github.heast13.kyrr.desktop")
     }
 
-    pub fn start_hotkey() -> Option<std::sync::mpsc::Receiver<KeyEvent>> {
-        None
+    pub fn enable_autostart() {
+        if !autostart_enabled() {
+            set_autostart(true);
+        }
     }
-
-    pub fn set_hotkey_active(_: bool) {}
-
-    pub fn enable_autostart() {}
 
     pub fn autostart_enabled() -> bool {
-        false
+        autostart_file().is_file()
     }
 
-    pub fn set_autostart(_: bool) {}
+    pub fn set_autostart(on: bool) {
+        let file = autostart_file();
+        if !on {
+            let _ = std::fs::remove_file(file);
+            return;
+        }
+        let Ok(exe) = std::env::current_exe() else {
+            return;
+        };
+        // An AppImage runs from a temporary mount; start the AppImage itself.
+        let exe = std::env::var_os("APPIMAGE").map(PathBuf::from).unwrap_or(exe);
+        let entry = format!(
+            "[Desktop Entry]\nType=Application\nName=kyrr\nExec=\"{}\" --background\nIcon=io.github.heast13.kyrr\nX-GNOME-Autostart-enabled=true\n",
+            exe.display()
+        );
+        if let Some(dir) = file.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(file, entry);
+    }
 
     pub fn work_area(_: i32, _: i32) -> Option<(i32, i32, i32, i32)> {
         None
@@ -309,27 +519,36 @@ mod imp {
     pub fn bring_to_front(_: &slint::Window) {}
 
     pub fn run_installer(_: &std::path::Path) -> Result<(), SetupError> {
-        Err(SetupError::Failed("updates install on Windows only".into()))
+        Err(SetupError::Failed("updates come from your package manager".into()))
     }
 
+    /// The filter's levels and before/after take, straight from the engine.
     pub struct Monitor;
 
-    #[allow(dead_code)]
     impl Monitor {
         pub fn open() -> Option<Monitor> {
-            None
+            matches!(state().filter, Filter::On(_)).then_some(Monitor)
         }
 
         pub fn levels(&self) -> Levels {
-            Levels::default()
+            match &state().filter {
+                Filter::On(engine) => engine.levels(),
+                _ => Levels::default(),
+            }
         }
 
         pub fn request_probe(&self) -> u32 {
-            0
+            match &state().filter {
+                Filter::On(engine) => engine.request_probe(),
+                _ => 0,
+            }
         }
 
-        pub fn probe(&self, _: u32) -> Option<Take> {
-            None
+        pub fn probe(&self, id: u32) -> Option<Take> {
+            match &state().filter {
+                Filter::On(engine) => engine.probe(id),
+                _ => None,
+            }
         }
     }
 }

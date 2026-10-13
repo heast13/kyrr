@@ -130,6 +130,63 @@ impl Drop for VirtualMic {
     }
 }
 
+/// The real microphones, read once without starting "kyrr" (for the first
+/// setup, before there is a [`VirtualMic`]).
+pub fn list() -> Result<Vec<Microphone>, String> {
+    pw::init();
+    let mainloop = pw::main_loop::MainLoopRc::new(None).map_err(|e| e.to_string())?;
+    let context = pw::context::ContextRc::new(&mainloop, None).map_err(|e| e.to_string())?;
+    let core = context
+        .connect_rc(None)
+        .map_err(|_| "PipeWire is not running".to_string())?;
+    let registry = core.get_registry_rc().map_err(|e| e.to_string())?;
+    let found = Rc::new(RefCell::new(Vec::new()));
+    let sink = found.clone();
+    let _registry_listener = registry
+        .add_listener_local()
+        .global(move |global| {
+            if global.type_ != pw::types::ObjectType::Node {
+                return;
+            }
+            if let Some(mic) = global.props.and_then(as_microphone) {
+                sink.borrow_mut().push(mic);
+            }
+        })
+        .register();
+    let pending = core.sync(0).map_err(|e| e.to_string())?;
+    let mainloop_weak = mainloop.downgrade();
+    let _core_listener = core
+        .add_listener_local()
+        .done(move |id, seq| {
+            if id == pw::core::PW_ID_CORE && seq == pending {
+                if let Some(mainloop) = mainloop_weak.upgrade() {
+                    mainloop.quit();
+                }
+            }
+        })
+        .register();
+    mainloop.run();
+    let mut mics = found.take();
+    mics.sort_by(|a, b| a.description.cmp(&b.description));
+    Ok(mics)
+}
+
+/// A node that is a real microphone (not "kyrr" itself).
+fn as_microphone(props: &spa::utils::dict::DictRef) -> Option<Microphone> {
+    let name = props.get(*pw::keys::NODE_NAME)?;
+    if props.get(*pw::keys::MEDIA_CLASS) != Some("Audio/Source") || name == NODE_NAME {
+        return None;
+    }
+    let description = props
+        .get(*pw::keys::NODE_DESCRIPTION)
+        .or_else(|| props.get(*pw::keys::NODE_NICK))
+        .unwrap_or(name);
+    Some(Microphone {
+        name: name.to_string(),
+        description: description.to_string(),
+    })
+}
+
 fn lock(shared: &Mutex<Shared>) -> std::sync::MutexGuard<'_, Shared> {
     shared.lock().unwrap_or_else(|p| p.into_inner())
 }
@@ -206,18 +263,7 @@ fn run(
             let Some(props) = global.props else { return };
             match global.type_ {
                 pw::types::ObjectType::Node => {
-                    let name = props.get(*pw::keys::NODE_NAME).unwrap_or_default();
-                    if props.get(*pw::keys::MEDIA_CLASS) != Some("Audio/Source") || name == NODE_NAME {
-                        return;
-                    }
-                    let description = props
-                        .get(*pw::keys::NODE_DESCRIPTION)
-                        .or_else(|| props.get(*pw::keys::NODE_NICK))
-                        .unwrap_or(name);
-                    let mic = Microphone {
-                        name: name.to_string(),
-                        description: description.to_string(),
-                    };
+                    let Some(mic) = as_microphone(props) else { return };
                     lock(&on_global.borrow().shared).microphones.push((global.id, mic));
                     if on_global.borrow().synced {
                         connect_if_needed(&on_global);

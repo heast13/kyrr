@@ -2878,7 +2878,10 @@ version = "0.5.0"
 dependencies = [
  "cpal",
  "kyrr-common",
+ "kyrr-denoise",
  "kyrr-dictate",
+ "kyrr-linux",
+ "kyrr-voice",
  "kyrr-windows",
  "raw-window-handle",
  "serde",
