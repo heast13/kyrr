@@ -707,6 +707,9 @@ impl App {
                         state.set_update_dismissed(version == dismissed);
                         state.set_update_version(version.as_str().into());
                         state.set_update_url(url.into());
+                        // The installer is Windows'; elsewhere kyrr is updated
+                        // where it came from (Flathub, AUR, a new AppImage).
+                        let installer = installer.filter(|_| cfg!(windows));
                         state.set_update_installable(installer.is_some());
                         state.set_update_has_news(news.is_some());
                         *pending_installer().lock().unwrap_or_else(|e| e.into_inner()) = installer;
@@ -941,6 +944,9 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     // An installer downloaded for the last update is done with.
     let _ = std::fs::remove_dir_all(update::folder());
     let window = MainWindow::new()?;
+    // So the desktop matches the window to kyrr's desktop entry and icon.
+    #[cfg(target_os = "linux")]
+    let _ = slint::set_xdg_app_id("io.github.heast13.kyrr");
     let _ = slint::select_bundled_translation(language.code());
 
     // Dictation worker, reporting back on the UI thread. Whether it records
@@ -1438,6 +1444,16 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             }
         });
     }
+    #[cfg(target_os = "linux")]
+    kyrr_linux::signals::on_terminate({
+        let worker = worker.clone();
+        move || {
+            let _ = worker.send(Command::Quit);
+            let _ = slint::invoke_from_event_loop(|| {
+                let _ = slint::quit_event_loop();
+            });
+        }
+    });
     let result = slint::run_event_loop_until_quit();
     TRAY.take();
     result

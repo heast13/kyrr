@@ -213,9 +213,19 @@ struct State {
 struct Streams {
     _source_listener: pw::stream::StreamListener<SourceData>,
     _capture_listener: pw::stream::StreamListener<()>,
-    _source: StreamRc,
-    _capture: StreamRc,
+    source: StreamRc,
+    capture: StreamRc,
     microphone: String,
+}
+
+impl Drop for Streams {
+    /// The callbacks run on PipeWire's real-time thread. Disconnecting takes
+    /// both nodes out of it and waits until it has, so no callback is still
+    /// running when the listeners and their data go.
+    fn drop(&mut self) {
+        let _ = self.source.disconnect();
+        let _ = self.capture.disconnect();
+    }
 }
 
 struct SourceData {
@@ -508,13 +518,13 @@ fn create_streams(core: &pw::core::CoreRc, microphone: &str, process: Arc<Mutex<
     .map_err(|e| e.to_string())?;
 
     let capture_ptr = capture.as_raw_ptr();
-    let source_weak = source.downgrade();
+    // A raw pointer, not the Rc: this runs on the real-time thread. The
+    // source outlives the listener (see `Streams`).
+    let source_ptr = source.as_raw_ptr();
     let capture_listener = capture
         .add_local_listener::<()>()
-        .process(move |_, _| {
-            if let Some(source) = source_weak.upgrade() {
-                let _ = source.trigger_process();
-            }
+        .process(move |_, _| unsafe {
+            pw_sys::pw_stream_trigger_process(source_ptr);
         })
         .register()
         .map_err(|e| e.to_string())?;
@@ -546,8 +556,8 @@ fn create_streams(core: &pw::core::CoreRc, microphone: &str, process: Arc<Mutex<
     Ok(Streams {
         _source_listener: source_listener,
         _capture_listener: capture_listener,
-        _source: source,
-        _capture: capture,
+        source,
+        capture,
         microphone: microphone.to_string(),
     })
 }

@@ -303,8 +303,20 @@ mod imp {
             if let Some(dir) = path.parent() {
                 let _ = std::fs::create_dir_all(dir);
             }
+            // Only the user may read it: it holds the keyboard portal's token.
+            use std::io::Write;
+            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
             if let Ok(json) = serde_json::to_vec_pretty(self) {
-                let _ = std::fs::write(path, json);
+                let file = std::fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .mode(0o600)
+                    .open(&path);
+                if let Ok(mut file) = file {
+                    let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600));
+                    let _ = file.write_all(&json);
+                }
             }
         }
 
@@ -550,6 +562,25 @@ mod imp {
         }
     }
 
+    /// A path for inside the quotes of a desktop entry's Exec: the quoting
+    /// escapes `"`, `` ` ``, `$` and `\` with a backslash, the value's own
+    /// escaping doubles that backslash, and `%` is doubled for field codes.
+    fn exec_quoted(path: &str) -> String {
+        let mut out = String::with_capacity(path.len());
+        for c in path.chars() {
+            match c {
+                '"' | '`' | '$' => {
+                    out.push_str("\\\\");
+                    out.push(c);
+                }
+                '\\' => out.push_str("\\\\\\\\"),
+                '%' => out.push_str("%%"),
+                c => out.push(c),
+            }
+        }
+        out
+    }
+
     fn flatpak() -> bool {
         std::env::var_os("FLATPAK_ID").is_some()
     }
@@ -591,7 +622,7 @@ mod imp {
         let exe = std::env::var_os("APPIMAGE").map(PathBuf::from).unwrap_or(exe);
         let entry = format!(
             "[Desktop Entry]\nType=Application\nName=kyrr\nExec=\"{}\" --background\nIcon=io.github.heast13.kyrr\nX-GNOME-Autostart-enabled=true\n",
-            exe.display()
+            exec_quoted(&exe.display().to_string())
         );
         if let Some(dir) = file.parent() {
             let _ = std::fs::create_dir_all(dir);

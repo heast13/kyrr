@@ -22,7 +22,8 @@ x11rb = { version = "0.13", features = ["xtest", "xkb"] }
 # (Hyprland, Sway and other wlroots compositors).
 wayland-client = "0.31"
 wayland-protocols-misc = { version = "0.3", features = ["client"] }
-rustix = { version = "1", features = ["fs", "mm"] }
+async-signal = "0.2"
+rustix = { version = "1", features = ["fs", "mm", "process"] }
 # Clipboard fallback when typing is not possible: X11, and Wayland compositors
 # with the data-control protocol.
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }

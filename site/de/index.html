@@ -93,10 +93,7 @@
 
       <div class="panel" id="flatpak" data-label="Flatpak">
         <h3>Flatpak</h3>
-        <p>Der einfache Weg auf den meisten Distributionen.</p>
-        <pre tabindex="0"><code>flatpak install flathub io.github.heast13.kyrr</code></pre>
-        <p>Oder such in GNOME Software oder KDE Discover nach „kyrr“.</p>
-        <p>Flathub: <a href="https://flathub.org/apps/io.github.heast13.kyrr">flathub.org/apps/io.github.heast13.kyrr</a></p>
+        <p>kyrr ist auf dem Weg zu Flathub. Sobald es dort ist, findest du es in GNOME Software und KDE Discover. Bis dahin nimm das AppImage oder, unter Arch, das AUR-Paket.</p>
       </div>
 
       <div class="panel" id="arch" data-label="Arch / AUR">
@@ -123,7 +120,8 @@
         <li><strong>PipeWire ist Pflicht.</strong> Es ist Standard in aktuellem Ubuntu, Fedora, Arch und Debian 12 und neuer.</li>
         <li><strong>Das Mikrofon „kyrr“.</strong> kyrr legt ein virtuelles Mikrofon namens „kyrr“ an und macht es zu deinem Standard. Apps, die das Standardmikrofon nutzen, bekommen sofort die saubere Stimme. Apps mit fest eingestelltem Mikrofon musst du auf „kyrr“ umstellen.</li>
         <li><strong>Push-to-talk</strong> läuft über den Dialog für globale Tastenkürzel deines Desktops (GNOME 48+, KDE Plasma). Er erscheint beim ersten Mal; bestätige dort die Taste. Unter Hyprland kommt diese Zeile in die <code>hyprland.conf</code>:
-          <pre tabindex="0"><code>bind = , F9, global, io.github.heast13.kyrr:dictate</code></pre></li>
+          <pre tabindex="0"><code>bind = , F9, global, io.github.heast13.kyrr:dictate</code></pre>
+          Unter X11 geht die Taste einfach so. Überall sonst legst du <code>kyrr --dictate</code> in den Tastatur-Einstellungen deines Desktops auf eine Taste; den genauen Befehl zeigt kyrr in seinen Einstellungen.</li>
         <li><strong>Tippen.</strong> Diktierter Text wird ins fokussierte Fenster getippt. Beim ersten Mal fragen GNOME oder KDE, ob kyrr das darf. Sag Ja, sonst hat das Diktat nichts zum Tippen.</li>
       </ul>
     </aside>
@@ -137,7 +135,7 @@
     </details>
     <details>
       <summary>Brauche ich eine Grafikkarte?</summary>
-      <p>Nein. kyrr läuft auf jedem 64-Bit-PC mit Intel oder AMD. Auf einem älteren Laptop nimmst du das kleine Modell für die Störgeräusche.</p>
+      <p>Nein. kyrr läuft auf jedem 64-Bit-PC mit Intel oder AMD. Auf einem älteren Laptop nimmst du das kleine Modell für die Störgeräusche. Unter Linux braucht der Filter einen Prozessor mit AVX2 (die meisten ab 2015); Diktieren geht auch ohne.</p>
     </details>
     <details>
       <summary>Welche Sprachen versteht das Diktat?</summary>

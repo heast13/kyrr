@@ -134,7 +134,6 @@ ONNX Runtime version in `cmake/onnxruntime-linux-x86_64.cmake`.
 | `--share=network` | Speech model download on first dictation, "Check for updates" |
 | `--filesystem=xdg-run/pipewire-0:ro` | The virtual microphone: a PipeWire source node and the default-source setting. As EasyEffects on Flathub. There is no portal for creating audio devices |
 | `--socket=pulseaudio` | cpal records and plays through ALSA, and ALSA's default device in the Freedesktop runtime is the PulseAudio plugin (`/etc/alsa/conf.d/99-pulseaudio-default.conf`). Dictation, listening to yourself and the before/after test need it |
-| `--talk-name=org.kde.StatusNotifierWatcher` | Tray icon |
 
 Portals cover the rest without static permissions: GlobalShortcuts (the
 push-to-talk key), RemoteDesktop (typing where the Wayland virtual keyboard
@@ -188,8 +187,8 @@ linter rejects `--own-name=org.kde.*` without exception
 (`finish-args-own-name-cpt`). ksni has `disable_dbus_name(true)` for exactly
 this case; Slint does not use it. Until Slint does, or kyrr gets a tray of
 its own on Linux, the app treats a Flatpak like a desktop without a tray:
-the window minimizes instead of hiding, and closing it quits.
-`--talk-name=org.kde.StatusNotifierWatcher` stays for when the tray works.
+the window minimizes instead of hiding, and closing it quits. Add
+`--talk-name=org.kde.StatusNotifierWatcher` back once the tray works.
 
 ### Handled in the app
 

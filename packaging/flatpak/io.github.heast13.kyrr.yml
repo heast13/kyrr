@@ -29,7 +29,6 @@ finish-args:
   # the PulseAudio plugin.
   - --socket=pulseaudio
   # Tray icon (StatusNotifierItem).
-  - --talk-name=org.kde.StatusNotifierWatcher
 cleanup:
   - /include
   - /lib/libonnxruntime.so
@@ -192,6 +191,7 @@ modules:
           - .git
           - assets
           - build-dir
+          - dist
           - repo
           - target
       # - type: git

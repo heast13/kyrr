@@ -105,10 +105,7 @@
 
       <div class="panel" id="flatpak" data-label="Flatpak">
         <h3>Flatpak</h3>
-        <p>The easy way on most distributions.</p>
-        <pre tabindex="0"><code>flatpak install flathub io.github.heast13.kyrr</code></pre>
-        <p>Or search for “kyrr” in GNOME Software or KDE Discover.</p>
-        <p>Flathub: <a href="https://flathub.org/apps/io.github.heast13.kyrr">flathub.org/apps/io.github.heast13.kyrr</a></p>
+        <p>kyrr is on its way to Flathub. Once it is there, you will find it in GNOME Software and KDE Discover. Until then, take the AppImage or, on Arch, the AUR package.</p>
       </div>
 
       <div class="panel" id="arch" data-label="Arch / AUR">
@@ -135,7 +132,8 @@
         <li><strong>PipeWire is required.</strong> It is the default on current Ubuntu, Fedora, Arch and Debian 12 and newer.</li>
         <li><strong>The “kyrr” microphone.</strong> kyrr adds a virtual microphone called “kyrr” and makes it your default. Apps that use the default microphone get the clean voice right away. Apps set to a specific microphone need to be switched to “kyrr”.</li>
         <li><strong>Push-to-talk</strong> goes through your desktop's global shortcut dialog (GNOME 48+, KDE Plasma). It shows up the first time; confirm the key there. On Hyprland, add this line to <code>hyprland.conf</code>:
-          <pre tabindex="0"><code>bind = , F9, global, io.github.heast13.kyrr:dictate</code></pre></li>
+          <pre tabindex="0"><code>bind = , F9, global, io.github.heast13.kyrr:dictate</code></pre>
+          On X11 the key just works. Anywhere else, put <code>kyrr --dictate</code> on a key in your desktop's keyboard settings; kyrr shows the exact command in its settings.</li>
         <li><strong>Typing.</strong> Dictated text is typed into the focused window. The first time, GNOME or KDE asks whether kyrr may do that. Say yes, or dictation has nothing to type with.</li>
       </ul>
     </aside>
@@ -149,7 +147,7 @@
     </details>
     <details>
       <summary>Do I need a graphics card?</summary>
-      <p>No. kyrr runs on any 64-bit Intel or AMD PC. On an older laptop, choose the small noise model.</p>
+      <p>No. kyrr runs on any 64-bit Intel or AMD PC. On an older laptop, choose the small noise model. On Linux the noise filter needs a processor with AVX2 (most from 2015 on); dictation works without.</p>
     </details>
     <details>
       <summary>Which languages does dictation understand?</summary>

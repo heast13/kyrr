@@ -15,6 +15,7 @@ pkgbase = kyrr-bin
 	depends = pipewire
 	optdepends = xdg-desktop-portal: push-to-talk key and typing on GNOME and KDE
 	optdepends = wireplumber: PipeWire session manager that makes the "kyrr" microphone appear
+	optdepends = pipewire-alsa: dictation records through the ALSA default, which this routes to PipeWire
 	provides = kyrr
 	conflicts = kyrr
 	source = https://github.com/heast13/kyrr/releases/download/v0.4.0/kyrr-0.4.0-linux-x86_64.tar.gz

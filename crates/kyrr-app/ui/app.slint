@@ -633,7 +633,8 @@ component DictationSettings inherits Card {
         selected <=> AppState.key-index;
         changed(i) => { AppState.key-changed(i); }
     }
-    Hint { text: @tr("With Ctrl, Alt or Shift held, the key stays with your app."); }
+    // Only where kyrr catches the key itself.
+    if AppState.key-note == "": Hint { text: @tr("With Ctrl, Alt or Shift held, the key stays with your app."); }
     if AppState.key-note != "": Hint { text: AppState.key-note; }
     Caption { text: @tr("How"); }
     Segmented {

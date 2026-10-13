@@ -12,7 +12,8 @@ url='https://github.com/heast13/kyrr'
 license=('MIT OR Apache-2.0')
 depends=('alsa-lib' 'fontconfig' 'gcc-libs' 'glibc' 'hicolor-icon-theme' 'libxkbcommon-x11' 'openssl' 'pipewire')
 optdepends=('xdg-desktop-portal: push-to-talk key and typing on GNOME and KDE'
-            'wireplumber: PipeWire session manager that makes the "kyrr" microphone appear')
+            'wireplumber: PipeWire session manager that makes the "kyrr" microphone appear'
+            'pipewire-alsa: dictation records through the ALSA default, which this routes to PipeWire')
 provides=('kyrr')
 conflicts=('kyrr')
 source=("https://github.com/heast13/kyrr/releases/download/v$pkgver/kyrr-$pkgver-linux-x86_64.tar.gz")

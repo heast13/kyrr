@@ -39,6 +39,9 @@ struct Shared {
     gain_db: AtomicU32,
     probe: Mutex<Probe>,
     probe_wanted: AtomicBool,
+    /// Counts model loads; a load that finishes after a newer one started
+    /// is dropped.
+    loads: AtomicU32,
 }
 
 #[derive(Default)]
@@ -172,6 +175,7 @@ impl Engine {
             gain_db: AtomicU32::new(0),
             probe: Mutex::new(Probe::default()),
             probe_wanted: AtomicBool::new(false),
+            loads: AtomicU32::new(0),
         });
         shared.set_settings(settings);
         let assets = assets_dir();
@@ -241,16 +245,27 @@ impl Engine {
         }
         let shared = self.shared.clone();
         let assets = self.assets.clone();
-        std::thread::spawn(move || match build_filter(&assets, model) {
-            Ok((filter, label)) => {
-                // An older load still waiting, and the filter the audio
-                // thread gave back, are freed here.
-                let waiting = lock(&shared.incoming).replace(filter);
-                let given_back = lock(&shared.outgoing).take();
-                drop((waiting, given_back));
-                *lock(&shared.engine) = label;
+        let load = shared.loads.fetch_add(1, Ordering::Relaxed) + 1;
+        std::thread::spawn(move || {
+            let built = build_filter(&assets, model);
+            // Under the slot's lock, so of two loads finishing together only
+            // the newer one lands.
+            let mut incoming = lock(&shared.incoming);
+            if shared.loads.load(Ordering::Relaxed) != load {
+                return;
             }
-            Err(e) => *lock(&shared.engine) = format!("passthrough: {e}"),
+            match built {
+                Ok((filter, label)) => {
+                    // An older load still waiting, and the filter the audio
+                    // thread gave back, are freed here.
+                    let waiting = incoming.replace(filter);
+                    drop(incoming);
+                    let given_back = lock(&shared.outgoing).take();
+                    drop((waiting, given_back));
+                    *lock(&shared.engine) = label;
+                }
+                Err(e) => *lock(&shared.engine) = format!("passthrough: {e}"),
+            }
         });
     }
 

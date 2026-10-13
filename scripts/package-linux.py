@@ -75,6 +75,8 @@ EXCLUDE = [
 # Loaded with dlopen by the window system code, so linuxdeploy does not see
 # them; the libxkbcommon-x11 package is missing on some Wayland-only installs.
 EXTRA_LIBRARIES = ["libxkbcommon-x11.so.0"]
+# Debian packages of the libraries the AppImage bundles, for their notices.
+BUNDLED_NOTICES = ["libxkbcommon0", "libxkbcommon-x11-0", "libxcb-xkb1"]
 
 
 # linuxdeploy's default AppRun is a symlink to the program, which then shows
@@ -209,6 +211,13 @@ def make_appimage(root: Path, work: Path, dest: Path) -> None:
     for lib in EXTRA_LIBRARIES:
         cmd += [f"--library={find_library(lib)}"]
     subprocess.run(cmd, check=True, env=env)
+    # The bundled libraries' notices (MIT), from the build system's packages.
+    licenses = usr / "share" / "doc" / "kyrr" / "licenses"
+    for package in BUNDLED_NOTICES:
+        notice = Path("/usr/share/doc") / package / "copyright"
+        if not notice.is_file():
+            sys.exit(f"{notice} not found (install {package})")
+        copy(notice, licenses / f"{package}.txt")
     dest.unlink(missing_ok=True)
     # --no-appstream: the metainfo is validated with the Flathub/AppStream tools.
     subprocess.run([str(appimagetool), "--no-appstream", f"--runtime-file={runtime}", str(appdir), str(dest)], check=True, env=env)

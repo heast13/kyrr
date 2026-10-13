@@ -7,5 +7,6 @@ pub mod background;
 pub mod hotkey;
 pub mod instance;
 pub mod mic;
+pub mod signals;
 pub mod tray;
 pub mod typing;

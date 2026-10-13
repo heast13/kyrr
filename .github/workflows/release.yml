@@ -24,6 +24,7 @@ jobs:
   installer:
     runs-on: windows-latest
     permissions:
+      contents: read
       # SignPath reads the workflow run and downloads the artifacts.
       actions: read
     env:

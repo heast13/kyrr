@@ -21,9 +21,11 @@ const SHOW: &[u8] = b"show";
 const DICTATE: &[u8] = b"dictate";
 
 fn socket_path() -> PathBuf {
-    let dir = std::env::var_os("XDG_RUNTIME_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
+    let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from) else {
+        // No folder of the user's own: the shared temp folder, one name per user.
+        let uid = rustix::process::getuid().as_raw();
+        return std::env::temp_dir().join(format!("kyrr-{uid}.sock"));
+    };
     // In a Flatpak the runtime folder is each start's own; this one below it
     // is shared by all starts of the app.
     match std::env::var("FLATPAK_ID") {
