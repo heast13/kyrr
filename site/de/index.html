@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kyrr: Nur deine Stimme</title>
+<meta name="description" content="kyrr ist eine kleine, kostenlose Open-Source-App für dein Mikrofon: Sie entfernt Störgeräusche, poliert die Stimme, gleicht die Lautstärke an und tippt, was du diktierst. Alles läuft auf deinem Computer. Für Windows und Linux.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/svg+xml" href="../kyrr.svg">
+<link rel="alternate" hreflang="en" href="https://heast13.github.io/kyrr/">
+<link rel="alternate" hreflang="de" href="https://heast13.github.io/kyrr/de/">
+<link rel="alternate" hreflang="x-default" href="https://heast13.github.io/kyrr/">
+<link rel="stylesheet" href="../style.css">
+<script src="../app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Zum Inhalt springen</a>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="./"><img src="../kyrr.svg" width="36" height="36" alt="">kyrr</a>
+    <nav class="lang" aria-label="Sprache">
+      <a href="../" lang="en" hreflang="en" data-lang-switch="en">English</a> ·
+      <a href="./" lang="de" aria-current="true">Deutsch</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <div class="hero">
+      <div>
+        <h1>Nur deine Stimme.</h1>
+        <p class="lead">kyrr ist eine kleine, kostenlose App für dein Mikrofon. Tastatur, Lüfter und Hund bleiben draußen, und was du sagst, wird in jede App getippt. Alles auf deinem Computer.</p>
+        <div class="actions">
+          <a class="btn primary" href="#download">Herunterladen</a>
+          <a class="btn" href="https://github.com/heast13/kyrr">Quellcode auf GitHub</a>
+        </div>
+        <p class="small">Für Windows 10/11 und Linux. Kostenlos und Open Source.</p>
+        <p class="kyrr-note"><i>kyrr</i> (Altnordisch): still, ruhig, in Ruhe.</p>
+      </div>
+      <img src="../main.png" width="570" height="564" alt="Das kyrr-Fenster: Störgeräusche entfernen, Stimme und Diktat, jeweils mit einem Schalter (Oberfläche auf Englisch)">
+    </div>
+
+    <section id="features" aria-labelledby="h-features">
+      <h2 id="h-features">Was kyrr kann</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>Störgeräusche entfernen</h3>
+          <p>Ein neuronaler Filter arbeitet in Echtzeit direkt am Mikrofon, für jede App: Teams, Zoom, Discord, OBS, den Browser. Ein großes Modell für das sauberste Ergebnis, ein kleines für ältere Laptops.</p>
+        </div>
+        <div class="card">
+          <h3>Stimme</h3>
+          <p>Ein bisschen Politur, wenn die Störgeräusche weg sind: ein Klang (von neutral bis hell, oder dein eigener), ein Kompressor, weichere S-Laute, Popschutz und ein Schnitt gegen tiefes Dröhnen.</p>
+        </div>
+        <div class="card">
+          <h3>Automatische Lautstärke</h3>
+          <p>Deine Stimme kommt immer gleich laut an, egal wie laut das Mikrofon eingestellt ist. Aus, bis du sie einschaltest.</p>
+        </div>
+        <div class="card">
+          <h3>Diktat</h3>
+          <p>F9 halten, sprechen, loslassen. Der Text landet dort, wo dein Cursor steht. Deutsch und Englisch, auf deinem Computer erkannt. Sag „neue Zeile“ (oder „new line“) für einen Zeilenumbruch.</p>
+        </div>
+      </div>
+      <div class="split">
+        <img src="../settings.png" width="1140" height="1901" loading="lazy" alt="Die Einstellungen von kyrr, erweiterte Ansicht, in zwei Spalten: Filterstärke und Modell, Klang mit Reglern, Kompressor, S-Laute, Tiefenschnitt, Popschutz, automatische Lautstärke, Sprache, Autostart, Updates, Mikrofon, Diktiertaste, Pegelcheck und Info (Oberfläche auf Englisch)">
+        <div>
+          <h3>Regler, falls du Regler magst</h3>
+          <p>Die Voreinstellungen passen. Wenn du mehr willst, haben die Einstellungen die Regler und einen Check, ob alles wirkt: ein Pegel live von dem, was das Mikrofon hört und was die Apps bekommen, ein Zehn-Sekunden-Test zum Abspielen vor und nach kyrr und Mithören über Kopfhörer.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<section class="privacy" id="privacy" aria-labelledby="h-privacy">
+  <div class="wrap">
+    <h2 id="h-privacy">Privat, im Sinne von: bleibt hier</h2>
+    <p>Deine Stimme und dein diktierter Text verlassen deinen Computer nie: keine Cloud, kein Konto, keine Telemetrie. Nach dem einmaligen Download des Sprachmodells läuft kyrr offline; sonst geht es nur einmal täglich online, um nach einer neuen Version zu fragen, und das lässt sich abschalten.</p>
+    <p><a href="https://github.com/heast13/kyrr#privacy">Genau nachlesen, was wohin verbindet (Englisch)</a></p>
+  </div>
+</section>
+
+<div class="wrap">
+  <section id="download" aria-labelledby="h-download">
+    <h2 id="h-download">Herunterladen</h2>
+    <p>Kostenlos, wirklich. Such dir dein System aus.</p>
+    <div data-tabs>
+      <div class="panel" id="windows" data-label="Windows">
+        <h3>Windows</h3>
+        <p>Windows 10 22H2 oder Windows 11, 64 Bit.</p>
+        <p><a class="btn primary" href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-setup.exe">kyrr-setup.exe herunterladen</a></p>
+        <p>Der Installer braucht Administratorrechte, und der Ton setzt kurz eine Sekunde aus, während kyrr seinen Filter einrichtet. Solange der Installer nicht signiert ist, warnt Windows SmartScreen davor („Weitere Informationen“, dann „Trotzdem ausführen“). Vergleiche ihn vorher mit der <code>.sha256</code>-Datei auf der <a href="https://github.com/heast13/kyrr/releases/latest">Release-Seite</a>. Warum er noch nicht signiert ist: <a href="https://github.com/heast13/kyrr#code-signing-policy">Code-Signing-Policy</a> (Englisch).</p>
+        <p class="small">Unter Windows on ARM (Snapdragon und andere ARM-Prozessoren) kann kyrr nur diktieren: Der Filter ist für Intel und AMD gebaut.</p>
+      </div>
+
+      <div class="panel" id="flatpak" data-label="Flatpak">
+        <h3>Flatpak</h3>
+        <p>Der einfache Weg auf den meisten Distributionen.</p>
+        <pre tabindex="0"><code>flatpak install flathub io.github.heast13.kyrr</code></pre>
+        <p>Oder such in GNOME Software oder KDE Discover nach „kyrr“.</p>
+        <p>Flathub: <a href="https://flathub.org/apps/io.github.heast13.kyrr">flathub.org/apps/io.github.heast13.kyrr</a></p>
+      </div>
+
+      <div class="panel" id="arch" data-label="Arch / AUR">
+        <h3>Arch / AUR</h3>
+        <p>Für Arch, Omarchy, Manjaro, EndeavourOS.</p>
+        <pre tabindex="0"><code>yay -S kyrr-bin</code></pre>
+        <p>oder, wenn du paru benutzt:</p>
+        <pre tabindex="0"><code>paru -S kyrr-bin</code></pre>
+        <p>Paketseite: <a href="https://aur.archlinux.org/packages/kyrr-bin">aur.archlinux.org/packages/kyrr-bin</a></p>
+      </div>
+
+      <div class="panel" id="appimage" data-label="AppImage">
+        <h3>AppImage</h3>
+        <p>Lade <code>kyrr-&lt;version&gt;-x86_64.AppImage</code> vom <a href="https://github.com/heast13/kyrr/releases/latest">neuesten Release</a>, mach die Datei ausführbar und starte sie:</p>
+        <pre tabindex="0"><code>chmod +x kyrr-*-x86_64.AppImage
+./kyrr-*-x86_64.AppImage</code></pre>
+        <p>Braucht glibc 2.39 oder neuer: Ubuntu 24.04+, Fedora 40+, Debian 13, Arch. Vergleiche die Datei mit ihrer Prüfsumme auf der Release-Seite, wenn du sichergehen willst.</p>
+      </div>
+    </div>
+
+    <aside class="notes" id="linux" aria-labelledby="h-linux">
+      <h3 id="h-linux">Hinweise für Linux</h3>
+      <ul>
+        <li><strong>PipeWire ist Pflicht.</strong> Es ist Standard in aktuellem Ubuntu, Fedora, Arch und Debian 12 und neuer.</li>
+        <li><strong>Das Mikrofon „kyrr“.</strong> kyrr legt ein virtuelles Mikrofon namens „kyrr“ an und macht es zu deinem Standard. Apps, die das Standardmikrofon nutzen, bekommen sofort die saubere Stimme. Apps mit fest eingestelltem Mikrofon musst du auf „kyrr“ umstellen.</li>
+        <li><strong>Push-to-talk</strong> läuft über den Dialog für globale Tastenkürzel deines Desktops (GNOME 48+, KDE Plasma). Er erscheint beim ersten Mal; bestätige dort die Taste. Unter Hyprland kommt diese Zeile in die <code>hyprland.conf</code>:
+          <pre tabindex="0"><code>bind = , F9, global, io.github.heast13.kyrr:dictate</code></pre></li>
+        <li><strong>Tippen.</strong> Diktierter Text wird ins fokussierte Fenster getippt. Beim ersten Mal fragen GNOME oder KDE, ob kyrr das darf. Sag Ja, sonst hat das Diktat nichts zum Tippen.</li>
+      </ul>
+    </aside>
+  </section>
+
+  <section id="faq" aria-labelledby="h-faq">
+    <h2 id="h-faq">Fragen</h2>
+    <details>
+      <summary>Funktioniert es offline?</summary>
+      <p>Ja. Sobald das Sprachmodell heruntergeladen ist (einmalig, 663 MB für Englisch, 900 MB für Deutsch), läuft kyrr komplett offline.</p>
+    </details>
+    <details>
+      <summary>Brauche ich eine Grafikkarte?</summary>
+      <p>Nein. kyrr läuft auf jedem 64-Bit-PC mit Intel oder AMD. Auf einem älteren Laptop nimmst du das kleine Modell für die Störgeräusche.</p>
+    </details>
+    <details>
+      <summary>Welche Sprachen versteht das Diktat?</summary>
+      <p>Deutsch und Englisch. Das deutsche Modell kommt auch mit Englisch zurecht.</p>
+    </details>
+    <details>
+      <summary>Was kostet es?</summary>
+      <p>Nichts. kyrr ist kostenlos und Open Source, ein Konto brauchst du auch nicht.</p>
+    </details>
+    <details>
+      <summary>Was unterscheidet kyrr von NVIDIA Broadcast oder Krisp?</summary>
+      <p>NVIDIA Broadcast braucht eine RTX-Grafikkarte. Krisp braucht ein Konto und ist 60 Minuten am Tag kostenlos, danach ein Abo. Beide arbeiten über ein virtuelles Mikrofon, das du in jeder App auswählst. kyrr braucht weder das eine noch das andere; unter Windows sitzt es am Mikrofon selbst, jede App bekommt es ohne Auswahl, und unter Linux wird es zum Standardmikrofon. Dazu diktiert es in jede App. Nach unserem Wissen, Stand Oktober 2026; Korrekturen willkommen.</p>
+    </details>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <p class="links">
+      <a href="https://github.com/heast13/kyrr">GitHub</a>
+      <a href="https://github.com/heast13/kyrr#readme">README</a>
+      <a href="https://github.com/heast13/kyrr/releases/latest">Releases</a>
+      <a href="https://github.com/heast13/kyrr#privacy">Datenschutz</a>
+      <a href="https://slint.dev">Made with Slint</a>
+    </p>
+    <p>kyrr ist freie Software unter MIT OR Apache-2.0, nach deiner Wahl.</p>
+    <p>Keine Cookies, keine Tracker, nichts von anderswo nachgeladen. Nicht mal eine Schrift.</p>
+  </div>
+</footer>
+</body>
+</html>
