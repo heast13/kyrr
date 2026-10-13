@@ -870,13 +870,13 @@ fn now() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
-/// The installer the last update check found, for "Update now".
 /// What the offered version brings, for the "What's new" window.
 fn pending_news() -> &'static std::sync::Mutex<Option<update::News>> {
     static PENDING: std::sync::Mutex<Option<update::News>> = std::sync::Mutex::new(None);
     &PENDING
 }
 
+/// The installer the last update check found, for "Update now".
 fn pending_installer() -> &'static std::sync::Mutex<Option<update::Installer>> {
     static PENDING: std::sync::Mutex<Option<update::Installer>> = std::sync::Mutex::new(None);
     &PENDING
