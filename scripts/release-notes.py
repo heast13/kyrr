@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Prints the release notes for one version: its section of CHANGELOG.md and
-a few lines about the installer.
+a few lines about the installer. When NEWS.md has a section for the version,
+its summary (English and German) is added as two hidden comments; kyrr shows
+it under "What's new" next to the update note.
 
   python scripts/release-notes.py 0.2.0 [--signed] [--out notes.md]
 """
@@ -19,6 +21,27 @@ def section(version: str) -> str:
     if match is None:
         sys.exit(f"CHANGELOG.md has no section for {version}")
     return match.group(1).strip()
+
+
+def news(version: str) -> str:
+    """The hidden blocks for kyrr's "What's new"; empty without a NEWS.md
+    section for this version. Plain words, only what a user notices."""
+    path = ROOT / "NEWS.md"
+    if not path.exists():
+        return ""
+    text = path.read_text(encoding="utf-8")
+    match = re.search(rf"^## {re.escape(version)}\b.*?\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+    if match is None:
+        return ""
+    english, _, german = match.group(1).partition("### Deutsch")
+    blocks = ""
+    for lang, body in (("en", english), ("de", german)):
+        body = body.strip()
+        if body:
+            if "-->" in body:
+                sys.exit("NEWS.md: a summary must not contain '-->'")
+            blocks += f"<!-- kyrr-news:{lang}\n{body}\n-->\n"
+    return blocks
 
 
 def main() -> None:
@@ -40,6 +63,9 @@ def main() -> None:
         f"Windows 10 22H2 or Windows 11, 64-bit. {signing} Compare the installer with "
         f"`kyrr-setup-{version}.exe.sha256` first. See the README for what the installer changes.\n"
     )
+    blocks = news(version)
+    if blocks:
+        notes += f"\n{blocks}"
     if out:
         Path(out).write_text(notes, encoding="utf-8")
     else:

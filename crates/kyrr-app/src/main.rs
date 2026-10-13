@@ -315,6 +315,8 @@ struct App {
     take: RefCell<Option<Arc<platform::Take>>>,
     /// The mic on the headphones, while on.
     listening: RefCell<Option<listen::Listening>>,
+    /// The "What's new" window, while it is open.
+    news_window: RefCell<Option<NewsWindow>>,
     /// Tap mode for the dictation key, read by the key thread.
     key_toggle: Arc<AtomicBool>,
     microphones: RefCell<Vec<Microphone>>,
@@ -661,12 +663,15 @@ impl App {
                         version,
                         url,
                         installer,
+                        news,
                     } => {
                         state.set_update_dismissed(version == dismissed);
                         state.set_update_version(version.as_str().into());
                         state.set_update_url(url.into());
                         state.set_update_installable(installer.is_some());
+                        state.set_update_has_news(news.is_some());
                         *pending_installer().lock().unwrap_or_else(|e| e.into_inner()) = installer;
+                        *pending_news().lock().unwrap_or_else(|e| e.into_inner()) = news;
                         state.set_update_state(UpdateState::Available);
                         if let Some(t) = tray.upgrade() {
                             t.set_update_version(version.into());
@@ -675,6 +680,31 @@ impl App {
                 }
             });
         });
+    }
+
+    /// Opens the window with what the offered version brings, in the app's
+    /// language.
+    fn show_news(&self) {
+        let Some(w) = self.window.upgrade() else { return };
+        let Some(news) = pending_news().lock().unwrap_or_else(|e| e.into_inner()).clone() else {
+            return;
+        };
+        let text = match self.language() {
+            Language::German => news.de,
+            Language::English => news.en,
+        };
+        let Ok(win) = NewsWindow::new() else { return };
+        win.set_version(w.global::<AppState>().get_update_version());
+        win.set_news(text.into());
+        let weak = win.as_weak();
+        win.on_close(move || {
+            if let Some(win) = weak.upgrade() {
+                let _ = win.hide();
+            }
+        });
+        if win.show().is_ok() {
+            *self.news_window.borrow_mut() = Some(win);
+        }
     }
 
     /// The daily check: when it is on and a day has passed since kyrr last
@@ -841,6 +871,12 @@ fn now() -> u64 {
 }
 
 /// The installer the last update check found, for "Update now".
+/// What the offered version brings, for the "What's new" window.
+fn pending_news() -> &'static std::sync::Mutex<Option<update::News>> {
+    static PENDING: std::sync::Mutex<Option<update::News>> = std::sync::Mutex::new(None);
+    &PENDING
+}
+
 fn pending_installer() -> &'static std::sync::Mutex<Option<update::Installer>> {
     static PENDING: std::sync::Mutex<Option<update::Installer>> = std::sync::Mutex::new(None);
     &PENDING
@@ -947,6 +983,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         probe_events: mpsc::channel(),
         take: RefCell::new(None),
         listening: RefCell::new(None),
+        news_window: RefCell::new(None),
         key_toggle,
         microphones: RefCell::new(Vec::new()),
         worker: worker.clone(),
@@ -1057,6 +1094,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 }
             });
         }
+    });
+    state.on_show_news({
+        let app = Rc::clone(&app);
+        move || app.show_news()
     });
     state.on_open_update({
         let weak = window.as_weak();

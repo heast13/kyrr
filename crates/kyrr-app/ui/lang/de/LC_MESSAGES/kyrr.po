@@ -713,3 +713,12 @@ msgstr "Mikro zu laut. Stell es in Windows leiser."
 
 msgid "Still listening to you. Headphones only!"
 msgstr "Mithören läuft noch. Nur mit Kopfhörern!"
+
+msgid "What's new"
+msgstr "Was ist neu"
+
+msgid "kyrr {} is out"
+msgstr "kyrr {} ist da"
+
+msgid "Close"
+msgstr "Schließen"
