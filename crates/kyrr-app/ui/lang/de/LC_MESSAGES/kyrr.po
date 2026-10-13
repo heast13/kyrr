@@ -737,6 +737,12 @@ msgstr "Braucht PipeWire, und das läuft nicht."
 msgid "Off. Your mic as loud as your system sets it."
 msgstr "Aus. Dein Mikro so laut, wie dein System es einstellt."
 
+msgid "Mic very quiet. Turn it up in your sound settings."
+msgstr "Mikro sehr leise. Stell es in den Sound-Einstellungen lauter."
+
+msgid "Mic too loud. Turn it down in your sound settings."
+msgstr "Mikro zu laut. Stell es in den Sound-Einstellungen leiser."
+
 msgid "Start when you sign in"
 msgstr "Beim Anmelden starten"
 

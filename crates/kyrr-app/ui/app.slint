@@ -759,8 +759,8 @@ component AlertButton inherits Rectangle {
 // empty or not, so the window keeps its height however many notes there are.
 component AlertLine inherits Text {
     pure function note() -> string {
-        if (AppState.alert == 1) { return @tr("Mic very quiet. Turn it up in Windows."); }
-        if (AppState.alert == 2) { return @tr("Mic too loud. Turn it down in Windows."); }
+        if (AppState.alert == 1) { return (AppState.linux ? @tr("Mic very quiet. Turn it up in your sound settings.") : @tr("Mic very quiet. Turn it up in Windows.")); }
+        if (AppState.alert == 2) { return (AppState.linux ? @tr("Mic too loud. Turn it down in your sound settings.") : @tr("Mic too loud. Turn it down in Windows.")); }
         if (AppState.alert == 3) { return @tr("Still listening to you. Headphones only!"); }
         return "";
     }
