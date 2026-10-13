@@ -97,12 +97,14 @@ fn main() {
     // A new version is out: the note above the bottom row.
     state.set_update_version("0.4.0".into());
     state.set_update_installable(true);
+    state.set_update_has_news(true);
     state.set_update_state(UpdateState::Available);
     render(&window, &ui, &format!("{out}/main-update-{lang}.rgba"));
     state.set_update_state(UpdateState::Downloading);
     state.set_update_progress(0.37);
     render(&window, &ui, &format!("{out}/main-updating-{lang}.rgba"));
     state.set_update_state(UpdateState::Idle);
+    state.set_update_has_news(false);
 
     // Nothing uses the microphone: standing by, with the meter at rest.
     state.set_mic_active(false);
@@ -191,4 +193,29 @@ fn main() {
     state.set_dictation_state(DictationState::Downloading);
     state.set_download_progress(0.42);
     render(&window, &ui, &format!("{out}/setup2-{lang}.rgba"));
+
+    // The summary window of a new version.
+    let news = NewsWindow::new().unwrap();
+    news.set_version("0.5.0".into());
+    news.set_news(
+        if lang == "de" {
+            "• Das Hauptfenster behält jetzt seine Höhe.\n• Eine kleine rote Zeile warnt, wenn dein Mikro zu leise ist oder „Mithören“ noch läuft.\n• Die automatische Lautstärke zeigt +9 dB grün oder −9 dB rot."
+        } else {
+            "• The main window keeps its height now.\n• A small red note warns when your mic is too quiet or \"Listen to yourself\" is still running.\n• The automatic volume shows +9 dB in green or −9 dB in red."
+        }
+        .into(),
+    );
+    news.show().unwrap();
+    let h = (320.0 * scale) as u32;
+    let w = (380.0 * scale) as u32;
+    window.set_size(PhysicalSize::new(w, h));
+    let mut buf = vec![PremultipliedRgbaColor::default(); (w * h) as usize];
+    window.request_redraw();
+    window.draw_if_needed(|r| {
+        r.render(&mut buf, w as usize);
+    });
+    let bytes: Vec<u8> = buf.iter().flat_map(|p| [p.red, p.green, p.blue, p.alpha]).collect();
+    let path = format!("{out}/news-{lang}.rgba");
+    std::fs::write(&path, bytes).unwrap();
+    std::fs::write(format!("{path}.size"), format!("{w}x{h}")).unwrap();
 }

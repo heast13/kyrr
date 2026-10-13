@@ -23,6 +23,14 @@ pub struct Installer {
     pub sha256_url: String,
 }
 
+/// What is new in a release, in plain words for each language, as the
+/// release writes it into its description (see `scripts/release-notes.py`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct News {
+    pub en: String,
+    pub de: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Outcome {
     UpToDate,
@@ -31,6 +39,8 @@ pub enum Outcome {
         /// The release page, the way out when the installer cannot be used.
         url: String,
         installer: Option<Installer>,
+        /// None for releases without a summary.
+        news: Option<News>,
     },
     /// Offline, no release yet, or an answer that made no sense.
     Failed,
@@ -93,7 +103,55 @@ fn parse(body: &str, current: &str) -> Outcome {
         version,
         url: url.to_string(),
         installer,
+        news: json["body"].as_str().and_then(news),
     }
+}
+
+/// The most the summary shows, per language.
+const NEWS_LIMIT: usize = 2000;
+
+/// The summary hidden in a release description as `<!-- kyrr-news:en … -->`
+/// and `<!-- kyrr-news:de … -->`. A language that is missing falls back to
+/// the other one; none at all is no summary.
+fn news(body: &str) -> Option<News> {
+    let (en, de) = (news_block(body, "en"), news_block(body, "de"));
+    let (en, de) = match (en, de) {
+        (None, None) => return None,
+        (Some(en), None) => (en.clone(), en),
+        (None, Some(de)) => (de.clone(), de),
+        (Some(en), Some(de)) => (en, de),
+    };
+    Some(News { en, de })
+}
+
+/// One language's block as plain text: bullets become "•", wrapped lines
+/// are joined, blank lines separate paragraphs.
+fn news_block(body: &str, lang: &str) -> Option<String> {
+    let start = format!("<!-- kyrr-news:{lang}");
+    let from = body.find(&start)? + start.len();
+    let block = &body[from..from + body[from..].find("-->")?];
+    let mut out = String::new();
+    for line in block.lines() {
+        let text = line.trim();
+        if text.is_empty() {
+            if !out.is_empty() && !out.ends_with("\n\n") {
+                out.push_str("\n\n");
+            }
+        } else if let Some(item) = line.strip_prefix("- ") {
+            if !out.is_empty() && !out.ends_with("\n\n") {
+                out.push('\n');
+            }
+            out.push_str("• ");
+            out.push_str(item.trim());
+        } else {
+            if !out.is_empty() && !out.ends_with("\n\n") && !out.ends_with('\n') {
+                out.push(' ');
+            }
+            out.push_str(text);
+        }
+    }
+    let out: String = out.trim().chars().take(NEWS_LIMIT).collect();
+    (!out.is_empty()).then_some(out)
 }
 
 /// "v1.2.3" or "1.2.3" as numbers; anything else is not a version.
@@ -173,6 +231,7 @@ mod tests {
                 version: "0.2.0".into(),
                 url: url.into(),
                 installer: None,
+                news: None,
             }
         );
         assert!(matches!(
@@ -214,6 +273,24 @@ mod tests {
             parse(&foreign, "0.3.0"),
             Outcome::Available { installer: None, .. }
         ));
+    }
+
+    #[test]
+    fn news_comes_from_the_release_description() {
+        let body = "- tech notes\n\nWindows 10.\n\n<!-- kyrr-news:en\n- A new button.\n  It is red.\n- Fewer bugs.\n\nSecond paragraph.\n-->\n<!-- kyrr-news:de\n- Ein neuer Knopf.\n-->\n";
+        let n = news(body).expect("news");
+        assert_eq!(n.en, "• A new button. It is red.\n• Fewer bugs.\n\nSecond paragraph.");
+        assert_eq!(n.de, "• Ein neuer Knopf.");
+        // One language only: the other one falls back to it.
+        let only = news("<!-- kyrr-news:de\n- Nur Deutsch.\n-->").expect("news");
+        assert_eq!(only.en, only.de);
+        // No block, an empty one or one never closed: no summary.
+        assert_eq!(news("- just notes"), None);
+        assert_eq!(news("<!-- kyrr-news:en\n\n-->"), None);
+        assert_eq!(news("<!-- kyrr-news:en\n- open end"), None);
+        // Long text is cut.
+        let long = format!("<!-- kyrr-news:en\n- {}\n-->", "x".repeat(5000));
+        assert_eq!(news(&long).expect("news").en.chars().count(), NEWS_LIMIT);
     }
 
     #[test]

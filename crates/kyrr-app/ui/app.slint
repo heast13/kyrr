@@ -76,6 +76,8 @@ export global AppState {
     in property <UpdateState> update-state;
     in property <string> update-version;
     in property <string> update-url;
+    // The new version comes with a short summary of what changed.
+    in property <bool> update-has-news;
     // The release's installer; "" when it has none (then only the page).
     in property <bool> update-installable;
     in property <float> update-progress; // 0..1
@@ -131,6 +133,7 @@ export global AppState {
     callback open-licenses();
     callback check-updates();
     callback open-update();
+    callback show-news();
     callback install-update();
     callback update-auto-toggled(bool);
     callback dismiss-update();
@@ -687,6 +690,11 @@ component UpdateBanner inherits Rectangle {
             vertical-alignment: center;
             horizontal-stretch: 1;
         }
+        if !root.busy && AppState.update-has-news: Button {
+            text: @tr("What's new");
+            horizontal-stretch: 0;
+            clicked => { AppState.show-news(); }
+        }
         if !root.busy && AppState.update-installable: Button {
             text: AppState.update-state == UpdateState.download-failed ? @tr("Try again") : @tr("Update");
             primary: true;
@@ -1093,6 +1101,44 @@ component SetupPage inherits VerticalLayout {
         text: @tr("Done");
         primary: AppState.dictation-state != DictationState.no-model;
         clicked => { AppState.finish-setup(); }
+    }
+}
+
+// What is new in the version on offer: a small window of its own with the
+// summary the release brings, in plain words.
+export component NewsWindow inherits Window {
+    in property <string> version;
+    in property <string> news;
+    callback close();
+    title: @tr("What's new");
+    icon: @image-url("icons/kyrr-256.png");
+    preferred-width: 380px;
+    min-width: 320px;
+    preferred-height: 320px;
+    VerticalLayout {
+        padding: 18px;
+        spacing: 12px;
+        Heading { text: @tr("kyrr {} is out", root.version); font-size: 18px; }
+        ScrollView {
+            VerticalLayout {
+                alignment: start;
+                width: parent.visible-width;
+                Text {
+                    text: root.news;
+                    wrap: word-wrap;
+                    font-size: 13px;
+                }
+            }
+        }
+        HorizontalLayout {
+            Rectangle { }
+            Button {
+                text: @tr("Close");
+                primary: true;
+                horizontal-stretch: 0;
+                clicked => { root.close(); }
+            }
+        }
     }
 }
 
