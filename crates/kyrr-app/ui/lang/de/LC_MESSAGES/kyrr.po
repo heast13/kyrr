@@ -707,3 +707,12 @@ msgstr "{} bereit"
 
 msgid "Just your voice. Keyboard, fan and dog stay outside."
 msgstr "Nur deine Stimme. Tastatur, Lüfter und Hund bleiben draußen."
+
+msgid "Mic very quiet. Turn it up in Windows."
+msgstr "Mikro sehr leise. Stell es in Windows lauter."
+
+msgid "Mic too loud. Turn it down in Windows."
+msgstr "Mikro zu laut. Stell es in Windows leiser."
+
+msgid "Still listening to you. Headphones only!"
+msgstr "Mithören läuft noch. Nur mit Kopfhörern!"

@@ -218,6 +218,37 @@ fn next_phrase(state: &AppState) {
     state.set_phrase(state.get_phrase().wrapping_add(1) & i32::MAX);
 }
 
+/// The small red notes at the bottom of the main page, numbered as the
+/// .slint side reads them (`AppState.alert`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Alert {
+    MicQuiet = 1,
+    MicLoud = 2,
+    Listening = 3,
+}
+
+/// The automatic volume's limits (see kyrr-voice), less a little slack for
+/// the gain stopping just short of them.
+const GAIN_AT_MAX_DB: f32 = 23.5;
+const GAIN_AT_MIN_DB: f32 = -11.5;
+
+/// The notes that apply right now. The window shows them one after the other.
+fn alerts(auto_level: bool, mic_active: bool, gain_db: f32, listening: bool) -> Vec<Alert> {
+    let mut list = Vec::new();
+    // The gain only means something while an app uses the microphone.
+    if auto_level && mic_active {
+        if gain_db >= GAIN_AT_MAX_DB {
+            list.push(Alert::MicQuiet);
+        } else if gain_db <= GAIN_AT_MIN_DB {
+            list.push(Alert::MicLoud);
+        }
+    }
+    if listening {
+        list.push(Alert::Listening);
+    }
+    list
+}
+
 /// A linear peak on the meter's scale: −60 dBFS to 0 dBFS.
 fn meter(peak: f32) -> f32 {
     if peak <= 0.0 || !peak.is_finite() {
@@ -268,6 +299,8 @@ struct App {
     meter: slint::Timer,
     heartbeat: Cell<u32>,
     ticks: Cell<u32>,
+    /// Which of the red notes is up; moves on with the phrases.
+    alert_turn: Cell<u32>,
     /// Ticks in a row the microphone was in use but silent.
     silent_ticks: Cell<u32>,
     model_changed: Cell<Option<Instant>>,
@@ -466,6 +499,7 @@ impl App {
         match ticks % PHRASE_TICKS {
             0 => {
                 next_phrase(&state);
+                self.alert_turn.set(self.alert_turn.get().wrapping_add(1));
                 state.set_phrase_visible(true);
             }
             t if t == PHRASE_TICKS - PHRASE_FADE_TICKS => state.set_phrase_visible(false),
@@ -485,6 +519,17 @@ impl App {
             levels.gain_db
         } else {
             0.0
+        });
+        let notes = alerts(
+            state.get_auto_level(),
+            active,
+            state.get_level_gain(),
+            state.get_listening(),
+        );
+        state.set_alert(if notes.is_empty() {
+            0
+        } else {
+            notes[self.alert_turn.get() as usize % notes.len()] as i32
         });
 
         let switching = match self.model_changed.get() {
@@ -890,6 +935,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         meter: slint::Timer::default(),
         heartbeat: Cell::new(0),
         ticks: Cell::new(0),
+        alert_turn: Cell::new(0),
         silent_ticks: Cell::new(0),
         model_changed: Cell::new(None),
         probe_events: mpsc::channel(),
@@ -1314,4 +1360,37 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     }
     tray.show()?;
     slint::run_event_loop_until_quit()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn no_notes_when_all_is_well() {
+        assert!(alerts(true, true, 8.0, false).is_empty());
+        assert!(alerts(false, false, 0.0, false).is_empty());
+    }
+
+    #[test]
+    fn gain_at_its_limit_says_so() {
+        assert_eq!(alerts(true, true, 24.0, false), [Alert::MicQuiet]);
+        assert_eq!(alerts(true, true, -12.0, false), [Alert::MicLoud]);
+        // Just short of the limits is still fine.
+        assert!(alerts(true, true, 23.0, false).is_empty());
+        assert!(alerts(true, true, -11.0, false).is_empty());
+    }
+
+    #[test]
+    fn gain_only_counts_while_it_works() {
+        // Automatic volume off, or no app on the microphone: the number is stale.
+        assert!(alerts(false, true, 24.0, false).is_empty());
+        assert!(alerts(true, false, -12.0, false).is_empty());
+    }
+
+    #[test]
+    fn several_notes_come_in_turn() {
+        assert_eq!(alerts(true, true, 24.0, true), [Alert::MicQuiet, Alert::Listening]);
+        assert_eq!(alerts(false, false, 0.0, true), [Alert::Listening]);
+    }
 }
