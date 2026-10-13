@@ -312,11 +312,8 @@ msgstr "Aus. Dein Mikro so laut, wie Windows es einstellt."
 msgid "Shows what it evens out while an app uses the mic."
 msgstr "Zeigt, was sie ausgleicht, solange eine App das Mikro nutzt."
 
-msgid "Right now {} dB louder."
-msgstr "Gerade {} dB lauter."
-
-msgid "Right now {} dB quieter."
-msgstr "Gerade {} dB leiser."
+msgid "Right now: {} dB"
+msgstr "Gerade: {} dB"
 
 msgid "Right now unchanged: your mic is just right."
 msgstr "Gerade unverändert: Dein Mikro passt genau."

@@ -887,11 +887,15 @@ component LevelSettings inherits Card {
             : AppState.auto-level ? @tr("Always the same volume, however your mic is set. If your call app does that too, switch one off.")
             : @tr("Off. Your mic as loud as Windows sets it.");
     }
+    // What it adds right now: green when it boosts, red when it cuts.
+    property <string> signed: root.gain > 0 ? "+" + root.gain : root.gain < 0 ? "−" + (-root.gain) : "0";
     if root.available && AppState.auto-level && AppState.advanced: Caption {
         text: !AppState.mic-active ? @tr("Shows what it evens out while an app uses the mic.")
-            : root.gain > 0 ? @tr("Right now {} dB louder.", root.gain)
-            : root.gain < 0 ? @tr("Right now {} dB quieter.", -root.gain)
-            : @tr("Right now unchanged: your mic is just right.");
+            : root.gain == 0 ? @tr("Right now unchanged: your mic is just right.")
+            : @tr("Right now: {} dB", root.signed);
+        color: !AppState.mic-active || root.gain == 0 ? Palette.foreground.with-alpha(0.65)
+            : root.gain > 0 ? (Palette.color-scheme == ColorScheme.dark ? #3fb950 : #1a7f37)
+            : #e5484d;
     }
 }
 
@@ -1200,7 +1204,9 @@ export component MainWindow inherits Window {
                     alignment: start;
                     NoiseSettings { }
                     VoiceSettings { }
-                    LevelSettings { }
+                    // Simple: here, with the voice. Advanced: the voice card
+                    // is tall, so it moves over to the shorter right column.
+                    if !AppState.advanced: LevelSettings { }
                     GeneralSettings { }
                 }
                 VerticalLayout {
@@ -1209,6 +1215,7 @@ export component MainWindow inherits Window {
                     alignment: start;
                     DictationSettings { }
                     ToolsSettings { }
+                    if AppState.advanced: LevelSettings { }
                     AboutSettings { }
                 }
             }
