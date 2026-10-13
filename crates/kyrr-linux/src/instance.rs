@@ -21,11 +21,15 @@ const SHOW: &[u8] = b"show";
 const DICTATE: &[u8] = b"dictate";
 
 fn socket_path() -> PathBuf {
-    // In a Flatpak this folder is the app's own, shared by all its starts.
     let dir = std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
-    dir.join("kyrr.sock")
+    // In a Flatpak the runtime folder is each start's own; this one below it
+    // is shared by all starts of the app.
+    match std::env::var("FLATPAK_ID") {
+        Ok(id) => dir.join("app").join(id).join("kyrr.sock"),
+        Err(_) => dir.join("kyrr.sock"),
+    }
 }
 
 /// `args` are the program's arguments; `--dictate` asks the running kyrr to

@@ -3,6 +3,7 @@
 
 #![cfg(target_os = "linux")]
 
+pub mod background;
 pub mod hotkey;
 pub mod instance;
 pub mod mic;

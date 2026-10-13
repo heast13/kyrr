@@ -281,6 +281,9 @@ mod imp {
         filter: BTreeMap<String, u32>,
         /// Lets the keyboard portal type without asking again.
         portal_token: Option<String>,
+        /// In a Flatpak: the Background portal starts kyrr at login. The
+        /// portal's own record is out of the sandbox's reach.
+        autostart: bool,
     }
 
     impl Saved {
@@ -450,9 +453,11 @@ mod imp {
         state().filter = Filter::Off;
     }
 
-    /// Whether the desktop shows kyrr's tray icon.
+    /// Whether the desktop shows kyrr's tray icon. Not from a Flatpak: the
+    /// tray (Slint's, through ksni) claims a D-Bus name the sandbox may not
+    /// own, so it never registers there.
     pub fn has_tray() -> bool {
-        kyrr_linux::tray::available()
+        !flatpak() && kyrr_linux::tray::available()
     }
 
     pub fn paste_text(text: &str) -> bool {
@@ -545,11 +550,35 @@ mod imp {
         }
     }
 
+    fn flatpak() -> bool {
+        std::env::var_os("FLATPAK_ID").is_some()
+    }
+
     pub fn autostart_enabled() -> bool {
+        if flatpak() {
+            return state().saved.autostart;
+        }
         autostart_file().is_file()
     }
 
     pub fn set_autostart(on: bool) {
+        if flatpak() {
+            // Taken as asked; the desktop may ask the user first, and its
+            // answer lands in the settings the next time they are shown.
+            {
+                let mut s = state();
+                s.saved.autostart = on;
+                s.saved.save();
+            }
+            std::thread::spawn(move || {
+                if let Ok(enabled) = kyrr_linux::background::request_autostart(on) {
+                    let mut s = state();
+                    s.saved.autostart = enabled;
+                    s.saved.save();
+                }
+            });
+            return;
+        }
         let file = autostart_file();
         if !on {
             let _ = std::fs::remove_file(file);
