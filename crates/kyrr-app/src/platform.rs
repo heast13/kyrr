@@ -198,6 +198,10 @@ mod imp {
     /// The filter lives in the audio service; nothing to stop.
     pub fn shutdown() {}
 
+    pub fn has_tray() -> bool {
+        true
+    }
+
     /// The live monitor the audio filter shares; `None` until it ran once.
     pub struct Monitor(kyrr_windows::monitor::Monitor);
 
@@ -424,6 +428,11 @@ mod imp {
     /// Gives the default microphone back before kyrr ends.
     pub fn shutdown() {
         state().filter = Filter::Off;
+    }
+
+    /// Whether the desktop shows kyrr's tray icon.
+    pub fn has_tray() -> bool {
+        kyrr_linux::tray::available()
     }
 
     pub fn paste_text(text: &str) -> bool {

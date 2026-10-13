@@ -329,7 +329,16 @@ struct App {
     microphones: RefCell<Vec<Microphone>>,
     worker: mpsc::Sender<Command>,
     window: Weak<MainWindow>,
-    tray: Weak<Tray>,
+}
+
+thread_local! {
+    /// The tray icon. It is replaced when a panel to host it turns up after
+    /// kyrr started (see [`retry_tray`]), so it is looked up, not kept.
+    static TRAY: RefCell<Option<Tray>> = const { RefCell::new(None) };
+}
+
+fn tray() -> Option<Tray> {
+    TRAY.with_borrow(|t| t.as_ref().map(Tray::clone_strong))
 }
 
 impl App {
@@ -349,7 +358,7 @@ impl App {
     }
 
     fn refresh_filter(&self) {
-        let (Some(w), Some(tray)) = (self.window.upgrade(), self.tray.upgrade()) else {
+        let (Some(w), Some(tray)) = (self.window.upgrade(), tray()) else {
             return;
         };
         let state = w.global::<AppState>();
@@ -449,7 +458,7 @@ impl App {
     /// appears or goes, the window fits its content).
     fn set_voice(&self, change: impl FnOnce(&mut VoiceSettings)) {
         self.write_filter(|f| change(&mut f.voice));
-        if let Some(t) = self.tray.upgrade() {
+        if let Some(t) = tray() {
             t.set_voice_enabled(self.filter.borrow().voice.enabled);
         }
         if let Some(w) = self.window.upgrade() {
@@ -650,7 +659,7 @@ impl App {
                 w.global::<AppState>().set_update_state(UpdateState::Checking);
             }
         }
-        let (window, tray) = (self.window.clone(), self.tray.clone());
+        let window = self.window.clone();
         std::thread::spawn(move || {
             let outcome = update::check();
             let _ = slint::invoke_from_event_loop(move || {
@@ -680,7 +689,7 @@ impl App {
                         *pending_installer().lock().unwrap_or_else(|e| e.into_inner()) = installer;
                         *pending_news().lock().unwrap_or_else(|e| e.into_inner()) = news;
                         state.set_update_state(UpdateState::Available);
-                        if let Some(t) = tray.upgrade() {
+                        if let Some(t) = tray() {
                             t.set_update_version(version.into());
                         }
                     }
@@ -784,7 +793,7 @@ impl App {
             state.set_key_toggle(toggle);
             state.set_key_name(name.as_str().into());
         }
-        if let Some(t) = self.tray.upgrade() {
+        if let Some(t) = tray() {
             t.set_key_name(name.into());
         }
     }
@@ -816,7 +825,7 @@ impl App {
         if let Some(w) = self.window.upgrade() {
             w.global::<AppState>().set_dictation_enabled(on);
         }
-        if let Some(t) = self.tray.upgrade() {
+        if let Some(t) = tray() {
             t.set_dictation_enabled(on);
         }
     }
@@ -908,7 +917,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     // An installer downloaded for the last update is done with.
     let _ = std::fs::remove_dir_all(update::folder());
     let window = MainWindow::new()?;
-    let tray = Tray::new()?;
     let _ = slint::select_bundled_translation(language.code());
 
     // Dictation worker, reporting back on the UI thread. Whether it records
@@ -916,15 +924,14 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     let recording = Arc::new(AtomicBool::new(false));
     let key_toggle = Arc::new(AtomicBool::new(false));
     let weak = window.as_weak();
-    let weak_tray = tray.as_weak();
     let recording_flag = Arc::clone(&recording);
     let notify: dictation::Notify = Arc::new(move |event| {
         if let Event::State(s) = &event {
             recording_flag.store(*s == State::Recording, Ordering::Relaxed);
         }
-        let (weak, weak_tray) = (weak.clone(), weak_tray.clone());
+        let weak = weak.clone();
         let _ = slint::invoke_from_event_loop(move || {
-            let (Some(w), Some(t)) = (weak.upgrade(), weak_tray.upgrade()) else {
+            let (Some(w), Some(t)) = (weak.upgrade(), tray()) else {
                 return;
             };
             let state = w.global::<AppState>();
@@ -995,8 +1002,9 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         microphones: RefCell::new(Vec::new()),
         worker: worker.clone(),
         window: window.as_weak(),
-        tray: tray.as_weak(),
     });
+    let tray = new_tray(&app)?;
+    TRAY.set(Some(tray.clone_strong()));
 
     let state = window.global::<AppState>();
     state.set_version(env!("CARGO_PKG_VERSION").into());
@@ -1203,10 +1211,15 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     });
     // Closing only hides the window; listening and the meter end with it.
     // The button in the window does the same; quitting is in the tray menu.
+    // Without a tray (GNOME without its extension) closing quits, and the
+    // button minimizes, so kyrr never hides where nobody can reach it.
     window.window().on_close_requested({
         let app = Rc::clone(&app);
         move || {
             app.window_closed();
+            if !platform::has_tray() {
+                let _ = slint::quit_event_loop();
+            }
             slint::CloseRequestResponse::HideWindow
         }
     });
@@ -1215,7 +1228,11 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         move || {
             app.window_closed();
             if let Some(w) = app.window.upgrade() {
-                let _ = w.hide();
+                if platform::has_tray() {
+                    let _ = w.hide();
+                } else {
+                    w.window().set_minimized(true);
+                }
             }
         }
     });
@@ -1319,55 +1336,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             }
         }
     });
-    let quit = {
-        let worker = worker.clone();
-        move || {
-            let _ = worker.send(Command::Quit);
-            let _ = slint::quit_event_loop();
-        }
-    };
-    tray.on_quit(quit);
-    tray.on_install_update({
-        let weak = window.as_weak();
-        move || {
-            if let Some(w) = weak.upgrade() {
-                show(&w);
-                w.global::<AppState>().invoke_install_update();
-            }
-        }
-    });
-    tray.on_open({
-        let app = Rc::clone(&app);
-        move || {
-            if let Some(w) = app.window.upgrade() {
-                app.refresh_microphones();
-                app.refresh_filter();
-                show(&w);
-            }
-        }
-    });
-    tray.on_toggle_filter({
-        let app = Rc::clone(&app);
-        move || {
-            let on = !app.filter.borrow().enabled;
-            app.set_filter(|f| f.enabled = on);
-        }
-    });
-    tray.on_toggle_voice({
-        let app = Rc::clone(&app);
-        move || {
-            let on = !app.filter.borrow().voice.enabled;
-            app.set_voice(|v| v.enabled = on);
-        }
-    });
-    tray.on_toggle_dictation({
-        let app = Rc::clone(&app);
-        move || {
-            let on = !app.config.borrow().dictation;
-            app.set_dictation(on);
-        }
-    });
-
     // The filter's state can change outside the app (stream starts, errors).
     // The daily look for a new version: a minute after the start (not in
     // the busy moments of signing in), then whenever a day has passed.
@@ -1411,9 +1379,116 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     }
     if !setup_done || !background {
         show(&window);
+    } else if !platform::has_tray() {
+        // Started at login without a tray to sit in (or before the panel
+        // that hosts it): give the panel a moment, then show up minimized
+        // rather than run where nobody can reach kyrr.
+        let weak = window.as_weak();
+        slint::Timer::single_shot(Duration::from_secs(10), move || {
+            if let Some(w) = weak.upgrade() {
+                if !platform::has_tray() {
+                    show(&w);
+                    w.window().set_minimized(true);
+                }
+            }
+        });
     }
+    let tray_at_start = platform::has_tray();
     tray.show()?;
-    slint::run_event_loop_until_quit()
+    drop(tray);
+    // A panel that hosts tray icons may start after kyrr (both at login).
+    // An icon can only register once one is there: make a new one then.
+    let tray_retry = slint::Timer::default();
+    if !tray_at_start {
+        let app = Rc::downgrade(&app);
+        let started = Instant::now();
+        let done = Cell::new(false);
+        tray_retry.start(slint::TimerMode::Repeated, Duration::from_secs(3), move || {
+            if done.get() || started.elapsed() > Duration::from_secs(120) || !platform::has_tray() {
+                return;
+            }
+            if let Some(app) = app.upgrade() {
+                done.set(retry_tray(&app).is_ok());
+            }
+        });
+    }
+    let result = slint::run_event_loop_until_quit();
+    TRAY.take();
+    result
+}
+
+/// A tray icon wired to the app.
+fn new_tray(app: &Rc<App>) -> Result<Tray, slint::PlatformError> {
+    let tray = Tray::new()?;
+    let quit = {
+        let worker = app.worker.clone();
+        move || {
+            let _ = worker.send(Command::Quit);
+            let _ = slint::quit_event_loop();
+        }
+    };
+    tray.on_quit(quit);
+    tray.on_install_update({
+        let weak = app.window.clone();
+        move || {
+            if let Some(w) = weak.upgrade() {
+                show(&w);
+                w.global::<AppState>().invoke_install_update();
+            }
+        }
+    });
+    tray.on_open({
+        let app = Rc::clone(app);
+        move || {
+            if let Some(w) = app.window.upgrade() {
+                app.refresh_microphones();
+                app.refresh_filter();
+                show(&w);
+            }
+        }
+    });
+    tray.on_toggle_filter({
+        let app = Rc::clone(app);
+        move || {
+            let on = !app.filter.borrow().enabled;
+            app.set_filter(|f| f.enabled = on);
+        }
+    });
+    tray.on_toggle_voice({
+        let app = Rc::clone(app);
+        move || {
+            let on = !app.filter.borrow().voice.enabled;
+            app.set_voice(|v| v.enabled = on);
+        }
+    });
+    tray.on_toggle_dictation({
+        let app = Rc::clone(app);
+        move || {
+            let on = !app.config.borrow().dictation;
+            app.set_dictation(on);
+        }
+    });
+    Ok(tray)
+}
+
+/// Replaces the tray icon with a new one that shows what the old one did;
+/// the old one never got a place in a panel.
+fn retry_tray(app: &Rc<App>) -> Result<(), slint::PlatformError> {
+    let new = new_tray(app)?;
+    if let Some(old) = tray() {
+        new.set_recording(old.get_recording());
+        new.set_active(old.get_active());
+        new.set_filter_enabled(old.get_filter_enabled());
+        new.set_voice_enabled(old.get_voice_enabled());
+        new.set_dictation_enabled(old.get_dictation_enabled());
+        new.set_dictation_ready(old.get_dictation_ready());
+        new.set_key_name(old.get_key_name());
+        new.set_update_version(old.get_update_version());
+        let _ = old.hide();
+    }
+    new.show()?;
+    TRAY.set(Some(new));
+    Ok(())
 }
 
 #[cfg(test)]

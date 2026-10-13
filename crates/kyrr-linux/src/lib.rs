@@ -6,4 +6,5 @@
 pub mod hotkey;
 pub mod instance;
 pub mod mic;
+pub mod tray;
 pub mod typing;
