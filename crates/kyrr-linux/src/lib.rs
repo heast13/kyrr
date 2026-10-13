@@ -4,5 +4,6 @@
 #![cfg(target_os = "linux")]
 
 pub mod hotkey;
+pub mod instance;
 pub mod mic;
 pub mod typing;

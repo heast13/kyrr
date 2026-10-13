@@ -1,8 +1,9 @@
 //! Push-to-talk key. Wayland has no way to read keys of other windows, so the
 //! key is caught through the compositor: the XDG GlobalShortcuts portal
 //! (GNOME 48+, KDE Plasma, Hyprland), or on an X11 session a passive key grab
-//! on the root window. Without either, [`start`] fails and the user binds
-//! `kyrr --dictate` to a key in the desktop settings.
+//! on the root window. Without either, the user binds `kyrr --dictate` to a
+//! key in the desktop settings; that start of kyrr hands it to the running
+//! one, which calls [`toggle`].
 //!
 //! With the portal the compositor, not kyrr, owns the key: kyrr only suggests
 //! it when the shortcut is bound. GNOME and KDE show their own dialog or
@@ -115,20 +116,28 @@ fn release() {
 }
 
 /// Starts catching the key on its own threads and returns the receiver for
-/// key events. Call once.
+/// key events. Call once. Without a way to catch the key the receiver still
+/// gets what [`toggle`] sends.
 pub fn start() -> Result<mpsc::Receiver<KeyEvent>, String> {
     let (tx, rx) = mpsc::channel();
     SENDER.set(tx).map_err(|_| "hotkey already started")?;
+    let x11_session = std::env::var_os("WAYLAND_DISPLAY").is_none() && std::env::var_os("DISPLAY").is_some();
     let backend = match start_portal() {
         Ok(()) => Backend::Portal,
-        Err(portal) if std::env::var_os("WAYLAND_DISPLAY").is_none() && std::env::var_os("DISPLAY").is_some() => {
-            start_x11().map_err(|x11| format!("no global shortcut portal ({portal}); X11: {x11}"))?;
-            Backend::X11
-        }
-        Err(portal) => return Err(format!("no global shortcut portal ({portal}) and no X11 session")),
+        Err(_) if x11_session && start_x11().is_ok() => Backend::X11,
+        Err(_) => Backend::None,
     };
     let _ = BACKEND.set(backend);
     Ok(rx)
+}
+
+/// `kyrr --dictate`: starts dictation, or ends it when it runs.
+pub fn toggle() {
+    if HELD.load(Ordering::Relaxed) {
+        release();
+    } else {
+        press();
+    }
 }
 
 /// Returns once the session exists; whether the shortcut gets bound is up to

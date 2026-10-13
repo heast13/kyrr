@@ -2,7 +2,8 @@
 //!
 //! `kyrr.exe --setup <command>` runs an elevated setup step (see
 //! `kyrr_windows::run_setup_command`); `--background` starts without
-//! showing the window.
+//! showing the window. On Linux `kyrr --dictate` starts or ends dictation
+//! in the running kyrr, for desktops where kyrr cannot catch a key itself.
 
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
@@ -48,7 +49,10 @@ fn main() {
         kyrr_windows::instance::Instance::Other => return,
     };
     #[cfg(not(windows))]
-    let show_requests: Option<mpsc::Receiver<()>> = None;
+    let show_requests = match kyrr_linux::instance::claim(&args) {
+        kyrr_linux::instance::Instance::First { show_requests } => Some(show_requests),
+        kyrr_linux::instance::Instance::Other => return,
+    };
 
     let background = args.iter().any(|a| a == "--background");
     if let Err(e) = run(background, show_requests) {
