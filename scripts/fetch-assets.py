@@ -6,9 +6,9 @@
 - ONNX Runtime 1.27.0 for Windows (Microsoft, MIT), the fallback engine on
   CPUs without AVX2/FMA; only with --windows
 - sherpa-onnx 1.13.8 static libraries *without* text-to-speech (Apache-2.0),
-  so kyrr.exe links no GPL code (the default build bundles espeak-ng);
-  only with --windows. Build with SHERPA_ONNX_LIB_DIR pointing at
-  assets/sherpa-onnx/lib (CI and package.py check it)
+  so kyrr links no GPL code (the default build bundles espeak-ng);
+  only with --windows or --linux. Build with SHERPA_ONNX_LIB_DIR pointing
+  at assets/sherpa-onnx/lib (CI and package.py check it)
 - two short speech clips from the sherpa-onnx test assets for the dictation
   tests; only with --test
 
@@ -51,6 +51,12 @@ SHERPA_LIB = (
     "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/"
     "sherpa-onnx-v1.13.8-win-x64-static-MT-Release-no-tts-lib.tar.bz2",
     "f0aa074ddc39553b30208b53e84c12275d09702911c9faa8d34fa932428e4641",
+)
+SHERPA_LIB_LINUX = (
+    "sherpa-onnx-v1.13.8-linux-x64-static-no-tts-lib.tar.bz2",
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/"
+    "sherpa-onnx-v1.13.8-linux-x64-static-no-tts-lib.tar.bz2",
+    "36f2ebd0b9aa09248ff6461a30dcb7edfe7eecf2deb67dfb0ceb3aaf4906051f",
 )
 # sherpa-onnx-sys always links these text-to-speech libraries; without
 # text-to-speech nothing references them, so empty stand-ins do.
@@ -130,26 +136,34 @@ def msvc_tool(name: str) -> Path:
 
 
 def extract_sherpa(archive: Path) -> None:
+    windows = archive.name.startswith("sherpa-onnx-v1.13.8-win")
+    suffix = ".lib" if windows else ".a"
     lib = ASSETS / "sherpa-onnx" / "lib"
     shutil.rmtree(lib.parent, ignore_errors=True)
     lib.mkdir(parents=True)
     with tarfile.open(archive) as t:
         for member in t.getmembers():
-            if member.isfile() and member.name.endswith(".lib"):
+            if member.isfile() and member.name.endswith(suffix):
                 member.name = Path(member.name).name
                 t.extract(member, lib, filter="data")
+    for name in SHERPA_STUBS:
+        if windows:
+            make_stub_lib(lib / f"{name}.lib")
+        else:
+            # An archive with no members.
+            (lib / f"lib{name}.a").write_bytes(b"!<arch>\n")
+    print(f"OK  sherpa-onnx without text-to-speech: SHERPA_ONNX_LIB_DIR={lib}")
+
+
+def make_stub_lib(dest: Path) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         definition = Path(tmp) / "stub.def"
         definition.write_text("LIBRARY kyrr_stub\nEXPORTS\n", encoding="ascii")
-        stub = Path(tmp) / "stub.lib"
         subprocess.run(
-            [str(msvc_tool("lib.exe")), "/NOLOGO", f"/DEF:{definition}", "/MACHINE:X64", f"/OUT:{stub}"],
+            [str(msvc_tool("lib.exe")), "/NOLOGO", f"/DEF:{definition}", "/MACHINE:X64", f"/OUT:{dest}"],
             check=True,
             capture_output=True,
         )
-        for name in SHERPA_STUBS:
-            shutil.copy2(stub, lib / f"{name}.lib")
-    print(f"OK  sherpa-onnx without text-to-speech: SHERPA_ONNX_LIB_DIR={lib}")
 
 
 def main() -> None:
@@ -159,6 +173,8 @@ def main() -> None:
     if "--windows" in sys.argv[1:]:
         extract_ort(fetch(*ORT_ZIP))
         extract_sherpa(fetch(*SHERPA_LIB))
+    if "--linux" in sys.argv[1:]:
+        extract_sherpa(fetch(*SHERPA_LIB_LINUX))
     if "--test" in sys.argv[1:]:
         for name, digest in TEST_AUDIO:
             fetch(name, f"{SHERPA}/{name}", digest, ASSETS / "test-audio")
