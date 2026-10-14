@@ -143,6 +143,8 @@ export global AppState {
     callback check-updates();
     callback open-update();
     callback show-news();
+    // What the running version brought (from the NEWS built into the app).
+    callback show-current-news();
     callback install-update();
     callback update-auto-toggled(bool);
     callback dismiss-update();
@@ -670,6 +672,7 @@ component AboutSettings inherits Card {
             text: root.unfolded ? @tr("Less") : @tr("Credits");
             clicked => { root.unfolded = !root.unfolded; }
         }
+        Button { text: @tr("What's new"); clicked => { AppState.show-current-news(); } }
         Button { text: @tr("Licenses"); clicked => { AppState.open-licenses(); } }
     }
 }
@@ -1130,6 +1133,8 @@ component SetupPage inherits VerticalLayout {
 export component NewsWindow inherits Window {
     in property <string> version;
     in property <string> news;
+    // 0: the version on offer, 1: the one that just got installed, 2: all of them.
+    in property <int> mode;
     callback close();
     title: @tr("What's new");
     icon: @image-url("icons/kyrr-256.png");
@@ -1139,7 +1144,12 @@ export component NewsWindow inherits Window {
     VerticalLayout {
         padding: 18px;
         spacing: 12px;
-        Heading { text: @tr("kyrr {} is out", root.version); font-size: 18px; }
+        Heading {
+            text: root.mode == 2 ? @tr("What's new in kyrr")
+                : root.mode == 1 ? @tr("What kyrr {} brings", root.version)
+                : @tr("kyrr {} is out", root.version);
+            font-size: 18px;
+        }
         ScrollView {
             VerticalLayout {
                 alignment: start;

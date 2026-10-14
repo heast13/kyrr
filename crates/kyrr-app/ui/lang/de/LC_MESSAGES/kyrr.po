@@ -735,6 +735,12 @@ msgstr "Mithören läuft noch. Nur mit Kopfhörern!"
 msgid "What's new"
 msgstr "Was ist neu"
 
+msgid "What's new in kyrr"
+msgstr "Was ist neu in kyrr"
+
+msgid "What kyrr {} brings"
+msgstr "Das bringt kyrr {}"
+
 msgid "kyrr {} is out"
 msgstr "kyrr {} ist da"
 

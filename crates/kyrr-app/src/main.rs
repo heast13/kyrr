@@ -845,12 +845,34 @@ impl App {
         let Some(news) = pending_news().lock().unwrap_or_else(|e| e.into_inner()).clone() else {
             return;
         };
+        self.open_news(&w.global::<AppState>().get_update_version(), news, 0);
+    }
+
+    /// What the running version brought, from the NEWS.md built into the app.
+    fn show_current_news(&self) {
+        let version = env!("CARGO_PKG_VERSION");
+        if let Some(news) = update::bundled_news(version) {
+            self.open_news(version, news, 1);
+        }
+    }
+
+    /// Every version's summary, the newest on top.
+    fn show_all_news(&self) {
+        if let Some(news) = update::all_news() {
+            self.open_news(env!("CARGO_PKG_VERSION"), news, 2);
+        }
+    }
+
+    /// The news window: `mode` 0 for the version on offer, 1 for the one just
+    /// installed, 2 for all of them.
+    fn open_news(&self, version: &str, news: update::News, mode: i32) {
         let text = match self.language() {
             Language::German => news.de,
             Language::English => news.en,
         };
         let Ok(win) = NewsWindow::new() else { return };
-        win.set_version(w.global::<AppState>().get_update_version());
+        win.set_version(version.into());
+        win.set_mode(mode);
         win.set_news(text.into());
         let weak = win.as_weak();
         win.on_close(move || {
@@ -1259,6 +1281,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             });
         }
     });
+    state.on_show_current_news({
+        let app = Rc::clone(&app);
+        move || app.show_all_news()
+    });
     state.on_show_news({
         let app = Rc::clone(&app);
         move || app.show_news()
@@ -1575,6 +1601,29 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                         show(&w);
                     }
                 });
+            }
+        });
+    }
+
+    // First start after an update (an existing install that last ran another
+    // version): say what the new version brings, once.
+    let updated = {
+        let mut config = app.config.borrow_mut();
+        let version = env!("CARGO_PKG_VERSION");
+        let updated = config.last_run_version != version && (!config.last_run_version.is_empty() || config.setup_done);
+        if config.last_run_version != version {
+            config.last_run_version = version.into();
+            config.save();
+        }
+        updated
+    };
+    if updated {
+        slint::Timer::single_shot(Duration::from_secs(3), {
+            let app = Rc::downgrade(&app);
+            move || {
+                if let Some(app) = app.upgrade() {
+                    app.show_current_news();
+                }
             }
         });
     }

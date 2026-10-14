@@ -77,7 +77,7 @@ Until the installer is code-signed, Windows SmartScreen warns about it
 from the release page first.
 
 Uninstalling takes the filter off the microphone, puts the Windows setting
-below back and asks whether to delete the downloaded speech models.
+described under "How it works" back and asks whether to delete the downloaded speech models.
 
 ## How it works
 
@@ -110,8 +110,9 @@ turns everything below 120 Hz down while it lasts, starting 10 ms before the
 thump arrives. *Automatic volume* (on by default, works with the voice
 shaping switched off too) measures the voice only while someone speaks and
 moves it slowly (5 dB/s up, 10 dB/s down, at most +24/−12 dB) towards about
-−23 dBFS; pauses, clicks and steady noise leave it alone. Call apps that
-adjust the volume themselves can work against it, so use one of the two.
+−23 dBFS; pauses, clicks and steady noise leave it alone. Apps that
+adjust the volume themselves (call apps, say) can work against it, so use
+one of the two.
 
 **Your microphone.** kyrr checks every few seconds which microphone the
 system uses. When it changes, the filter moves along: Windows asks for
@@ -179,7 +180,7 @@ kyrr sends no data about you or your computer anywhere, see
 
 ## Building
 
-Windows (the Linux build follows with the Linux release) with Rust (MSVC), the Visual Studio Build Tools and Python 3; for
+On Windows, with Rust (MSVC), the Visual Studio Build Tools and Python 3; for
 the installer Inno Setup 6.
 
 ```powershell
