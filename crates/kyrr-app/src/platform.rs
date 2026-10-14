@@ -224,10 +224,6 @@ mod imp {
         KeyNote::None
     }
 
-    pub fn tiled() -> bool {
-        false
-    }
-
     /// The live monitor the audio filter shares; `None` until it ran once.
     pub struct Monitor(kyrr_windows::monitor::Monitor);
 
@@ -638,19 +634,6 @@ mod imp {
     /// `s` for inside a double-quoted Lua string.
     fn lua_quoted(s: &str) -> String {
         s.replace('\\', "\\\\").replace('"', "\\\"")
-    }
-
-    /// Whether a tiling compositor places the window.
-    pub fn tiled() -> bool {
-        let desktop = std::env::var("XDG_CURRENT_DESKTOP")
-            .unwrap_or_default()
-            .to_ascii_lowercase();
-        ["HYPRLAND_INSTANCE_SIGNATURE", "SWAYSOCK", "NIRI_SOCKET"]
-            .iter()
-            .any(|v| std::env::var_os(v).is_some())
-            || ["hyprland", "sway", "niri", "river"]
-                .iter()
-                .any(|d| desktop.contains(d))
     }
 
     /// How this kyrr is started with `flag`: through Flatpak, the

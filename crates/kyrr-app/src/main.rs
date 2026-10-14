@@ -1075,7 +1075,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_autostart(platform::autostart_enabled());
     state.set_update_auto(app.config.borrow().update_check);
     state.set_linux(cfg!(target_os = "linux"));
-    window.set_tiled(platform::tiled());
     state.set_tray(platform::has_tray());
     state.set_advanced(app.config.borrow().advanced_settings);
     app.apply_key();
