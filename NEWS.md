@@ -9,11 +9,13 @@ the text.
 
 ## 0.5.1
 
-- Noise removal now also works after you switch to some other microphones (it stayed silent on a RØDE PodMic USB). If it was off for your new microphone, kyrr shows a "Repair" button.
+- kyrr now follows your microphone: plug in another one (or the same one in a different USB port) and, once Windows uses it as your microphone, the noise removal moves along by itself. Windows asks for permission once and the sound pauses for a moment. On a RØDE PodMic USB it used to stay silent; that works now.
+- If Windows takes kyrr off your microphone (after an update, say), kyrr puts itself back.
 
 ### Deutsch
 
-- Die Rauschunterdrückung funktioniert jetzt auch nach dem Wechsel auf manche andere Mikrofone (beim RØDE PodMic USB blieb sie stumm). War sie bei deinem neuen Mikro aus, zeigt kyrr einen „Reparieren“-Knopf.
+- kyrr folgt jetzt deinem Mikrofon: Steckst du ein anderes ein (oder dasselbe an einen anderen USB-Anschluss), zieht die Rauschunterdrückung von selbst mit, sobald Windows es als dein Mikrofon nimmt. Windows fragt einmal um Erlaubnis, der Ton pausiert kurz. Beim RØDE PodMic USB blieb sie vorher stumm, jetzt geht es.
+- Nimmt Windows kyrr vom Mikrofon (zum Beispiel nach einem Update), setzt kyrr sich selbst wieder drauf.
 
 ## 0.5.0
 

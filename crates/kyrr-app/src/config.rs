@@ -29,6 +29,9 @@ pub struct Config {
     pub update_dismissed: String,
     /// The settings page shows everything, not just the basics.
     pub advanced_settings: bool,
+    /// The microphone Windows used by default when the user picked another
+    /// one on purpose; kyrr leaves that pick until the default changes.
+    pub pinned_default: String,
 }
 
 /// Keys dictation can use, as Windows virtual-key codes: F8, F9, Pause and
@@ -48,6 +51,7 @@ impl Default for Config {
             update_checked: 0,
             update_dismissed: String::new(),
             advanced_settings: false,
+            pinned_default: String::new(),
         }
     }
 }

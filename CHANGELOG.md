@@ -2,10 +2,19 @@
 
 ## 0.5.1 (2026-10-14)
 
-- Switching to another microphone now works for microphones Windows had not
-  given a "supported modes" entry (seen on a RØDE PodMic USB): kyrr adds it
-  when it attaches, so Windows loads the noise filter there. A microphone
-  attached earlier without it shows the "Repair" button.
+- Plugging another microphone in or out is followed by itself: kyrr checks
+  every few seconds which microphone Windows uses and moves the noise filter
+  there (Windows asks for permission once, then sound pauses for a moment).
+  A microphone on another USB port counts as a new one. If you decline, a
+  button on the main page offers it. A microphone you pick by hand with
+  "Change microphone" stays until Windows' default changes, and so does one
+  kyrr was already set up on.
+- If Windows takes kyrr off the microphone (an update, most likely), kyrr
+  puts itself back once by itself; the "Repair" button stays as the fallback.
+- The microphone list in the window stays current while it is open.
+- Microphones Windows had not given a "supported modes" entry (seen on a
+  RØDE PodMic USB) now get the noise filter too: kyrr adds the entry when it
+  attaches. A microphone attached earlier without it is repaired by itself.
 
 ## 0.5.0 (2026-10-13)
 
