@@ -684,6 +684,9 @@ msgstr "Mit Strg, Alt oder Umschalt bleibt die Taste bei deiner App."
 msgid "Your microphone is not plugged in."
 msgstr "Dein Mikrofon steckt nicht."
 
+msgid "Your system uses another microphone now."
+msgstr "Dein System nutzt jetzt ein anderes Mikrofon."
+
 msgid "Windows uses another microphone now."
 msgstr "Windows nutzt jetzt ein anderes Mikrofon."
 
@@ -777,10 +780,10 @@ msgid "{} is not set up yet: kyrr needs your desktop's OK for it."
 msgstr "{} ist noch nicht eingerichtet: Dafür braucht kyrr das OK deines Desktops."
 
 msgid "Dictation uses {}. Your desktop has to allow that once: click below, then “Add” in its window."
-msgstr "Diktiert wird mit {}. Dein Desktop muss das einmal erlauben: Klick unten, dann in seinem Fenster auf „Hinzufügen“."
+msgstr "Diktiert wird mit {}. Dein Desktop muss das einmal erlauben: Klick unten, dann in seinem Fenster auf „Hinzufügen“ (englisch „Add“)."
 
-msgid "Now click “Add” in your desktop's window."
-msgstr "Jetzt im Fenster deines Desktops auf „Hinzufügen“ klicken."
+msgid "Now click “Add” in your desktop's window. {} is already filled in there, the pencil is not needed."
+msgstr "Jetzt im Fenster deines Desktops auf „Hinzufügen“ (englisch „Add“) klicken. {} steht dort schon drin, den Stift brauchst du nicht."
 
 msgid "{} is not set up yet: the window was closed without “Add”. Try again?"
 msgstr "{} ist noch nicht eingerichtet: Das Fenster wurde ohne „Hinzufügen“ geschlossen. Nochmal?"

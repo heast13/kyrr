@@ -453,17 +453,20 @@ mod imp {
 
     pub fn microphones() -> Vec<Microphone> {
         match &state().filter {
-            Filter::On(engine) => engine
-                .microphones()
-                .into_iter()
-                .map(|m| Microphone {
-                    guid: m.name,
-                    name: m.description,
-                    // "kyrr" itself is the default; the filter does not
-                    // follow another one.
-                    is_default: false,
-                })
-                .collect(),
+            // "kyrr" itself is the system's default; the filter follows the
+            // microphone the system would use without it.
+            Filter::On(engine) => {
+                let default = engine.system_default();
+                engine
+                    .microphones()
+                    .into_iter()
+                    .map(|m| Microphone {
+                        is_default: default.as_ref() == Some(&m.name),
+                        guid: m.name,
+                        name: m.description,
+                    })
+                    .collect()
+            }
             // Before the first setup: the microphones PipeWire offers, read
             // without starting anything.
             _ => kyrr_linux::mic::list()

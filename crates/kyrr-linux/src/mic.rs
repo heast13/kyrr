@@ -69,6 +69,11 @@ enum Command {
 struct Shared {
     microphones: Vec<(u32, Microphone)>,
     status: Option<Status>,
+    /// The microphone the system default was before "kyrr" took it.
+    previous: Option<String>,
+    /// The microphone last plugged in, or last picked in the system's sound
+    /// settings, while kyrr runs: what the system would use now.
+    latest: Option<String>,
 }
 
 /// The running virtual microphone. Dropping it removes "kyrr" and gives the
@@ -116,6 +121,22 @@ impl VirtualMic {
 
     pub fn status(&self) -> Status {
         lock(&self.shared).status.clone().unwrap_or(Status::Starting)
+    }
+
+    /// The microphone the system would record from without "kyrr" (node
+    /// name): the one plugged in or picked in the sound settings last, else
+    /// the default from before "kyrr", else the first one. Like Windows'
+    /// default microphone, which kyrr's filter follows there.
+    pub fn system_default(&self) -> Option<String> {
+        let shared = lock(&self.shared);
+        let present = |name: &&String| shared.microphones.iter().any(|(_, m)| m.name == **name);
+        shared
+            .latest
+            .as_ref()
+            .filter(present)
+            .or(shared.previous.as_ref().filter(present))
+            .or(shared.microphones.first().map(|(_, m)| &m.name))
+            .cloned()
     }
 
     /// Records from another microphone (node name) from now on.
@@ -319,8 +340,17 @@ fn run(
             match global.type_ {
                 pw::types::ObjectType::Node => {
                     let Some(mic) = as_microphone(props) else { return };
-                    lock(&on_global.borrow().shared).microphones.push((global.id, mic));
-                    if on_global.borrow().synced {
+                    let synced = {
+                        let state = on_global.borrow();
+                        let mut shared = lock(&state.shared);
+                        if state.synced {
+                            // Plugged in now: what the system would take.
+                            shared.latest = Some(mic.name.clone());
+                        }
+                        shared.microphones.push((global.id, mic));
+                        state.synced
+                    };
+                    if synced {
                         connect_if_needed(&on_global);
                     }
                 }
@@ -351,10 +381,7 @@ fn run(
                         .property(move |subject, key, _, value| {
                             if subject == 0 && key == Some(DEFAULT_SOURCE_KEY) {
                                 if let Some(state) = weak.upgrade() {
-                                    let value = value.map(str::to_string);
-                                    if value.as_deref().and_then(json_name) != Some(NODE_NAME) {
-                                        state.borrow_mut().previous_default = value;
-                                    }
+                                    default_changed(&state, value);
                                 }
                             }
                             0
@@ -430,6 +457,33 @@ fn run(
     mainloop.run();
     state.borrow_mut().streams = None;
     Ok(())
+}
+
+/// The default microphone changed: at start, the one from before "kyrr";
+/// later, one picked in the sound settings, which "kyrr" follows (the app
+/// decides when) and takes the default back from.
+fn default_changed(state: &Rc<RefCell<State>>, value: Option<&str>) {
+    let name = value.and_then(json_name).map(str::to_string);
+    if name.as_deref() == Some(NODE_NAME) {
+        return;
+    }
+    let mut s = state.borrow_mut();
+    s.previous_default = value.map(str::to_string);
+    let mut shared = lock(&s.shared);
+    shared.previous = name.clone();
+    if !s.synced || s.quit_after.is_some() {
+        return;
+    }
+    shared.latest = name.clone();
+    drop(shared);
+    // Already on that microphone: nothing to move, only the default to take
+    // back, so apps keep getting the clean voice.
+    if s.streams
+        .as_ref()
+        .is_some_and(|st| Some(&st.microphone) == name.as_ref())
+    {
+        make_default(&s);
+    }
 }
 
 /// The microphone to record from: the one asked for if it is there, else

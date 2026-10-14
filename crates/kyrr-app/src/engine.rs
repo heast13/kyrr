@@ -219,6 +219,12 @@ impl Engine {
         self.mic.status()
     }
 
+    /// The microphone the system would use without "kyrr" (see
+    /// [`VirtualMic::system_default`]).
+    pub fn system_default(&self) -> Option<String> {
+        self.mic.system_default()
+    }
+
     /// Engine and model, e.g. "native, quality"; empty while loading.
     pub fn engine(&self) -> String {
         lock(&self.shared.engine).clone()

@@ -482,10 +482,6 @@ impl App {
     /// Windows asks for permission once per change; when that is declined or
     /// fails, a button on the main page offers it instead.
     fn follow_default(self: &Rc<Self>) {
-        // On Linux "kyrr" is the default microphone; there is none to follow.
-        if !cfg!(windows) {
-            return;
-        }
         let Some(w) = self.window.upgrade() else {
             return;
         };
@@ -532,8 +528,11 @@ impl App {
         state.set_move_to(offer.into());
         state.set_move_unplugged(unplugged);
         if let follow::Outcome::Move(guid) = outcome {
-            // The window says what is going on while Windows asks.
-            show(&w);
+            // The window says what is going on while Windows asks; Linux
+            // does not ask, and the move takes a moment only.
+            if cfg!(windows) {
+                show(&w);
+            }
             self.move_filter(guid);
         }
     }
