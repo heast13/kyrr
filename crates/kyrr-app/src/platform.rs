@@ -8,6 +8,8 @@ use kyrr_common::FilterSettings;
 pub struct Microphone {
     pub guid: String,
     pub name: String,
+    /// The one Windows uses unless an app asks for another.
+    pub is_default: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -65,6 +67,7 @@ mod imp {
             .map(|m| Microphone {
                 guid: m.guid,
                 name: m.name,
+                is_default: m.is_default,
             })
             .collect()
     }
@@ -237,9 +240,11 @@ mod imp {
         host.input_devices()
             .map(|devs| {
                 devs.filter_map(|d| d.description().ok())
-                    .map(|d| Microphone {
+                    .enumerate()
+                    .map(|(i, d)| Microphone {
                         guid: d.name().to_string(),
                         name: d.name().to_string(),
+                        is_default: i == 0,
                     })
                     .collect()
             })

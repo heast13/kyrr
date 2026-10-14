@@ -8,6 +8,7 @@
 
 mod config;
 mod dictation;
+mod follow;
 mod listen;
 mod platform;
 mod player;
@@ -320,6 +321,8 @@ struct App {
     /// Tap mode for the dictation key, read by the key thread.
     key_toggle: Arc<AtomicBool>,
     microphones: RefCell<Vec<Microphone>>,
+    /// Moves the filter along when the default microphone changes.
+    follower: RefCell<follow::Follower>,
     worker: mpsc::Sender<Command>,
     window: Weak<MainWindow>,
     tray: Weak<Tray>,
@@ -330,15 +333,95 @@ impl App {
         self.config.borrow().language()
     }
 
+    /// Reads the microphones Windows lists now. The window's list only changes
+    /// when the microphones did, so a pick in it is not lost every few seconds.
     fn refresh_microphones(&self) {
         let mics = platform::microphones();
         let Some(w) = self.window.upgrade() else {
             return;
         };
+        if *self.microphones.borrow() == mics {
+            return;
+        }
         let names: Vec<SharedString> = mics.iter().map(|m| m.name.as_str().into()).collect();
-        w.global::<AppState>()
-            .set_microphones(ModelRc::new(VecModel::from(names)));
+        let state = w.global::<AppState>();
+        state.set_microphones(ModelRc::new(VecModel::from(names)));
+        // The pick pointed into the old list.
+        state.set_mic_index(0);
         *self.microphones.borrow_mut() = mics;
+    }
+
+    /// Writes the user's pick to the config when it changed, so it holds
+    /// after a restart.
+    fn keep_pin(&self) {
+        let pinned = self.follower.borrow().pinned().unwrap_or_default().to_string();
+        let mut config = self.config.borrow_mut();
+        if config.pinned_default != pinned {
+            config.pinned_default = pinned;
+            config.save();
+        }
+    }
+
+    /// The microphone Windows uses by default.
+    fn default_microphone(&self) -> Option<Microphone> {
+        self.microphones.borrow().iter().find(|m| m.is_default).cloned()
+    }
+
+    /// Keeps the filter on the microphone Windows uses: plugging another one
+    /// in or out, or a microphone on another USB port (a new id), moves it.
+    /// Windows asks for permission once per change; when that is declined or
+    /// fails, a button on the main page offers it instead.
+    fn follow_default(self: &Rc<Self>) {
+        let Some(w) = self.window.upgrade() else {
+            return;
+        };
+        let state = w.global::<AppState>();
+        let fs = state.get_filter_state();
+        let attached = self.attached.borrow().clone();
+        let default = self.default_microphone();
+        let present = attached
+            .as_deref()
+            .is_some_and(|g| self.microphones.borrow().iter().any(|m| m.guid.eq_ignore_ascii_case(g)));
+        let busy = fs == FilterState::SettingUp
+            || !matches!(
+                fs,
+                FilterState::Running
+                    | FilterState::Checking
+                    | FilterState::Passthrough
+                    | FilterState::Detached
+                    | FilterState::Error
+            )
+            || w.get_setup_mode()
+            || !self.config.borrow().setup_done
+            // Whoever switched the noise removal off gets no prompts for it.
+            || !self.filter.borrow().enabled;
+        let outcome = self.follower.borrow_mut().tick(&follow::Input {
+            attached: attached.as_deref(),
+            attached_present: present,
+            detached: fs == FilterState::Detached,
+            default: default.as_ref().map(|m| m.guid.as_str()),
+            busy,
+        });
+        self.keep_pin();
+        let (offer, unplugged) = match &outcome {
+            follow::Outcome::Offer { to, unplugged } => (
+                self.microphones
+                    .borrow()
+                    .iter()
+                    .find(|m| m.guid.eq_ignore_ascii_case(to))
+                    .map(|m| m.name.clone())
+                    .unwrap_or_default(),
+                *unplugged,
+            ),
+            _ => (String::new(), false),
+        };
+        state.set_move_to(offer.into());
+        state.set_move_unplugged(unplugged);
+        if let follow::Outcome::Move(guid) = outcome {
+            // The window says what is going on while Windows asks.
+            show(&w);
+            self.move_filter(guid);
+        }
     }
 
     fn refresh_filter(&self) {
@@ -367,17 +450,6 @@ impl App {
             FilterStatus::Detached(g) => (FilterState::Detached, Some(g), String::new()),
         };
         let mic = guid.as_deref().map(name).unwrap_or_default();
-        // The filtered microphone is unplugged: offer the default one.
-        let move_to = match &guid {
-            Some(g) if !self.microphones.borrow().iter().any(|m| &m.guid == g) => self
-                .microphones
-                .borrow()
-                .first()
-                .map(|m| m.name.clone())
-                .unwrap_or_default(),
-            _ => String::new(),
-        };
-        state.set_move_to(move_to.into());
         // On CPUs without AVX2 the filter runs ONNX Runtime, at several times
         // the CPU: switch to the small model once, then leave it to the user.
         let old_cpu = fs == FilterState::Running && detail.starts_with("onnx");
@@ -818,6 +890,10 @@ impl App {
         let Some(mic) = self.microphones.borrow().get(index).cloned() else {
             return;
         };
+        // Chosen on purpose: kyrr leaves it while Windows' default stays as it is.
+        let default = self.default_microphone().map(|m| m.guid);
+        self.follower.borrow_mut().user_chose(default.as_deref());
+        self.keep_pin();
         self.move_filter(mic.guid);
     }
 
@@ -969,6 +1045,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     }
 
     let filter = platform::filter_settings();
+    let pinned = Some(config.pinned_default.clone()).filter(|p| !p.is_empty());
     let app = Rc::new(App {
         config: RefCell::new(config),
         filter: RefCell::new(filter),
@@ -986,6 +1063,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         news_window: RefCell::new(None),
         key_toggle,
         microphones: RefCell::new(Vec::new()),
+        follower: RefCell::new(follow::Follower::with_pinned(pinned)),
         worker: worker.clone(),
         window: window.as_weak(),
         tray: tray.as_weak(),
@@ -1124,8 +1202,11 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.on_move_to_default({
         let app = Rc::clone(&app);
         move || {
-            let first = app.microphones.borrow().first().map(|m| m.guid.clone());
-            if let Some(guid) = first {
+            let target = app
+                .default_microphone()
+                .or_else(|| app.microphones.borrow().first().cloned())
+                .map(|m| m.guid);
+            if let Some(guid) = target {
                 app.move_filter(guid);
             }
         }
@@ -1380,7 +1461,12 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     let poll = slint::Timer::default();
     poll.start(slint::TimerMode::Repeated, Duration::from_secs(2), {
         let app = Rc::clone(&app);
-        move || app.refresh_filter()
+        move || {
+            // The microphones first: the filter's state is read against them.
+            app.refresh_microphones();
+            app.refresh_filter();
+            app.follow_default();
+        }
     });
     if let Some(requests) = show_requests {
         let weak = window.as_weak();
