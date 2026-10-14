@@ -6,13 +6,14 @@ members = [
     "crates/kyrr-common",
     "crates/kyrr-denoise",
     "crates/kyrr-dictate",
+    "crates/kyrr-linux",
     "crates/kyrr-voice",
     "crates/kyrr-windows",
 ]
 exclude = ["vendor"]
 
 [workspace.package]
-version = "0.5.2"
+version = "0.5.3"
 authors = ["heast13"]
 edition = "2021"
 license = "MIT OR Apache-2.0"

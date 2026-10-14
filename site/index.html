@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kyrr: Just your voice</title>
+<meta name="description" content="kyrr is a small, free, open-source app for your microphone: it removes background noise, polishes your voice, evens out the volume and types what you dictate. Everything runs on your computer. Windows and Linux.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/svg+xml" href="kyrr.svg">
+<link rel="alternate" hreflang="en" href="https://heast13.github.io/kyrr/">
+<link rel="alternate" hreflang="de" href="https://heast13.github.io/kyrr/de/">
+<link rel="alternate" hreflang="x-default" href="https://heast13.github.io/kyrr/">
+<link rel="stylesheet" href="style.css">
+<script>
+// German browsers go to /de/ once, unless the visitor chose a language before.
+(function () {
+  try {
+    var pref = localStorage.getItem("kyrr-lang");
+    if (!pref && /^de\b/i.test(navigator.language || "")) location.replace("de/" + location.hash);
+    else if (pref === "de") location.replace("de/" + location.hash);
+  } catch (e) {
+    if (/^de\b/i.test(navigator.language || "")) location.replace("de/" + location.hash);
+  }
+})();
+</script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="./"><img src="kyrr.svg" width="36" height="36" alt="">kyrr</a>
+    <nav class="lang" aria-label="Language">
+      <a href="./" lang="en" aria-current="true">English</a> ·
+      <a href="de/" lang="de" hreflang="de" data-lang-switch="de">Deutsch</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <div class="hero">
+      <div>
+        <h1>Just your voice.</h1>
+        <p class="lead">kyrr is a small, free app for your microphone. Keyboard, fan and dog stay outside, and what you say gets typed into any app. All of it on your computer.</p>
+        <div class="actions">
+          <a class="btn primary" href="#download">Download</a>
+          <a class="btn" href="https://github.com/heast13/kyrr">Source on GitHub</a>
+        </div>
+        <p class="small">For Windows 10/11 and Linux. Free and open source.</p>
+        <p class="kyrr-note"><i>kyrr</i> (Old Norse): still, quiet, at rest.</p>
+      </div>
+      <img src="main.png" width="570" height="606" alt="kyrr's window: noise filter, improve voice and dictation, each with one switch">
+    </div>
+
+    <section id="features" aria-labelledby="h-features">
+      <h2 id="h-features">What it does</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>Remove background noise</h3>
+          <p>A neural filter works on your microphone in real time, for every app: Teams, Zoom, Discord, OBS, the browser. A large model for the cleanest result, a small one for older laptops.</p>
+        </div>
+        <div class="card">
+          <h3>Improve voice</h3>
+          <p>A bit of polish once the noise is gone: a sound (from neutral to bright, or your own), a compressor, softer S sounds, pop protection and a cut for low rumble.</p>
+        </div>
+        <div class="card">
+          <h3>Automatic volume</h3>
+          <p>Your voice arrives at the same level however loud the microphone is set. On from the start.</p>
+        </div>
+        <div class="card">
+          <h3>Dictation</h3>
+          <p>Hold F9, talk, let go. The text lands at your cursor. German and English, transcribed on your computer. Say “new line” or “neue Zeile” for a line break.</p>
+        </div>
+      </div>
+      <div class="split">
+        <img src="settings.png" width="1140" height="1727" loading="lazy" alt="kyrr's settings, advanced view, in two columns: filter strength and model, voice sound with its sliders, compressor, S sounds, low cut, pop protection, automatic volume, language, autostart, updates, microphone, dictation key, level check and about">
+        <div>
+          <h3>Knobs, if you like knobs</h3>
+          <p>The defaults are fine. If you want more, Settings has the sliders, and a check to see that it all works: a live level of what the microphone hears and what apps get, a ten-second test you can play before and after kyrr, and listening to yourself on headphones.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<section class="privacy" id="privacy" aria-labelledby="h-privacy">
+  <div class="wrap">
+    <h2 id="h-privacy">Private, as in: stays here</h2>
+    <p>Your voice and your dictated text never leave your computer: no cloud, no account, no telemetry. After the one-time download of the speech model kyrr works offline; the only thing it does online on its own is a daily check for a new version, which you can switch off.</p>
+    <p><a href="https://github.com/heast13/kyrr#privacy">Read exactly what connects where</a></p>
+  </div>
+</section>
+
+<div class="wrap">
+  <section id="download" aria-labelledby="h-download">
+    <h2 id="h-download">Download</h2>
+    <p>Free, as in free. Pick your system.</p>
+    <div data-tabs>
+      <div class="panel" id="windows" data-label="Windows">
+        <h3>Windows</h3>
+        <p>Windows 10 22H2 or Windows 11, 64-bit.</p>
+        <p><a class="btn primary" href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-setup.exe">Download kyrr-setup.exe</a></p>
+        <p>The installer needs administrator rights, and sound drops out for a second while kyrr sets up its filter. Until the installer is code-signed, Windows SmartScreen warns about it (“More info”, then “Run anyway”). Compare it with its <code>.sha256</code> file on the <a href="https://github.com/heast13/kyrr/releases/latest">release page</a> first. Why it is not signed yet: <a href="https://github.com/heast13/kyrr#code-signing-policy">code signing policy</a>.</p>
+        <p class="small">On Windows on ARM (Snapdragon and other ARM processors) kyrr only dictates: its noise filter is built for Intel and AMD.</p>
+      </div>
+
+
+      <div class="panel" id="appimage" data-label="Linux">
+        <h3>Linux</h3>
+        <p>One file for every distribution, an AppImage. 64-bit Intel or AMD with glibc 2.39 or newer: Ubuntu 24.04+, Fedora 40+, Debian 13, Arch. The noise filter needs AVX2 (most processors from 2015 on).</p>
+        <p><a class="btn primary" href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">Download kyrr-x86_64.AppImage</a></p>
+        <p>Make it executable and start it:</p>
+        <pre tabindex="0"><code>chmod +x kyrr-x86_64.AppImage
+./kyrr-x86_64.AppImage</code></pre>
+        <p>Or in your file manager: right click, Properties, allow executing it as a program, then double click. On its first start kyrr adds itself to your app menu. To be sure, compare its SHA256 with the one on the <a href="https://github.com/heast13/kyrr/releases/latest">release page</a>.</p>
+      </div>
+    </div>
+
+    <aside class="notes" id="linux" aria-labelledby="h-linux">
+      <h3 id="h-linux">Linux notes</h3>
+      <ul>
+        <li><strong>PipeWire is required.</strong> It is the default on current Ubuntu, Fedora, Arch and Debian 12 and newer.</li>
+        <li><strong>The “kyrr” microphone.</strong> kyrr adds a virtual microphone called “kyrr” and makes it your default. Apps that use the default microphone get the clean voice right away. Apps set to a specific microphone need to be switched to “kyrr”.</li>
+        <li><strong>The dictation key</strong> goes through your desktop's global shortcut dialog (GNOME 48+, KDE Plasma). kyrr walks you through it the first time; F9 is already filled in. On Hyprland (Omarchy, say) kyrr shows the lines to add to your key bindings. On X11 the key just works. Anywhere else, put the command kyrr shows in its settings on a key in your desktop's keyboard settings.</li>
+        <li><strong>Typing.</strong> Dictated text is typed into the focused window. The first time, GNOME or KDE asks whether kyrr may do that. Say yes; otherwise kyrr can only put the text on the clipboard.</li>
+      </ul>
+    </aside>
+  </section>
+
+  <section id="faq" aria-labelledby="h-faq">
+    <h2 id="h-faq">Questions</h2>
+    <details>
+      <summary>Does it work offline?</summary>
+      <p>Yes. Once the speech model is downloaded (once, 663 MB for English, 900 MB for German) kyrr works fully offline.</p>
+    </details>
+    <details>
+      <summary>Do I need a graphics card?</summary>
+      <p>No. kyrr runs on any 64-bit Intel or AMD PC. On an older laptop, choose the small noise model. On Linux the noise filter needs a processor with AVX2 (most from 2015 on); dictation works without.</p>
+    </details>
+    <details>
+      <summary>Which languages does dictation understand?</summary>
+      <p>German and English. The German model handles English too.</p>
+    </details>
+    <details>
+      <summary>What does it cost?</summary>
+      <p>Nothing. kyrr is free and open source, and there is no account to make.</p>
+    </details>
+    <details>
+      <summary>How is it different from NVIDIA Broadcast or Krisp?</summary>
+      <p>NVIDIA Broadcast needs an RTX graphics card. Krisp needs an account and is free for 60 minutes a day, then a subscription. Both work through a virtual microphone you pick in each app. kyrr needs neither; on Windows it sits on the microphone itself, so every app gets it with nothing to choose, and on Linux it becomes the default microphone. On top, it dictates into any app. As far as we know in October 2026; corrections welcome.</p>
+    </details>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <p class="links">
+      <a href="https://github.com/heast13/kyrr">GitHub</a>
+      <a href="https://github.com/heast13/kyrr#readme">README</a>
+      <a href="https://github.com/heast13/kyrr/releases/latest">Releases</a>
+      <a href="https://github.com/heast13/kyrr#privacy">Privacy</a>
+      <a href="https://slint.dev">Made with Slint</a>
+    </p>
+    <p>kyrr is free software, licensed MIT OR Apache-2.0, at your option.</p>
+    <p>No cookies, no trackers, nothing loaded from anywhere else. Not even a font.</p>
+  </div>
+</footer>
+</body>
+</html>

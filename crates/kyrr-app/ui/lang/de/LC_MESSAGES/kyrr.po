@@ -32,38 +32,14 @@ msgstr "Beenden"
 msgid "Setting things up… sound takes a short break."
 msgstr "Richte alles ein … der Ton macht kurz Pause."
 
-
-
-
-
-
 msgid "Before: this is you without kyrr."
 msgstr "Vorher: So klingst du ohne kyrr."
 
 msgid "After: same take, with kyrr."
 msgstr "Nachher: Gleiche Aufnahme, mit kyrr."
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 msgid "Pick a microphone and off we go."
-msgstr "Such dir ein Mikro aus, dann geht's los."
+msgstr "Such dir ein Mikro aus, dann geht’s los."
 
 msgid "Oops, something went wrong. Details below."
 msgstr "Hoppla, da ging was schief. Details unten."
@@ -77,31 +53,8 @@ msgstr "Feierabend. Alles aus."
 msgid "Noise allowed, voice polished."
 msgstr "Lärm erlaubt, Stimme poliert."
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 msgid "Remove background noise"
 msgstr "Störgeräusche entfernen"
-
 
 msgid "Off. Your mic passes through as it is."
 msgstr "Aus. Dein Mikro läuft unverändert durch."
@@ -139,7 +92,6 @@ msgstr "Aus. Deine Stimme bleibt, wie sie ist."
 msgid "Dictation"
 msgstr "Diktieren"
 
-
 msgid "One download first ({}), then it is yours."
 msgstr "Erst ein Download ({}), dann gehört es dir."
 
@@ -148,7 +100,6 @@ msgstr "Sprachmodell wird heruntergeladen … {} %"
 
 msgid "Loading the speech model…"
 msgstr "Sprachmodell wird gestartet …"
-
 
 msgid "Listening…"
 msgstr "Hört zu …"
@@ -244,7 +195,7 @@ msgid "S sounds stay as they are."
 msgstr "S-Laute bleiben, wie sie sind."
 
 msgid "Voice is off, so there is nothing to turn. Switch it on in the main view."
-msgstr "Stimme ist aus, also gibt es nichts zu drehen. Schalte sie auf der Startseite ein."
+msgstr "Stimme ist aus, also gibt es nichts zu drehen. Schalte sie auf der Hauptseite ein."
 
 msgid "Sound"
 msgstr "Klang"
@@ -324,8 +275,6 @@ msgstr "Gerade unverändert: Dein Mikro passt genau."
 msgid "Reset"
 msgstr "Zurücksetzen"
 
-
-
 msgid "Test: before / after"
 msgstr "Test: vorher / nachher"
 
@@ -375,7 +324,7 @@ msgid "Update now"
 msgstr "Jetzt aktualisieren"
 
 msgid "Downloading the update… {}%"
-msgstr "Lade das Update… {}%"
+msgstr "Update wird geladen … {} %"
 
 msgid "Installing. Windows asks for permission once, then kyrr restarts by itself."
 msgstr "Wird installiert. Windows fragt einmal nach der Berechtigung, dann startet kyrr von selbst neu."
@@ -396,7 +345,7 @@ msgid "Installing, kyrr restarts in a moment."
 msgstr "Wird installiert, kyrr startet gleich neu."
 
 msgid "The update did not download."
-msgstr "Das Update ließ sich nicht laden."
+msgstr "Das Update ließ sich nicht herunterladen."
 
 msgid "Version {} is out."
 msgstr "Version {} ist da."
@@ -451,7 +400,6 @@ msgstr "Wird eingerichtet …"
 
 msgid "Talk instead of typing"
 msgstr "Reden statt tippen"
-
 
 msgid "Done"
 msgstr "Fertig"
@@ -577,7 +525,7 @@ msgid "Stockpiling silence."
 msgstr "Ruhevorratshaltung."
 
 msgid "Your mic delivers pure silence. Muted?"
-msgstr "Dein Mikro liefert nur Stille. Stumm geschaltet?"
+msgstr "Dein Mikro liefert nur Stille. Stummgeschaltet?"
 
 msgid "About"
 msgstr "Über kyrr"
@@ -628,7 +576,7 @@ msgid "Moves while an app uses the mic."
 msgstr "Bewegt sich, solange eine App das Mikro nutzt."
 
 msgid "kyrr keeps running in the tray, bottom right."
-msgstr "kyrr läuft unten rechts im Tray weiter."
+msgstr "kyrr läuft unten rechts im Infobereich weiter."
 
 msgid "Off to the corner"
 msgstr "Ab in die Ecke"
@@ -687,6 +635,9 @@ msgstr "Mit Strg, Alt oder Umschalt bleibt die Taste bei deiner App."
 msgid "Your microphone is not plugged in."
 msgstr "Dein Mikrofon steckt nicht."
 
+msgid "Your system uses another microphone now."
+msgstr "Dein System nutzt jetzt ein anderes Mikrofon."
+
 msgid "Your mic is muted in Windows."
 msgstr "Dein Mikro ist in Windows stummgeschaltet."
 
@@ -698,6 +649,18 @@ msgstr "Mikrofon verbunden: {}"
 
 msgid "Switch it on"
 msgstr "Einschalten"
+
+msgid "Your mic is muted."
+msgstr "Dein Mikro ist stummgeschaltet."
+
+msgid "kyrr keeps running in the tray."
+msgstr "kyrr läuft im Tray weiter."
+
+msgid "No tray here: the window's X only minimizes kyrr."
+msgstr "Kein Tray hier: Das X des Fensters minimiert kyrr nur."
+
+msgid "No tray here: closing the window quits kyrr."
+msgstr "Kein Tray hier: Fenster schließen beendet kyrr."
 
 msgid "Windows uses another microphone now."
 msgstr "Windows nutzt jetzt ein anderes Mikrofon."
@@ -746,3 +709,78 @@ msgstr "kyrr {} ist da"
 
 msgid "Close"
 msgstr "Schließen"
+
+# Linux
+
+msgid "PipeWire is not running, and kyrr needs it. Dictation works."
+msgstr "PipeWire läuft nicht, und kyrr braucht es. Diktieren geht."
+
+msgid "Needs PipeWire too."
+msgstr "Braucht auch PipeWire."
+
+msgid "Needs PipeWire, which is not running."
+msgstr "Braucht PipeWire, und das läuft nicht."
+
+msgid "Off. Your mic as loud as your system sets it."
+msgstr "Aus. Dein Mikro so laut, wie dein System es einstellt."
+
+msgid "Mic very quiet. Turn it up in your sound settings."
+msgstr "Mikro sehr leise. Stell es in den Sound-Einstellungen lauter."
+
+msgid "Mic too loud. Turn it down in your sound settings."
+msgstr "Mikro zu laut. Stell es in den Sound-Einstellungen leiser."
+
+msgid "Start when you sign in"
+msgstr "Beim Anmelden starten"
+
+msgid "Version {} is out. Update kyrr where you installed it from, your settings stay."
+msgstr "Version {} ist da. Aktualisiere kyrr dort, wo du es installiert hast, deine Einstellungen bleiben."
+
+msgid "kyrr adds a microphone called “kyrr” and makes it the default. Apps set to a particular microphone need to be switched to “kyrr”."
+msgstr "kyrr legt ein Mikrofon namens „kyrr“ an und macht es zum Standard. Apps, die auf ein bestimmtes Mikrofon eingestellt sind, stellst du auf „kyrr“ um."
+
+msgid "kyrr starts when you sign in and lives in the tray, if your desktop has one. Both can be changed in the settings."
+msgstr "kyrr startet beim Anmelden und wohnt im Tray, wenn dein Desktop eins hat. Beides lässt sich in den Einstellungen ändern."
+
+msgid "Dictate with your key, the text lands at your cursor. Setting up the key: see Settings."
+msgstr "Diktieren per Taste, der Text landet an deinem Cursor. Taste einrichten: siehe Einstellungen."
+
+msgid "Start dictation with a key, speak, end it: kyrr types what you said. It runs on your computer, nothing is sent anywhere."
+msgstr "Diktat per Taste starten, sprechen, beenden: kyrr tippt, was du gesagt hast. Läuft auf deinem Rechner, nichts wird verschickt."
+
+msgid "{} is not set up yet: kyrr needs your desktop's OK for it."
+msgstr "{} ist noch nicht eingerichtet: Dafür braucht kyrr das OK deines Desktops."
+
+msgid "Dictation uses {}. Your desktop has to allow that once: click below, then “Add” in its window."
+msgstr "Diktiert wird mit {}. Dein Desktop muss das einmal erlauben: Klick unten, dann in seinem Fenster auf „Hinzufügen“ (englisch „Add“)."
+
+msgid "Now click “Add” in your desktop's window: the blue button at its top right. {} is already filled in, the pencil is not needed."
+msgstr "Jetzt im Fenster deines Desktops auf „Hinzufügen“ (englisch „Add“) klicken: der blaue Knopf oben rechts. {} steht schon drin, den Stift brauchst du nicht."
+
+msgid "{} is not set up yet: the window was closed without “Add”. Try again?"
+msgstr "{} ist noch nicht eingerichtet: Das Fenster wurde ohne „Hinzufügen“ geschlossen. Nochmal?"
+
+msgid "✓ {} works."
+msgstr "✓ {} funktioniert."
+
+msgid "✓ {} is set up. Try it: press {} once."
+msgstr "✓ {} ist eingerichtet. Probier’s aus: Drück einmal {}."
+
+msgid "Set up {}"
+msgstr "{} einrichten"
+
+msgid "Last step: kyrr types your words into other apps. Your desktop asks once (“Remote Desktop”): switch on “Allow Remote Interaction”, then click “Share”."
+msgstr "Letzter Schritt: kyrr tippt deine Worte in andere Apps. Dafür fragt dein Desktop einmal nach („Remote Desktop“ oder „Entfernter Bildschirm“): „Fernzugriff zulassen“ einschalten, dann „Freigeben“ klicken."
+
+msgid "In your desktop's window: switch on “Allow Remote Interaction” (its only switch), then click “Share”, the blue button at the top right."
+msgstr "Im Fenster deines Desktops: „Fernzugriff zulassen“ einschalten (der einzige Schalter, englisch „Allow Remote Interaction“), dann „Freigeben“ klicken, der blaue Knopf oben rechts (englisch „Share“)."
+
+msgid "Not allowed, so kyrr cannot type for you. Try again?"
+msgstr "Nicht erlaubt, also kann kyrr nicht für dich tippen. Nochmal?"
+
+msgid "✓ kyrr may type."
+msgstr "✓ kyrr darf tippen."
+
+msgid "Allow typing"
+msgstr "Tippen erlauben"
+

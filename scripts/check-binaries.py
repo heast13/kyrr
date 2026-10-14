@@ -6,6 +6,8 @@
 - kyrr_apo.dll imports no Visual C++ runtime: inside audiodg.exe a missing
   runtime means the filter silently never loads
 
+With --linux only the first check applies, to target/release/kyrr.
+
 Standard library only.
 """
 
@@ -16,6 +18,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 RELEASE = ROOT / "target" / "release"
 FORBIDDEN_TEXT = [b"espeak", b"piper_phonemize"]
+# The Linux binary has sherpa-onnx's speaker model code, which says
+# "wespeaker"; these only appear in espeak-ng and piper themselves.
+FORBIDDEN_TEXT_LINUX = [b"espeak-ng", b"espeak_", b"libespeak", b"piper_phonemize"]
 FORBIDDEN_IMPORTS = ("vcruntime", "msvcp", "api-ms-win-crt", "ucrtbase")
 
 
@@ -50,6 +55,17 @@ def imports(path: Path) -> list[str]:
 
 
 def main() -> None:
+    if "--linux" in sys.argv[1:]:
+        exe = (RELEASE / "kyrr").read_bytes()
+        problems = [
+            f"kyrr contains {text.decode()}: build with SHERPA_ONNX_LIB_DIR (no-TTS libraries)"
+            for text in FORBIDDEN_TEXT_LINUX
+            if text in exe
+        ]
+        if problems:
+            sys.exit("\n".join(problems))
+        print("OK  kyrr without text-to-speech")
+        return
     problems = []
     exe = (RELEASE / "kyrr.exe").read_bytes()
     for text in FORBIDDEN_TEXT:

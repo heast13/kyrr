@@ -4,13 +4,13 @@
 
 <p>
   <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-setup.exe"><img src="https://img.shields.io/github/v/release/heast13/kyrr?label=Download%20for%20Windows&style=for-the-badge&color=005fb8" alt="Download kyrr for Windows"></a>
+  <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage"><img src="https://img.shields.io/github/v/release/heast13/kyrr?label=Download%20for%20Linux&style=for-the-badge&color=005fb8" alt="Download kyrr for Linux (AppImage)"></a>
 </p>
 
 [![Made with Slint](https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png)](https://slint.dev)
 
 A small, free app for your microphone, for **Windows** and **Linux**:
 cleaner sound, a better voice and dictation, all on your own computer.
-Windows is out; the Linux version (an AppImage) follows shortly.
 
 > **Everything runs on your PC.** Your voice and your dictated text never
 > leave your computer: no cloud, no account, no telemetry. Once the speech
@@ -53,7 +53,7 @@ Status: young and in active development.
 | | kyrr | NVIDIA Broadcast | Krisp |
 |---|---|---|---|
 | Price | free, open source | free | free for 60 minutes a day, subscription beyond |
-| Needs | any 64-bit Intel or AMD PC with Windows 10 or 11 (Linux soon) | an NVIDIA RTX graphics card | an account |
+| Needs | any 64-bit Intel or AMD PC with Windows 10 or 11, or Linux with PipeWire | an NVIDIA RTX graphics card | an account |
 | Where it works | on the microphone itself: every app, nothing to choose | apps set to its virtual microphone | apps set to its virtual microphone |
 
 On top, kyrr dictates into any app, on your computer. As far as we know in
@@ -64,8 +64,6 @@ October 2026; corrections welcome.
 **Windows.** Download `kyrr-setup-<version>.exe` from the [latest
 release](https://github.com/heast13/kyrr/releases/latest) and run it (see the
 [code signing policy](#code-signing-policy)).
-
-**Linux.** An AppImage is coming; this page gets its download then.
 
 Windows 10 22H2 or Windows 11, 64-bit. The installer needs administrator
 rights, and sound drops out for a second while kyrr sets up its filter.
@@ -78,6 +76,34 @@ from the release page first.
 
 Uninstalling takes the filter off the microphone, puts the Windows setting
 described under "How it works" back and asks whether to delete the downloaded speech models.
+
+**Linux.** Download `kyrr-x86_64.AppImage` from the [latest
+release](https://github.com/heast13/kyrr/releases/latest), make it executable
+and start it:
+
+```sh
+chmod +x kyrr-x86_64.AppImage
+./kyrr-x86_64.AppImage
+```
+
+In a file manager the same works with a right click, Properties, "Allow
+executing file as program" (the wording differs a little per desktop), then
+a double click. On its first start kyrr adds itself to your app menu.
+
+64-bit Intel or AMD with glibc 2.39 or newer (Ubuntu 24.04, Fedora 40, Debian
+13, Arch or newer) and PipeWire, which these use anyway. The noise filter
+needs a processor with AVX2 (most from 2015 on); dictation works without. No
+administrator rights needed. On GNOME and KDE your desktop asks once for the
+dictation key and once whether kyrr may type; kyrr walks you through both. On
+Hyprland (Omarchy, say) kyrr shows the lines to add to your key bindings;
+without a tray icon the window's X minimizes kyrr where the desktop can bring
+it back (GNOME, say) and quits it on tiling ones; "Quit" always ends it.
+Updates are not installed by themselves: kyrr says when there is a new
+version, and you download the new AppImage.
+
+To remove kyrr, quit it ("Quit" at the bottom left) and delete the
+AppImage; the app menu and the start at sign-in skip it from then on. Your
+settings are in `~/.config/kyrr`, the speech models in `~/.local/share/kyrr`.
 
 ## How it works
 
@@ -95,6 +121,13 @@ Equalizer APO's does, says so before it starts, and restores the previous
 value on uninstall (unless Equalizer APO is installed and still needs it).
 If a Windows or driver update takes kyrr off the microphone, the app notices
 and offers to repair it.
+
+On Linux kyrr does the same as a PipeWire microphone of its own, called
+"kyrr": it reads your real microphone, removes the noise and becomes the
+system's default microphone, so every app that uses the default gets the
+cleaned signal. kyrr only reads your real microphone while an app listens to
+"kyrr". When kyrr quits, its microphone goes away and the system falls back
+to your real one.
 
 **Improve voice.** The same filter can shape the voice: a low cut (80 Hz,
 100 Hz for the bright sound) before the noise filter, then three EQ bands
@@ -114,19 +147,22 @@ moves it slowly (5 dB/s up, 10 dB/s down, at most +24/−12 dB) towards about
 adjust the volume themselves (call apps, say) can work against it, so use
 one of the two.
 
-**Your microphone.** kyrr checks every few seconds which microphone the
-system uses. When it changes, the filter moves along: Windows asks for
-permission once and sound pauses for a moment. If you decline, a button on
-the main page offers it. A microphone you pick by hand stays until the
-system's default changes.
+**Your microphone.** kyrr checks every few seconds which microphone the system
+uses. When it changes, the filter moves along: Windows asks for permission
+once and sound pauses for a moment; on Linux it simply moves. If that does not
+happen (you declined, say), a button on the main page offers it. A microphone
+you pick by hand stays until the system's default changes.
 
-**Check.** The filter shares a small block of memory with the app
+**Check.** On Windows the filter shares a small block of memory with the app
 (`Global\kyrr-monitor-3`): the level before and after kyrr, what the
 automatic volume adds, and on request one ten-second take, unprocessed and
 processed. The audio service writes it; users signed in at this computer can
 read it and ask for a take, which only records while an app already uses the
 microphone. The app plays the take, keeps it only in memory and clears it
 from the shared block.
+
+On Linux the filter runs inside the app, which reads the levels and the
+take directly.
 
 **Dictation.** kyrr records while the key is held and transcribes locally
 with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (its build without
@@ -157,6 +193,7 @@ the internet for exactly these things:
   kyrr only asks when you click "Check for updates".
 - **An update**, only when you click "Update": the installer of the new
   version from this repository's releases, checked against its SHA256 file.
+  On Linux kyrr opens the release page instead.
 
 Nothing is installed without your click. (Building kyrr also downloads its
 assets and libraries, from kyrr's mirror on GitHub first.)
@@ -194,6 +231,21 @@ python scripts/package.py
 text-to-speech; the default ones bundle espeak-ng (GPL-3.0).
 `scripts/check-binaries.py` (run by `package.py` and CI) refuses a build
 that contains it, or a filter DLL that needs the Visual C++ runtime.
+
+On Linux (the packages libpipewire-0.3-dev, libclang-dev, libasound2-dev,
+libfontconfig1-dev, libxkbcommon-dev, libxkbcommon-x11-0 and libssl-dev, or
+their names elsewhere):
+
+```sh
+python3 scripts/fetch-assets.py --linux
+SHERPA_ONNX_LIB_DIR=$PWD/assets/sherpa-onnx/lib cargo build --release -p kyrr
+python3 scripts/package-linux.py   # dist/: AppImage and tarball, each with a .sha256
+```
+
+`package-linux.py` downloads linuxdeploy and appimagetool (pinned by SHA256)
+and needs `libxkbcommon-x11` installed to bundle it. The AppImage runs on the
+glibc of the machine that built it or newer (the release is built on
+Ubuntu 24.04: glibc 2.39).
 
 The cores (`kyrr-denoise`, `kyrr-voice`, `kyrr-dictate`) build and test on Linux too;
 `cargo run -p kyrr --example preview -- <dir>` renders the window headless.

@@ -2,12 +2,15 @@
 //!
 //! `kyrr.exe --setup <command>` runs an elevated setup step (see
 //! `kyrr_windows::run_setup_command`); `--background` starts without
-//! showing the window.
+//! showing the window. On Linux `kyrr --dictate` starts or ends dictation
+//! in the running kyrr, for desktops where kyrr cannot catch a key itself.
 
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod config;
 mod dictation;
+#[cfg(target_os = "linux")]
+mod engine;
 mod follow;
 mod listen;
 mod platform;
@@ -28,7 +31,7 @@ use slint::{ComponentHandle, LogicalSize, ModelRc, PhysicalPosition, SharedStrin
 
 use config::Config;
 use dictation::{Command, Event, State};
-use platform::{FilterStatus, Microphone, SetupError};
+use platform::{Desktop, FilterStatus, KeyBinding, KeyNote, Microphone, SetupError};
 
 slint::include_modules!();
 
@@ -47,12 +50,22 @@ fn main() {
         kyrr_windows::instance::Instance::Other => return,
     };
     #[cfg(not(windows))]
-    let show_requests: Option<mpsc::Receiver<()>> = None;
+    let show_requests = match kyrr_linux::instance::claim(&args) {
+        kyrr_linux::instance::Instance::First { show_requests } => Some(show_requests),
+        kyrr_linux::instance::Instance::Other => return,
+    };
 
-    let background = args.iter().any(|a| a == "--background");
+    // A dictation key pressed while kyrr is not running starts it quietly.
+    let background = args.iter().any(|a| {
+        matches!(
+            a.as_str(),
+            "--background" | "--dictate" | "--dictate-start" | "--dictate-stop"
+        )
+    });
     if let Err(e) = run(background, show_requests) {
         eprintln!("kyrr: {e}");
     }
+    platform::shutdown();
 }
 
 /// Texts set from Rust; everything else is translated in the .slint file.
@@ -78,6 +91,75 @@ fn text(language: Language, english: &str) -> String {
     match language {
         Language::German => german.into(),
         Language::English => english.into(),
+    }
+}
+
+/// What to do so the dictation key reaches kyrr, in the user's language,
+/// and what the desktop will ask on the first dictation.
+fn key_note(language: Language) -> String {
+    let german = matches!(language, Language::German);
+    let note = key_note_only(platform::key_note(), german);
+    if !platform::typing_needs_permission() {
+        return note;
+    }
+    let typing = if german {
+        "Beim ersten Diktat fragt dein Desktop nach „Remote Desktop“ (oder „Entfernter Bildschirm“): „Fernzugriff zulassen“ einschalten, dann „Freigeben“. kyrr tippt damit nur deinen Text."
+    } else {
+        "On the first dictation your desktop asks about “Remote Desktop”: switch on “Allow Remote Interaction”, then “Share”. kyrr only uses it to type your text."
+    };
+    if note.is_empty() {
+        typing.into()
+    } else {
+        format!("{note}\n\n{typing}")
+    }
+}
+
+fn key_note_only(note: KeyNote, german: bool) -> String {
+    match note {
+        KeyNote::None => String::new(),
+        KeyNote::Desktop(Desktop::Gnome) if german => {
+            "Die Taste verwaltet GNOME, die Auswahl hier gilt dort nicht. Ändern: Einstellungen › Apps › kyrr.".into()
+        }
+        KeyNote::Desktop(Desktop::Gnome) => {
+            "GNOME manages the key, so there is no choice here. To change it: Settings › Apps › kyrr.".into()
+        }
+        KeyNote::Desktop(Desktop::Kde) if german => {
+            "Die Taste verwaltet KDE, die Auswahl hier gilt dort nicht. Ändern: Systemeinstellungen › Tastatur › Kurzbefehle › kyrr."
+                .into()
+        }
+        KeyNote::Desktop(Desktop::Kde) => {
+            "KDE manages the key, so there is no choice here. To change it: System Settings › Keyboard › Shortcuts › kyrr."
+                .into()
+        }
+        KeyNote::Desktop(_) if german => {
+            "Die Taste legt dein Desktop fest: Er fragt einmal nach, ändern geht in seinen Tastatur-Einstellungen."
+                .into()
+        }
+        KeyNote::Desktop(_) => {
+            "Your desktop decides the key: it asks once, and its keyboard settings can change it.".into()
+        }
+        KeyNote::Unbound if german => {
+            "Dein Desktop vergibt die Taste und fragt dafür einmal nach. Diese Frage wurde abgebrochen, also kommt die Taste bei kyrr nicht an. „Taste einrichten“ fragt nochmal."
+                .into()
+        }
+        KeyNote::Unbound => {
+            "Your desktop hands out the key and asks once for it. That question was cancelled, so the key does not reach kyrr. “Set up key” asks again."
+                .into()
+        }
+        KeyNote::Hyprland { file, lines } if german => format!("Für Hyprland gehört das in die Datei {file}:\n{lines}"),
+        KeyNote::Hyprland { file, lines } => format!("For Hyprland, add this to {file}:\n{lines}"),
+        KeyNote::HyprlandCommands { file, lines } if german => format!(
+            "Hyprlands Tastenkürzel-Portal antwortet nicht. Mit diesen Zeilen in der Datei {file} diktierst du wie gewohnt mit gehaltener Taste:\n{lines}"
+        ),
+        KeyNote::HyprlandCommands { file, lines } => format!(
+            "Hyprland's shortcut portal does not answer. Add these lines to {file} and holding the key dictates as usual:\n{lines}"
+        ),
+        KeyNote::Command(command) if german => format!(
+            "Dieser Desktop reicht keine Taste an kyrr weiter. Leg in seinen Tastatur-Einstellungen diesen Befehl auf eine Taste, jeder Druck startet oder beendet das Diktat:\n{command}"
+        ),
+        KeyNote::Command(command) => format!(
+            "This desktop passes no key to kyrr. Put this command on a key in its keyboard settings, each press starts or ends dictation:\n{command}"
+        ),
     }
 }
 
@@ -134,8 +216,7 @@ const FRAME_SIDES: f32 = 16.0;
 /// Left, top, right and bottom of the free screen the window is on, in
 /// physical pixels.
 fn screen(w: &MainWindow) -> Option<(i32, i32, i32, i32)> {
-    let pos = w.window().position();
-    platform::work_area(pos.x, pos.y)
+    platform::work_area(w.window())
 }
 
 /// The height the content wants, up to what the screen has room for.
@@ -152,6 +233,19 @@ fn resize(w: &MainWindow, height: f32) {
     let win = w.window();
     let width = w.get_page_width();
     win.set_size(LogicalSize::new(width, height));
+    #[cfg(target_os = "linux")]
+    {
+        w.set_fit_height(height);
+        // The new minimum reaches the compositor with the next frame; until
+        // then a smaller size is held at the old minimum (GNOME), so ask
+        // once more after it.
+        let weak = w.as_weak();
+        slint::Timer::single_shot(Duration::from_millis(50), move || {
+            if let Some(w) = weak.upgrade() {
+                w.window().set_size(LogicalSize::new(width, height));
+            }
+        });
+    }
     let Some((left, top, right, bottom)) = screen(w) else {
         return;
     };
@@ -306,6 +400,11 @@ const MODEL_SWITCH_TIMEOUT: Duration = Duration::from_secs(20);
 /// small. Showing alone left it behind the current window at times.
 fn show(window: &MainWindow) {
     if !window.window().is_visible() {
+        // The width first: until the window has one, text is measured as if
+        // it wrapped after every word, and the content seems far taller.
+        // Wayland compositors may keep the first size they saw.
+        let width = window.get_page_width();
+        window.window().set_size(LogicalSize::new(width, FALLBACK_HEIGHT));
         resize(window, wanted_height(window));
     }
     let _ = window.show();
@@ -347,6 +446,8 @@ struct App {
     news_window: RefCell<Option<NewsWindow>>,
     /// Tap mode for the dictation key, read by the key thread.
     key_toggle: Arc<AtomicBool>,
+    /// Key presses counted when the key was set up, to see it pressed since.
+    presses_at_bound: Cell<Option<u32>>,
     microphones: RefCell<Vec<Microphone>>,
     /// The microphone list has been read once (before that, "none" means nothing).
     mics_seen: Cell<bool>,
@@ -356,7 +457,16 @@ struct App {
     follower: RefCell<follow::Follower>,
     worker: mpsc::Sender<Command>,
     window: Weak<MainWindow>,
-    tray: Weak<Tray>,
+}
+
+thread_local! {
+    /// The tray icon. It is replaced when a panel to host it turns up after
+    /// kyrr started (see [`retry_tray`]), so it is looked up, not kept.
+    static TRAY: RefCell<Option<Tray>> = const { RefCell::new(None) };
+}
+
+fn tray() -> Option<Tray> {
+    TRAY.with_borrow(|t| t.as_ref().map(Tray::clone_strong))
 }
 
 impl App {
@@ -484,14 +594,17 @@ impl App {
         state.set_move_to(offer.into());
         state.set_move_unplugged(unplugged);
         if let follow::Outcome::Move(guid) = outcome {
-            // The window says what is going on while Windows asks.
-            show(&w);
+            // The window says what is going on while Windows asks; Linux
+            // does not ask, and the move takes a moment only.
+            if cfg!(windows) {
+                show(&w);
+            }
             self.move_filter(guid);
         }
     }
 
     fn refresh_filter(&self) {
-        let (Some(w), Some(tray)) = (self.window.upgrade(), self.tray.upgrade()) else {
+        let (Some(w), Some(tray)) = (self.window.upgrade(), tray()) else {
             return;
         };
         let state = w.global::<AppState>();
@@ -580,7 +693,7 @@ impl App {
     /// appears or goes, the window fits its content).
     fn set_voice(&self, change: impl FnOnce(&mut VoiceSettings)) {
         self.write_filter(|f| change(&mut f.voice));
-        if let Some(t) = self.tray.upgrade() {
+        if let Some(t) = tray() {
             t.set_voice_enabled(self.filter.borrow().voice.enabled);
         }
         if let Some(w) = self.window.upgrade() {
@@ -608,6 +721,16 @@ impl App {
     }
 
     /// The window went away: no meter, no listening.
+    /// Minimizes the window. The meter keeps its timer, which idles while
+    /// the window is minimized: nothing starts it again when the taskbar
+    /// brings the window back.
+    fn minimize(&self) {
+        self.stop_listening();
+        if let Some(w) = self.window.upgrade() {
+            w.window().set_minimized(true);
+        }
+    }
+
     fn window_closed(&self) {
         self.meter.stop();
         self.stop_listening();
@@ -799,7 +922,7 @@ impl App {
                 w.global::<AppState>().set_update_state(UpdateState::Checking);
             }
         }
-        let (window, tray) = (self.window.clone(), self.tray.clone());
+        let window = self.window.clone();
         std::thread::spawn(move || {
             let outcome = update::check();
             let _ = slint::invoke_from_event_loop(move || {
@@ -824,12 +947,15 @@ impl App {
                         state.set_update_dismissed(version == dismissed);
                         state.set_update_version(version.as_str().into());
                         state.set_update_url(url.into());
+                        // The installer is Windows'; elsewhere kyrr is updated
+                        // where it came from (Flathub, AUR, a new AppImage).
+                        let installer = installer.filter(|_| cfg!(windows));
                         state.set_update_installable(installer.is_some());
                         state.set_update_has_news(news.is_some());
                         *pending_installer().lock().unwrap_or_else(|e| e.into_inner()) = installer;
                         *pending_news().lock().unwrap_or_else(|e| e.into_inner()) = news;
                         state.set_update_state(UpdateState::Available);
-                        if let Some(t) = tray.upgrade() {
+                        if let Some(t) = tray() {
                             t.set_update_version(version.into());
                         }
                     }
@@ -955,8 +1081,60 @@ impl App {
             state.set_key_toggle(toggle);
             state.set_key_name(name.as_str().into());
         }
-        if let Some(t) = self.tray.upgrade() {
+        self.refresh_key_note();
+        if let Some(t) = tray() {
             t.set_key_name(name.into());
+        }
+    }
+
+    /// What the window says about the key. It changes after the start: the
+    /// desktop's dialog is answered, typing is allowed.
+    fn refresh_key_note(&self) {
+        let Some(w) = self.window.upgrade() else {
+            return;
+        };
+        let state = w.global::<AppState>();
+        let language = self.language();
+        let note = platform::key_note();
+        let fixed = matches!(note, KeyNote::Desktop(_) | KeyNote::Unbound);
+        let unbound = matches!(note, KeyNote::Unbound);
+        let german = language == Language::German;
+        let button = match note {
+            KeyNote::Unbound if german => "Taste einrichten",
+            KeyNote::Unbound => "Set up key",
+            KeyNote::Desktop(_) if platform::can_open_key_settings() && german => "Taste ändern",
+            KeyNote::Desktop(_) if platform::can_open_key_settings() => "Change key",
+            _ => "",
+        };
+        let text = key_note(language);
+        if state.get_key_note() != text.as_str() {
+            state.set_key_note(text.into());
+        }
+        state.set_key_fixed(fixed);
+        state.set_key_unbound(unbound);
+        if state.get_key_button() != button {
+            state.set_key_button(button.into());
+        }
+        // The setup's walk through the desktop's questions.
+        state.set_guide(fixed);
+        let key_state = match platform::key_binding() {
+            KeyBinding::NotAsked => 0,
+            KeyBinding::Asking => 1,
+            KeyBinding::Bound => 2,
+            KeyBinding::Refused => 3,
+        };
+        state.set_key_state(key_state);
+        let presses = platform::key_presses();
+        if key_state == 2 {
+            let base = self.presses_at_bound.get().unwrap_or(presses);
+            self.presses_at_bound.set(Some(base));
+            state.set_key_tried(presses > base);
+        } else {
+            self.presses_at_bound.set(None);
+            state.set_key_tried(false);
+        }
+        if state.get_typing_state() == 0 && !platform::typing_needs_permission() {
+            state.set_typing_state(2);
         }
     }
 
@@ -987,7 +1165,7 @@ impl App {
         if let Some(w) = self.window.upgrade() {
             w.global::<AppState>().set_dictation_enabled(on);
         }
-        if let Some(t) = self.tray.upgrade() {
+        if let Some(t) = tray() {
             t.set_dictation_enabled(on);
         }
     }
@@ -1083,7 +1261,9 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     // An installer downloaded for the last update is done with.
     let _ = std::fs::remove_dir_all(update::folder());
     let window = MainWindow::new()?;
-    let tray = Tray::new()?;
+    // So the desktop matches the window to kyrr's desktop entry and icon.
+    #[cfg(target_os = "linux")]
+    let _ = slint::set_xdg_app_id("io.github.heast13.kyrr");
     let _ = slint::select_bundled_translation(language.code());
 
     // Dictation worker, reporting back on the UI thread. Whether it records
@@ -1091,15 +1271,14 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     let recording = Arc::new(AtomicBool::new(false));
     let key_toggle = Arc::new(AtomicBool::new(false));
     let weak = window.as_weak();
-    let weak_tray = tray.as_weak();
     let recording_flag = Arc::clone(&recording);
     let notify: dictation::Notify = Arc::new(move |event| {
         if let Event::State(s) = &event {
             recording_flag.store(*s == State::Recording, Ordering::Relaxed);
         }
-        let (weak, weak_tray) = (weak.clone(), weak_tray.clone());
+        let weak = weak.clone();
         let _ = slint::invoke_from_event_loop(move || {
-            let (Some(w), Some(t)) = (weak.upgrade(), weak_tray.upgrade()) else {
+            let (Some(w), Some(t)) = (weak.upgrade(), tray()) else {
                 return;
             };
             let state = w.global::<AppState>();
@@ -1130,7 +1309,11 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     );
 
     // Hold mode: press starts, release stops. Tap mode: each press toggles.
-    if let Some(keys) = platform::start_hotkey() {
+    let description = match language {
+        Language::German => "kyrr: Diktieren (Taste halten)",
+        Language::English => "kyrr: Dictate (hold the key)",
+    };
+    if let Some(keys) = platform::start_hotkey(description, config.setup_done) {
         let worker = worker.clone();
         let (recording, key_toggle) = (Arc::clone(&recording), Arc::clone(&key_toggle));
         std::thread::spawn(move || {
@@ -1168,14 +1351,16 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         listening: RefCell::new(None),
         news_window: RefCell::new(None),
         key_toggle,
+        presses_at_bound: Cell::new(None),
         microphones: RefCell::new(Vec::new()),
         mics_seen: Cell::new(false),
         connected: RefCell::new(None),
         follower: RefCell::new(follow::Follower::with_pinned(pinned)),
         worker: worker.clone(),
         window: window.as_weak(),
-        tray: tray.as_weak(),
     });
+    let tray = new_tray(&app)?;
+    TRAY.set(Some(tray.clone_strong()));
 
     let state = window.global::<AppState>();
     state.set_version(env!("CARGO_PKG_VERSION").into());
@@ -1186,6 +1371,9 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_model_index(filter.light_model as i32);
     state.set_autostart(platform::autostart_enabled());
     state.set_update_auto(app.config.borrow().update_check);
+    state.set_linux(cfg!(target_os = "linux"));
+    state.set_tray(platform::has_tray());
+    state.set_can_minimize(platform::can_minimize());
     state.set_advanced(app.config.borrow().advanced_settings);
     app.apply_key();
     show_voice(&state, &filter.voice);
@@ -1334,6 +1522,45 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             app.apply_key();
         }
     });
+    state.on_key_button_clicked({
+        let app = Rc::clone(&app);
+        move || {
+            if matches!(platform::key_note(), KeyNote::Unbound) {
+                platform::bind_key_again();
+            } else {
+                platform::open_key_settings();
+            }
+            app.refresh_key_note();
+        }
+    });
+    state.on_setup_key({
+        let app = Rc::clone(&app);
+        move || {
+            platform::bind_key_again();
+            // The portal thread takes a moment to say it is asking.
+            if let Some(w) = app.window.upgrade() {
+                w.global::<AppState>().set_key_state(1);
+            }
+        }
+    });
+    state.on_allow_typing({
+        let weak = window.as_weak();
+        move || {
+            if let Some(w) = weak.upgrade() {
+                w.global::<AppState>().set_typing_state(1);
+            }
+            let weak = weak.clone();
+            std::thread::spawn(move || {
+                let allowed = platform::allow_typing();
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(w) = weak.upgrade() {
+                        w.global::<AppState>().set_typing_state(if allowed { 2 } else { 3 });
+                        fit(&weak);
+                    }
+                });
+            });
+        }
+    });
     state.on_key_toggle_changed({
         let app = Rc::clone(&app);
         move |on| {
@@ -1389,20 +1616,42 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     });
     // Closing only hides the window; listening and the meter end with it.
     // The button in the window does the same; quitting is in the tray menu.
+    // Without a tray (GNOME without its extension) both minimize, so kyrr
+    // never hides where nobody can reach it, and a button in the window
+    // quits. A desktop that cannot minimize (Hyprland, sway) quits on close.
     window.window().on_close_requested({
         let app = Rc::clone(&app);
         move || {
-            app.window_closed();
+            if platform::has_tray() {
+                app.window_closed();
+            } else if platform::can_minimize() {
+                app.minimize();
+                return slint::CloseRequestResponse::KeepWindowShown;
+            } else {
+                app.window_closed();
+                let _ = slint::quit_event_loop();
+            }
             slint::CloseRequestResponse::HideWindow
         }
     });
     state.on_hide({
         let app = Rc::clone(&app);
         move || {
+            if !platform::has_tray() {
+                app.minimize();
+                return;
+            }
             app.window_closed();
             if let Some(w) = app.window.upgrade() {
                 let _ = w.hide();
             }
+        }
+    });
+    state.on_quit_app({
+        let worker = app.worker.clone();
+        move || {
+            let _ = worker.send(Command::Quit);
+            let _ = slint::quit_event_loop();
         }
     });
     window.on_shown({
@@ -1505,14 +1754,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             }
         }
     });
-    let quit = {
-        let worker = worker.clone();
-        move || {
-            let _ = worker.send(Command::Quit);
-            let _ = slint::quit_event_loop();
-        }
-    };
-    tray.on_quit(quit.clone());
     state.on_unmute({
         let app = Rc::clone(&app);
         move || {
@@ -1522,48 +1763,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             app.check_mute();
         }
     });
-    state.on_quit_app(quit);
-    tray.on_install_update({
-        let weak = window.as_weak();
-        move || {
-            if let Some(w) = weak.upgrade() {
-                show(&w);
-                w.global::<AppState>().invoke_install_update();
-            }
-        }
-    });
-    tray.on_open({
-        let app = Rc::clone(&app);
-        move || {
-            if let Some(w) = app.window.upgrade() {
-                app.refresh_microphones();
-                app.refresh_filter();
-                show(&w);
-            }
-        }
-    });
-    tray.on_toggle_filter({
-        let app = Rc::clone(&app);
-        move || {
-            let on = !app.filter.borrow().enabled;
-            app.set_filter(|f| f.enabled = on);
-        }
-    });
-    tray.on_toggle_voice({
-        let app = Rc::clone(&app);
-        move || {
-            let on = !app.filter.borrow().voice.enabled;
-            app.set_voice(|v| v.enabled = on);
-        }
-    });
-    tray.on_toggle_dictation({
-        let app = Rc::clone(&app);
-        move || {
-            let on = !app.config.borrow().dictation;
-            app.set_dictation(on);
-        }
-    });
-
     // The filter's state can change outside the app (stream starts, errors).
     // The daily look for a new version: a minute after the start (not in
     // the busy moments of signing in), then whenever a day has passed.
@@ -1589,6 +1788,32 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             app.refresh_filter();
             app.check_mute();
             app.follow_default();
+            app.refresh_key_note();
+        }
+    });
+    // In the setup the answers to the desktop's questions and the first
+    // press of the key show at once.
+    let guide_poll = slint::Timer::default();
+    guide_poll.start(slint::TimerMode::Repeated, Duration::from_millis(250), {
+        let app = Rc::clone(&app);
+        move || {
+            let Some(w) = app.window.upgrade() else {
+                return;
+            };
+            if w.get_setup_mode() && w.get_setup_step() == 1 && w.global::<AppState>().get_guide() {
+                let before = (
+                    w.global::<AppState>().get_key_state(),
+                    w.global::<AppState>().get_key_tried(),
+                );
+                app.refresh_key_note();
+                let after = (
+                    w.global::<AppState>().get_key_state(),
+                    w.global::<AppState>().get_key_tried(),
+                );
+                if before != after {
+                    fit(&app.window);
+                }
+            }
         }
     });
     if let Some(requests) = show_requests {
@@ -1637,9 +1862,131 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     }
     if !setup_done || !background {
         show(&window);
+    } else if !platform::has_tray() && cfg!(windows) {
+        // Started at login without a tray to sit in (or before the panel
+        // that hosts it): give the panel a moment, then show up minimized
+        // rather than run where nobody can reach kyrr. Not on Linux: not
+        // every desktop can minimize (Hyprland would show the window), and
+        // starting kyrr from the app menu brings up the running one.
+        let weak = window.as_weak();
+        slint::Timer::single_shot(Duration::from_secs(10), move || {
+            if let Some(w) = weak.upgrade() {
+                if !platform::has_tray() {
+                    show(&w);
+                    w.window().set_minimized(true);
+                }
+            }
+        });
     }
+    let tray_at_start = platform::has_tray();
     tray.show()?;
-    slint::run_event_loop_until_quit()
+    drop(tray);
+    // A panel that hosts tray icons may start after kyrr (both at login).
+    // An icon can only register once one is there: make a new one then.
+    let tray_retry = slint::Timer::default();
+    if !tray_at_start {
+        let app = Rc::downgrade(&app);
+        let started = Instant::now();
+        let done = Cell::new(false);
+        tray_retry.start(slint::TimerMode::Repeated, Duration::from_secs(3), move || {
+            if done.get() || started.elapsed() > Duration::from_secs(120) || !platform::has_tray() {
+                return;
+            }
+            if let Some(app) = app.upgrade() {
+                done.set(retry_tray(&app).is_ok());
+            }
+        });
+    }
+    #[cfg(target_os = "linux")]
+    kyrr_linux::signals::on_terminate({
+        let worker = worker.clone();
+        move || {
+            let _ = worker.send(Command::Quit);
+            let _ = slint::invoke_from_event_loop(|| {
+                let _ = slint::quit_event_loop();
+            });
+        }
+    });
+    let result = slint::run_event_loop_until_quit();
+    TRAY.take();
+    result
+}
+
+/// A tray icon wired to the app.
+fn new_tray(app: &Rc<App>) -> Result<Tray, slint::PlatformError> {
+    let tray = Tray::new()?;
+    let quit = {
+        let worker = app.worker.clone();
+        move || {
+            let _ = worker.send(Command::Quit);
+            let _ = slint::quit_event_loop();
+        }
+    };
+    tray.on_quit(quit);
+    tray.on_install_update({
+        let weak = app.window.clone();
+        move || {
+            if let Some(w) = weak.upgrade() {
+                show(&w);
+                w.global::<AppState>().invoke_install_update();
+            }
+        }
+    });
+    tray.on_open({
+        let app = Rc::clone(app);
+        move || {
+            if let Some(w) = app.window.upgrade() {
+                app.refresh_microphones();
+                app.refresh_filter();
+                show(&w);
+            }
+        }
+    });
+    tray.on_toggle_filter({
+        let app = Rc::clone(app);
+        move || {
+            let on = !app.filter.borrow().enabled;
+            app.set_filter(|f| f.enabled = on);
+        }
+    });
+    tray.on_toggle_voice({
+        let app = Rc::clone(app);
+        move || {
+            let on = !app.filter.borrow().voice.enabled;
+            app.set_voice(|v| v.enabled = on);
+        }
+    });
+    tray.on_toggle_dictation({
+        let app = Rc::clone(app);
+        move || {
+            let on = !app.config.borrow().dictation;
+            app.set_dictation(on);
+        }
+    });
+    Ok(tray)
+}
+
+/// Replaces the tray icon with a new one that shows what the old one did;
+/// the old one never got a place in a panel.
+fn retry_tray(app: &Rc<App>) -> Result<(), slint::PlatformError> {
+    let new = new_tray(app)?;
+    if let Some(old) = tray() {
+        new.set_recording(old.get_recording());
+        new.set_active(old.get_active());
+        new.set_filter_enabled(old.get_filter_enabled());
+        new.set_voice_enabled(old.get_voice_enabled());
+        new.set_dictation_enabled(old.get_dictation_enabled());
+        new.set_dictation_ready(old.get_dictation_ready());
+        new.set_key_name(old.get_key_name());
+        new.set_update_version(old.get_update_version());
+        let _ = old.hide();
+    }
+    new.show()?;
+    TRAY.set(Some(new));
+    if let Some(w) = app.window.upgrade() {
+        w.global::<AppState>().set_tray(true);
+    }
+    Ok(())
 }
 
 #[cfg(test)]

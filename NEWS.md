@@ -7,6 +7,28 @@ after the version when it is released (`## 0.6.0`, say); `scripts/release-notes.
 puts it into the release description, where kyrr reads it. Never put `-->` in
 the text.
 
+An item for one system only starts with `(Windows)` or `(Linux)`, as in
+`- (Linux) …`; kyrr shows it only there, without the mark. Everything else
+is for both, so it names neither. Linux lists the versions from 0.5.3 on.
+
+## 0.5.3
+
+- (Linux) kyrr is here for Linux: the noise removal works on a microphone of its own called "kyrr", which your apps get as their microphone, and dictation types into any window with F9.
+- (Linux) On GNOME and KDE your desktop asks once for the key and once for permission to type; kyrr walks you through both.
+- (Linux) kyrr follows your microphone when you plug in another one or pick one in the sound settings, and tells you when it is muted.
+- (Linux) Without a tray icon, the window's X only minimizes kyrr where your desktop allows it; "Quit" ends it.
+- (Windows) kyrr is now available for Linux too.
+- (Windows) The small wave next to the status line needs far less processor time.
+
+### Deutsch
+
+- (Linux) kyrr gibt es jetzt für Linux: Die Entfernung von Störgeräuschen läuft über ein eigenes Mikrofon namens „kyrr“, das deine Apps als Mikrofon bekommen, und das Diktat tippt mit F9 in jedes Fenster.
+- (Linux) Unter GNOME und KDE fragt dein Desktop einmal nach der Taste und einmal, ob kyrr tippen darf; kyrr führt dich durch beides.
+- (Linux) kyrr folgt deinem Mikrofon, wenn du ein anderes einsteckst oder in den Toneinstellungen auswählst, und sagt dir, wenn es stummgeschaltet ist.
+- (Linux) Ohne Tray-Symbol minimiert das X am Fenster kyrr nur, wo dein Desktop das kann; „Beenden“ beendet es.
+- (Windows) kyrr gibt es jetzt auch für Linux.
+- (Windows) Die kleine Welle neben der Statuszeile braucht viel weniger Rechenleistung.
+
 ## 0.5.2
 
 - kyrr tells you when Windows has your microphone muted (or it sends nothing at all), and a click on "Switch it on" fixes it. It also says when no microphone is found and which one was just plugged in.

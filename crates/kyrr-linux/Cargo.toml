@@ -1,0 +1,36 @@
+[package]
+name = "kyrr-linux"
+description = "Linux integration for kyrr: the virtual microphone, the push-to-talk key and typing text"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[target.'cfg(target_os = "linux")'.dependencies]
+kyrr-common = { path = "../kyrr-common" }
+# The virtual microphone: a capture stream from the real microphone and a
+# source node named "kyrr" that apps record from.
+pipewire = { version = "0.10", features = ["v1_0_0"] }
+# Desktop portals (global shortcut, keyboard input, background) on the same
+# zbus and async-io as the tray icon.
+ashpd = { version = "0.13", default-features = false, features = ["async-io", "global_shortcuts", "remote_desktop", "screencast", "background"] }
+futures-lite = "2"
+# Asking the portal thread to bind the shortcut again.
+async-channel = "2"
+x11rb = { version = "0.13", features = ["xtest", "xkb"] }
+# Typing on Wayland compositors with the virtual keyboard protocol
+# (Hyprland, Sway and other wlroots compositors).
+wayland-client = "0.31"
+wayland-protocols-misc = { version = "0.3", features = ["client"] }
+async-signal = "0.2"
+rustix = { version = "1", features = ["fs", "mm", "process"] }
+# Clipboard fallback when typing is not possible: X11, and Wayland compositors
+# with the data-control protocol.
+arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
+# Whether the desktop shows tray icons (StatusNotifierWatcher on D-Bus).
+zbus = { version = "5", default-features = false, features = ["async-io"] }
+# Which characters the layout of the user can type (the RemoteDesktop portal
+# types only those).
+xkbcommon = { version = "0.9", default-features = false }

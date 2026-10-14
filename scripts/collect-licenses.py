@@ -1,7 +1,7 @@
 """Collects the license files of every Rust crate linked into kyrr.exe and
-kyrr_apo.dll. Taken from dpdf-voice.
+kyrr_apo.dll (or, with --linux, into the Linux kyrr). Taken from dpdf-voice.
 
-Usage: python scripts/collect-licenses.py <out dir>
+Usage: python scripts/collect-licenses.py [--linux] <out dir>
 
 Writes <out dir>/<crate>-<version>/<license files> plus <out dir>/CRATES.md.
 Only normal (non-build, non-dev) dependencies of the shipped packages are
@@ -16,9 +16,10 @@ import shutil
 import subprocess
 import sys
 
-TARGET = "x86_64-pc-windows-msvc"
-SHIPPED = ("kyrr", "kyrr-apo")
-PATTERNS = ("license", "licence", "copying", "notice", "copyright")
+LINUX = "--linux" in sys.argv[1:]
+TARGET = "x86_64-unknown-linux-gnu" if LINUX else "x86_64-pc-windows-msvc"
+SHIPPED = ("kyrr",) if LINUX else ("kyrr", "kyrr-apo")
+PATTERNS = ("license", "licence", "unlicense", "copying", "notice", "copyright")
 
 
 def linked_crates(root):
@@ -117,7 +118,7 @@ def license_files(pkg_dir):
 
 def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    out_dir = sys.argv[1]
+    out_dir = [a for a in sys.argv[1:] if a != "--linux"][0]
     meta = json.loads(subprocess.run(
         ["cargo", "metadata", "--format-version", "1", "--filter-platform", TARGET],
         cwd=root, check=True, capture_output=True, text=True, encoding="utf-8").stdout)
@@ -153,7 +154,7 @@ def main():
     if missing:
         sys.exit("no license file found for: " + ", ".join(missing))
     with open(os.path.join(out_dir, "CRATES.md"), "w", encoding="utf-8", newline="\n") as f:
-        f.write("# Rust crates linked into kyrr.exe and kyrr_apo.dll\n\n")
+        f.write(f"# Rust crates linked into {'kyrr' if LINUX else 'kyrr.exe and kyrr_apo.dll'}\n\n")
         f.write("Each crate's license files are in the folder `<crate>-<version>/`.\n\n")
         f.write("| Crate | Version | License |\n|---|---|---|\n")
         for name, version, lic, _ in rows:

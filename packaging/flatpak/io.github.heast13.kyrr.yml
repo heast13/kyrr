@@ -1,0 +1,231 @@
+# Flatpak manifest for kyrr. See README.md next to this file for how to
+# build it, how to regenerate cargo-sources.json and what changes for the
+# Flathub submission.
+id: io.github.heast13.kyrr
+runtime: org.freedesktop.Platform
+runtime-version: '26.08'
+sdk: org.freedesktop.Sdk
+command: kyrr
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  # libclang for bindgen (pipewire-sys, libspa-sys).
+  - org.freedesktop.Sdk.Extension.llvm22
+finish-args:
+  # The window: Wayland first, X11 only where there is no Wayland.
+  - --socket=wayland
+  - --socket=fallback-x11
+  # X11 shared memory (MIT-SHM); needed together with X11 access.
+  - --share=ipc
+  # OpenGL drawing of the window (Slint's default renderer).
+  - --device=dri
+  # Speech model download on first dictation and "Check for updates".
+  - --share=network
+  # The virtual microphone "kyrr": a PipeWire source node and the default
+  # source in PipeWire's metadata. Read-only bind of the socket, as
+  # EasyEffects does; connecting to it works the same.
+  - --filesystem=xdg-run/pipewire-0:ro
+  # Dictation recording, listening to yourself and the before/after test go
+  # through cpal -> ALSA, whose default device in the Freedesktop runtime is
+  # the PulseAudio plugin.
+  - --socket=pulseaudio
+  # Tray icon (StatusNotifierItem).
+cleanup:
+  - /include
+  - /lib/libonnxruntime.so
+  - /sherpa-onnx
+modules:
+  # ONNX Runtime for sherpa-onnx (dictation). Microsoft's official release
+  # build, not built from source: see README.md, "ONNX Runtime is a prebuilt
+  # binary". The version is the one sherpa-onnx 1.13.8 is built and tested
+  # with (cmake/onnxruntime-linux-x86_64*.cmake); it moves with sherpa-onnx,
+  # not on its own, so no x-checker-data here or on sherpa-onnx (pinned by
+  # crates/kyrr-dictate/Cargo.toml). Installed as a shared library;
+  # libonnxruntime.so.1 is the only file that ships.
+  - name: onnxruntime
+    buildsystem: simple
+    only-arches:
+      - x86_64
+    build-commands:
+      - install -Dm644 -t ${FLATPAK_DEST}/include/onnxruntime include/*.h include/*.inc
+      - install -Dm755 lib/libonnxruntime.so.1.28.2 ${FLATPAK_DEST}/lib/libonnxruntime.so.1.28.2
+      - ln -sf libonnxruntime.so.1.28.2 ${FLATPAK_DEST}/lib/libonnxruntime.so.1
+      - ln -sf libonnxruntime.so.1 ${FLATPAK_DEST}/lib/libonnxruntime.so
+      - install -Dm644 LICENSE ${FLATPAK_DEST}/share/licenses/${FLATPAK_ID}/onnxruntime/LICENSE
+      - install -Dm644 ThirdPartyNotices.txt ${FLATPAK_DEST}/share/licenses/${FLATPAK_ID}/onnxruntime/ThirdPartyNotices.txt
+      # Also where kyrr's own notices are (THIRD_PARTY.md: "notices in
+      # licenses/"), under the names scripts/package-linux.py uses.
+      - install -Dm644 LICENSE ${FLATPAK_DEST}/share/doc/kyrr/licenses/LICENSE-onnxruntime.txt
+      - install -Dm644 ThirdPartyNotices.txt ${FLATPAK_DEST}/share/doc/kyrr/licenses/ThirdPartyNotices-onnxruntime.txt
+    sources:
+      - type: archive
+        url: https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-linux-x64-1.28.2.tgz
+        sha256: d7209b8751b27b862b0c76332c2e20e203396edb5dab700ecf4bb485cf147415
+
+  # sherpa-onnx, the dictation engine, built from source as static libraries
+  # for the Rust crate sherpa-onnx-sys (SHERPA_ONNX_LIB_DIR). Text-to-speech
+  # is off, so espeak-ng (GPL) and piper-phonemize are neither downloaded nor
+  # built. Speaker diarization is off too (kyrr does not use it), which
+  # saves the hclust-cpp download. Installed to /app/sherpa-onnx, which is
+  # only needed while kyrr links and is removed by `cleanup`.
+  - name: sherpa-onnx
+    buildsystem: cmake-ninja
+    build-options:
+      env:
+        # Use the ONNX Runtime from the module above instead of downloading
+        # sherpa-onnx's own prebuilt static one (cmake/onnxruntime.cmake).
+        SHERPA_ONNXRUNTIME_INCLUDE_DIR: /app/include/onnxruntime
+        SHERPA_ONNXRUNTIME_LIB_DIR: /app/lib
+    builddir: true
+    only-arches:
+      - x86_64
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_INSTALL_PREFIX=/app/sherpa-onnx
+      - -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+      - -DBUILD_SHARED_LIBS=OFF
+      - -DSHERPA_ONNX_ENABLE_TTS=OFF
+      - -DSHERPA_ONNX_ENABLE_SPEAKER_DIARIZATION=OFF
+      - -DSHERPA_ONNX_ENABLE_C_API=ON
+      - -DSHERPA_ONNX_ENABLE_BINARY=OFF
+      - -DSHERPA_ONNX_BUILD_C_API_EXAMPLES=OFF
+      - -DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF
+      - -DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF
+      - -DSHERPA_ONNX_ENABLE_PYTHON=OFF
+      - -DSHERPA_ONNX_ENABLE_JNI=OFF
+      - -DSHERPA_ONNX_ENABLE_TESTS=OFF
+      - -DSHERPA_ONNX_ENABLE_GPU=OFF
+      - -DSHERPA_ONNX_LINK_LIBSTDCPP_STATICALLY=OFF
+      - -DSHERPA_ONNX_USE_PRE_INSTALLED_ONNXRUNTIME_IF_AVAILABLE=ON
+    post-install:
+      # sherpa-onnx-sys links these text-to-speech libraries unconditionally
+      # (SHERPA_ONNX_STATIC_LIBS in its build.rs). Without text-to-speech
+      # nothing references them, so empty archives stand in, as in
+      # scripts/fetch-assets.py. libonnxruntime.a stands in the same way:
+      # ONNX Runtime is the shared library above, linked by the kyrr module.
+      - for lib in espeak-ng piper_phonemize ucd onnxruntime; do printf '!<arch>\n' > /app/sherpa-onnx/lib/lib${lib}.a; done
+      - install -Dm644 ../LICENSE ${FLATPAK_DEST}/share/licenses/${FLATPAK_ID}/sherpa-onnx/LICENSE
+    sources:
+      - type: git
+        url: https://github.com/k2-fsa/sherpa-onnx.git
+        tag: v1.13.8
+        commit: 11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf
+      # sherpa-onnx's CMake (FetchContent) looks for each dependency's
+      # archive in its source folder before it would download it, and
+      # checks the archive against the same SHA256 as here. URLs and hashes
+      # are those in the cmake/*.cmake files of the v1.13.8 tag and of the
+      # dependencies themselves (kissfft: kaldi-native-fbank; kaldifst:
+      # kaldi-decoder). Update them together with the tag.
+      - type: file
+        url: https://github.com/csukuangfj/kaldi-native-fbank/archive/refs/tags/v1.22.3.tar.gz
+        sha256: 9176cc66fc7ce1edf85cf355b06e320c57db6297df74277f575183468893cf61
+        dest-filename: kaldi-native-fbank-1.22.3.tar.gz
+      - type: file
+        url: https://github.com/mborgerding/kissfft/archive/febd4caeed32e33ad8b2e0bb5ea77542c40f18ec.zip
+        sha256: 497103e664168ebe39580b757adbe616f6cf85a16572af581ca7bc42d0ab13fd
+        dest-filename: kissfft-febd4caeed32e33ad8b2e0bb5ea77542c40f18ec.zip
+      - type: file
+        url: https://github.com/k2-fsa/kaldi-decoder/archive/refs/tags/v0.3.0.tar.gz
+        sha256: b9f34cfb4fd3b1344100eead79ef4d37aa15962274b9e3056de345021f76a1b0
+        dest-filename: kaldi-decoder-0.3.0.tar.gz
+      - type: file
+        url: https://github.com/k2-fsa/kaldifst/archive/refs/tags/v1.8.0.tar.gz
+        sha256: 3f247b7e5a2409071202f5e2bc6200060f66728c0a3443c03923ad2723e040b3
+        dest-filename: kaldifst-1.8.0.tar.gz
+      - type: file
+        url: https://github.com/csukuangfj/openfst/archive/refs/tags/v1.8.5-2026-07-09.tar.gz
+        sha256: 2ff712a32952fcb01d351121a6bc8ccf4fdc6b2aa06ce8df2b3095dedd518c0e
+        dest-filename: openfst-1.8.5-2026-07-09.tar.gz
+      - type: file
+        url: https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.tar.gz
+        sha256: e9c326dc8c05cd1e044c71f30f1b2e34a6161a3b6ecf445d56b53ff1669e3dec
+        dest-filename: eigen-5.0.1.tar.gz
+      - type: file
+        url: https://github.com/pkufool/simple-sentencepiece/archive/refs/tags/v0.7.tar.gz
+        sha256: 1748a822060a35baa9f6609f84efc8eb54dc0e74b9ece3d82367b7119fdc75af
+        dest-filename: simple-sentencepiece-0.7.tar.gz
+      - type: file
+        url: https://github.com/nlohmann/json/archive/refs/tags/v3.12.0.tar.gz
+        sha256: 4b92eb0c06d10683f7447ce9406cb97cd4b453be18d7279320f7b2f025c10187
+        dest-filename: json-3.12.0.tar.gz
+
+  - name: kyrr
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/llvm22/bin
+      prepend-ld-library-path: /usr/lib/sdk/llvm22/lib
+      env:
+        CARGO_HOME: /run/build/kyrr/cargo
+        CARGO_NET_OFFLINE: 'true'
+        # The static libraries from the sherpa-onnx module, used instead of
+        # sherpa-onnx-sys downloading its prebuilt ones.
+        SHERPA_ONNX_LIB_DIR: /app/sherpa-onnx/lib
+        # ONNX Runtime is a shared library here (see the onnxruntime module);
+        # sherpa-onnx-sys only names the empty static stand-in. A link-arg
+        # comes after all libraries on the linker command line, where the
+        # references from the sherpa-onnx archives resolve against it.
+        RUSTFLAGS: -C link-arg=-L/app/lib -C link-arg=-lonnxruntime
+    only-arches:
+      - x86_64
+    build-commands:
+      - cargo --offline build --release --locked -p kyrr
+      - install -Dm755 target/release/kyrr ${FLATPAK_DEST}/bin/kyrr
+      # The noise models, where engine.rs `assets_dir()` looks next to the
+      # program: /app/bin/../share/kyrr.
+      - install -Dm644 -t ${FLATPAK_DEST}/share/kyrr assets/dpdfnet8_48khz_hr.onnx assets/dpdfnet2_48khz_hr.onnx assets/dpdfnet8_48khz_hr.weights.f32 assets/dpdfnet2_48khz_hr.weights.f32
+      - install -Dm644 packaging/linux/${FLATPAK_ID}.desktop ${FLATPAK_DEST}/share/applications/${FLATPAK_ID}.desktop
+      - install -Dm644 packaging/linux/${FLATPAK_ID}.metainfo.xml ${FLATPAK_DEST}/share/metainfo/${FLATPAK_ID}.metainfo.xml
+      - install -Dm644 crates/kyrr-app/ui/icons/kyrr-256.png ${FLATPAK_DEST}/share/icons/hicolor/256x256/apps/${FLATPAK_ID}.png
+      - install -Dm644 crates/kyrr-app/ui/icons/kyrr.svg ${FLATPAK_DEST}/share/icons/hicolor/scalable/apps/${FLATPAK_ID}.svg
+      # Where Settings > About finds the license notices (platform.rs
+      # `open_licenses`: ../share/doc/kyrr/THIRD_PARTY.md next to the program).
+      - install -Dm644 -t ${FLATPAK_DEST}/share/doc/kyrr THIRD_PARTY.md NOTICE LICENSE-MIT LICENSE-APACHE
+      - python3 scripts/collect-licenses.py --linux ${FLATPAK_DEST}/share/doc/kyrr/licenses/crates
+      - install -Dm644 -t ${FLATPAK_DEST}/share/licenses/${FLATPAK_ID}/kyrr LICENSE-MIT LICENSE-APACHE NOTICE
+    sources:
+      # Local builds: the repository this file is in. For Flathub, replace
+      # this with the git source below (tag and commit of the release).
+      - type: dir
+        path: ../..
+        skip:
+          - .flatpak-builder
+          - .git
+          - assets
+          - build-dir
+          - dist
+          - repo
+          - target
+      # - type: git
+      #   url: https://github.com/heast13/kyrr.git
+      #   tag: v0.5.0
+      #   commit: 0000000000000000000000000000000000000000
+      #   x-checker-data:
+      #     type: git
+      #     tag-pattern: ^v([\d.]+)$
+      - cargo-sources.json
+      # DPDFNet models and native-engine weights (Ceva, Apache-2.0), the same
+      # files and SHA256 as scripts/fetch-assets.py: kyrr's own mirror
+      # first, HushMic's v0.10.2 release as the fallback.
+      - type: file
+        url: https://github.com/heast13/kyrr-assets/releases/download/build-1/dpdfnet8_48khz_hr.onnx
+        mirror-urls:
+          - https://github.com/Fovty/HushMic/releases/download/v0.10.2/dpdfnet8_48khz_hr.onnx
+        sha256: 7b3afbb260a08fe9af3d16e3bda992971be1e7e951d1dee7c2d235f5c43f5631
+        dest: assets
+      - type: file
+        url: https://github.com/heast13/kyrr-assets/releases/download/build-1/dpdfnet2_48khz_hr.onnx
+        mirror-urls:
+          - https://github.com/Fovty/HushMic/releases/download/v0.10.2/dpdfnet2_48khz_hr.onnx
+        sha256: 7f0575a5cec0ba4ffd8f8bd657e06d007e4ccdd955d76faab922b9d3291dc14b
+        dest: assets
+      - type: file
+        url: https://github.com/heast13/kyrr-assets/releases/download/build-1/dpdfnet8_48khz_hr.weights.f32
+        mirror-urls:
+          - https://github.com/Fovty/HushMic/releases/download/v0.10.2/dpdfnet8_48khz_hr.weights.f32
+        sha256: 5a5bb67a8619090c54dc2793536fe813fe38123b236d445f3433aafe3075529d
+        dest: assets
+      - type: file
+        url: https://github.com/heast13/kyrr-assets/releases/download/build-1/dpdfnet2_48khz_hr.weights.f32
+        mirror-urls:
+          - https://github.com/Fovty/HushMic/releases/download/v0.10.2/dpdfnet2_48khz_hr.weights.f32
+        sha256: cb7248b8fccbff7b32f254ec2ed0061e604514b2ccd98d997cd081a876424e7b
+        dest: assets
