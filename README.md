@@ -90,12 +90,12 @@ In a file manager the same works with a right click, Properties, "Allow
 executing file as program" (the wording differs a little per desktop), then
 a double click. On its first start kyrr adds itself to your app menu.
 
-64-bit Intel or AMD with glibc 2.39 or newer (Ubuntu 24.04, Fedora 40,
-Debian 13, Arch or newer) and PipeWire, which these use anyway. The noise
-filter needs a processor with AVX2 (most from 2015 on); dictation works
-without. No administrator rights needed. On GNOME and KDE your desktop asks once for the
-dictation key and once whether kyrr may type; kyrr walks you through both.
-On Hyprland (Omarchy, say) kyrr shows the lines to add to your key bindings;
+64-bit Intel or AMD with glibc 2.39 or newer (Ubuntu 24.04, Fedora 40, Debian
+13, Arch or newer) and PipeWire, which these use anyway. The noise filter
+needs a processor with AVX2 (most from 2015 on); dictation works without. No
+administrator rights needed. On GNOME and KDE your desktop asks once for the
+dictation key and once whether kyrr may type; kyrr walks you through both. On
+Hyprland (Omarchy, say) kyrr shows the lines to add to your key bindings;
 without a tray icon the window's X minimizes kyrr where the desktop can bring
 it back (GNOME, say) and quits it on tiling ones; "Quit" always ends it.
 Updates are not installed by themselves: kyrr says when there is a new
@@ -147,11 +147,11 @@ moves it slowly (5 dB/s up, 10 dB/s down, at most +24/−12 dB) towards about
 adjust the volume themselves (call apps, say) can work against it, so use
 one of the two.
 
-**Your microphone.** kyrr checks every few seconds which microphone the
-system uses. When it changes, the filter moves along: Windows asks for
-permission once and sound pauses for a moment; on Linux it simply moves. If
-that does not happen (you declined, say), a button on the main page offers it. A microphone you pick by hand stays until the
-system's default changes.
+**Your microphone.** kyrr checks every few seconds which microphone the system
+uses. When it changes, the filter moves along: Windows asks for permission
+once and sound pauses for a moment; on Linux it simply moves. If that does not
+happen (you declined, say), a button on the main page offers it. A microphone
+you pick by hand stays until the system's default changes.
 
 **Check.** On Windows the filter shares a small block of memory with the app
 (`Global\kyrr-monitor-3`): the level before and after kyrr, what the

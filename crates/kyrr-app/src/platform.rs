@@ -771,7 +771,7 @@ mod imp {
             Some(entry.into_bytes()),
         );
         // The start at sign-in follows a moved AppImage too.
-        if autostart_file().is_file() {
+        if autostart_enabled() {
             set_autostart(true);
         }
     }
@@ -934,7 +934,24 @@ mod imp {
         if flatpak() {
             return state().saved.autostart;
         }
-        autostart_file().is_file()
+        std::fs::read_to_string(autostart_file()).is_ok_and(|entry| !autostart_switched_off(&entry))
+    }
+
+    /// The desktop's own settings (GNOME Tweaks, KDE's) switch a start at
+    /// sign-in off by marking the file instead of deleting it.
+    fn autostart_switched_off(entry: &str) -> bool {
+        entry
+            .lines()
+            .any(|l| matches!(l.trim(), "Hidden=true" | "X-GNOME-Autostart-enabled=false"))
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn autostart_switched_off_by_the_desktop() {
+        let ours = "[Desktop Entry]\nExec=kyrr --background\nX-GNOME-Autostart-enabled=true\n";
+        assert!(!autostart_switched_off(ours));
+        assert!(autostart_switched_off(&ours.replace("enabled=true", "enabled=false")));
+        assert!(autostart_switched_off(&format!("{ours}Hidden=true\n")));
     }
 
     pub fn set_autostart(on: bool) {
@@ -972,10 +989,7 @@ mod imp {
             path.replace('\\', "\\\\"),
             exec_quoted(&path)
         );
-        if let Some(dir) = file.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        let _ = std::fs::write(file, entry);
+        write_if_changed(&file, Some(entry.into_bytes()));
     }
 
     /// The screen the window is on (panels included; a Wayland app cannot
