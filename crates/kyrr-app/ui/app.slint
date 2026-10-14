@@ -51,6 +51,8 @@ export global AppState {
     // The red note at the bottom of the main page, one at a time:
     // 0 none, 1 mic too quiet, 2 mic too loud, 3 still listening.
     in property <int> alert;
+    // The microphone named by the "connected" note (alert 5).
+    in property <string> alert-mic;
 
     // Voice: sound, S sounds and volume, shaped in the audio filter
     in-out property <bool> voice-enabled: true;
@@ -811,10 +813,12 @@ component AlertLine inherits Text {
         if (AppState.alert == 1) { return (AppState.linux ? @tr("Mic very quiet. Turn it up in your sound settings.") : @tr("Mic very quiet. Turn it up in Windows.")); }
         if (AppState.alert == 2) { return (AppState.linux ? @tr("Mic too loud. Turn it down in your sound settings.") : @tr("Mic too loud. Turn it down in Windows.")); }
         if (AppState.alert == 3) { return @tr("Still listening to you. Headphones only!"); }
+        if (AppState.alert == 4) { return @tr("No microphone here. kyrr is looking for one…"); }
+        if (AppState.alert == 5) { return @tr("✓ Microphone connected: {}", AppState.alert-mic); }
         return "";
     }
     text: root.note();
-    color: #e5484d;
+    color: AppState.alert == 5 ? #30a46c : #e5484d;
     font-size: 11px;
     min-height: 16px;
     vertical-alignment: center;
@@ -1184,7 +1188,7 @@ component SetupPage inherits VerticalLayout {
     // The desktop's questions, one at a time, each said before it comes.
     if step == 1 && AppState.guide: Caption {
         text: AppState.key-state == 0 ? @tr("Dictation uses {}. Your desktop has to allow that once: click below, then “Add” in its window.", AppState.key-name)
-            : AppState.key-state == 1 ? @tr("Now click “Add” in your desktop's window. {} is already filled in there, the pencil is not needed.", AppState.key-name)
+            : AppState.key-state == 1 ? @tr("Now click “Add” in your desktop's window: the blue button at its top right. {} is already filled in, the pencil is not needed.", AppState.key-name)
             : AppState.key-state == 3 ? @tr("{} is not set up yet: the window was closed without “Add”. Try again?", AppState.key-name)
             : AppState.key-tried ? @tr("✓ {} works.", AppState.key-name)
             : @tr("✓ {} is set up. Try it: press {} once.", AppState.key-name, AppState.key-name);
@@ -1196,7 +1200,7 @@ component SetupPage inherits VerticalLayout {
     }
     if step == 1 && AppState.guide && AppState.key-state == 2: Caption {
         text: AppState.typing-state == 0 ? @tr("Last step: kyrr types your words into other apps. Your desktop asks once (“Remote Desktop”): switch on “Allow Remote Interaction”, then click “Share”.")
-            : AppState.typing-state == 1 ? @tr("In your desktop's window: switch on “Allow Remote Interaction”, then click “Share”.")
+            : AppState.typing-state == 1 ? @tr("In your desktop's window: switch on “Allow Remote Interaction” (its only switch), then click “Share”, the blue button at the top right.")
             : AppState.typing-state == 3 ? @tr("Not allowed, so kyrr cannot type for you. Try again?")
             : @tr("✓ kyrr may type.");
     }

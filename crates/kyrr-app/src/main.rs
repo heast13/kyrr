@@ -325,15 +325,26 @@ enum Alert {
     MicQuiet = 1,
     MicLoud = 2,
     Listening = 3,
+    /// The filter's microphone is gone; kyrr waits for one.
+    NoMic = 4,
+    /// kyrr moved to a new microphone just now (`AppState.alert-mic`).
+    MicFound = 5,
 }
+
+/// How long the note about a newly connected microphone stays.
+const MIC_FOUND_SHOWN: Duration = Duration::from_secs(6);
 
 /// The automatic volume's limits (see kyrr-voice), less a little slack for
 /// the gain stopping just short of them.
 const GAIN_AT_MAX_DB: f32 = 23.5;
 const GAIN_AT_MIN_DB: f32 = -11.5;
 
-/// The notes that apply right now. The window shows them one after the other.
-fn alerts(auto_level: bool, mic_active: bool, gain_db: f32, listening: bool) -> Vec<Alert> {
+/// The notes that apply right now. The window shows them one after the other;
+/// a microphone found or missing is the only note while it applies.
+fn alerts(mic: Option<Alert>, auto_level: bool, mic_active: bool, gain_db: f32, listening: bool) -> Vec<Alert> {
+    if let Some(mic) = mic {
+        return vec![mic];
+    }
     let mut list = Vec::new();
     // The gain only means something while an app uses the microphone.
     if auto_level && mic_active {
@@ -665,6 +676,21 @@ impl App {
         }
     }
 
+    /// A microphone just connected, or none there to record from.
+    fn mic_note(&self) -> Option<Alert> {
+        let found = *mic_found().lock().unwrap_or_else(|e| e.into_inner());
+        if found.is_some_and(|at| at.elapsed() < MIC_FOUND_SHOWN) {
+            return Some(Alert::MicFound);
+        }
+        let mics = self.microphones.borrow();
+        let attached = self.attached.borrow();
+        let missing = match attached.as_deref() {
+            Some(guid) => !mics.iter().any(|m| m.guid.eq_ignore_ascii_case(guid)),
+            None => mics.is_empty(),
+        };
+        (missing && self.config.borrow().setup_done).then_some(Alert::NoMic)
+    }
+
     fn window_closed(&self) {
         self.meter.stop();
         self.stop_listening();
@@ -724,6 +750,7 @@ impl App {
             0.0
         });
         let notes = alerts(
+            self.mic_note(),
             state.get_auto_level(),
             active,
             state.get_level_gain(),
@@ -1084,6 +1111,13 @@ impl App {
         w.global::<AppState>().set_filter_state(FilterState::SettingUp);
         let weak = self.window.clone();
         let language = self.language();
+        let name = self
+            .microphones
+            .borrow()
+            .iter()
+            .find(|m| m.guid.eq_ignore_ascii_case(&guid))
+            .map(|m| m.name.clone())
+            .unwrap_or_default();
         std::thread::spawn(move || {
             let result = platform::attach(&guid);
             let _ = slint::invoke_from_event_loop(move || {
@@ -1095,6 +1129,10 @@ impl App {
                     Ok(()) => {
                         state.set_filter_state(FilterState::Checking);
                         state.set_move_to("".into());
+                        if !w.get_setup_mode() {
+                            state.set_alert_mic(name.into());
+                            *mic_found().lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
+                        }
                         if w.get_setup_mode() {
                             w.set_setup_step(1);
                             fit(&weak);
@@ -1122,6 +1160,12 @@ fn now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
+}
+
+/// When kyrr last moved to another microphone, for a short note.
+fn mic_found() -> &'static std::sync::Mutex<Option<Instant>> {
+    static FOUND: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
+    &FOUND
 }
 
 /// What the offered version brings, for the "What's new" window.
@@ -1849,29 +1893,32 @@ mod tests {
 
     #[test]
     fn no_notes_when_all_is_well() {
-        assert!(alerts(true, true, 8.0, false).is_empty());
-        assert!(alerts(false, false, 0.0, false).is_empty());
+        assert!(alerts(None, true, true, 8.0, false).is_empty());
+        assert!(alerts(None, false, false, 0.0, false).is_empty());
     }
 
     #[test]
     fn gain_at_its_limit_says_so() {
-        assert_eq!(alerts(true, true, 24.0, false), [Alert::MicQuiet]);
-        assert_eq!(alerts(true, true, -12.0, false), [Alert::MicLoud]);
+        assert_eq!(alerts(None, true, true, 24.0, false), [Alert::MicQuiet]);
+        assert_eq!(alerts(None, true, true, -12.0, false), [Alert::MicLoud]);
         // Just short of the limits is still fine.
-        assert!(alerts(true, true, 23.0, false).is_empty());
-        assert!(alerts(true, true, -11.0, false).is_empty());
+        assert!(alerts(None, true, true, 23.0, false).is_empty());
+        assert!(alerts(None, true, true, -11.0, false).is_empty());
     }
 
     #[test]
     fn gain_only_counts_while_it_works() {
         // Automatic volume off, or no app on the microphone: the number is stale.
-        assert!(alerts(false, true, 24.0, false).is_empty());
-        assert!(alerts(true, false, -12.0, false).is_empty());
+        assert!(alerts(None, false, true, 24.0, false).is_empty());
+        assert!(alerts(None, true, false, -12.0, false).is_empty());
     }
 
     #[test]
     fn several_notes_come_in_turn() {
-        assert_eq!(alerts(true, true, 24.0, true), [Alert::MicQuiet, Alert::Listening]);
-        assert_eq!(alerts(false, false, 0.0, true), [Alert::Listening]);
+        assert_eq!(
+            alerts(None, true, true, 24.0, true),
+            [Alert::MicQuiet, Alert::Listening]
+        );
+        assert_eq!(alerts(None, false, false, 0.0, true), [Alert::Listening]);
     }
 }

@@ -782,8 +782,8 @@ msgstr "{} ist noch nicht eingerichtet: Dafür braucht kyrr das OK deines Deskto
 msgid "Dictation uses {}. Your desktop has to allow that once: click below, then “Add” in its window."
 msgstr "Diktiert wird mit {}. Dein Desktop muss das einmal erlauben: Klick unten, dann in seinem Fenster auf „Hinzufügen“ (englisch „Add“)."
 
-msgid "Now click “Add” in your desktop's window. {} is already filled in there, the pencil is not needed."
-msgstr "Jetzt im Fenster deines Desktops auf „Hinzufügen“ (englisch „Add“) klicken. {} steht dort schon drin, den Stift brauchst du nicht."
+msgid "Now click “Add” in your desktop's window: the blue button at its top right. {} is already filled in, the pencil is not needed."
+msgstr "Jetzt im Fenster deines Desktops auf „Hinzufügen“ (englisch „Add“) klicken: der blaue Knopf oben rechts. {} steht schon drin, den Stift brauchst du nicht."
 
 msgid "{} is not set up yet: the window was closed without “Add”. Try again?"
 msgstr "{} ist noch nicht eingerichtet: Das Fenster wurde ohne „Hinzufügen“ geschlossen. Nochmal?"
@@ -800,8 +800,8 @@ msgstr "{} einrichten"
 msgid "Last step: kyrr types your words into other apps. Your desktop asks once (“Remote Desktop”): switch on “Allow Remote Interaction”, then click “Share”."
 msgstr "Letzter Schritt: kyrr tippt deine Worte in andere Apps. Dafür fragt dein Desktop einmal nach („Remote Desktop“ oder „Entfernter Bildschirm“): „Fernzugriff zulassen“ einschalten, dann „Freigeben“ klicken."
 
-msgid "In your desktop's window: switch on “Allow Remote Interaction”, then click “Share”."
-msgstr "Im Fenster deines Desktops: „Fernzugriff zulassen“ einschalten, dann „Freigeben“ klicken."
+msgid "In your desktop's window: switch on “Allow Remote Interaction” (its only switch), then click “Share”, the blue button at the top right."
+msgstr "Im Fenster deines Desktops: „Fernzugriff zulassen“ einschalten (der einzige Schalter, englisch „Allow Remote Interaction“), dann „Freigeben“ klicken, der blaue Knopf oben rechts (englisch „Share“)."
 
 msgid "Not allowed, so kyrr cannot type for you. Try again?"
 msgstr "Nicht erlaubt, also kann kyrr nicht für dich tippen. Nochmal?"
@@ -811,3 +811,9 @@ msgstr "✓ kyrr darf tippen."
 
 msgid "Allow typing"
 msgstr "Tippen erlauben"
+
+msgid "No microphone here. kyrr is looking for one…"
+msgstr "Kein Mikrofon da. kyrr sucht eins …"
+
+msgid "✓ Microphone connected: {}"
+msgstr "✓ Mikrofon verbunden: {}"
