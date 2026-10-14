@@ -13,7 +13,8 @@ const STABLE_TICKS: u32 = 5;
 
 /// What the app sees right now.
 pub struct Input<'a> {
-    /// Endpoint GUID the filter is on.
+    /// Endpoint GUID the filter is on; none while kyrr is set up but on no
+    /// microphone.
     pub attached: Option<&'a str>,
     /// The filter's microphone is plugged in.
     pub attached_present: bool,
@@ -23,6 +24,8 @@ pub struct Input<'a> {
     pub default: Option<&'a str>,
     /// The app must not touch the setup now (first-run, setting up, no filter).
     pub busy: bool,
+    /// Endpoint GUIDs of every microphone that is plugged in right now.
+    pub listed: Vec<&'a str>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -53,8 +56,10 @@ pub struct Follower {
     stable: u32,
     /// Microphones kyrr already tried to move to by itself, until the filter
     /// is on them: no second automatic prompt for them, however often the
-    /// default flips in between.
-    tried: Vec<String>,
+    /// default flips in between. Each with the ticks in a row it has been
+    /// unplugged: one that stays away was pulled out (also while the move
+    /// ran), so plugging it in again is a new chance, and not a loop.
+    tried: Vec<(String, u32)>,
     /// The default microphone while the user chose another one on purpose:
     /// left alone while the default is that one. Only a move away from the
     /// pick ends it, so a default that flickers does not cost the pick.
@@ -100,10 +105,22 @@ impl Follower {
             self.stable = 0;
         }
         self.last_default = Some(default.to_string());
+        self.tried.retain_mut(|(t, away)| {
+            *away = if input.listed.iter().any(|l| same(l, t)) {
+                0
+            } else {
+                *away + 1
+            };
+            *away < STABLE_TICKS
+        });
         let need = match input.attached {
             Some(a) if !same(a, default) => Some(Need::Switch),
             Some(_) if input.detached && input.attached_present => Some(Need::Repair),
-            _ => None,
+            Some(_) => None,
+            // Set up, yet on no microphone (a move that went wrong, or by an
+            // older kyrr): back onto the default, so kyrr never stands
+            // there without one.
+            None => Some(Need::Switch),
         };
         let Some(need) = need else {
             self.stable = 0;
@@ -111,7 +128,7 @@ impl Follower {
             // declined or failed stays remembered, so a default flipping to
             // and fro does not ask for it again.
             if let Some(a) = input.attached {
-                self.tried.retain(|t| !same(t, a));
+                self.tried.retain(|(t, _)| !same(t, a));
             }
             return Outcome::Idle;
         };
@@ -132,8 +149,8 @@ impl Follower {
             return Outcome::Idle;
         }
         let to = default.to_string();
-        if !self.tried.iter().any(|t| same(t, &to)) {
-            self.tried.push(to.clone());
+        if !self.tried.iter().any(|(t, _)| same(t, &to)) {
+            self.tried.push((to.clone(), 0));
             // Leaving the microphone the user picked: that pick is over.
             self.pinned = None;
             return Outcome::Move(to);
@@ -141,7 +158,7 @@ impl Follower {
         match need {
             Need::Switch => Outcome::Offer {
                 to,
-                unplugged: !input.attached_present,
+                unplugged: input.attached.is_some() && !input.attached_present,
             },
             // The Repair button on the main page covers this one.
             Need::Repair => Outcome::Idle,
@@ -163,6 +180,8 @@ mod tests {
             detached: false,
             default,
             busy: false,
+            // Both are plugged in, unless the test says the filter's is not.
+            listed: default.into_iter().chain(attached.filter(|_| present)).collect(),
         }
     }
 
@@ -276,8 +295,10 @@ mod tests {
         let mut i = input(Some(FIFINE), false, Some(PODMIC));
         i.busy = true;
         assert_eq!(run(&mut f, &i, 20), Outcome::Idle);
-        // Without a filter anywhere (never set up) there is nothing to move.
-        assert_eq!(run(&mut f, &input(None, false, Some(PODMIC)), 20), Outcome::Idle);
+        // Never set up: the setup picks the microphone, not this.
+        let mut never = input(None, false, Some(PODMIC));
+        never.busy = true;
+        assert_eq!(run(&mut f, &never, 20), Outcome::Idle);
         // No default microphone at all: nothing to move to.
         assert_eq!(run(&mut f, &input(Some(FIFINE), false, None), 20), Outcome::Idle);
     }
@@ -368,5 +389,93 @@ mod tests {
             run(&mut f, &input(Some(x), true, Some(PODMIC)), STABLE_TICKS),
             Outcome::Move(PODMIC.into())
         );
+    }
+
+    #[test]
+    fn a_microphone_pulled_out_during_the_move_is_tried_again_when_it_is_back() {
+        let mut f = Follower::default();
+        f.tick(&input(Some(FIFINE), true, Some(FIFINE)));
+        // The move to the PodMic starts; while Windows asks, it is pulled out.
+        let to_pod = input(Some(FIFINE), true, Some(PODMIC));
+        assert_eq!(run(&mut f, &to_pod, STABLE_TICKS), Outcome::Move(PODMIC.into()));
+        // The filter stayed on the fifine, which is the default again.
+        let back_on_fifine = input(Some(FIFINE), true, Some(FIFINE));
+        assert_eq!(run(&mut f, &back_on_fifine, STABLE_TICKS), Outcome::Idle);
+        // Plugged in again: one new automatic try.
+        assert_eq!(run(&mut f, &to_pod, STABLE_TICKS), Outcome::Move(PODMIC.into()));
+    }
+
+    #[test]
+    fn a_microphone_that_stays_plugged_in_is_not_tried_twice() {
+        let mut f = Follower::default();
+        f.tick(&input(Some(FIFINE), true, Some(FIFINE)));
+        let to_pod = input(Some(FIFINE), true, Some(PODMIC));
+        assert_eq!(run(&mut f, &to_pod, STABLE_TICKS), Outcome::Move(PODMIC.into()));
+        // Declined or failed, and the default flips to the fifine and back.
+        let back_on_fifine = input(Some(FIFINE), true, Some(FIFINE));
+        for _ in 0..3 {
+            f.tick(&back_on_fifine);
+        }
+        assert!(matches!(
+            run(&mut f, &to_pod, 30),
+            Outcome::Idle | Outcome::Offer { .. }
+        ));
+    }
+
+    #[test]
+    fn a_microphone_missing_for_one_tick_is_not_forgotten() {
+        let mut f = Follower::default();
+        f.tick(&input(Some(FIFINE), true, Some(FIFINE)));
+        let to_pod = input(Some(FIFINE), true, Some(PODMIC));
+        assert_eq!(run(&mut f, &to_pod, STABLE_TICKS), Outcome::Move(PODMIC.into()));
+        // The list flickers once, the PodMic is the default again right after.
+        let mut flicker = input(Some(FIFINE), true, Some(FIFINE));
+        flicker.listed = vec![FIFINE];
+        f.tick(&flicker);
+        assert!(matches!(
+            run(&mut f, &to_pod, 30),
+            Outcome::Idle | Outcome::Offer { .. }
+        ));
+    }
+
+    #[test]
+    fn a_filter_on_no_microphone_goes_back_onto_the_default() {
+        // A move went wrong half-way and left kyrr on no microphone.
+        let mut f = Follower::default();
+        let lost = input(None, false, Some(FIFINE));
+        assert_eq!(run(&mut f, &lost, STABLE_TICKS), Outcome::Move(FIFINE.into()));
+        // That did not work either: a button, not a second prompt.
+        assert_eq!(
+            f.tick(&lost),
+            Outcome::Offer {
+                to: FIFINE.into(),
+                // No microphone at all, not an unplugged one.
+                unplugged: false
+            }
+        );
+        // Without any microphone there is nothing to go back to.
+        let mut f = Follower::default();
+        assert_eq!(run(&mut f, &input(None, false, None), 30), Outcome::Idle);
+    }
+
+    #[test]
+    fn a_microphone_is_forgotten_after_exactly_five_ticks_away() {
+        let mut f = Follower::default();
+        f.tick(&input(Some(FIFINE), true, Some(FIFINE)));
+        let to_pod = input(Some(FIFINE), true, Some(PODMIC));
+        assert_eq!(run(&mut f, &to_pod, STABLE_TICKS), Outcome::Move(PODMIC.into()));
+        let away = input(Some(FIFINE), true, Some(FIFINE));
+        for _ in 0..STABLE_TICKS - 1 {
+            f.tick(&away);
+        }
+        // One tick short: still remembered, so a button and no new prompt.
+        assert!(matches!(run(&mut f, &to_pod, STABLE_TICKS + 1), Outcome::Offer { .. }));
+        let mut f = Follower::default();
+        f.tick(&input(Some(FIFINE), true, Some(FIFINE)));
+        assert_eq!(run(&mut f, &to_pod, STABLE_TICKS), Outcome::Move(PODMIC.into()));
+        for _ in 0..STABLE_TICKS {
+            f.tick(&away);
+        }
+        assert_eq!(run(&mut f, &to_pod, STABLE_TICKS), Outcome::Move(PODMIC.into()));
     }
 }

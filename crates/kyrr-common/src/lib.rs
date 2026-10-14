@@ -2,6 +2,8 @@
 //! filter running inside the Windows audio engine. Plain data only, so every
 //! part can use it without pulling in platform code.
 
+pub mod mic_move;
+
 /// COM class of kyrr's audio processing object.
 pub const APO_CLSID: u128 = 0xfce4df8f_fc7f_4164_be4a_c3e4a078cfb2;
 

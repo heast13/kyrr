@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- A microphone that is unplugged while kyrr moves to it (on Windows while
+  the permission prompt is open) no longer leaves kyrr on no microphone:
+  the move changes nothing and kyrr stays where it was, without restarting
+  the audio. A move attaches to the new microphone before it lets go of the
+  old one, and a filter that is set up but on no microphone goes back onto
+  the default one by itself, or offers it as a button. Windows and Linux.
+
 ## 0.5.3 (2026-10-14)
 
 - kyrr for Linux, as an AppImage (`kyrr-x86_64.AppImage`, plus a tarball

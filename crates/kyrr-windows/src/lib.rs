@@ -21,6 +21,10 @@ pub mod setup;
 pub mod typing;
 pub mod window;
 
+/// Exit code of `move <guid>` when that microphone is not plugged in (any
+/// more): nothing was changed and the audio service was not restarted.
+pub const EXIT_GONE: i32 = 3;
+
 /// Runs an elevated setup command and returns the process exit code:
 /// `install` (the DLL next to this exe), `uninstall`, `move <guid>`,
 /// `detach <guid>`. All but install restart the audio service so the
@@ -43,6 +47,10 @@ pub fn run_setup_command(args: &[String]) -> i32 {
         }
         [cmd] if cmd == "install" => setup::installed_dll().and_then(|dll| setup::install(&dll)),
         [cmd] if cmd == "uninstall" => restart(setup::uninstall()),
+        // Unplugged while Windows asked for permission: kyrr stays where it is.
+        [cmd, guid] if cmd == "move" && setup::is_endpoint_guid(guid) && !setup::endpoint_usable(guid) => {
+            return EXIT_GONE
+        }
         [cmd, guid] if cmd == "move" => restart(setup::move_to(guid)),
         [cmd, guid] if cmd == "detach" => restart(setup::detach(guid)),
         _ => Err(format!("unknown setup command: {args:?}")),
