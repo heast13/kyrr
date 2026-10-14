@@ -381,9 +381,11 @@ impl App {
         if *self.microphones.borrow() == mics {
             return;
         }
-        // None before, one now: say so for a few seconds (not at the start).
-        if !first && self.microphones.borrow().is_empty() {
-            if let Some(m) = mics.iter().find(|m| m.is_default).or(mics.first()) {
+        // A microphone that was not there before: name it for a few seconds
+        // (not at the start, when everything is new).
+        if !first {
+            let known = self.microphones.borrow();
+            if let Some(m) = mics.iter().find(|m| !known.iter().any(|k| k.guid == m.guid)) {
                 *self.connected.borrow_mut() = Some((m.name.clone(), Instant::now()));
             }
         }
