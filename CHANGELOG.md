@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 (2026-10-14)
+
+- Switching to another microphone now works for microphones Windows had not
+  given a "supported modes" entry (seen on a RØDE PodMic USB): kyrr adds it
+  when it attaches, so Windows loads the noise filter there. A microphone
+  attached earlier without it shows the "Repair" button.
+
 ## 0.5.0 (2026-10-13)
 
 - The main window keeps its height; it cannot be pulled taller or shorter
