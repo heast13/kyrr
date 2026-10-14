@@ -4,6 +4,7 @@
 
 <p>
   <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-setup.exe"><img src="https://img.shields.io/github/v/release/heast13/kyrr?label=Download%20for%20Windows&style=for-the-badge&color=005fb8" alt="Download kyrr for Windows"></a>
+  <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage"><img src="https://img.shields.io/github/v/release/heast13/kyrr?label=Download%20for%20Linux&style=for-the-badge&color=005fb8" alt="Download kyrr for Linux (AppImage)"></a>
 </p>
 
 [![Made with Slint](https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png)](https://slint.dev)
