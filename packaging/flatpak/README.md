@@ -1,6 +1,7 @@
 # Flatpak
 
-The Flatpak of kyrr, written for a later submission to Flathub.
+The Flatpak of kyrr, for Flathub. The manifest builds the tagged release
+(`v0.5.3`) from source.
 
 | File | What it is |
 | --- | --- |
@@ -43,9 +44,17 @@ flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest packagin
 flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo $HOME/.cache/kyrr-flatpak/repo
 ```
 
-The app source is `type: dir` with `path: ../..`, the working tree as it is
-(minus `target/`, `.git/`, `assets/` and flatpak-builder's own folders). The
-noise models come from the manifest's own `file` sources, not from `assets/`.
+The app source is the manifest's `git` source (tag and commit of the
+release), not the working tree. To build the working tree instead, swap that
+source for this one (and keep it out of commits):
+
+```yaml
+      - type: dir
+        path: ../..
+        skip: [.flatpak-builder, .git, assets, build-dir, dist, repo, target]
+```
+
+The noise models come from the manifest's own `file` sources, not from `assets/`.
 
 ### What the build does
 
@@ -110,19 +119,25 @@ ONNX Runtime version in `cmake/onnxruntime-linux-x86_64.cmake`.
 
 ## For the Flathub submission
 
-1. Tag a release that has the Linux port and add it to the `<releases>` of
-   `packaging/linux/io.github.heast13.kyrr.metainfo.xml` (Flathub shows the
-   newest one; it must match what ships).
-2. In the manifest, replace the `type: dir` source of the kyrr module with
-   the commented-out `type: git` block: `url`, the release `tag` and its
-   `commit` (`git rev-parse v0.X.Y^{commit}`).
-3. Regenerate `cargo-sources.json` from that tag's `Cargo.lock`.
-4. The pull request against `flathub/flathub` (branch `new-pr`) contains
-   `io.github.heast13.kyrr.yml`, `cargo-sources.json` and `flathub.json`, side
-   by side at the top level. Nothing else: no binaries, no copies of the
-   desktop file or MetaInfo.
-5. Run `flatpak-builder-lint` on the manifest and on the built repo first.
-6. After the app is accepted, the ID `io.github.heast13.kyrr` can be
+On every release the manifest moves with it:
+
+1. `<releases>` in `packaging/linux/io.github.heast13.kyrr.metainfo.xml` has
+   the new version (Flathub shows the newest one; it must match what ships).
+   The tag has to carry it, so this goes in before the tag.
+2. In the manifest, `tag` and `commit` of the kyrr git source
+   (`git rev-parse v0.X.Y^{commit}`).
+3. `cargo-sources.json` is regenerated from that tag's `Cargo.lock` (next
+   section; a byte-identical result means nothing changed).
+
+First submission:
+
+1. Run `flatpak-builder-lint` on the manifest and on the built repo (see
+   "Building locally").
+2. Pull request against `flathub/flathub` (base branch `new-pr`) with
+   `io.github.heast13.kyrr.yml`, `cargo-sources.json` and `flathub.json`
+   side by side at the top level. Nothing else: no binaries, no copies of
+   the desktop file or MetaInfo.
+3. After the app is accepted, the ID `io.github.heast13.kyrr` can be
    verified on Flathub through the GitHub account `heast13`.
 
 ## Permissions
