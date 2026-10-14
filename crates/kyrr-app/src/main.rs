@@ -146,10 +146,10 @@ fn key_note_only(note: KeyNote, german: bool) -> String {
             "Your desktop hands out the key and asks once for it. That question was cancelled, so the key does not reach kyrr. “Set up key” asks again."
                 .into()
         }
-        KeyNote::Hyprland { file, lines } if german => format!("Für Hyprland gehört das in die {file}:\n{lines}"),
+        KeyNote::Hyprland { file, lines } if german => format!("Für Hyprland gehört das in die Datei {file}:\n{lines}"),
         KeyNote::Hyprland { file, lines } => format!("For Hyprland, add this to {file}:\n{lines}"),
         KeyNote::HyprlandCommands { file, lines } if german => format!(
-            "Hyprlands Tastenkürzel-Portal antwortet nicht. Mit diesen Zeilen in der {file} diktierst du wie gewohnt mit gehaltener Taste:\n{lines}"
+            "Hyprlands Tastenkürzel-Portal antwortet nicht. Mit diesen Zeilen in der Datei {file} diktierst du wie gewohnt mit gehaltener Taste:\n{lines}"
         ),
         KeyNote::HyprlandCommands { file, lines } => format!(
             "Hyprland's shortcut portal does not answer. Add these lines to {file} and holding the key dictates as usual:\n{lines}"
