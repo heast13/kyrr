@@ -73,6 +73,8 @@ pub enum Command {
     Retry,
     /// Endpoint GUID of the microphone to record (the one the filter is on).
     Microphone(Option<String>),
+    /// Windows has the microphone muted (or not).
+    Muted(bool),
     KeyDown,
     KeyUp,
     Quit,
@@ -113,6 +115,14 @@ fn say(language: Language, what: &str) -> String {
         ("blocked", false) if cfg!(windows) => "Could not paste here (a window running as administrator?).",
         ("blocked", true) => "Konnte hier nicht tippen, und auch die Zwischenablage war nicht erreichbar.",
         ("blocked", false) => "Could not type here, and the clipboard was out of reach too.",
+        ("muted", true) if cfg!(windows) => {
+            "Dein Mikrofon ist in Windows stummgeschaltet. Auf der Hauptseite kannst du das aufheben."
+        }
+        ("muted", false) if cfg!(windows) => {
+            "Your microphone is muted in Windows. You can switch that off on the main page."
+        }
+        ("muted", true) => "Dein Mikrofon ist stummgeschaltet. Auf der Hauptseite kannst du das aufheben.",
+        ("muted", false) => "Your microphone is muted. You can switch that off on the main page.",
         ("cut", true) => "Nach zwei Minuten ist Schluss: Der Rest kam nicht mit.",
         ("cut", false) => "Two minutes is the limit: the rest was not written.",
         (other, _) => other,
@@ -127,6 +137,7 @@ struct Worker {
     model: Option<Dictation>,
     recording: Option<Recording>,
     microphone: Option<String>,
+    muted: bool,
     download_cancel: Option<Arc<AtomicBool>>,
     /// Number of the current download, so a cancelled one finishing late
     /// does not end a newer one.
@@ -162,6 +173,7 @@ pub fn spawn(
         model: None,
         recording: None,
         microphone: None,
+        muted: false,
         download_cancel: None,
         download_id: 0,
         download_running: false,
@@ -276,6 +288,7 @@ impl Worker {
                 }
             }
             Command::Microphone(guid) => self.microphone = guid,
+            Command::Muted(on) => self.muted = on,
             Command::Download => self.start_download(),
             Command::CancelDownload => {
                 self.cancel_download();
@@ -361,7 +374,8 @@ impl Worker {
             describe(rate, &samples),
             started.elapsed().as_secs_f32()
         );
-        if !text.is_empty() {
+        let heard = !text.is_empty();
+        if heard {
             // A space to go on with, unless the text ends with a line break.
             let typed = if text.ends_with('\n') {
                 text.clone()
@@ -375,6 +389,9 @@ impl Worker {
             } else {
                 self.tell("blocked");
             }
+        }
+        if !heard && self.muted {
+            self.tell("muted");
         }
         if rate > 0 && samples.len() >= rate as usize * MAX_SECONDS {
             self.tell("cut");

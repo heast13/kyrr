@@ -325,27 +325,43 @@ enum Alert {
     MicQuiet = 1,
     MicLoud = 2,
     Listening = 3,
-    /// The filter's microphone is gone; kyrr waits for one.
-    NoMic = 4,
-    /// kyrr moved to a new microphone just now (`AppState.alert-mic`).
-    MicFound = 5,
+    /// Windows has the microphone muted; says so alone, it outweighs the rest.
+    Muted = 4,
+    /// Windows lists no microphone at all; kyrr keeps looking.
+    NoMic = 6,
+    /// A microphone just showed up (the name is `AppState.connected-name`).
+    Connected = 7,
 }
 
-/// How long the note about a newly connected microphone stays.
-const MIC_FOUND_SHOWN: Duration = Duration::from_secs(6);
+/// How long the "connected" note stays up.
+const CONNECTED_NOTE: Duration = Duration::from_secs(10);
 
 /// The automatic volume's limits (see kyrr-voice), less a little slack for
 /// the gain stopping just short of them.
 const GAIN_AT_MAX_DB: f32 = 23.5;
 const GAIN_AT_MIN_DB: f32 = -11.5;
 
-/// The notes that apply right now. The window shows them one after the other;
-/// a microphone found or missing is the only note while it applies.
-fn alerts(mic: Option<Alert>, auto_level: bool, mic_active: bool, gain_db: f32, listening: bool) -> Vec<Alert> {
-    if let Some(mic) = mic {
-        return vec![mic];
+/// The notes that apply right now. The window shows them one after the other.
+#[allow(clippy::too_many_arguments)]
+fn alerts(
+    auto_level: bool,
+    mic_active: bool,
+    gain_db: f32,
+    listening: bool,
+    muted: bool,
+    no_mic: bool,
+    connected: bool,
+) -> Vec<Alert> {
+    if muted {
+        return vec![Alert::Muted];
+    }
+    if no_mic {
+        return vec![Alert::NoMic];
     }
     let mut list = Vec::new();
+    if connected {
+        list.push(Alert::Connected);
+    }
     // The gain only means something while an app uses the microphone.
     if auto_level && mic_active {
         if gain_db >= GAIN_AT_MAX_DB {
@@ -433,6 +449,10 @@ struct App {
     /// Key presses counted when the key was set up, to see it pressed since.
     presses_at_bound: Cell<Option<u32>>,
     microphones: RefCell<Vec<Microphone>>,
+    /// The microphone list has been read once (before that, "none" means nothing).
+    mics_seen: Cell<bool>,
+    /// A microphone that just showed up, and when: shown for a few seconds.
+    connected: RefCell<Option<(String, Instant)>>,
     /// Moves the filter along when the default microphone changes.
     follower: RefCell<follow::Follower>,
     worker: mpsc::Sender<Command>,
@@ -461,8 +481,17 @@ impl App {
         let Some(w) = self.window.upgrade() else {
             return;
         };
+        let first = !self.mics_seen.replace(true);
         if *self.microphones.borrow() == mics {
             return;
+        }
+        // A microphone that was not there before: name it for a few seconds
+        // (not at the start, when everything is new).
+        if !first {
+            let known = self.microphones.borrow();
+            if let Some(m) = mics.iter().find(|m| !known.iter().any(|k| k.guid == m.guid)) {
+                *self.connected.borrow_mut() = Some((m.name.clone(), Instant::now()));
+            }
         }
         let names: Vec<SharedString> = mics.iter().map(|m| m.name.as_str().into()).collect();
         let state = w.global::<AppState>();
@@ -481,6 +510,32 @@ impl App {
             config.pinned_default = pinned;
             config.save();
         }
+    }
+
+    /// The microphone the filter is on, else the default one.
+    fn working_microphone(&self) -> Option<Microphone> {
+        let attached = self.attached.borrow().clone();
+        let mics = self.microphones.borrow();
+        attached
+            .and_then(|g| mics.iter().find(|m| m.guid.eq_ignore_ascii_case(&g)).cloned())
+            .or_else(|| mics.iter().find(|m| m.is_default).cloned())
+    }
+
+    /// Whether Windows has the microphone muted: said on the main page and
+    /// to the dictation, instead of nothing happening.
+    fn check_mute(&self) {
+        let Some(w) = self.window.upgrade() else {
+            return;
+        };
+        let muted = self
+            .working_microphone()
+            .and_then(|m| platform::microphone_muted(&m.id))
+            .unwrap_or(false);
+        let state = w.global::<AppState>();
+        if state.get_mic_muted() != muted {
+            state.set_mic_muted(muted);
+        }
+        let _ = self.worker.send(Command::Muted(muted));
     }
 
     /// The microphone Windows uses by default.
@@ -676,21 +731,6 @@ impl App {
         }
     }
 
-    /// A microphone just connected, or none there to record from.
-    fn mic_note(&self) -> Option<Alert> {
-        let found = *mic_found().lock().unwrap_or_else(|e| e.into_inner());
-        if found.is_some_and(|at| at.elapsed() < MIC_FOUND_SHOWN) {
-            return Some(Alert::MicFound);
-        }
-        let mics = self.microphones.borrow();
-        let attached = self.attached.borrow();
-        let missing = match attached.as_deref() {
-            Some(guid) => !mics.iter().any(|m| m.guid.eq_ignore_ascii_case(guid)),
-            None => mics.is_empty(),
-        };
-        (missing && self.config.borrow().setup_done).then_some(Alert::NoMic)
-    }
-
     fn window_closed(&self) {
         self.meter.stop();
         self.stop_listening();
@@ -749,12 +789,29 @@ impl App {
         } else {
             0.0
         });
+        let connected_name = self
+            .connected
+            .borrow()
+            .as_ref()
+            .map(|(n, _)| n.clone())
+            .unwrap_or_default();
+        state.set_connected_name(connected_name.into());
+        let connected = self
+            .connected
+            .borrow()
+            .as_ref()
+            .is_some_and(|(_, at)| at.elapsed() < CONNECTED_NOTE);
+        if !connected {
+            *self.connected.borrow_mut() = None;
+        }
         let notes = alerts(
-            self.mic_note(),
             state.get_auto_level(),
             active,
             state.get_level_gain(),
             state.get_listening(),
+            state.get_mic_muted(),
+            self.microphones.borrow().is_empty() && self.mics_seen.get(),
+            connected,
         );
         state.set_alert(if notes.is_empty() {
             0
@@ -914,12 +971,34 @@ impl App {
         let Some(news) = pending_news().lock().unwrap_or_else(|e| e.into_inner()).clone() else {
             return;
         };
+        self.open_news(&w.global::<AppState>().get_update_version(), news, 0);
+    }
+
+    /// What the running version brought, from the NEWS.md built into the app.
+    fn show_current_news(&self) {
+        let version = env!("CARGO_PKG_VERSION");
+        if let Some(news) = update::bundled_news(version) {
+            self.open_news(version, news, 1);
+        }
+    }
+
+    /// Every version's summary, the newest on top.
+    fn show_all_news(&self) {
+        if let Some(news) = update::all_news() {
+            self.open_news(env!("CARGO_PKG_VERSION"), news, 2);
+        }
+    }
+
+    /// The news window: `mode` 0 for the version on offer, 1 for the one just
+    /// installed, 2 for all of them.
+    fn open_news(&self, version: &str, news: update::News, mode: i32) {
         let text = match self.language() {
             Language::German => news.de,
             Language::English => news.en,
         };
         let Ok(win) = NewsWindow::new() else { return };
-        win.set_version(w.global::<AppState>().get_update_version());
+        win.set_version(version.into());
+        win.set_mode(mode);
         win.set_news(text.into());
         let weak = win.as_weak();
         win.on_close(move || {
@@ -1111,13 +1190,6 @@ impl App {
         w.global::<AppState>().set_filter_state(FilterState::SettingUp);
         let weak = self.window.clone();
         let language = self.language();
-        let name = self
-            .microphones
-            .borrow()
-            .iter()
-            .find(|m| m.guid.eq_ignore_ascii_case(&guid))
-            .map(|m| m.name.clone())
-            .unwrap_or_default();
         std::thread::spawn(move || {
             let result = platform::attach(&guid);
             let _ = slint::invoke_from_event_loop(move || {
@@ -1129,10 +1201,6 @@ impl App {
                     Ok(()) => {
                         state.set_filter_state(FilterState::Checking);
                         state.set_move_to("".into());
-                        if !w.get_setup_mode() {
-                            state.set_alert_mic(name.into());
-                            *mic_found().lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
-                        }
                         if w.get_setup_mode() {
                             w.set_setup_step(1);
                             fit(&weak);
@@ -1160,12 +1228,6 @@ fn now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
-}
-
-/// When kyrr last moved to another microphone, for a short note.
-fn mic_found() -> &'static std::sync::Mutex<Option<Instant>> {
-    static FOUND: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
-    &FOUND
 }
 
 /// What the offered version brings, for the "What's new" window.
@@ -1291,6 +1353,8 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         key_toggle,
         presses_at_bound: Cell::new(None),
         microphones: RefCell::new(Vec::new()),
+        mics_seen: Cell::new(false),
+        connected: RefCell::new(None),
         follower: RefCell::new(follow::Follower::with_pinned(pinned)),
         worker: worker.clone(),
         window: window.as_weak(),
@@ -1404,6 +1468,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 }
             });
         }
+    });
+    state.on_show_current_news({
+        let app = Rc::clone(&app);
+        move || app.show_all_news()
     });
     state.on_show_news({
         let app = Rc::clone(&app);
@@ -1579,7 +1647,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             }
         }
     });
-    state.on_quit({
+    state.on_quit_app({
         let worker = app.worker.clone();
         move || {
             let _ = worker.send(Command::Quit);
@@ -1686,6 +1754,15 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             }
         }
     });
+    state.on_unmute({
+        let app = Rc::clone(&app);
+        move || {
+            if let Some(m) = app.working_microphone() {
+                platform::unmute_microphone(&m.id);
+            }
+            app.check_mute();
+        }
+    });
     // The filter's state can change outside the app (stream starts, errors).
     // The daily look for a new version: a minute after the start (not in
     // the busy moments of signing in), then whenever a day has passed.
@@ -1709,6 +1786,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             // The microphones first: the filter's state is read against them.
             app.refresh_microphones();
             app.refresh_filter();
+            app.check_mute();
             app.follow_default();
             app.refresh_key_note();
         }
@@ -1748,6 +1826,30 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                         show(&w);
                     }
                 });
+            }
+        });
+    }
+
+    // First visible start after an update (an existing install that last ran
+    // another version): say what the new version brings, once. A start in the
+    // background (Windows login) leaves it for the next visible one.
+    let updated = !background && {
+        let mut config = app.config.borrow_mut();
+        let version = env!("CARGO_PKG_VERSION");
+        let updated = config.last_run_version != version && (!config.last_run_version.is_empty() || config.setup_done);
+        if config.last_run_version != version {
+            config.last_run_version = version.into();
+            config.save();
+        }
+        updated
+    };
+    if updated {
+        slint::Timer::single_shot(Duration::from_secs(3), {
+            let app = Rc::downgrade(&app);
+            move || {
+                if let Some(app) = app.upgrade() {
+                    app.show_current_news();
+                }
             }
         });
     }
@@ -1893,32 +1995,38 @@ mod tests {
 
     #[test]
     fn no_notes_when_all_is_well() {
-        assert!(alerts(None, true, true, 8.0, false).is_empty());
-        assert!(alerts(None, false, false, 0.0, false).is_empty());
+        assert!(alerts(true, true, 8.0, false, false, false, false).is_empty());
+        assert!(alerts(false, false, 0.0, false, false, false, false).is_empty());
     }
 
     #[test]
     fn gain_at_its_limit_says_so() {
-        assert_eq!(alerts(None, true, true, 24.0, false), [Alert::MicQuiet]);
-        assert_eq!(alerts(None, true, true, -12.0, false), [Alert::MicLoud]);
+        assert_eq!(alerts(true, true, 24.0, false, false, false, false), [Alert::MicQuiet]);
+        assert_eq!(alerts(true, true, -12.0, false, false, false, false), [Alert::MicLoud]);
         // Just short of the limits is still fine.
-        assert!(alerts(None, true, true, 23.0, false).is_empty());
-        assert!(alerts(None, true, true, -11.0, false).is_empty());
+        assert!(alerts(true, true, 23.0, false, false, false, false).is_empty());
+        assert!(alerts(true, true, -11.0, false, false, false, false).is_empty());
     }
 
     #[test]
     fn gain_only_counts_while_it_works() {
         // Automatic volume off, or no app on the microphone: the number is stale.
-        assert!(alerts(None, false, true, 24.0, false).is_empty());
-        assert!(alerts(None, true, false, -12.0, false).is_empty());
+        assert!(alerts(false, true, 24.0, false, false, false, false).is_empty());
+        assert!(alerts(true, false, -12.0, false, false, false, false).is_empty());
     }
 
     #[test]
     fn several_notes_come_in_turn() {
         assert_eq!(
-            alerts(None, true, true, 24.0, true),
+            alerts(true, true, 24.0, true, false, false, false),
             [Alert::MicQuiet, Alert::Listening]
         );
-        assert_eq!(alerts(None, false, false, 0.0, true), [Alert::Listening]);
+        // Muted outweighs everything else, even with no app on the microphone.
+        assert_eq!(alerts(true, true, 24.0, true, true, false, false), [Alert::Muted]);
+        assert_eq!(alerts(false, false, 0.0, false, true, false, false), [Alert::Muted]);
+        // No microphone at all, and one that just came back.
+        assert_eq!(alerts(true, false, 0.0, true, false, true, false), [Alert::NoMic]);
+        assert_eq!(alerts(false, false, 0.0, false, false, false, true), [Alert::Connected]);
+        assert_eq!(alerts(false, false, 0.0, true, false, false, false), [Alert::Listening]);
     }
 }

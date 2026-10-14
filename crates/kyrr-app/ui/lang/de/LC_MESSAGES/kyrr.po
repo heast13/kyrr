@@ -124,6 +124,9 @@ msgstr "Mikrofon einrichten"
 msgid "Voice"
 msgstr "Stimme"
 
+msgid "Improve voice"
+msgstr "Stimme verbessern"
+
 msgid "Needs a microphone first."
 msgstr "Braucht zuerst ein Mikrofon."
 
@@ -624,8 +627,8 @@ msgstr "Version {} ist da. Herunterladen und den Installer starten, deine Einste
 msgid "Moves while an app uses the mic."
 msgstr "Bewegt sich, solange eine App das Mikro nutzt."
 
-msgid "Everything keeps running in the tray, bottom right. Quit there with a right-click."
-msgstr "Alles läuft unten rechts im Tray weiter. Beenden geht dort per Rechtsklick."
+msgid "kyrr keeps running in the tray, bottom right."
+msgstr "kyrr läuft unten rechts im Tray weiter."
 
 msgid "Off to the corner"
 msgstr "Ab in die Ecke"
@@ -687,6 +690,30 @@ msgstr "Dein Mikrofon steckt nicht."
 msgid "Your system uses another microphone now."
 msgstr "Dein System nutzt jetzt ein anderes Mikrofon."
 
+msgid "Your mic is muted in Windows."
+msgstr "Dein Mikro ist in Windows stummgeschaltet."
+
+msgid "No microphone found. kyrr keeps looking."
+msgstr "Kein Mikrofon gefunden. kyrr sucht weiter."
+
+msgid "Microphone connected: {}"
+msgstr "Mikrofon verbunden: {}"
+
+msgid "Switch it on"
+msgstr "Einschalten"
+
+msgid "Your mic is muted."
+msgstr "Dein Mikro ist stummgeschaltet."
+
+msgid "kyrr keeps running in the tray."
+msgstr "kyrr läuft im Tray weiter."
+
+msgid "No tray here: the window's X only minimizes kyrr."
+msgstr "Kein Tray hier: Das X des Fensters minimiert kyrr nur."
+
+msgid "No tray here: closing the window quits kyrr."
+msgstr "Kein Tray hier: Fenster schließen beendet kyrr."
+
 msgid "Windows uses another microphone now."
 msgstr "Windows nutzt jetzt ein anderes Mikrofon."
 
@@ -723,6 +750,12 @@ msgstr "Mithören läuft noch. Nur mit Kopfhörern!"
 msgid "What's new"
 msgstr "Was ist neu"
 
+msgid "What's new in kyrr"
+msgstr "Was ist neu in kyrr"
+
+msgid "What kyrr {} brings"
+msgstr "Das bringt kyrr {}"
+
 msgid "kyrr {} is out"
 msgstr "kyrr {} ist da"
 
@@ -758,8 +791,6 @@ msgstr "Version {} ist da. Aktualisiere kyrr dort, wo du es installiert hast, de
 msgid "Everything keeps running in the tray. Quit there with a right-click."
 msgstr "Alles läuft im Tray weiter. Beenden geht dort per Rechtsklick."
 
-msgid "No tray on this desktop: the window's X only minimizes kyrr. To end it, click Quit."
-msgstr "Dieser Desktop hat kein Tray: Das X des Fensters minimiert kyrr nur. Zum Beenden klick auf „Beenden“."
 
 msgid "No tray on this desktop: kyrr waits in the taskbar. Closing the window quits it."
 msgstr "Dieser Desktop hat kein Tray: kyrr wartet in der Taskleiste. Fenster schließen beendet es."
@@ -812,8 +843,4 @@ msgstr "✓ kyrr darf tippen."
 msgid "Allow typing"
 msgstr "Tippen erlauben"
 
-msgid "No microphone here. kyrr is looking for one…"
-msgstr "Kein Mikrofon da. kyrr sucht eins …"
 
-msgid "✓ Microphone connected: {}"
-msgstr "✓ Mikrofon verbunden: {}"

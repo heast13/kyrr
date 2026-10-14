@@ -41,6 +41,10 @@ export global AppState {
     in property <bool> mic-active;
     // The microphone is in use but delivers nothing at all: muted, most likely.
     in property <bool> mic-silent;
+    // Windows has the microphone muted.
+    in-out property <bool> mic-muted;
+    // A microphone that just showed up.
+    in property <string> connected-name;
     in property <float> level-before; // 0..1
     in property <float> level-after;
     in property <ProbeState> probe-state: ProbeState.idle;
@@ -51,8 +55,6 @@ export global AppState {
     // The red note at the bottom of the main page, one at a time:
     // 0 none, 1 mic too quiet, 2 mic too loud, 3 still listening.
     in property <int> alert;
-    // The microphone named by the "connected" note (alert 5).
-    in property <string> alert-mic;
 
     // Voice: sound, S sounds and volume, shaped in the audio filter
     in-out property <bool> voice-enabled: true;
@@ -152,10 +154,12 @@ export global AppState {
     callback finish-setup();
     callback change-microphone();
     callback autostart-toggled(bool);
-    // Puts the window away, like its close button; quitting is in the tray.
+    // Puts the window away, like its close button; kyrr keeps running in the tray.
     callback hide();
-    // Quits kyrr; the button for it shows only where there is no tray.
-    callback quit();
+    // Ends kyrr for good, like the tray menu's "Quit".
+    callback quit-app();
+    // Switches Windows' mute off the microphone.
+    callback unmute();
     callback page-changed();
     callback dictation-retry();
     callback repair();
@@ -166,6 +170,8 @@ export global AppState {
     callback check-updates();
     callback open-update();
     callback show-news();
+    // What the running version brought (from the NEWS built into the app).
+    callback show-current-news();
     callback install-update();
     callback update-auto-toggled(bool);
     callback dismiss-update();
@@ -552,7 +558,7 @@ component VoiceCard inherits Card {
     property <bool> available: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed
         && AppState.filter-state != FilterState.unsupported;
     RowHead {
-        title: @tr("Voice");
+        title: @tr("Improve voice");
         enabled: root.available;
         checked <=> AppState.voice-enabled;
         toggled(on) => { AppState.voice-toggled(on); }
@@ -720,6 +726,7 @@ component AboutSettings inherits Card {
             text: root.unfolded ? @tr("Less") : @tr("Credits");
             clicked => { root.unfolded = !root.unfolded; }
         }
+        Button { text: @tr("What's new"); clicked => { AppState.show-current-news(); } }
         Button { text: @tr("Licenses"); clicked => { AppState.open-licenses(); } }
     }
 }
@@ -813,53 +820,44 @@ component AlertLine inherits Text {
         if (AppState.alert == 1) { return (AppState.linux ? @tr("Mic very quiet. Turn it up in your sound settings.") : @tr("Mic very quiet. Turn it up in Windows.")); }
         if (AppState.alert == 2) { return (AppState.linux ? @tr("Mic too loud. Turn it down in your sound settings.") : @tr("Mic too loud. Turn it down in Windows.")); }
         if (AppState.alert == 3) { return @tr("Still listening to you. Headphones only!"); }
-        if (AppState.alert == 4) { return @tr("No microphone here. kyrr is looking for one…"); }
-        if (AppState.alert == 5) { return @tr("✓ Microphone connected: {}", AppState.alert-mic); }
+        if (AppState.alert == 4) { return AppState.linux ? @tr("Your mic is muted.") : @tr("Your mic is muted in Windows."); }
+        if (AppState.alert == 6) { return @tr("No microphone found. kyrr keeps looking."); }
+        if (AppState.alert == 7) { return @tr("Microphone connected: {}", AppState.connected-name); }
         return "";
     }
     text: root.note();
-    color: AppState.alert == 5 ? #30a46c : #e5484d;
+    // The red notes are problems; a microphone coming back is good news.
+    color: AppState.alert == 7 ? #3fb950 : #e5484d;
     font-size: 11px;
     min-height: 16px;
     vertical-alignment: center;
     overflow: elide;
-    opacity: AppState.phrase-visible ? 1 : 0;
+    // The mute note stays; the others take turns.
+    opacity: (AppState.phrase-visible || AppState.alert == 4 || AppState.alert == 6 || AppState.alert == 7) ? 1 : 0;
     animate opacity { duration: 450ms; easing: ease-in-out; }
 }
 
-component HideRow inherits VerticalLayout {
-    // Without a tray there is a second button; the note then gets the full
-    // width above both.
-    property <bool> quit-here: AppState.linux && !AppState.tray && AppState.can-minimize;
-    spacing: 6px;
-    if !root.quit-here: HorizontalLayout {
-        spacing: 8px;
-        Hint {
-            text: !AppState.linux ? @tr("Everything keeps running in the tray, bottom right. Quit there with a right-click.")
-                : AppState.tray ? @tr("Everything keeps running in the tray. Quit there with a right-click.")
-                : @tr("No tray on this desktop: kyrr waits in the taskbar. Closing the window quits it.");
-            vertical-alignment: center;
-        }
-        Button {
-            text: @tr("Off to the corner");
-            horizontal-stretch: 0;
-            clicked => { AppState.hide(); }
-        }
+component HideRow inherits HorizontalLayout {
+    spacing: 8px;
+    Button {
+        text: @tr("Quit");
+        horizontal-stretch: 0;
+        clicked => { AppState.quit-app(); }
     }
-    if root.quit-here: Hint {
-        text: @tr("No tray on this desktop: the window's X only minimizes kyrr. To end it, click Quit.");
+    Hint {
+        // Without a tray, the window's X minimizes kyrr where the desktop
+        // can; tiling ones cannot, there it quits.
+        text: !AppState.linux ? @tr("kyrr keeps running in the tray, bottom right.")
+            : AppState.tray ? @tr("kyrr keeps running in the tray.")
+            : AppState.can-minimize ? @tr("No tray here: the window's X only minimizes kyrr.")
+            : @tr("No tray here: closing the window quits kyrr.");
+        horizontal-alignment: center;
+        vertical-alignment: center;
     }
-    // Quit on the far left, away from the button used every day.
-    if root.quit-here: HorizontalLayout {
-        Button {
-            text: @tr("Quit");
-            clicked => { AppState.quit(); }
-        }
-        Rectangle { horizontal-stretch: 1; }
-        Button {
-            text: @tr("Off to the corner");
-            clicked => { AppState.hide(); }
-        }
+    Button {
+        text: @tr("Off to the corner");
+        horizontal-stretch: 0;
+        clicked => { AppState.hide(); }
     }
 }
 
@@ -1223,6 +1221,8 @@ component SetupPage inherits VerticalLayout {
 export component NewsWindow inherits Window {
     in property <string> version;
     in property <string> news;
+    // 0: the version on offer, 1: the one that just got installed, 2: all of them.
+    in property <int> mode;
     callback close();
     title: @tr("What's new");
     icon: @image-url("icons/kyrr-256.png");
@@ -1232,7 +1232,12 @@ export component NewsWindow inherits Window {
     VerticalLayout {
         padding: 18px;
         spacing: 12px;
-        Heading { text: @tr("kyrr {} is out", root.version); font-size: 18px; }
+        Heading {
+            text: root.mode == 2 ? @tr("What's new in kyrr")
+                : root.mode == 1 ? @tr("What kyrr {} brings", root.version)
+                : @tr("kyrr {} is out", root.version);
+            font-size: 18px;
+        }
         ScrollView {
             VerticalLayout {
                 alignment: start;
@@ -1329,7 +1334,19 @@ export component MainWindow inherits Window {
             if main-page && !AppState.update-dismissed && (AppState.update-state == UpdateState.available
                 || AppState.update-state == UpdateState.downloading || AppState.update-state == UpdateState.installing
                 || AppState.update-state == UpdateState.download-failed): UpdateBanner { }
-            if main-page: AlertLine { }
+            if main-page: HorizontalLayout {
+                spacing: 8px;
+                AlertLine { }
+                if AppState.alert == 4: Text {
+                    text: @tr("Switch it on");
+                    color: #e5484d;
+                    font-size: 11px;
+                    font-weight: 700;
+                    horizontal-stretch: 0;
+                    vertical-alignment: center;
+                    TouchArea { clicked => { AppState.unmute(); } mouse-cursor: pointer; }
+                }
+            }
             if main-page: HideRow { }
 
             // Settings page: the deeper options.

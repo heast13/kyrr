@@ -219,6 +219,10 @@ impl Engine {
         self.mic.status()
     }
 
+    pub fn node_id(&self, name: &str) -> Option<u32> {
+        self.mic.node_id(name)
+    }
+
     /// The microphone the system would use without "kyrr" (see
     /// [`VirtualMic::system_default`]).
     pub fn system_default(&self) -> Option<String> {

@@ -32,6 +32,9 @@ pub struct Config {
     /// The microphone Windows used by default when the user picked another
     /// one on purpose; kyrr leaves that pick until the default changes.
     pub pinned_default: String,
+    /// The version that ran last: when it differs, kyrr was updated and shows
+    /// what the new version brings, once.
+    pub last_run_version: String,
 }
 
 /// Keys dictation can use, as Windows virtual-key codes: F8, F9, Pause and
@@ -52,6 +55,7 @@ impl Default for Config {
             update_dismissed: String::new(),
             advanced_settings: false,
             pinned_default: String::new(),
+            last_run_version: String::new(),
         }
     }
 }

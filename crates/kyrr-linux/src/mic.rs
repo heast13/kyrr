@@ -123,6 +123,15 @@ impl VirtualMic {
         lock(&self.shared).status.clone().unwrap_or(Status::Starting)
     }
 
+    /// PipeWire's id of a microphone (node name), for tools that take ids.
+    pub fn node_id(&self, name: &str) -> Option<u32> {
+        lock(&self.shared)
+            .microphones
+            .iter()
+            .find(|(_, m)| m.name == name)
+            .map(|(id, _)| *id)
+    }
+
     /// The microphone the system would record from without "kyrr" (node
     /// name): the one plugged in or picked in the sound settings last, else
     /// the default from before "kyrr", else the first one. Like Windows'

@@ -6,6 +6,9 @@ use kyrr_common::FilterSettings;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Microphone {
+    /// Full endpoint id (what Windows' audio API takes); the node name on
+    /// Linux.
+    pub id: String,
     pub guid: String,
     pub name: String,
     /// The one Windows uses unless an app asks for another.
@@ -104,11 +107,22 @@ mod imp {
             .unwrap_or_default()
             .into_iter()
             .map(|m| Microphone {
+                id: m.id,
                 guid: m.guid,
                 name: m.name,
                 is_default: m.is_default,
             })
             .collect()
+    }
+
+    /// Whether Windows has this microphone muted (full endpoint id).
+    pub fn microphone_muted(id: &str) -> Option<bool> {
+        devices::is_muted(id)
+    }
+
+    /// Takes Windows' mute off the microphone.
+    pub fn unmute_microphone(id: &str) -> bool {
+        devices::unmute(id)
     }
 
     pub fn filter_status() -> FilterStatus {
@@ -462,6 +476,7 @@ mod imp {
                     .into_iter()
                     .map(|m| Microphone {
                         is_default: default.as_ref() == Some(&m.name),
+                        id: m.name.clone(),
                         guid: m.name,
                         name: m.description,
                     })
@@ -473,11 +488,48 @@ mod imp {
                 .unwrap_or_default()
                 .into_iter()
                 .map(|m| Microphone {
+                    id: m.name.clone(),
                     guid: m.name,
                     name: m.description,
                     is_default: false,
                 })
                 .collect(),
+        }
+    }
+
+    /// Whether the microphone (node name) is muted in the sound settings,
+    /// asked of WirePlumber's `wpctl`; `None` where that is out of reach
+    /// (the Flatpak sandbox) or the filter does not run.
+    pub fn microphone_muted(name: &str) -> Option<bool> {
+        let id = mic_node(name)?;
+        let out = std::process::Command::new("wpctl")
+            .args(["get-volume", &id.to_string()])
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()?;
+        out.status
+            .success()
+            .then(|| String::from_utf8_lossy(&out.stdout).contains("[MUTED]"))
+    }
+
+    pub fn unmute_microphone(name: &str) -> bool {
+        let Some(id) = mic_node(name) else {
+            return false;
+        };
+        std::process::Command::new("wpctl")
+            .args(["set-mute", &id.to_string(), "0"])
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success())
+    }
+
+    fn mic_node(name: &str) -> Option<u32> {
+        if flatpak() {
+            return None;
+        }
+        match &state().filter {
+            Filter::On(engine) => engine.node_id(name),
+            _ => None,
         }
     }
 
