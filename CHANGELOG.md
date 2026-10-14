@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.5.3 (2026-10-14)
+
+- kyrr for Linux, as an AppImage (`kyrr-x86_64.AppImage`, plus a tarball
+  for packagers). 64-bit Intel or AMD, glibc 2.39 or newer (Ubuntu 24.04,
+  Fedora 40, Debian 13, Arch), PipeWire. The noise filter is a virtual
+  PipeWire microphone called "kyrr" that becomes the default; it follows
+  the microphone your system would use, as on Windows, and says when that
+  microphone is muted. GNOME's orange microphone icon only shows while
+  something really records.
+- Dictation on Linux: the key goes through the desktop's global shortcuts
+  on GNOME and KDE (the desktop asks once, kyrr walks you through it) and is
+  read directly elsewhere; typing goes through the desktop's remote desktop
+  permission, the Wayland virtual keyboard or X11, with the clipboard as the
+  fallback.
+- On Linux without a tray icon, the window's X minimizes kyrr on desktops
+  that can restore it (GNOME, KDE, Cinnamon, Xfce and the like) and quits it
+  on tiling ones. Linux is only offered updates that come with an AppImage.
+- Windows: the wave next to the status line steps on a timer instead of
+  every frame and needs far less processor time. A settings file that does
+  not read is kept as config.json.bak instead of being overwritten.
+
 ## 0.5.2 (2026-10-14)
 
 - A microphone Windows has muted is said on the main page ("Your mic is muted

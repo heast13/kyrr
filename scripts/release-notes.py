@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Prints the release notes for one version: its section of CHANGELOG.md and
 a few lines about the installer. When NEWS.md has a section for the version,
-its summary (English and German) is added as two hidden comments; kyrr shows
-it under "What's new" next to the update note.
+its summary (English and German, for Windows and for Linux) is added as
+hidden comments; kyrr shows it under "What's new" next to the update note.
 
   python scripts/release-notes.py 0.2.0 [--signed] [--out notes.md]
 """
@@ -23,9 +23,31 @@ def section(version: str) -> str:
     return match.group(1).strip()
 
 
+MARK = re.compile(r"^- \((Windows|Linux)\) ")
+
+
+def for_system(body: str, system: str) -> str:
+    """The items of a NEWS.md section for one system: a bullet marked
+    "(Windows)" or "(Linux)" stays only there, without the mark, and the
+    lines that continue it go with it. kyrr reads the same way (update.rs)."""
+    out, keep = [], True
+    for line in body.splitlines():
+        if line.startswith("- "):
+            mark = MARK.match(line)
+            keep = mark is None or mark.group(1) == system
+            if mark is not None:
+                line = "- " + line[mark.end():]
+        elif not line.strip():
+            keep = True
+        if keep:
+            out.append(line)
+    return "\n".join(out).strip()
+
+
 def news(version: str) -> str:
     """The hidden blocks for kyrr's "What's new"; empty without a NEWS.md
-    section for this version. Plain words, only what a user notices."""
+    section for this version. Plain words, only what a user notices. Windows
+    keeps the block names older versions read; Linux has its own."""
     path = ROOT / "NEWS.md"
     if not path.exists():
         return ""
@@ -35,12 +57,13 @@ def news(version: str) -> str:
         return ""
     english, _, german = match.group(1).partition("### Deutsch")
     blocks = ""
-    for lang, body in (("en", english), ("de", german)):
-        body = body.strip()
-        if body:
-            if "-->" in body:
-                sys.exit("NEWS.md: a summary must not contain '-->'")
-            blocks += f"<!-- kyrr-news:{lang}\n{body}\n-->\n"
+    for system, tag in (("Windows", "kyrr-news"), ("Linux", "kyrr-linux-news")):
+        for lang, body in (("en", english), ("de", german)):
+            body = for_system(body, system)
+            if body:
+                if "-->" in body:
+                    sys.exit("NEWS.md: a summary must not contain '-->'")
+                blocks += f"<!-- {tag}:{lang}\n{body}\n-->\n"
     return blocks
 
 

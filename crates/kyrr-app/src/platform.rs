@@ -770,6 +770,10 @@ mod imp {
             &data.join(format!("applications/{id}.desktop")),
             Some(entry.into_bytes()),
         );
+        // The start at sign-in follows a moved AppImage too.
+        if autostart_file().is_file() {
+            set_autostart(true);
+        }
     }
 
     fn write_if_changed(path: &std::path::Path, contents: Option<Vec<u8>>) {
@@ -960,10 +964,13 @@ mod imp {
             return;
         };
         // An AppImage runs from a temporary mount; start the AppImage itself.
+        // TryExec: a deleted AppImage is skipped at sign-in instead of failing.
         let exe = std::env::var_os("APPIMAGE").map(PathBuf::from).unwrap_or(exe);
+        let path = exe.display().to_string();
         let entry = format!(
-            "[Desktop Entry]\nType=Application\nName=kyrr\nExec=\"{}\" --background\nIcon=io.github.heast13.kyrr\nX-GNOME-Autostart-enabled=true\n",
-            exec_quoted(&exe.display().to_string())
+            "[Desktop Entry]\nType=Application\nName=kyrr\nTryExec={}\nExec=\"{}\" --background\nIcon=io.github.heast13.kyrr\nX-GNOME-Autostart-enabled=true\n",
+            path.replace('\\', "\\\\"),
+            exec_quoted(&path)
         );
         if let Some(dir) = file.parent() {
             let _ = std::fs::create_dir_all(dir);
