@@ -52,8 +52,7 @@
   }
   wrap.insertBefore(list, wrap.firstChild);
 
-  // Start on the visitor's system: Windows, else the AppImage (it runs on
-  // every distribution; switch to Flatpak once kyrr is on Flathub).
+  // Start on the visitor's system: Windows, else Linux (the AppImage).
   var ua = navigator.userAgent || "";
   var want = /Windows/.test(ua) ? "windows" : "appimage";
   var start = panels.findIndex(function (p) { return p.id === want; });

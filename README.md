@@ -91,11 +91,13 @@ executing file as program" (the wording differs a little per desktop), then
 a double click. On its first start kyrr adds itself to your app menu.
 
 64-bit Intel or AMD with glibc 2.39 or newer (Ubuntu 24.04, Fedora 40,
-Debian 13, Arch or newer) and PipeWire, which these use anyway. No
-administrator rights needed. On GNOME and KDE your desktop asks once for the
+Debian 13, Arch or newer) and PipeWire, which these use anyway. The noise
+filter needs a processor with AVX2 (most from 2015 on); dictation works
+without. No administrator rights needed. On GNOME and KDE your desktop asks once for the
 dictation key and once whether kyrr may type; kyrr walks you through both.
 On Hyprland (Omarchy, say) kyrr shows the lines to add to your key bindings;
-without a tray icon (GNOME) the window's X minimizes kyrr, "Quit" ends it.
+without a tray icon the window's X minimizes kyrr where the desktop can bring
+it back (GNOME, say) and quits it on tiling ones; "Quit" always ends it.
 Updates are not installed by themselves: kyrr says when there is a new
 version, and you download the new AppImage.
 
@@ -147,17 +149,20 @@ one of the two.
 
 **Your microphone.** kyrr checks every few seconds which microphone the
 system uses. When it changes, the filter moves along: Windows asks for
-permission once and sound pauses for a moment (on Linux it just moves). If you decline, a button on
-the main page offers it. A microphone you pick by hand stays until the
+permission once and sound pauses for a moment; on Linux it simply moves. If
+that does not happen (you declined, say), a button on the main page offers it. A microphone you pick by hand stays until the
 system's default changes.
 
-**Check.** The filter shares a small block of memory with the app
+**Check.** On Windows the filter shares a small block of memory with the app
 (`Global\kyrr-monitor-3`): the level before and after kyrr, what the
 automatic volume adds, and on request one ten-second take, unprocessed and
 processed. The audio service writes it; users signed in at this computer can
 read it and ask for a take, which only records while an app already uses the
 microphone. The app plays the take, keeps it only in memory and clears it
 from the shared block.
+
+On Linux the filter runs inside the app, which reads the levels and the
+take directly.
 
 **Dictation.** kyrr records while the key is held and transcribes locally
 with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (its build without
@@ -228,7 +233,8 @@ text-to-speech; the default ones bundle espeak-ng (GPL-3.0).
 that contains it, or a filter DLL that needs the Visual C++ runtime.
 
 On Linux (the packages libpipewire-0.3-dev, libclang-dev, libasound2-dev,
-libfontconfig1-dev, libxkbcommon-dev and libssl-dev, or their names elsewhere):
+libfontconfig1-dev, libxkbcommon-dev, libxkbcommon-x11-0 and libssl-dev, or
+their names elsewhere):
 
 ```sh
 python3 scripts/fetch-assets.py --linux

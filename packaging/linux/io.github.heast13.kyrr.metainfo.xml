@@ -58,7 +58,7 @@
   <supports>
     <control>keyboard</control>
     <control>pointing</control>
-    <internet>first-run</internet>
+    <internet>always</internet>
   </supports>
   <categories>
     <category>AudioVideo</category>

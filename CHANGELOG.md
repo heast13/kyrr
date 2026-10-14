@@ -17,9 +17,9 @@
 - On Linux without a tray icon, the window's X minimizes kyrr on desktops
   that can restore it (GNOME, KDE, Cinnamon, Xfce and the like) and quits it
   on tiling ones. Linux is only offered updates that come with an AppImage.
-- Windows: the wave next to the status line steps on a timer instead of
-  every frame and needs far less processor time. A settings file that does
-  not read is kept as config.json.bak instead of being overwritten.
+- The wave next to the status line steps on a timer instead of every frame
+  and needs far less processor time. A settings file that does not read is
+  kept as config.json.bak instead of being overwritten.
 
 ## 0.5.2 (2026-10-14)
 
