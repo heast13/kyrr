@@ -1605,9 +1605,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         });
     }
 
-    // First start after an update (an existing install that last ran another
-    // version): say what the new version brings, once.
-    let updated = {
+    // First visible start after an update (an existing install that last ran
+    // another version): say what the new version brings, once. A start in the
+    // background (Windows login) leaves it for the next visible one.
+    let updated = !background && {
         let mut config = app.config.borrow_mut();
         let version = env!("CARGO_PKG_VERSION");
         let updated = config.last_run_version != version && (!config.last_run_version.is_empty() || config.setup_done);
