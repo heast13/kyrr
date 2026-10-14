@@ -11,6 +11,9 @@
   the right.
 - New defaults: S sounds softened "light" and automatic volume on. The main
   page's voice card is called "Improve voice".
+- "What's new" opens by itself after an update and, under Settings, About,
+  at any time, listing every version from the newest down. The text is built
+  into the app (NEWS.md), so it also works when you install by hand.
 
 ## 0.5.1 (2026-10-14)
 

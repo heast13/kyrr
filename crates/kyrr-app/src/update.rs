@@ -129,7 +129,12 @@ fn news(body: &str) -> Option<News> {
 fn news_block(body: &str, lang: &str) -> Option<String> {
     let start = format!("<!-- kyrr-news:{lang}");
     let from = body.find(&start)? + start.len();
-    let block = &body[from..from + body[from..].find("-->")?];
+    plain(&body[from..from + body[from..].find("-->")?], NEWS_LIMIT)
+}
+
+/// A block of bullets and paragraphs as plain text: bullets become "•",
+/// wrapped lines are joined, blank lines separate paragraphs.
+fn plain(block: &str, limit: usize) -> Option<String> {
     let mut out = String::new();
     for line in block.lines() {
         let text = line.trim();
@@ -150,8 +155,69 @@ fn news_block(body: &str, lang: &str) -> Option<String> {
             out.push_str(text);
         }
     }
-    let out: String = out.trim().chars().take(NEWS_LIMIT).collect();
+    let out: String = out.trim().chars().take(limit).collect();
     (!out.is_empty()).then_some(out)
+}
+
+/// NEWS.md, the file the release description's summary is made from, built
+/// into the app: what a version brought can be read again after the update,
+/// however it was installed.
+const NEWS_MD: &str = include_str!("../../../NEWS.md");
+
+/// The summary of `version` from the built-in NEWS.md.
+pub fn bundled_news(version: &str) -> Option<News> {
+    news_of_version(NEWS_MD, version)
+}
+
+/// Every version's summary from the built-in NEWS.md, the newest first (the
+/// order of the file), each under a line "kyrr <version>".
+pub fn all_news() -> Option<News> {
+    let (mut en, mut de) = (String::new(), String::new());
+    let (mut german, mut seen) = (false, false);
+    for line in NEWS_MD.lines() {
+        if let Some(version) = line.strip_prefix("## ") {
+            seen = true;
+            german = false;
+            for text in [&mut en, &mut de] {
+                text.push_str(&format!("\nkyrr {}\n", version.trim()));
+            }
+        } else if line.trim_end() == "### Deutsch" {
+            german = true;
+        } else if seen {
+            let text = if german { &mut de } else { &mut en };
+            text.push_str(line);
+            text.push('\n');
+        }
+    }
+    let (en, de) = (plain(&en, usize::MAX)?, plain(&de, usize::MAX)?);
+    Some(News { en, de })
+}
+
+/// The `## <version>` section of a NEWS.md: English first, then the part
+/// after the `### Deutsch` line.
+fn news_of_version(markdown: &str, version: &str) -> Option<News> {
+    let mut lines = markdown.lines().skip_while(|l| l.trim_end() != format!("## {version}"));
+    lines.next()?;
+    let (mut en, mut de, mut german) = (String::new(), String::new(), false);
+    for line in lines {
+        if line.starts_with("## ") {
+            break;
+        }
+        if line.trim_end() == "### Deutsch" {
+            german = true;
+            continue;
+        }
+        let target = if german { &mut de } else { &mut en };
+        target.push_str(line);
+        target.push('\n');
+    }
+    let (en, de) = (plain(&en, NEWS_LIMIT), plain(&de, NEWS_LIMIT));
+    match (en, de) {
+        (None, None) => None,
+        (Some(en), None) => Some(News { de: en.clone(), en }),
+        (None, Some(de)) => Some(News { en: de.clone(), de }),
+        (Some(en), Some(de)) => Some(News { en, de }),
+    }
 }
 
 /// "v1.2.3" or "1.2.3" as numbers; anything else is not a version.
@@ -353,5 +419,51 @@ mod tests {
         assert!(path.is_file());
         assert!((last - 1.0).abs() < 1e-6);
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn news_of_a_version_comes_from_news_md() {
+        let md = "# What's new
+
+intro
+
+## 0.6.0
+
+- New thing.
+- Another one.
+
+### Deutsch
+
+- Neues.
+
+## 0.5.0
+
+- Old.
+";
+        let n = news_of_version(md, "0.6.0").expect("news");
+        assert_eq!(
+            n.en,
+            "• New thing.
+• Another one."
+        );
+        assert_eq!(n.de, "• Neues.");
+        assert_eq!(news_of_version(md, "0.5.0").expect("news").de, "• Old.");
+        assert_eq!(news_of_version(md, "9.9.9"), None);
+    }
+
+    /// A release without its NEWS.md section would show an empty window.
+    #[test]
+    fn this_version_has_news() {
+        let n = bundled_news(env!("CARGO_PKG_VERSION")).expect("NEWS.md needs a section for this version");
+        assert!(!n.en.is_empty() && !n.de.is_empty());
+    }
+
+    #[test]
+    fn all_news_lists_every_version_newest_first() {
+        let n = all_news().expect("news");
+        let this = format!("kyrr {}", env!("CARGO_PKG_VERSION"));
+        assert!(n.en.starts_with(&this), "{}", &n.en[..40.min(n.en.len())]);
+        assert!(n.en.contains("kyrr 0.2.0") && n.de.contains("kyrr 0.2.0"));
+        assert!(n.de.find("kyrr 0.5.0") < n.de.find("kyrr 0.4.0"));
     }
 }
