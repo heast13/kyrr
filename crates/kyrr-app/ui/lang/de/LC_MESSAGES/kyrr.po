@@ -684,6 +684,9 @@ msgstr "Mit Strg, Alt oder Umschalt bleibt die Taste bei deiner App."
 msgid "Your microphone is not plugged in."
 msgstr "Dein Mikrofon steckt nicht."
 
+msgid "Windows uses another microphone now."
+msgstr "Windows nutzt jetzt ein anderes Mikrofon."
+
 msgid "kyrr starts with Windows and lives in the tray, bottom right (maybe behind the little arrow). Both can be changed in the settings."
 msgstr "kyrr startet mit Windows und wohnt unten rechts im Infobereich (vielleicht hinter dem kleinen Pfeil). Beides lässt sich in den Einstellungen ändern."
 

@@ -35,8 +35,17 @@ const FX_GUID: &str = "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d}";
 /// PKEY_AudioEndpoint_Disable_SysFx: 1 = "audio enhancements" switched off.
 const DISABLE_SYSFX: &str = "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5";
 
+/// PKEY_SFX_ProcessingModes_Supported_For_Streaming: the processing modes the
+/// stream effect handles. Windows writes it for most endpoints; a microphone
+/// without it never gets its stream effect loaded, kyrr's included.
+const SFX_MODES: &str = "{d3993a3f-99c2-4402-b5ec-a92a0367664b},5";
+/// AUDIO_SIGNALPROCESSINGMODE_DEFAULT.
+const MODE_DEFAULT: &str = "{C18E2F7E-933D-4965-B7D1-1EEF228D2AF3}";
+
 /// Below an endpoint key in `REG_ENDPOINTS`.
 const SLOT: &str = "Slot";
+/// 1 when kyrr wrote the endpoint's [`SFX_MODES`] (and so removes it again).
+const ADDED_MODES: &str = "AddedModes";
 const PRIOR_DISABLE_SYSFX: &str = "PriorDisableSysFx";
 
 /// Users may set filter values; the audio service (LocalService) may write
@@ -196,9 +205,14 @@ pub fn slot_holds_kyrr(guid: &str) -> bool {
         return false;
     };
     let slot = record.get_dword(SLOT).unwrap_or(5);
-    Key::open(HKEY_LOCAL_MACHINE, &format!(r"{CAPTURE_KEY}\{guid}\FxProperties"))
-        .and_then(|fx| fx.get_string(&fx_value(slot)))
-        .is_some_and(|v| v.eq_ignore_ascii_case(&clsid()))
+    Key::open(HKEY_LOCAL_MACHINE, &format!(r"{CAPTURE_KEY}\{guid}\FxProperties")).is_some_and(|fx| {
+        // Without the modes entry Windows leaves kyrr unloaded (see `SFX_MODES`),
+        // so such a microphone, attached by an older kyrr, is offered the repair.
+        fx.has_value(SFX_MODES)
+            && fx
+                .get_string(&fx_value(slot))
+                .is_some_and(|v| v.eq_ignore_ascii_case(&clsid()))
+    })
 }
 
 /// Forgets what the filter last reported, so a status from another
@@ -277,6 +291,10 @@ pub fn attach(guid: &str) -> Result<(), String> {
     }
     let slot = record.get_dword(SLOT).unwrap_or(5);
     fx.set_string(&fx_value(slot), &ours)?;
+    if !fx.has_value(SFX_MODES) {
+        record.set_dword(ADDED_MODES, 1)?;
+        fx.set_multi_string(SFX_MODES, &[MODE_DEFAULT])?;
+    }
 
     // Effects only run with "audio enhancements" on for the microphone.
     let props = Key::create_privileged(HKEY_LOCAL_MACHINE, &format!(r"{base}\Properties"))?;
@@ -315,6 +333,9 @@ pub fn detach(guid: &str) -> Result<(), String> {
             Some(child) => fx.set_string(&name, &child)?,
             None => fx.delete_value(&name)?,
         }
+    }
+    if record.get_dword(ADDED_MODES) == Some(1) {
+        fx.delete_value(SFX_MODES)?;
     }
     if let Some(prior) = record.get_dword(PRIOR_DISABLE_SYSFX) {
         let props = Key::create_privileged(HKEY_LOCAL_MACHINE, &format!(r"{base}\Properties"))?;

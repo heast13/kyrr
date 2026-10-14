@@ -7,6 +7,16 @@ after the version when it is released (`## 0.6.0`, say); `scripts/release-notes.
 puts it into the release description, where kyrr reads it. Never put `-->` in
 the text.
 
+## 0.5.1
+
+- kyrr now follows your microphone: plug in another one (or the same one in a different USB port) and, once Windows uses it as your microphone, the noise removal moves along by itself. Windows asks for permission once and the sound pauses for a moment. On a RØDE PodMic USB it used to stay silent; that works now.
+- If Windows takes kyrr off your microphone (after an update, say), kyrr puts itself back.
+
+### Deutsch
+
+- kyrr folgt jetzt deinem Mikrofon: Steckst du ein anderes ein (oder dasselbe an einen anderen USB-Anschluss), zieht die Rauschunterdrückung von selbst mit, sobald Windows es als dein Mikrofon nimmt. Windows fragt einmal um Erlaubnis, der Ton pausiert kurz. Beim RØDE PodMic USB blieb sie vorher stumm, jetzt geht es.
+- Nimmt Windows kyrr vom Mikrofon (zum Beispiel nach einem Update), setzt kyrr sich selbst wieder drauf.
+
 ## 0.5.0
 
 - The main window keeps its height now, so it no longer gets pulled out of shape.

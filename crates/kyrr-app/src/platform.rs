@@ -8,6 +8,8 @@ use kyrr_common::FilterSettings;
 pub struct Microphone {
     pub guid: String,
     pub name: String,
+    /// The one Windows uses unless an app asks for another.
+    pub is_default: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -104,6 +106,7 @@ mod imp {
             .map(|m| Microphone {
                 guid: m.guid,
                 name: m.name,
+                is_default: m.is_default,
             })
             .collect()
     }
@@ -456,6 +459,9 @@ mod imp {
                 .map(|m| Microphone {
                     guid: m.name,
                     name: m.description,
+                    // "kyrr" itself is the default; the filter does not
+                    // follow another one.
+                    is_default: false,
                 })
                 .collect(),
             // Before the first setup: the microphones PipeWire offers, read
@@ -466,6 +472,7 @@ mod imp {
                 .map(|m| Microphone {
                     guid: m.name,
                     name: m.description,
+                    is_default: false,
                 })
                 .collect(),
         }

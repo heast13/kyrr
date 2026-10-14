@@ -35,6 +35,7 @@ export global AppState {
     in property <string> attached-mic;
     // The filtered microphone is unplugged; this one could take over ("" if none).
     in property <string> move-to;
+    in property <bool> move-unplugged;
 
     // Live: level and the before/after probe
     in property <bool> mic-active;
@@ -535,7 +536,8 @@ component NoiseCard inherits Card {
         primary: true;
         clicked => { AppState.repair(); }
     }
-    if AppState.move-to != "": Hint { text: @tr("Your microphone is not plugged in."); }
+    if AppState.move-to != "" && AppState.move-unplugged: Hint { text: @tr("Your microphone is not plugged in."); }
+    if AppState.move-to != "" && !AppState.move-unplugged: Hint { text: @tr("Windows uses another microphone now."); }
     if AppState.move-to != "": Button {
         text: @tr("Use {} instead", AppState.move-to);
         clicked => { AppState.move-to-default(); }
