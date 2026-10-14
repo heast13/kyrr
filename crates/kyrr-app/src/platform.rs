@@ -94,6 +94,9 @@ pub enum Desktop {
 #[cfg_attr(not(windows), allow(dead_code))]
 pub enum SetupError {
     Declined,
+    /// The microphone to move to is gone (unplugged while the permission
+    /// prompt was open): nothing was changed.
+    Gone,
     Failed(String),
 }
 
@@ -162,6 +165,7 @@ mod imp {
     fn run(args: &[&str]) -> Result<(), SetupError> {
         match elevate::run_self_elevated(args) {
             Ok(0) => Ok(()),
+            Ok(code) if code == kyrr_windows::EXIT_GONE as u32 => Err(SetupError::Gone),
             Ok(code) => Err(SetupError::Failed(format!("setup failed ({code})"))),
             Err(elevate::ElevateError::Declined) => Err(SetupError::Declined),
             Err(elevate::ElevateError::Failed(e)) => Err(SetupError::Failed(e)),
@@ -580,6 +584,13 @@ mod imp {
     pub fn attach(guid: &str) -> Result<(), SetupError> {
         {
             let mut s = state();
+            // Pulled out meanwhile: stay on the microphone in use, which
+            // keeps working, instead of waiting for one that is gone.
+            if let Filter::On(engine) = &s.filter {
+                if !engine.microphones().iter().any(|m| m.name == guid) {
+                    return Err(SetupError::Gone);
+                }
+            }
             s.saved.microphone = Some(guid.to_string());
             s.saved.save();
             if let Filter::On(engine) = &s.filter {

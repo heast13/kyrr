@@ -565,19 +565,24 @@ impl App {
                     | FilterState::Checking
                     | FilterState::Passthrough
                     | FilterState::Detached
+                    | FilterState::NotAttached
                     | FilterState::Error
             )
             || w.get_setup_mode()
             || !self.config.borrow().setup_done
             // Whoever switched the noise removal off gets no prompts for it.
             || !self.filter.borrow().enabled;
-        let outcome = self.follower.borrow_mut().tick(&follow::Input {
-            attached: attached.as_deref(),
-            attached_present: present,
-            detached: fs == FilterState::Detached,
-            default: default.as_ref().map(|m| m.guid.as_str()),
-            busy,
-        });
+        let outcome = {
+            let mics = self.microphones.borrow();
+            self.follower.borrow_mut().tick(&follow::Input {
+                attached: attached.as_deref(),
+                attached_present: present,
+                detached: fs == FilterState::Detached,
+                default: default.as_ref().map(|m| m.guid.as_str()),
+                busy,
+                listed: mics.iter().map(|m| m.guid.as_str()).collect(),
+            })
+        };
         self.keep_pin();
         let (offer, unplugged) = match &outcome {
             follow::Outcome::Offer { to, unplugged } => (
@@ -1187,6 +1192,7 @@ impl App {
         let Some(w) = self.window.upgrade() else {
             return;
         };
+        let before = w.global::<AppState>().get_filter_state();
         w.global::<AppState>().set_filter_state(FilterState::SettingUp);
         let weak = self.window.clone();
         let language = self.language();
@@ -1206,9 +1212,17 @@ impl App {
                             fit(&weak);
                         }
                     }
+                    // Unplugged during the prompt: nothing changed, and the
+                    // next look at the microphones says what to do now.
+                    Err(SetupError::Gone) => state.set_filter_state(match before {
+                        // A second move was running: the next look at the
+                        // filter sets the real state.
+                        FilterState::SettingUp => FilterState::Checking,
+                        before => before,
+                    }),
                     Err(e) => {
                         let msg = match e {
-                            SetupError::Declined => text(language, "permission"),
+                            SetupError::Declined | SetupError::Gone => text(language, "permission"),
                             SetupError::Failed(e) => format!("{} {e}", text(language, "setup failed")),
                         };
                         state.set_error_text(msg.into());
@@ -1460,7 +1474,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 // here means nothing was installed: Windows' permission was
                 // declined, so the offer stands again.
                 match platform::run_installer(&path) {
-                    Ok(()) | Err(SetupError::Declined) => set(UpdateState::Available),
+                    Ok(()) | Err(SetupError::Declined | SetupError::Gone) => set(UpdateState::Available),
                     Err(SetupError::Failed(e)) => {
                         eprintln!("kyrr: update: {e}");
                         set(UpdateState::DownloadFailed);

@@ -225,13 +225,21 @@ fn clear_status() {
     }
 }
 
-/// Moves the filter to microphone `guid`: detaches it from every other one
-/// and attaches it there, in one elevated step.
+/// Moves the filter to microphone `guid` in one elevated step: checks that it
+/// is still there, attaches it, then lets the others go. If the microphone
+/// was pulled out meanwhile, nothing changes and the filter stays where it was.
 pub fn move_to(guid: &str) -> Result<(), String> {
-    for old in attached().into_iter().filter(|g| !g.eq_ignore_ascii_case(guid)) {
-        detach(&old)?;
+    if !is_endpoint_guid(guid) {
+        return Err(format!("not a microphone id: {guid}"));
     }
-    attach(guid)
+    kyrr_common::mic_move::move_filter(guid, &attached(), endpoint_usable(guid), attach, detach)
+}
+
+/// Whether Windows lists microphone `guid` as plugged in and enabled
+/// (`DeviceState` 1; unplugged, disabled and removed ones have other values).
+pub fn endpoint_usable(guid: &str) -> bool {
+    Key::open(HKEY_LOCAL_MACHINE, &format!(r"{CAPTURE_KEY}\{guid}"))
+        .is_some_and(|k| k.get_dword("DeviceState") == Some(1))
 }
 
 /// Endpoint GUIDs kyrr is attached to.
