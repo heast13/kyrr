@@ -233,8 +233,6 @@ enum Alert {
     Listening = 3,
     /// Windows has the microphone muted; says so alone, it outweighs the rest.
     Muted = 4,
-    /// An app uses the microphone and it delivers nothing at all.
-    Silent = 5,
     /// Windows lists no microphone at all; kyrr keeps looking.
     NoMic = 6,
     /// A microphone just showed up (the name is `AppState.connected-name`).
@@ -257,7 +255,6 @@ fn alerts(
     gain_db: f32,
     listening: bool,
     muted: bool,
-    silent: bool,
     no_mic: bool,
     connected: bool,
 ) -> Vec<Alert> {
@@ -270,9 +267,6 @@ fn alerts(
     let mut list = Vec::new();
     if connected {
         list.push(Alert::Connected);
-    }
-    if silent {
-        list.push(Alert::Silent);
     }
     // The gain only means something while an app uses the microphone.
     if auto_level && mic_active {
@@ -693,7 +687,6 @@ impl App {
             state.get_level_gain(),
             state.get_listening(),
             state.get_mic_muted(),
-            state.get_mic_silent(),
             self.microphones.borrow().is_empty() && self.mics_seen.get(),
             connected,
         );
@@ -1605,68 +1598,38 @@ mod tests {
 
     #[test]
     fn no_notes_when_all_is_well() {
-        assert!(alerts(true, true, 8.0, false, false, false, false, false).is_empty());
-        assert!(alerts(false, false, 0.0, false, false, false, false, false).is_empty());
+        assert!(alerts(true, true, 8.0, false, false, false, false).is_empty());
+        assert!(alerts(false, false, 0.0, false, false, false, false).is_empty());
     }
 
     #[test]
     fn gain_at_its_limit_says_so() {
-        assert_eq!(
-            alerts(true, true, 24.0, false, false, false, false, false),
-            [Alert::MicQuiet]
-        );
-        assert_eq!(
-            alerts(true, true, -12.0, false, false, false, false, false),
-            [Alert::MicLoud]
-        );
+        assert_eq!(alerts(true, true, 24.0, false, false, false, false), [Alert::MicQuiet]);
+        assert_eq!(alerts(true, true, -12.0, false, false, false, false), [Alert::MicLoud]);
         // Just short of the limits is still fine.
-        assert!(alerts(true, true, 23.0, false, false, false, false, false).is_empty());
-        assert!(alerts(true, true, -11.0, false, false, false, false, false).is_empty());
+        assert!(alerts(true, true, 23.0, false, false, false, false).is_empty());
+        assert!(alerts(true, true, -11.0, false, false, false, false).is_empty());
     }
 
     #[test]
     fn gain_only_counts_while_it_works() {
         // Automatic volume off, or no app on the microphone: the number is stale.
-        assert!(alerts(false, true, 24.0, false, false, false, false, false).is_empty());
-        assert!(alerts(true, false, -12.0, false, false, false, false, false).is_empty());
+        assert!(alerts(false, true, 24.0, false, false, false, false).is_empty());
+        assert!(alerts(true, false, -12.0, false, false, false, false).is_empty());
     }
 
     #[test]
     fn several_notes_come_in_turn() {
         assert_eq!(
-            alerts(true, true, 24.0, true, false, false, false, false),
+            alerts(true, true, 24.0, true, false, false, false),
             [Alert::MicQuiet, Alert::Listening]
         );
         // Muted outweighs everything else, even with no app on the microphone.
-        assert_eq!(
-            alerts(true, true, 24.0, true, true, false, false, false),
-            [Alert::Muted]
-        );
-        assert_eq!(
-            alerts(false, false, 0.0, false, true, false, false, false),
-            [Alert::Muted]
-        );
+        assert_eq!(alerts(true, true, 24.0, true, true, false, false), [Alert::Muted]);
+        assert_eq!(alerts(false, false, 0.0, false, true, false, false), [Alert::Muted]);
         // No microphone at all, and one that just came back.
-        assert_eq!(
-            alerts(true, false, 0.0, true, false, false, true, false),
-            [Alert::NoMic]
-        );
-        assert_eq!(
-            alerts(false, false, 0.0, false, false, false, false, true),
-            [Alert::Connected]
-        );
-        // Silence from a microphone in use is a note of its own.
-        assert_eq!(
-            alerts(false, true, 0.0, false, false, true, false, false),
-            [Alert::Silent]
-        );
-        assert_eq!(
-            alerts(false, true, 0.0, true, false, true, false, false),
-            [Alert::Silent, Alert::Listening]
-        );
-        assert_eq!(
-            alerts(false, false, 0.0, true, false, false, false, false),
-            [Alert::Listening]
-        );
+        assert_eq!(alerts(true, false, 0.0, true, false, true, false), [Alert::NoMic]);
+        assert_eq!(alerts(false, false, 0.0, false, false, false, true), [Alert::Connected]);
+        assert_eq!(alerts(false, false, 0.0, true, false, false, false), [Alert::Listening]);
     }
 }

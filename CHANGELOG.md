@@ -4,8 +4,7 @@
 
 - A microphone Windows has muted is said on the main page ("Your mic is muted
   in Windows.") with a "Switch it on" link that lifts the mute, and dictation
-  tells why nothing was written. A microphone an app uses that delivers pure
-  silence is reported there too.
+  tells why nothing was written.
 - No microphone at all: "No microphone found. kyrr keeps looking."; a newly
   plugged one is named in green for ten seconds ("Microphone connected: ...").
 - The main page has a "Quit" button, bottom left; "Off to the corner" moved to

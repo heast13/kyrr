@@ -764,7 +764,6 @@ component AlertLine inherits Text {
         if (AppState.alert == 2) { return @tr("Mic too loud. Turn it down in Windows."); }
         if (AppState.alert == 3) { return @tr("Still listening to you. Headphones only!"); }
         if (AppState.alert == 4) { return @tr("Your mic is muted in Windows."); }
-        if (AppState.alert == 5) { return @tr("Your mic delivers pure silence. Muted?"); }
         if (AppState.alert == 6) { return @tr("No microphone found. kyrr keeps looking."); }
         if (AppState.alert == 7) { return @tr("Microphone connected: {}", AppState.connected-name); }
         return "";
