@@ -17,6 +17,8 @@ pipewire = { version = "0.10", features = ["v1_0_0"] }
 # zbus and async-io as the tray icon.
 ashpd = { version = "0.13", default-features = false, features = ["async-io", "global_shortcuts", "remote_desktop", "screencast", "background"] }
 futures-lite = "2"
+# Asking the portal thread to bind the shortcut again.
+async-channel = "2"
 x11rb = { version = "0.13", features = ["xtest", "xkb"] }
 # Typing on Wayland compositors with the virtual keyboard protocol
 # (Hyprland, Sway and other wlroots compositors).

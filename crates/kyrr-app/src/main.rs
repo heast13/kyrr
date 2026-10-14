@@ -30,7 +30,7 @@ use slint::{ComponentHandle, LogicalSize, ModelRc, PhysicalPosition, SharedStrin
 
 use config::Config;
 use dictation::{Command, Event, State};
-use platform::{FilterStatus, KeyNote, Microphone, SetupError};
+use platform::{Desktop, FilterStatus, KeyNote, Microphone, SetupError};
 
 slint::include_modules!();
 
@@ -93,17 +93,57 @@ fn text(language: Language, english: &str) -> String {
     }
 }
 
-/// What to do so the dictation key reaches kyrr, in the user's language.
+/// What to do so the dictation key reaches kyrr, in the user's language,
+/// and what the desktop will ask on the first dictation.
 fn key_note(language: Language) -> String {
     let german = matches!(language, Language::German);
-    match platform::key_note() {
+    let note = key_note_only(platform::key_note(), german);
+    if !platform::typing_needs_permission() {
+        return note;
+    }
+    let typing = if german {
+        "Beim ersten Diktat fragt dein Desktop nach „Remote Desktop“ (oder „Entfernter Bildschirm“): „Fernzugriff zulassen“ einschalten, dann „Freigeben“. kyrr tippt damit nur deinen Text."
+    } else {
+        "On the first dictation your desktop asks about “Remote Desktop”: switch on “Allow Remote Interaction”, then “Share”. kyrr only uses it to type your text."
+    };
+    if note.is_empty() {
+        typing.into()
+    } else {
+        format!("{note}\n\n{typing}")
+    }
+}
+
+fn key_note_only(note: KeyNote, german: bool) -> String {
+    match note {
         KeyNote::None => String::new(),
-        KeyNote::Desktop if german => {
+        KeyNote::Desktop(Desktop::Gnome) if german => {
+            "Die Taste verwaltet GNOME, die Auswahl hier gilt dort nicht. Ändern: Einstellungen › Apps › kyrr.".into()
+        }
+        KeyNote::Desktop(Desktop::Gnome) => {
+            "GNOME manages the key, so there is no choice here. To change it: Settings › Apps › kyrr.".into()
+        }
+        KeyNote::Desktop(Desktop::Kde) if german => {
+            "Die Taste verwaltet KDE, die Auswahl hier gilt dort nicht. Ändern: Systemeinstellungen › Tastatur › Kurzbefehle › kyrr."
+                .into()
+        }
+        KeyNote::Desktop(Desktop::Kde) => {
+            "KDE manages the key, so there is no choice here. To change it: System Settings › Keyboard › Shortcuts › kyrr."
+                .into()
+        }
+        KeyNote::Desktop(_) if german => {
             "Die Taste legt dein Desktop fest: Er fragt einmal nach, ändern geht in seinen Tastatur-Einstellungen."
                 .into()
         }
-        KeyNote::Desktop => {
+        KeyNote::Desktop(_) => {
             "Your desktop decides the key: it asks once, and its keyboard settings can change it.".into()
+        }
+        KeyNote::Unbound if german => {
+            "Dein Desktop vergibt die Taste und fragt dafür einmal nach. Diese Frage wurde abgebrochen, also kommt die Taste bei kyrr nicht an. „Taste einrichten“ fragt nochmal."
+                .into()
+        }
+        KeyNote::Unbound => {
+            "Your desktop hands out the key and asks once for it. That question was cancelled, so the key does not reach kyrr. “Set up key” asks again."
+                .into()
         }
         KeyNote::Hyprland { file, lines } if german => format!("Für Hyprland gehört das in die {file}:\n{lines}"),
         KeyNote::Hyprland { file, lines } => format!("For Hyprland, add this to {file}:\n{lines}"),
@@ -847,10 +887,40 @@ impl App {
             state.set_key_index(index as i32);
             state.set_key_toggle(toggle);
             state.set_key_name(name.as_str().into());
-            state.set_key_note(key_note(self.language()).into());
         }
+        self.refresh_key_note();
         if let Some(t) = tray() {
             t.set_key_name(name.into());
+        }
+    }
+
+    /// What the window says about the key. It changes after the start: the
+    /// desktop's dialog is answered, typing is allowed.
+    fn refresh_key_note(&self) {
+        let Some(w) = self.window.upgrade() else {
+            return;
+        };
+        let state = w.global::<AppState>();
+        let language = self.language();
+        let note = platform::key_note();
+        let fixed = matches!(note, KeyNote::Desktop(_) | KeyNote::Unbound);
+        let unbound = matches!(note, KeyNote::Unbound);
+        let german = language == Language::German;
+        let button = match note {
+            KeyNote::Unbound if german => "Taste einrichten",
+            KeyNote::Unbound => "Set up key",
+            KeyNote::Desktop(_) if platform::can_open_key_settings() && german => "Taste ändern",
+            KeyNote::Desktop(_) if platform::can_open_key_settings() => "Change key",
+            _ => "",
+        };
+        let text = key_note(language);
+        if state.get_key_note() != text.as_str() {
+            state.set_key_note(text.into());
+        }
+        state.set_key_fixed(fixed);
+        state.set_key_unbound(unbound);
+        if state.get_key_button() != button {
+            state.set_key_button(button.into());
         }
     }
 
@@ -1021,7 +1091,11 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     );
 
     // Hold mode: press starts, release stops. Tap mode: each press toggles.
-    if let Some(keys) = platform::start_hotkey() {
+    let description = match language {
+        Language::German => "kyrr: Diktieren (Taste halten)",
+        Language::English => "kyrr: Dictate (hold the key)",
+    };
+    if let Some(keys) = platform::start_hotkey(description) {
         let worker = worker.clone();
         let (recording, key_toggle) = (Arc::clone(&recording), Arc::clone(&key_toggle));
         std::thread::spawn(move || {
@@ -1215,6 +1289,17 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 config.save();
             }
             app.apply_key();
+        }
+    });
+    state.on_key_button_clicked({
+        let app = Rc::clone(&app);
+        move || {
+            if matches!(platform::key_note(), KeyNote::Unbound) {
+                platform::bind_key_again();
+            } else {
+                platform::open_key_settings();
+            }
+            app.refresh_key_note();
         }
     });
     state.on_key_toggle_changed({
@@ -1416,7 +1501,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     let poll = slint::Timer::default();
     poll.start(slint::TimerMode::Repeated, Duration::from_secs(2), {
         let app = Rc::clone(&app);
-        move || app.refresh_filter()
+        move || {
+            app.refresh_filter();
+            app.refresh_key_note();
+        }
     });
     if let Some(requests) = show_requests {
         let weak = window.as_weak();

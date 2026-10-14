@@ -79,6 +79,13 @@ export global AppState {
     in property <string> key-name: "F9";
     // What the user has to do so the key reaches kyrr (Linux); "" for nothing.
     in property <string> key-note;
+    // The desktop owns the key (GNOME, KDE): kyrr's choice of key does nothing.
+    in property <bool> key-fixed;
+    // The desktop could own the key but has not bound it (dialog cancelled).
+    in property <bool> key-unbound;
+    // A button for the key in the settings ("Set up key", "Change key"); "" for none.
+    in property <string> key-button;
+    callback key-button-clicked();
     // "Check for updates", on request only.
     in property <UpdateState> update-state;
     in property <string> update-version;
@@ -548,6 +555,7 @@ component DictationCard inherits Card {
             : AppState.dictation-state == DictationState.no-model ? @tr("One download first ({}), then it is yours.", AppState.download-size)
             : AppState.dictation-state == DictationState.downloading ? @tr("Downloading the speech model… {}%", round(AppState.download-progress * 100))
             : AppState.dictation-state == DictationState.loading ? @tr("Loading the speech model…")
+            : AppState.dictation-state == DictationState.ready && AppState.key-unbound ? @tr("{} is not set up yet: kyrr needs your desktop's OK for it.", AppState.key-name)
             : AppState.dictation-state == DictationState.ready && AppState.key-note != "" ? @tr("Dictate with your key, the text lands at your cursor. Setting up the key: see Settings.")
             : AppState.dictation-state == DictationState.ready ? (AppState.key-toggle ? @tr("Tap {}, talk, tap again. The text lands at your cursor.", AppState.key-name) : @tr("Hold {}, talk, let go. The text lands at your cursor.", AppState.key-name))
             : AppState.dictation-state == DictationState.recording ? @tr("Listening…")
@@ -560,6 +568,11 @@ component DictationCard inherits Card {
     if AppState.dictation-state == DictationState.error: Button {
         text: @tr("Try again");
         clicked => { AppState.dictation-retry(); }
+    }
+    if AppState.dictation-state == DictationState.ready && AppState.key-unbound: Button {
+        text: AppState.key-button;
+        primary: true;
+        clicked => { AppState.key-button-clicked(); }
     }
     if AppState.dictation-state == DictationState.downloading: HorizontalLayout {
         spacing: 12px;
@@ -638,7 +651,8 @@ component NoiseSettings inherits Card {
 component DictationSettings inherits Card {
     Heading { text: @tr("Dictation"); }
     Caption { text: @tr("Key"); }
-    Segmented {
+    // Where the desktop owns the key, its own settings change it.
+    if !AppState.key-fixed: Segmented {
         options: ["F8", "F9", "Pause", @tr("Right Ctrl")];
         selected <=> AppState.key-index;
         changed(i) => { AppState.key-changed(i); }
@@ -646,6 +660,10 @@ component DictationSettings inherits Card {
     // Only where kyrr catches the key itself.
     if AppState.key-note == "": Hint { text: @tr("With Ctrl, Alt or Shift held, the key stays with your app."); }
     if AppState.key-note != "": Hint { text: AppState.key-note; }
+    if AppState.key-button != "": Button {
+        text: AppState.key-button;
+        clicked => { AppState.key-button-clicked(); }
+    }
     Caption { text: @tr("How"); }
     Segmented {
         options: [@tr("Hold"), @tr("Tap")];

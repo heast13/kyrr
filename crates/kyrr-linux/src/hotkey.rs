@@ -25,6 +25,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{mpsc, Mutex, OnceLock, PoisonError};
 
 use ashpd::desktop::global_shortcuts::{GlobalShortcuts, NewShortcut};
+use ashpd::desktop::Session;
 use futures_lite::{future, stream, StreamExt};
 use x11rb::connection::Connection;
 use x11rb::errors::ReplyError;
@@ -66,8 +67,11 @@ const KEYS: [(u32, u32, &str); 4] = [
 static KEY: AtomicUsize = AtomicUsize::new(1);
 static ACTIVE: AtomicBool = AtomicBool::new(false);
 static HELD: AtomicBool = AtomicBool::new(false);
-/// The portal session came up but binding the shortcut failed.
+/// The portal session came up but binding the shortcut failed, or the user
+/// cancelled the desktop's dialog.
 static UNBOUND: AtomicBool = AtomicBool::new(false);
+/// Asks the portal thread to bind the shortcut again.
+static REBIND: OnceLock<async_channel::Sender<()>> = OnceLock::new();
 static SENDER: OnceLock<mpsc::Sender<KeyEvent>> = OnceLock::new();
 static BACKEND: OnceLock<Backend> = OnceLock::new();
 static X11: OnceLock<X11> = OnceLock::new();
@@ -127,19 +131,33 @@ fn release() {
 }
 
 /// Starts catching the key on its own threads and returns the receiver for
-/// key events. Call once. Without a way to catch the key the receiver still
+/// key events. Call once. `description` names the shortcut in the desktop's
+/// dialog and settings. Without a way to catch the key the receiver still
 /// gets what [`toggle`] sends.
-pub fn start() -> Result<mpsc::Receiver<KeyEvent>, String> {
+pub fn start(description: &str) -> Result<mpsc::Receiver<KeyEvent>, String> {
     let (tx, rx) = mpsc::channel();
     SENDER.set(tx).map_err(|_| "hotkey already started")?;
     let x11_session = std::env::var_os("WAYLAND_DISPLAY").is_none() && std::env::var_os("DISPLAY").is_some();
-    let backend = match start_portal() {
+    let backend = match start_portal(description.to_string()) {
         Ok(()) => Backend::Portal,
         Err(_) if x11_session && start_x11().is_ok() => Backend::X11,
         Err(_) => Backend::None,
     };
     let _ = BACKEND.set(backend);
     Ok(rx)
+}
+
+/// Whether the portal is there but the key is not bound to kyrr, e.g. because
+/// the user cancelled the desktop's dialog. [`bind_again`] asks once more.
+pub fn unbound() -> bool {
+    BACKEND.get() == Some(&Backend::Portal) && UNBOUND.load(Ordering::Relaxed)
+}
+
+/// Asks the desktop again to bind the key, with its dialog where it has one.
+pub fn bind_again() {
+    if let Some(rebind) = REBIND.get() {
+        let _ = rebind.try_send(());
+    }
 }
 
 /// `kyrr --dictate`: starts dictation, or ends it when it runs.
@@ -164,16 +182,16 @@ pub fn remote_release() {
 
 /// Returns once the session exists; whether the shortcut gets bound is up to
 /// the user, who may be asked and may take a while.
-fn start_portal() -> Result<(), String> {
+fn start_portal(description: String) -> Result<(), String> {
     let (ready_tx, ready_rx) = mpsc::channel();
     std::thread::Builder::new()
         .name("kyrr-hotkey".into())
-        .spawn(move || future::block_on(portal(ready_tx)))
+        .spawn(move || future::block_on(portal(ready_tx, description)))
         .map_err(|e| e.to_string())?;
     ready_rx.recv().map_err(|e| e.to_string())?
 }
 
-async fn portal(ready: mpsc::Sender<Result<(), String>>) {
+async fn portal(ready: mpsc::Sender<Result<(), String>>, description: String) {
     // Outside Flatpak the portal cannot tell which app this is; it matters
     // for the shortcut's name in the compositor. Older portals lack the call.
     // The portal finds the app by its launcher; one an AppImage has just
@@ -206,26 +224,53 @@ async fn portal(ready: mpsc::Sender<Result<(), String>>) {
     };
     let _ = ready.send(Ok(()));
 
+    let (rebind_tx, rebind_rx) = async_channel::bounded(1);
+    let _ = REBIND.set(rebind_tx);
+    let binding = async {
+        let mut session = session;
+        bind(&shortcuts, &session, &description).await;
+        // GNOME turns down a second request in a session whose dialog was
+        // cancelled: ask in a new one.
+        while rebind_rx.recv().await.is_ok() {
+            match shortcuts.create_session(Default::default()).await {
+                Ok(new) => {
+                    let _ = session.close().await;
+                    session = new;
+                }
+                Err(e) => eprintln!("kyrr: shortcut portal: {e}"),
+            }
+            bind(&shortcuts, &session, &description).await;
+        }
+    };
+    let pressed = pressed.filter_map(|a| (a.shortcut_id() == SHORTCUT).then_some(KeyEvent::Pressed));
+    let released = released.filter_map(|d| (d.shortcut_id() == SHORTCUT).then_some(KeyEvent::Released));
+    let events = async {
+        let mut events = pin!(stream::or(pressed, released));
+        while let Some(event) = events.next().await {
+            match event {
+                KeyEvent::Pressed => press(),
+                KeyEvent::Released => release(),
+            }
+        }
+    };
+    future::or(binding, events).await;
+}
+
+/// Asks the desktop to bind the key to kyrr; GNOME and KDE show a dialog.
+async fn bind(shortcuts: &GlobalShortcuts, session: &Session<GlobalShortcuts>, description: &str) {
     let trigger = KEYS[KEY.load(Ordering::Relaxed)].2;
-    let shortcut = NewShortcut::new(SHORTCUT, "Dictate (hold to talk)").preferred_trigger(trigger);
+    let shortcut = NewShortcut::new(SHORTCUT, description).preferred_trigger(trigger);
     let bound = async {
         shortcuts
-            .bind_shortcuts(&session, &[shortcut], None, Default::default())
+            .bind_shortcuts(session, &[shortcut], None, Default::default())
             .await?
             .response()
     };
-    if let Err(e) = bound.await {
-        eprintln!("kyrr: binding the dictation shortcut: {e}");
-        UNBOUND.store(true, Ordering::Relaxed);
-        return;
-    }
-    let pressed = pressed.filter_map(|a| (a.shortcut_id() == SHORTCUT).then_some(KeyEvent::Pressed));
-    let released = released.filter_map(|d| (d.shortcut_id() == SHORTCUT).then_some(KeyEvent::Released));
-    let mut events = pin!(stream::or(pressed, released));
-    while let Some(event) = events.next().await {
-        match event {
-            KeyEvent::Pressed => press(),
-            KeyEvent::Released => release(),
+    match bound.await {
+        Ok(_) => UNBOUND.store(false, Ordering::Relaxed),
+        Err(e) => {
+            eprintln!("kyrr: binding the dictation shortcut: {e}");
+            UNBOUND.store(true, Ordering::Relaxed);
         }
     }
 }

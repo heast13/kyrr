@@ -766,3 +766,6 @@ msgstr "Diktieren per Taste, der Text landet an deinem Cursor. Taste einrichten:
 
 msgid "Start dictation with a key, speak, end it: kyrr types what you said. It runs on your computer, nothing is sent anywhere."
 msgstr "Diktat per Taste starten, sprechen, beenden: kyrr tippt, was du gesagt hast. Läuft auf deinem Rechner, nichts wird verschickt."
+
+msgid "{} is not set up yet: kyrr needs your desktop's OK for it."
+msgstr "{} ist noch nicht eingerichtet: Dafür braucht kyrr das OK deines Desktops."

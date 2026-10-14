@@ -53,7 +53,10 @@ pub enum KeyNote {
     /// Nothing: kyrr catches the key itself.
     None,
     /// The desktop owns the key (its shortcut portal) and can change it.
-    Desktop,
+    Desktop(Desktop),
+    /// The desktop could own the key, but has not bound it to kyrr: the user
+    /// cancelled its dialog, or it failed. [`bind_key_again`] asks again.
+    Unbound,
     /// Hyprland binds the key: these lines belong in this config file.
     Hyprland { file: String, lines: String },
     /// Hyprland without the shortcut portal: lines that run kyrr on the
@@ -61,6 +64,15 @@ pub enum KeyNote {
     HyprlandCommands { file: String, lines: String },
     /// Nothing catches keys: bind this command to a key.
     Command(String),
+}
+
+/// Desktops whose own settings change the key, so the note can say where.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(windows, allow(dead_code))]
+pub enum Desktop {
+    Gnome,
+    Kde,
+    Other,
 }
 
 #[derive(Debug)]
@@ -159,8 +171,25 @@ mod imp {
     }
 
     /// Push-to-talk events; `None` when the key could not be hooked.
-    pub fn start_hotkey() -> Option<std::sync::mpsc::Receiver<hotkey::KeyEvent>> {
+    pub fn start_hotkey(_description: &str) -> Option<std::sync::mpsc::Receiver<hotkey::KeyEvent>> {
         hotkey::start().ok()
+    }
+
+    /// The hook needs no one's OK.
+    pub fn bind_key_again() {}
+
+    /// kyrr's own settings change the key.
+    pub fn open_key_settings() -> bool {
+        false
+    }
+
+    pub fn can_open_key_settings() -> bool {
+        false
+    }
+
+    /// Typing needs no one's OK.
+    pub fn typing_needs_permission() -> bool {
+        false
     }
 
     pub fn set_hotkey_active(active: bool) {
@@ -508,9 +537,62 @@ mod imp {
         kyrr_linux::hotkey::set_key(vk);
     }
 
-    pub fn start_hotkey() -> Option<std::sync::mpsc::Receiver<KeyEvent>> {
+    /// `description` names the shortcut in the desktop's dialog and settings.
+    pub fn start_hotkey(description: &str) -> Option<std::sync::mpsc::Receiver<KeyEvent>> {
         integrate_appimage();
-        kyrr_linux::hotkey::start().ok()
+        kyrr_linux::hotkey::start(description).ok()
+    }
+
+    pub fn bind_key_again() {
+        kyrr_linux::hotkey::bind_again();
+    }
+
+    /// Opens the page of the desktop's settings where kyrr's key is changed.
+    /// False where kyrr cannot open it (Flatpak, other desktops).
+    pub fn open_key_settings() -> bool {
+        let command: &[&str] = match desktop() {
+            Desktop::Gnome => &["gnome-control-center", "applications", "io.github.heast13.kyrr"],
+            Desktop::Kde => &["systemsettings", "kcm_keys"],
+            Desktop::Other => return false,
+        };
+        !flatpak()
+            && std::process::Command::new(command[0])
+                .args(&command[1..])
+                .spawn()
+                .is_ok()
+    }
+
+    /// Whether [`open_key_settings`] can work, to offer it at all.
+    pub fn can_open_key_settings() -> bool {
+        let program = match desktop() {
+            Desktop::Gnome => "gnome-control-center",
+            Desktop::Kde => "systemsettings",
+            Desktop::Other => return false,
+        };
+        !flatpak()
+            && std::env::var_os("PATH")
+                .is_some_and(|path| std::env::split_paths(&path).any(|dir| dir.join(program).is_file()))
+    }
+
+    /// Whether the first dictation will bring up the desktop's "Remote
+    /// Desktop" dialog (GNOME, KDE), which kyrr needs to type there. Once
+    /// granted, the portal's token keeps the answer.
+    pub fn typing_needs_permission() -> bool {
+        let wayland = std::env::var_os("WAYLAND_DISPLAY").is_some_and(|d| !d.is_empty());
+        wayland && desktop() != Desktop::Other && state().saved.portal_token.is_none()
+    }
+
+    fn desktop() -> Desktop {
+        let desktop = std::env::var("XDG_CURRENT_DESKTOP")
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if desktop.contains("gnome") {
+            Desktop::Gnome
+        } else if desktop.contains("kde") {
+            Desktop::Kde
+        } else {
+            Desktop::Other
+        }
     }
 
     /// Gives an AppImage the launcher a package would install. Without it the
@@ -580,10 +662,13 @@ mod imp {
         let hyprland = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some()
             || std::env::var("XDG_CURRENT_DESKTOP").is_ok_and(|d| d.to_ascii_lowercase().contains("hyprland"));
         let backend = hotkey::backend();
+        if !hyprland && hotkey::unbound() {
+            return KeyNote::Unbound;
+        }
         if !hyprland || backend == Backend::X11 {
             return match backend {
                 Backend::X11 => KeyNote::None,
-                Backend::Portal => KeyNote::Desktop,
+                Backend::Portal => KeyNote::Desktop(desktop()),
                 Backend::None => KeyNote::Command(dictate_command("--dictate")),
             };
         }
