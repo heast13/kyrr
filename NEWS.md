@@ -7,6 +7,18 @@ after the version when it is released (`## 0.6.0`, say); `scripts/release-notes.
 puts it into the release description, where kyrr reads it. Never put `-->` in
 the text.
 
+## 0.5.2
+
+- kyrr tells you when Windows has your microphone muted (or it sends nothing at all), and a click on "Switch it on" fixes it. It also says when no microphone is found and which one was just plugged in.
+- New "Quit" button on the main page, bottom left.
+- S sounds are softened a little and the automatic volume is on from the start.
+
+### Deutsch
+
+- kyrr sagt dir, wenn Windows dein Mikrofon stummgeschaltet hat (oder es gar nichts liefert), und ein Klick auf „Einschalten“ behebt das. Es meldet auch, wenn kein Mikrofon gefunden wird und welches gerade eingesteckt wurde.
+- Neuer „Beenden“-Knopf unten links auf der Hauptseite.
+- S-Laute werden von Anfang an leicht gedämpft und die automatische Lautstärke ist gleich an.
+
 ## 0.5.1
 
 - kyrr now follows your microphone: plug in another one (or the same one in a different USB port) and, once Windows uses it as your microphone, the noise removal moves along by itself. Windows asks for permission once and the sound pauses for a moment. On a RØDE PodMic USB it used to stay silent; that works now.

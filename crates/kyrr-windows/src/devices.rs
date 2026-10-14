@@ -95,3 +95,22 @@ pub fn is_muted(id: &str) -> Option<bool> {
 pub fn unmute(id: &str) -> bool {
     volume_of(id).is_some_and(|v| unsafe { v.SetMute(false, std::ptr::null()) }.is_ok())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Needs a microphone: reads the mute state of every active one and
+    /// switches it off (it is not on).
+    #[test]
+    #[ignore = "needs audio hardware"]
+    fn reads_the_mute_state_of_every_microphone() {
+        for m in microphones().unwrap() {
+            let muted = is_muted(&m.id);
+            println!("{}: muted {muted:?}", m.name);
+            assert!(muted.is_some(), "{}", m.name);
+            // Switching mute off is harmless where it is off already.
+            assert!(unmute(&m.id), "{}", m.name);
+        }
+    }
+}
