@@ -188,10 +188,10 @@ impl Default for VoiceSettings {
             presence: 0,
             air: 0,
             low_cut: true,
-            deesser: Amount::Off,
+            deesser: Amount::Light,
             compressor: Amount::Medium,
             pops: false,
-            auto_level: false,
+            auto_level: true,
         }
     }
 }
@@ -324,7 +324,7 @@ mod tests {
             _ => None,
         });
         assert_eq!(bad.voice.look, Look::Neutral);
-        assert_eq!(bad.voice.deesser, Amount::Off);
+        assert_eq!(bad.voice.deesser, Amount::Light);
         assert_eq!(bad.voice.body, -CUSTOM_RANGE);
     }
 

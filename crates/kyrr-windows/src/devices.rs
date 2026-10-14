@@ -1,6 +1,8 @@
 //! Microphones (active capture endpoints) as Windows lists them.
 
+use windows::core::PCWSTR;
 use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
+use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::{
     eCapture, eConsole, IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
 };
@@ -69,4 +71,27 @@ pub fn microphones() -> Result<Vec<Microphone>, String> {
     }
     mics.sort_by_key(|m| !m.is_default);
     Ok(mics)
+}
+
+/// The microphone's volume control (Windows' own mute switch and level).
+fn volume_of(id: &str) -> Option<IAudioEndpointVolume> {
+    unsafe {
+        // The UI thread is already STA (see `microphones`); already initialized is fine.
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+    }
+    let enumerator: IMMDeviceEnumerator = unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) }.ok()?;
+    let wide: Vec<u16> = id.encode_utf16().chain(Some(0)).collect();
+    let device = unsafe { enumerator.GetDevice(PCWSTR(wide.as_ptr())) }.ok()?;
+    unsafe { device.Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None) }.ok()
+}
+
+/// Whether Windows has the microphone (full endpoint id) muted; None when it
+/// cannot be told.
+pub fn is_muted(id: &str) -> Option<bool> {
+    Some(unsafe { volume_of(id)?.GetMute() }.ok()?.as_bool())
+}
+
+/// Switches the microphone's Windows mute off. True when it worked.
+pub fn unmute(id: &str) -> bool {
+    volume_of(id).is_some_and(|v| unsafe { v.SetMute(false, std::ptr::null()) }.is_ok())
 }

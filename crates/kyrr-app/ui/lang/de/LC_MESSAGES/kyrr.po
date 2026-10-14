@@ -124,6 +124,9 @@ msgstr "Mikrofon einrichten"
 msgid "Voice"
 msgstr "Stimme"
 
+msgid "Improve voice"
+msgstr "Stimme verbessern"
+
 msgid "Needs a microphone first."
 msgstr "Braucht zuerst ein Mikrofon."
 
@@ -624,8 +627,8 @@ msgstr "Version {} ist da. Herunterladen und den Installer starten, deine Einste
 msgid "Moves while an app uses the mic."
 msgstr "Bewegt sich, solange eine App das Mikro nutzt."
 
-msgid "Everything keeps running in the tray, bottom right. Quit there with a right-click."
-msgstr "Alles läuft unten rechts im Tray weiter. Beenden geht dort per Rechtsklick."
+msgid "kyrr keeps running in the tray, bottom right."
+msgstr "kyrr läuft unten rechts im Tray weiter."
 
 msgid "Off to the corner"
 msgstr "Ab in die Ecke"
@@ -683,6 +686,18 @@ msgstr "Mit Strg, Alt oder Umschalt bleibt die Taste bei deiner App."
 
 msgid "Your microphone is not plugged in."
 msgstr "Dein Mikrofon steckt nicht."
+
+msgid "Your mic is muted in Windows."
+msgstr "Dein Mikro ist in Windows stummgeschaltet."
+
+msgid "No microphone found. kyrr keeps looking."
+msgstr "Kein Mikrofon gefunden. kyrr sucht weiter."
+
+msgid "Microphone connected: {}"
+msgstr "Mikrofon verbunden: {}"
+
+msgid "Switch it on"
+msgstr "Einschalten"
 
 msgid "Windows uses another microphone now."
 msgstr "Windows nutzt jetzt ein anderes Mikrofon."

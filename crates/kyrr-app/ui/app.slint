@@ -34,6 +34,10 @@ export global AppState {
     in property <bool> mic-active;
     // The microphone is in use but delivers nothing at all: muted, most likely.
     in property <bool> mic-silent;
+    // Windows has the microphone muted.
+    in-out property <bool> mic-muted;
+    // A microphone that just showed up.
+    in property <string> connected-name;
     in property <float> level-before; // 0..1
     in property <float> level-after;
     in property <ProbeState> probe-state: ProbeState.idle;
@@ -123,8 +127,12 @@ export global AppState {
     callback finish-setup();
     callback change-microphone();
     callback autostart-toggled(bool);
-    // Puts the window away, like its close button; quitting is in the tray.
+    // Puts the window away, like its close button; kyrr keeps running in the tray.
     callback hide();
+    // Ends kyrr for good, like the tray menu's "Quit".
+    callback quit-app();
+    // Switches Windows' mute off the microphone.
+    callback unmute();
     callback page-changed();
     callback dictation-retry();
     callback repair();
@@ -510,7 +518,7 @@ component VoiceCard inherits Card {
     property <bool> available: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed
         && AppState.filter-state != FilterState.unsupported;
     RowHead {
-        title: @tr("Voice");
+        title: @tr("Improve voice");
         enabled: root.available;
         checked <=> AppState.voice-enabled;
         toggled(on) => { AppState.voice-toggled(on); }
@@ -755,22 +763,34 @@ component AlertLine inherits Text {
         if (AppState.alert == 1) { return @tr("Mic very quiet. Turn it up in Windows."); }
         if (AppState.alert == 2) { return @tr("Mic too loud. Turn it down in Windows."); }
         if (AppState.alert == 3) { return @tr("Still listening to you. Headphones only!"); }
+        if (AppState.alert == 4) { return @tr("Your mic is muted in Windows."); }
+        if (AppState.alert == 5) { return @tr("Your mic delivers pure silence. Muted?"); }
+        if (AppState.alert == 6) { return @tr("No microphone found. kyrr keeps looking."); }
+        if (AppState.alert == 7) { return @tr("Microphone connected: {}", AppState.connected-name); }
         return "";
     }
     text: root.note();
-    color: #e5484d;
+    // The red notes are problems; a microphone coming back is good news.
+    color: AppState.alert == 7 ? #3fb950 : #e5484d;
     font-size: 11px;
     min-height: 16px;
     vertical-alignment: center;
     overflow: elide;
-    opacity: AppState.phrase-visible ? 1 : 0;
+    // The mute note stays; the others take turns.
+    opacity: (AppState.phrase-visible || AppState.alert == 4 || AppState.alert == 6 || AppState.alert == 7) ? 1 : 0;
     animate opacity { duration: 450ms; easing: ease-in-out; }
 }
 
 component HideRow inherits HorizontalLayout {
     spacing: 8px;
+    Button {
+        text: @tr("Quit");
+        horizontal-stretch: 0;
+        clicked => { AppState.quit-app(); }
+    }
     Hint {
-        text: @tr("Everything keeps running in the tray, bottom right. Quit there with a right-click.");
+        text: @tr("kyrr keeps running in the tray, bottom right.");
+        horizontal-alignment: center;
         vertical-alignment: center;
     }
     Button {
@@ -1212,7 +1232,19 @@ export component MainWindow inherits Window {
             if main-page && !AppState.update-dismissed && (AppState.update-state == UpdateState.available
                 || AppState.update-state == UpdateState.downloading || AppState.update-state == UpdateState.installing
                 || AppState.update-state == UpdateState.download-failed): UpdateBanner { }
-            if main-page: AlertLine { }
+            if main-page: HorizontalLayout {
+                spacing: 8px;
+                AlertLine { }
+                if AppState.alert == 4: Text {
+                    text: @tr("Switch it on");
+                    color: #e5484d;
+                    font-size: 11px;
+                    font-weight: 700;
+                    horizontal-stretch: 0;
+                    vertical-alignment: center;
+                    TouchArea { clicked => { AppState.unmute(); } mouse-cursor: pointer; }
+                }
+            }
             if main-page: HideRow { }
 
             // Settings page: the deeper options.
