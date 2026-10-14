@@ -56,7 +56,8 @@ pub struct Follower {
     /// default flips in between.
     tried: Vec<String>,
     /// The default microphone while the user chose another one on purpose:
-    /// left alone until the default changes.
+    /// left alone while the default is that one. Only a move away from the
+    /// pick ends it, so a default that flickers does not cost the pick.
     pinned: Option<String>,
 }
 
@@ -96,7 +97,6 @@ impl Follower {
         };
         let first_sight = self.last_default.is_none();
         if self.last_default.as_deref().is_some_and(|l| !same(l, default)) {
-            self.pinned = None;
             self.stable = 0;
         }
         self.last_default = Some(default.to_string());
@@ -134,6 +134,8 @@ impl Follower {
         let to = default.to_string();
         if !self.tried.iter().any(|t| same(t, &to)) {
             self.tried.push(to.clone());
+            // Leaving the microphone the user picked: that pick is over.
+            self.pinned = None;
             return Outcome::Move(to);
         }
         match need {
@@ -336,5 +338,35 @@ mod tests {
         // A pick kept from the last run holds as well.
         let mut f = Follower::with_pinned(Some(PODMIC.into()));
         assert_eq!(run(&mut f, &input(Some(FIFINE), true, Some(PODMIC)), 30), Outcome::Idle);
+    }
+
+    #[test]
+    fn a_flickering_default_does_not_cost_the_pick() {
+        let mut f = Follower::default();
+        f.user_chose(Some(PODMIC));
+        let flicker = input(Some(FIFINE), true, Some("{cccccccc-0000-0000-0000-000000000003}"));
+        for _ in 0..STABLE_TICKS - 1 {
+            assert_eq!(f.tick(&flicker), Outcome::Idle);
+        }
+        assert_eq!(f.tick(&input(Some(FIFINE), true, Some(PODMIC))), Outcome::Idle);
+        assert_eq!(f.pinned(), Some(PODMIC));
+        assert_eq!(run(&mut f, &input(Some(FIFINE), true, Some(PODMIC)), 30), Outcome::Idle);
+    }
+
+    #[test]
+    fn an_old_pick_does_not_hold_the_filter_on_a_microphone_it_left() {
+        // The pick (default was D) was kept from an earlier run, the default is X now.
+        let mut f = Follower::with_pinned(Some(PODMIC.into()));
+        let x = "{cccccccc-0000-0000-0000-000000000003}";
+        assert_eq!(
+            run(&mut f, &input(Some(FIFINE), true, Some(x)), STABLE_TICKS),
+            Outcome::Move(x.into())
+        );
+        // Later the default is the PodMic again: the filter follows it.
+        f.tick(&input(Some(x), true, Some(x)));
+        assert_eq!(
+            run(&mut f, &input(Some(x), true, Some(PODMIC)), STABLE_TICKS),
+            Outcome::Move(PODMIC.into())
+        );
     }
 }

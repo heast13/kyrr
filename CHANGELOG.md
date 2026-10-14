@@ -7,8 +7,8 @@
   there (Windows asks for permission once, then sound pauses for a moment).
   A microphone on another USB port counts as a new one. If you decline, a
   button on the main page offers it. A microphone you pick by hand with
-  "Change microphone" stays until Windows' default changes, and so does one
-  kyrr was already set up on.
+  "Change microphone" stays while Windows' default stays as it was, and so
+  does one kyrr was already set up on.
 - If Windows takes kyrr off the microphone (an update, most likely), kyrr
   puts itself back once by itself; the "Repair" button stays as the fallback.
 - The microphone list in the window stays current while it is open.
