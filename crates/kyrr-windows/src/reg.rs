@@ -6,8 +6,8 @@ use windows::Win32::Security::Authorization::{ConvertStringSecurityDescriptorToS
 use windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
 use windows::Win32::System::Registry::{
     RegCloseKey, RegCreateKeyExW, RegDeleteTreeW, RegDeleteValueW, RegEnumKeyExW, RegGetValueW, RegOpenKeyExW,
-    RegSetValueExW, HKEY, KEY_ALL_ACCESS, KEY_READ, KEY_SET_VALUE, REG_DWORD, REG_OPTION_BACKUP_RESTORE,
-    REG_OPTION_NON_VOLATILE, REG_SAM_FLAGS, REG_SZ, RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
+    RegQueryValueExW, RegSetValueExW, HKEY, KEY_ALL_ACCESS, KEY_READ, KEY_SET_VALUE, REG_DWORD, REG_MULTI_SZ,
+    REG_OPTION_BACKUP_RESTORE, REG_OPTION_NON_VOLATILE, REG_SAM_FLAGS, REG_SZ, RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
 };
 
 pub fn wide(s: &str) -> Vec<u16> {
@@ -180,6 +180,21 @@ impl Key {
         )
     }
 
+    /// Whether the key holds a value of this name, of any type.
+    pub fn has_value(&self, name: &str) -> bool {
+        let n = wide(name);
+        unsafe { RegQueryValueExW(self.0, PCWSTR(n.as_ptr()), None, None, None, None) == ERROR_SUCCESS }
+    }
+
+    pub fn set_multi_string(&self, name: &str, values: &[&str]) -> Result<(), String> {
+        let n = wide(name);
+        let bytes = multi_string_bytes(values);
+        check(
+            unsafe { RegSetValueExW(self.0, PCWSTR(n.as_ptr()), None, REG_MULTI_SZ, Some(&bytes)) },
+            name,
+        )
+    }
+
     pub fn set_dword(&self, name: &str, value: u32) -> Result<(), String> {
         let n = wide(name);
         check(
@@ -224,6 +239,13 @@ impl Key {
     }
 }
 
+/// The REG_MULTI_SZ encoding: every string ends in a NUL, and one more NUL ends the list.
+fn multi_string_bytes(values: &[&str]) -> Vec<u8> {
+    let mut units: Vec<u16> = values.iter().flat_map(|v| v.encode_utf16().chain(Some(0))).collect();
+    units.push(0);
+    units.iter().flat_map(|c| c.to_le_bytes()).collect()
+}
+
 /// Deletes a key with everything below it; a missing key is fine.
 pub fn delete_tree(root: HKEY, path: &str) -> Result<(), String> {
     let p = wide(path);
@@ -232,4 +254,15 @@ pub fn delete_tree(root: HKEY, path: &str) -> Result<(), String> {
         return Ok(());
     }
     check(err, path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn multi_string_ends_in_two_nuls() {
+        assert_eq!(multi_string_bytes(&["a"]), [b'a', 0, 0, 0, 0, 0]);
+        assert_eq!(multi_string_bytes(&["a", "b"]), [b'a', 0, 0, 0, b'b', 0, 0, 0, 0, 0]);
+    }
 }
