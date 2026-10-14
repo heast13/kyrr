@@ -94,8 +94,9 @@ its sounds and de-esser levels: a low cut (80 Hz, 100 Hz for the bright sound) b
 then three EQ bands (body at 250 Hz, presence at 3 kHz, air above 8 kHz), a
 de-esser on the band above 4 kHz, a compressor (light, medium or strong) and
 a limiter at −1 dBFS. It works with the noise filter switched off too, and
-adds no latency. On by default with a neutral sound, medium compression and
-the low cut; pop protection is off by default. Reset brings back the defaults.
+adds no latency. On by default with a neutral sound, medium compression, light
+S-sound softening and the low cut; pop protection is off by default. Reset
+brings back the defaults.
 
 kyrr adds two stages of its own. *Pop protection* listens to the raw
 microphone for the thump of a P or B: energy below 60 Hz that jumps above
@@ -103,7 +104,7 @@ the voice's own bass (100–400 Hz) and above the room's steady rumble. A
 voice stays about 20 dB below that line, close to the mic too. While it is
 crossed, everything below 120 Hz is turned down, up to 30 dB. The cut
 happens after the noise filter, whose delay lets it start 10 ms before the
-thump arrives. *Automatic volume* (in Settings below Voice, off by default,
+thump arrives. *Automatic volume* (in Settings below Voice, on by default,
 works with the voice shaping switched off too; the advanced view shows what
 it adds right now) measures the voice only while someone speaks and moves it
 slowly (5 dB/s up, 10 dB/s down, at most +24/−12 dB) to −23 dBFS, before the

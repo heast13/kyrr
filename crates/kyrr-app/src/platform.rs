@@ -6,6 +6,8 @@ use kyrr_common::FilterSettings;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Microphone {
+    /// Full endpoint id (what Windows' audio API takes).
+    pub id: String,
     pub guid: String,
     pub name: String,
     /// The one Windows uses unless an app asks for another.
@@ -65,11 +67,22 @@ mod imp {
             .unwrap_or_default()
             .into_iter()
             .map(|m| Microphone {
+                id: m.id,
                 guid: m.guid,
                 name: m.name,
                 is_default: m.is_default,
             })
             .collect()
+    }
+
+    /// Whether Windows has this microphone muted (full endpoint id).
+    pub fn microphone_muted(id: &str) -> Option<bool> {
+        devices::is_muted(id)
+    }
+
+    /// Takes Windows' mute off the microphone.
+    pub fn unmute_microphone(id: &str) -> bool {
+        devices::unmute(id)
     }
 
     pub fn filter_status() -> FilterStatus {
@@ -242,6 +255,7 @@ mod imp {
                 devs.filter_map(|d| d.description().ok())
                     .enumerate()
                     .map(|(i, d)| Microphone {
+                        id: d.name().to_string(),
                         guid: d.name().to_string(),
                         name: d.name().to_string(),
                         is_default: i == 0,
@@ -249,6 +263,14 @@ mod imp {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    pub fn microphone_muted(_: &str) -> Option<bool> {
+        None
+    }
+
+    pub fn unmute_microphone(_: &str) -> bool {
+        false
     }
 
     pub fn filter_status() -> FilterStatus {
