@@ -8,7 +8,9 @@
 
 [![Made with Slint](https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png)](https://slint.dev)
 
-A small, free Windows app for your microphone.
+A small, free app for your microphone, for **Windows** and **Linux**:
+cleaner sound, a better voice and dictation, all on your own computer.
+Windows is out; the Linux version (an AppImage) follows shortly.
 
 > **Everything runs on your PC.** Your voice and your dictated text never
 > leave your computer: no cloud, no account, no telemetry. Once the speech
@@ -20,11 +22,11 @@ What it does:
   ([DPDFNet](https://github.com/ceva-ip/DPDFNet)) on your microphone, for
   every app: Teams, Zoom, Discord, OBS, the browser. A large model for the
   cleanest result, a small one for older laptops.
-- **Voice.** Shaping after the noise is gone: a sound (Neutral, Warm,
+- **Improve voice.** Shaping after the noise is gone: a sound (Neutral, Warm,
   Clear, Bright or your own), a compressor, softer S sounds, pop protection
   and a cut for low rumble.
 - **Automatic volume.** Brings your voice to the same level however loud
-  your microphone is set, with or without the voice shaping.
+  your microphone is set.
 - **Dictation.** Hold F9 (or F8, Pause, right Ctrl; or tap to start and
   stop), speak, release. The text appears where your cursor is. German and
   English, transcribed on your PC. Say "new line" or "neue
@@ -32,12 +34,16 @@ What it does:
 - **Check.** A live level of what the microphone hears and what apps get,
   a ten-second test (record once, then play the take before and after kyrr)
   and listening to yourself live on headphones.
+- **Follows your microphone.** Plug in another one, or the same one into
+  another USB port, and kyrr moves along by itself. It also tells you what
+  is wrong: a muted microphone (with a button to switch it back on), none
+  found, or one that just arrived.
 
 <p align="center">
-  <img src="docs/screenshots/main.png" width="380" alt="kyrr's window: noise filter, voice and dictation, each with one switch">
+  <img src="docs/screenshots/main.png" width="380" alt="kyrr's window: noise filter, improve voice and dictation, each with one switch">
 </p>
 <p align="center">
-  <img src="docs/screenshots/settings.png" width="760" alt="Settings, advanced view, in two columns: filter strength and model, voice sound with its sliders, compressor, S sounds, low cut, pop protection, automatic volume, language, autostart, updates and microphone; dictation key, level check with before/after test and listening, about">
+  <img src="docs/screenshots/settings.png" width="760" alt="Settings in two columns: filter strength and model, voice sound with its sliders, compressor, S sounds, low cut, pop protection, automatic volume, language, autostart, updates and microphone; dictation key, level check with before/after test and listening, about">
 </p>
 
 Status: young and in active development.
@@ -47,7 +53,7 @@ Status: young and in active development.
 | | kyrr | NVIDIA Broadcast | Krisp |
 |---|---|---|---|
 | Price | free, open source | free | free for 60 minutes a day, subscription beyond |
-| Needs | any 64-bit Intel or AMD PC with Windows 10 or 11 | an NVIDIA RTX graphics card | an account |
+| Needs | any 64-bit Intel or AMD PC with Windows 10 or 11 (Linux soon) | an NVIDIA RTX graphics card | an account |
 | Where it works | on the microphone itself: every app, nothing to choose | apps set to its virtual microphone | apps set to its virtual microphone |
 
 On top, kyrr dictates into any app, on your computer. As far as we know in
@@ -55,9 +61,11 @@ October 2026; corrections welcome.
 
 ## Install
 
-Download `kyrr-setup-<version>.exe` from the [latest
+**Windows.** Download `kyrr-setup-<version>.exe` from the [latest
 release](https://github.com/heast13/kyrr/releases/latest) and run it (see the
 [code signing policy](#code-signing-policy)).
+
+**Linux.** An AppImage is coming; this page gets its download then.
 
 Windows 10 22H2 or Windows 11, 64-bit. The installer needs administrator
 rights, and sound drops out for a second while kyrr sets up its filter.
@@ -88,29 +96,28 @@ value on uninstall (unless Equalizer APO is installed and still needs it).
 If a Windows or driver update takes kyrr off the microphone, the app notices
 and offers to repair it.
 
-**Voice.** The same filter can shape the voice, with the chain of
-[Omavoice DPDFNet](https://github.com/heast13/omarchy-omavoice-dpdfnet) and
-its sounds and de-esser levels: a low cut (80 Hz, 100 Hz for the bright sound) before the noise filter,
-then three EQ bands (body at 250 Hz, presence at 3 kHz, air above 8 kHz), a
-de-esser on the band above 4 kHz, a compressor (light, medium or strong) and
-a limiter at −1 dBFS. It works with the noise filter switched off too, and
-adds no latency. On by default with a neutral sound, medium compression, light
+**Improve voice.** The same filter can shape the voice: a low cut (80 Hz,
+100 Hz for the bright sound) before the noise filter, then three EQ bands
+(body at 250 Hz, presence at 3 kHz, air above 8 kHz), a de-esser on the band
+above 4 kHz, a compressor (light, medium or strong) and a limiter at
+−1 dBFS. It works with the noise filter switched off too, and adds no
+latency. On by default with a neutral sound, medium compression, light
 S-sound softening and the low cut; pop protection is off by default. Reset
 brings back the defaults.
 
-kyrr adds two stages of its own. *Pop protection* listens to the raw
-microphone for the thump of a P or B: energy below 60 Hz that jumps above
-the voice's own bass (100–400 Hz) and above the room's steady rumble. A
-voice stays about 20 dB below that line, close to the mic too. While it is
-crossed, everything below 120 Hz is turned down, up to 30 dB. The cut
-happens after the noise filter, whose delay lets it start 10 ms before the
-thump arrives. *Automatic volume* (in Settings below Voice, on by default,
-works with the voice shaping switched off too; the advanced view shows what
-it adds right now) measures the voice only while someone speaks and moves it
-slowly (5 dB/s up, 10 dB/s down, at most +24/−12 dB) to −23 dBFS, before the
-de-esser and compressor; pauses, clicks and steady noise leave it alone.
-Call apps that adjust the volume themselves can work against it, so use one
-of the two.
+*Pop protection* listens to the raw microphone for the thump of a P or B and
+turns everything below 120 Hz down while it lasts, starting 10 ms before the
+thump arrives. *Automatic volume* (on by default, works with the voice
+shaping switched off too) measures the voice only while someone speaks and
+moves it slowly (5 dB/s up, 10 dB/s down, at most +24/−12 dB) towards about
+−23 dBFS; pauses, clicks and steady noise leave it alone. Call apps that
+adjust the volume themselves can work against it, so use one of the two.
+
+**Your microphone.** kyrr checks every few seconds which microphone the
+system uses. When it changes, the filter moves along: Windows asks for
+permission once and sound pauses for a moment. If you decline, a button on
+the main page offers it. A microphone you pick by hand stays until the
+system's default changes.
 
 **Check.** The filter shares a small block of memory with the app
 (`Global\kyrr-monitor-3`): the level before and after kyrr, what the
@@ -172,7 +179,7 @@ kyrr sends no data about you or your computer anywhere, see
 
 ## Building
 
-Windows with Rust (MSVC), the Visual Studio Build Tools and Python 3; for
+Windows (the Linux build follows with the Linux release) with Rust (MSVC), the Visual Studio Build Tools and Python 3; for
 the installer Inno Setup 6.
 
 ```powershell
