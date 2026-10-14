@@ -8,8 +8,10 @@
 //! share a node group, so one clock drives them. When an app reads from
 //! "kyrr", the capture stream triggers the source stream, which takes the
 //! newest microphone buffer, runs it through the filter and hands it on in
-//! the same cycle. The capture side is passive: while no app records from
-//! "kyrr", the real microphone is not opened.
+//! the same cycle. The capture stream exists only while an app records from
+//! "kyrr": the desktop's microphone indicator (GNOME's orange one) shows any
+//! capture stream, even an idle one, and should only light up when someone
+//! listens.
 //!
 //! If kyrr ends without restoring the default (a crash), PipeWire falls
 //! back to the real microphone by itself, and "kyrr" is the default again
@@ -17,7 +19,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 
@@ -209,13 +211,17 @@ struct State {
     quit_after: Option<pw::spa::utils::result::AsyncSeq>,
 }
 
-/// Fields drop in order: the listeners before the streams they belong to
-/// (the source listener also points at the capture stream).
+/// Fields drop in order: the listener before the stream it belongs to.
 struct Streams {
     _source_listener: pw::stream::StreamListener<SourceData>,
-    _capture_listener: pw::stream::StreamListener<()>,
     source: StreamRc,
-    capture: StreamRc,
+    /// The real microphone, while an app records from "kyrr".
+    capture: Option<Capture>,
+    /// What the source's callback reads the microphone from; null while
+    /// there is no capture stream.
+    capture_ptr: Arc<AtomicPtr<pw_sys::pw_stream>>,
+    core: pw::core::CoreRc,
+    group: String,
     microphone: String,
     /// The links from "kyrr" to the apps recording from it.
     links: std::collections::HashSet<u32>,
@@ -223,27 +229,52 @@ struct Streams {
     in_use: Arc<AtomicBool>,
 }
 
+/// The capture stream on the real microphone.
+struct Capture {
+    _listener: pw::stream::StreamListener<()>,
+    stream: StreamRc,
+    /// The source's view of this stream, emptied before it goes.
+    shared: Arc<AtomicPtr<pw_sys::pw_stream>>,
+}
+
+impl Drop for Capture {
+    /// The source's callback runs on PipeWire's real-time thread. It stops
+    /// seeing this stream first; disconnecting then waits until the
+    /// real-time thread is out of both, so no callback still holds it when
+    /// the listener and the stream go.
+    fn drop(&mut self) {
+        self.shared.store(std::ptr::null_mut(), Ordering::SeqCst);
+        let _ = self.stream.disconnect();
+    }
+}
+
 impl Streams {
     fn set_links(&mut self, change: impl FnOnce(&mut std::collections::HashSet<u32>)) {
         change(&mut self.links);
-        self.in_use.store(!self.links.is_empty(), Ordering::Relaxed);
+        let in_use = !self.links.is_empty();
+        self.in_use.store(in_use, Ordering::Relaxed);
+        if !in_use {
+            self.capture = None;
+        } else if self.capture.is_none() {
+            match create_capture(self) {
+                Ok(capture) => self.capture = Some(capture),
+                Err(e) => eprintln!("kyrr: microphone did not open: {e}"),
+            }
+        }
     }
 }
 
 impl Drop for Streams {
-    /// The callbacks run on PipeWire's real-time thread. Disconnecting takes
-    /// both nodes out of it and waits until it has, so no callback is still
-    /// running when the listeners and their data go.
+    /// The capture stream goes first: its callback triggers the source.
     fn drop(&mut self) {
+        self.capture = None;
         let _ = self.source.disconnect();
-        let _ = self.capture.disconnect();
     }
 }
 
 struct SourceData {
-    /// The capture stream; it outlives this listener (both live in `Streams`,
-    /// and the listeners go first).
-    capture: *mut pw_sys::pw_stream,
+    /// The capture stream, or null while there is none (see `Capture`).
+    capture: Arc<AtomicPtr<pw_sys::pw_stream>>,
     /// Only ever locked by the real-time thread; shared so the streams can
     /// be replaced without taking the filter apart.
     process: Arc<Mutex<Process>>,
@@ -525,19 +556,55 @@ fn create_streams(core: &pw::core::CoreRc, microphone: &str, process: Arc<Mutex<
         },
     )
     .map_err(|e| e.to_string())?;
+    let capture_ptr = Arc::new(AtomicPtr::new(std::ptr::null_mut()));
+    let source_listener = source
+        .add_local_listener_with_user_data(SourceData {
+            capture: capture_ptr.clone(),
+            process,
+        })
+        .process(|source, data| unsafe { fill(source, data) })
+        .register()
+        .map_err(|e| e.to_string())?;
+    let flags = StreamFlags::AUTOCONNECT | StreamFlags::MAP_BUFFERS | StreamFlags::RT_PROCESS | StreamFlags::TRIGGER;
+    connect(&source, spa::utils::Direction::Output, flags)?;
+    Ok(Streams {
+        _source_listener: source_listener,
+        source,
+        capture: None,
+        capture_ptr,
+        core: core.clone(),
+        group,
+        microphone: microphone.to_string(),
+        links: Default::default(),
+        in_use: Arc::new(AtomicBool::new(false)),
+    })
+}
+
+fn connect(stream: &StreamRc, direction: spa::utils::Direction, flags: StreamFlags) -> Result<(), String> {
+    let format = audio_format();
+    let Some(pod) = Pod::from_bytes(&format) else {
+        return Err("invalid audio format".to_string());
+    };
+    stream
+        .connect(direction, None, flags, &mut [pod])
+        .map_err(|e| e.to_string())
+}
+
+/// Opens the real microphone for "kyrr"; its buffers drive the source.
+fn create_capture(streams: &Streams) -> Result<Capture, String> {
+    let group = streams.group.as_str();
     let capture = StreamRc::new(
-        core.clone(),
+        streams.core.clone(),
         "kyrr microphone",
         properties! {
             *pw::keys::MEDIA_TYPE => "Audio",
             *pw::keys::MEDIA_CATEGORY => "Capture",
             *pw::keys::NODE_NAME => "kyrr.input",
             *pw::keys::NODE_DESCRIPTION => "kyrr",
-            *pw::keys::NODE_GROUP => group.as_str(),
-            *pw::keys::NODE_LINK_GROUP => group.as_str(),
+            *pw::keys::NODE_GROUP => group,
+            *pw::keys::NODE_LINK_GROUP => group,
             *pw::keys::NODE_VIRTUAL => "true",
-            *pw::keys::NODE_PASSIVE => "true",
-            *pw::keys::TARGET_OBJECT => microphone,
+            *pw::keys::TARGET_OBJECT => streams.microphone.as_str(),
             // Never fall back to the default microphone: that is "kyrr".
             "node.dont-fallback" => "true",
             "resample.prefill" => "true",
@@ -547,15 +614,12 @@ fn create_streams(core: &pw::core::CoreRc, microphone: &str, process: Arc<Mutex<
 
     let capture_ptr = capture.as_raw_ptr();
     // A raw pointer, not the Rc: this runs on the real-time thread. The
-    // source outlives the listener (see `Streams`).
-    let source_ptr = source.as_raw_ptr();
-    // The capture side also runs while only others use the microphone (it
-    // is passive, not idle). The filter works only while an app records
-    // from "kyrr" (it is linked); otherwise the microphone's buffers go
-    // straight back.
-    let in_use = Arc::new(AtomicBool::new(false));
-    let linked = in_use.clone();
-    let capture_listener = capture
+    // source outlives the capture stream (see `Streams`).
+    let source_ptr = streams.source.as_raw_ptr();
+    // Between the last app letting go and the stream closing, the
+    // microphone's buffers go straight back.
+    let linked = streams.in_use.clone();
+    let listener = capture
         .add_local_listener::<()>()
         .process(move |_, _| unsafe {
             if linked.load(Ordering::Relaxed) {
@@ -569,56 +633,36 @@ fn create_streams(core: &pw::core::CoreRc, microphone: &str, process: Arc<Mutex<
         })
         .register()
         .map_err(|e| e.to_string())?;
-    let source_listener = source
-        .add_local_listener_with_user_data(SourceData {
-            capture: capture_ptr,
-            process,
-        })
-        .process(|source, data| unsafe { fill(source, data) })
-        .register()
-        .map_err(|e| e.to_string())?;
-
-    let format = audio_format();
-    let connect = |stream: &StreamRc, direction, flags| {
-        let Some(pod) = Pod::from_bytes(&format) else {
-            return Err("invalid audio format".to_string());
-        };
-        stream
-            .connect(direction, None, flags, &mut [pod])
-            .map_err(|e| e.to_string())
-    };
-    let common = StreamFlags::AUTOCONNECT | StreamFlags::MAP_BUFFERS | StreamFlags::RT_PROCESS;
-    // The source first, so it is ready before the capture side triggers it.
-    let connected = connect(&source, spa::utils::Direction::Output, common | StreamFlags::TRIGGER).and_then(|()| {
-        let async_ = StreamFlags::from_bits_retain(pw_sys::pw_stream_flags_PW_STREAM_FLAG_ASYNC);
-        connect(&capture, spa::utils::Direction::Input, common | async_)
-    });
-    connected?;
-    Ok(Streams {
-        _source_listener: source_listener,
-        _capture_listener: capture_listener,
-        source,
-        capture,
-        microphone: microphone.to_string(),
-        links: Default::default(),
-        in_use,
+    let async_ = StreamFlags::from_bits_retain(pw_sys::pw_stream_flags_PW_STREAM_FLAG_ASYNC);
+    let flags = StreamFlags::AUTOCONNECT | StreamFlags::MAP_BUFFERS | StreamFlags::RT_PROCESS | async_;
+    connect(&capture, spa::utils::Direction::Input, flags)?;
+    streams.capture_ptr.store(capture_ptr, Ordering::SeqCst);
+    Ok(Capture {
+        _listener: listener,
+        stream: capture,
+        shared: streams.capture_ptr.clone(),
     })
 }
 
 /// The source's process callback: the newest microphone buffer, filtered,
 /// into the source's buffer. Silence when the microphone has nothing.
 unsafe fn fill(source: &pw::stream::Stream, data: &mut SourceData) {
-    let input = newest_buffer(data.capture);
+    let capture = data.capture.load(Ordering::SeqCst);
+    let input = if capture.is_null() {
+        std::ptr::null_mut()
+    } else {
+        newest_buffer(capture)
+    };
     let Some(mut out) = source.dequeue_buffer() else {
         if !input.is_null() {
-            unsafe { pw_sys::pw_stream_queue_buffer(data.capture, input) };
+            unsafe { pw_sys::pw_stream_queue_buffer(capture, input) };
         }
         return;
     };
     let requested = out.requested() as usize;
     let Some(out_data) = out.datas_mut().first_mut() else {
         if !input.is_null() {
-            unsafe { pw_sys::pw_stream_queue_buffer(data.capture, input) };
+            unsafe { pw_sys::pw_stream_queue_buffer(capture, input) };
         }
         return;
     };
@@ -647,7 +691,7 @@ unsafe fn fill(source: &pw::stream::Stream, data: &mut SourceData) {
     *chunk.stride_mut() = 4;
     *chunk.size_mut() = (frames * 4) as u32;
     if !input.is_null() {
-        unsafe { pw_sys::pw_stream_queue_buffer(data.capture, input) };
+        unsafe { pw_sys::pw_stream_queue_buffer(capture, input) };
     }
 }
 

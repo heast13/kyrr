@@ -274,6 +274,10 @@ mod imp {
         true
     }
 
+    pub fn can_minimize() -> bool {
+        true
+    }
+
     pub fn key_note() -> KeyNote {
         KeyNote::None
     }
@@ -541,6 +545,20 @@ mod imp {
     /// own, so it never registers there.
     pub fn has_tray() -> bool {
         !flatpak() && kyrr_linux::tray::available()
+    }
+
+    /// Whether the desktop minimizes windows. Tiling compositors (Hyprland,
+    /// sway, niri) ignore the request, so only desktops known to have a
+    /// taskbar or dock to minimize to count.
+    pub fn can_minimize() -> bool {
+        const MINIMIZING: [&str; 12] = [
+            "gnome", "kde", "cinnamon", "xfce", "mate", "budgie", "unity", "pantheon", "lxqt", "lxde", "deepin",
+            "cosmic",
+        ];
+        let desktop = std::env::var("XDG_CURRENT_DESKTOP")
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        desktop.split(':').any(|d| MINIMIZING.iter().any(|m| d.contains(m)))
     }
 
     pub fn paste_text(text: &str) -> bool {

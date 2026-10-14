@@ -752,6 +752,9 @@ msgstr "Version {} ist da. Aktualisiere kyrr dort, wo du es installiert hast, de
 msgid "Everything keeps running in the tray. Quit there with a right-click."
 msgstr "Alles läuft im Tray weiter. Beenden geht dort per Rechtsklick."
 
+msgid "No tray on this desktop: the window's X only minimizes kyrr. To end it, click Quit."
+msgstr "Dieser Desktop hat kein Tray: Das X des Fensters minimiert kyrr nur. Zum Beenden klick auf „Beenden“."
+
 msgid "No tray on this desktop: kyrr waits in the taskbar. Closing the window quits it."
 msgstr "Dieser Desktop hat kein Tray: kyrr wartet in der Taskleiste. Fenster schließen beendet es."
 

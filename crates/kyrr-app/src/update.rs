@@ -65,14 +65,15 @@ pub fn check() -> Outcome {
         .call()
         .and_then(|mut r| r.body_mut().with_config().limit(1 << 20).read_to_string());
     match body {
-        Ok(body) => parse(&body, env!("CARGO_PKG_VERSION")),
+        Ok(body) => parse(&body, env!("CARGO_PKG_VERSION"), cfg!(target_os = "linux")),
         Err(_) => Outcome::Failed,
     }
 }
 
 /// Reads GitHub's answer about the latest release and compares it with
-/// `current`.
-fn parse(body: &str, current: &str) -> Outcome {
+/// `current`. On `linux` only a release with an AppImage counts: one that
+/// brings a new Windows version only has nothing to update here.
+fn parse(body: &str, current: &str, linux: bool) -> Outcome {
     let Ok(json) = serde_json::from_str::<serde_json::Value>(body) else {
         return Outcome::Failed;
     };
@@ -95,6 +96,9 @@ fn parse(body: &str, current: &str) -> Outcome {
             (a["name"].as_str() == Some(name) && link.starts_with(DOWNLOADS)).then(|| link.to_string())
         })
     };
+    if linux && asset(&format!("kyrr-{version}-x86_64.AppImage")).is_none() {
+        return Outcome::UpToDate;
+    }
     let exe = format!("kyrr-setup-{version}.exe");
     let installer = asset(&exe)
         .zip(asset(&format!("{exe}.sha256")))
@@ -226,7 +230,7 @@ mod tests {
     fn newer_release_is_offered() {
         let url = "https://github.com/heast13/kyrr/releases/tag/v0.2.0";
         assert_eq!(
-            parse(&answer("v0.2.0", url), "0.1.0"),
+            parse(&answer("v0.2.0", url), "0.1.0", false),
             Outcome::Available {
                 version: "0.2.0".into(),
                 url: url.into(),
@@ -235,7 +239,7 @@ mod tests {
             }
         );
         assert!(matches!(
-            parse(&answer("v0.10.0", url), "0.9.3"),
+            parse(&answer("v0.10.0", url), "0.9.3", false),
             Outcome::Available { .. }
         ));
     }
@@ -253,7 +257,7 @@ mod tests {
             ]
         })
         .to_string();
-        let Outcome::Available { installer, .. } = parse(&body, "0.3.0") else {
+        let Outcome::Available { installer, .. } = parse(&body, "0.3.0", false) else {
             panic!("not offered");
         };
         assert_eq!(
@@ -270,8 +274,34 @@ mod tests {
             "https://example.com/",
         );
         assert!(matches!(
-            parse(&foreign, "0.3.0"),
+            parse(&foreign, "0.3.0", false),
             Outcome::Available { installer: None, .. }
+        ));
+    }
+
+    #[test]
+    fn linux_only_sees_releases_for_linux() {
+        let dl = "https://github.com/heast13/kyrr/releases/download/v0.5.1/";
+        let windows = serde_json::json!({
+            "tag_name": "v0.5.1",
+            "html_url": "https://github.com/heast13/kyrr/releases/tag/v0.5.1",
+            "assets": [
+                { "name": "kyrr-setup-0.5.1.exe", "browser_download_url": format!("{dl}kyrr-setup-0.5.1.exe") },
+            ]
+        });
+        assert_eq!(parse(&windows.to_string(), "0.5.0", true), Outcome::UpToDate);
+        assert!(matches!(
+            parse(&windows.to_string(), "0.5.0", false),
+            Outcome::Available { .. }
+        ));
+        let mut both = windows;
+        both["assets"].as_array_mut().unwrap().push(serde_json::json!({
+            "name": "kyrr-0.5.1-x86_64.AppImage",
+            "browser_download_url": format!("{dl}kyrr-0.5.1-x86_64.AppImage"),
+        }));
+        assert!(matches!(
+            parse(&both.to_string(), "0.5.0", true),
+            Outcome::Available { .. }
         ));
     }
 
@@ -296,19 +326,19 @@ mod tests {
     #[test]
     fn same_or_older_is_up_to_date() {
         let url = "https://github.com/heast13/kyrr/releases/tag/v0.1.0";
-        assert_eq!(parse(&answer("v0.1.0", url), "0.1.0"), Outcome::UpToDate);
-        assert_eq!(parse(&answer("0.0.9", url), "0.1.0"), Outcome::UpToDate);
+        assert_eq!(parse(&answer("v0.1.0", url), "0.1.0", false), Outcome::UpToDate);
+        assert_eq!(parse(&answer("0.0.9", url), "0.1.0", false), Outcome::UpToDate);
     }
 
     #[test]
     fn odd_answers_fail() {
         let url = "https://github.com/heast13/kyrr/releases/tag/v9.0.0";
-        assert_eq!(parse("", "0.1.0"), Outcome::Failed);
-        assert_eq!(parse(r#"{"message":"Not Found"}"#, "0.1.0"), Outcome::Failed);
-        assert_eq!(parse(&answer("nightly", url), "0.1.0"), Outcome::Failed);
-        assert_eq!(parse(&answer("v9.0.0-rc1", url), "0.1.0"), Outcome::Failed);
+        assert_eq!(parse("", "0.1.0", false), Outcome::Failed);
+        assert_eq!(parse(r#"{"message":"Not Found"}"#, "0.1.0", false), Outcome::Failed);
+        assert_eq!(parse(&answer("nightly", url), "0.1.0", false), Outcome::Failed);
+        assert_eq!(parse(&answer("v9.0.0-rc1", url), "0.1.0", false), Outcome::Failed);
         assert_eq!(
-            parse(&answer("v9.0.0", "https://example.com/kyrr.exe"), "0.1.0"),
+            parse(&answer("v9.0.0", "https://example.com/kyrr.exe"), "0.1.0", false),
             Outcome::Failed
         );
     }
@@ -332,7 +362,7 @@ mod tests {
             .call()
             .and_then(|mut r| r.body_mut().read_to_string())
             .expect("GitHub answers");
-        let Outcome::Available { installer, .. } = parse(&body, "0.0.1") else {
+        let Outcome::Available { installer, .. } = parse(&body, "0.0.1", false) else {
             panic!("no release offered");
         };
         let installer = installer.expect("installer and checksum attached");

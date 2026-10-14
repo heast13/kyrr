@@ -580,6 +580,16 @@ impl App {
     }
 
     /// The window went away: no meter, no listening.
+    /// Minimizes the window. The meter keeps its timer, which idles while
+    /// the window is minimized: nothing starts it again when the taskbar
+    /// brings the window back.
+    fn minimize(&self) {
+        self.stop_listening();
+        if let Some(w) = self.window.upgrade() {
+            w.window().set_minimized(true);
+        }
+    }
+
     fn window_closed(&self) {
         self.meter.stop();
         self.stop_listening();
@@ -1174,6 +1184,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_update_auto(app.config.borrow().update_check);
     state.set_linux(cfg!(target_os = "linux"));
     state.set_tray(platform::has_tray());
+    state.set_can_minimize(platform::can_minimize());
     state.set_advanced(app.config.borrow().advanced_settings);
     app.apply_key();
     show_voice(&state, &filter.voice);
@@ -1409,13 +1420,19 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     });
     // Closing only hides the window; listening and the meter end with it.
     // The button in the window does the same; quitting is in the tray menu.
-    // Without a tray (GNOME without its extension) closing quits, and the
-    // button minimizes, so kyrr never hides where nobody can reach it.
+    // Without a tray (GNOME without its extension) both minimize, so kyrr
+    // never hides where nobody can reach it, and a button in the window
+    // quits. A desktop that cannot minimize (Hyprland, sway) quits on close.
     window.window().on_close_requested({
         let app = Rc::clone(&app);
         move || {
-            app.window_closed();
-            if !platform::has_tray() {
+            if platform::has_tray() {
+                app.window_closed();
+            } else if platform::can_minimize() {
+                app.minimize();
+                return slint::CloseRequestResponse::KeepWindowShown;
+            } else {
+                app.window_closed();
                 let _ = slint::quit_event_loop();
             }
             slint::CloseRequestResponse::HideWindow
@@ -1424,14 +1441,21 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.on_hide({
         let app = Rc::clone(&app);
         move || {
+            if !platform::has_tray() {
+                app.minimize();
+                return;
+            }
             app.window_closed();
             if let Some(w) = app.window.upgrade() {
-                if platform::has_tray() {
-                    let _ = w.hide();
-                } else {
-                    w.window().set_minimized(true);
-                }
+                let _ = w.hide();
             }
+        }
+    });
+    state.on_quit({
+        let worker = app.worker.clone();
+        move || {
+            let _ = worker.send(Command::Quit);
+            let _ = slint::quit_event_loop();
         }
     });
     window.on_shown({

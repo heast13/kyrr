@@ -36,6 +36,25 @@ pub enum State {
     Error,
 }
 
+/// Numbers about a recording for the log, to tell a microphone that opened
+/// late or sounds too quiet from a model that misheard. Never the audio.
+fn describe(rate: u32, samples: &[f32]) -> String {
+    if rate == 0 || samples.is_empty() {
+        return "empty recording".into();
+    }
+    let db = |x: f32| 20.0 * x.max(1e-6).log10();
+    let empty = samples.iter().take_while(|s| **s == 0.0).count();
+    let peak = samples.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+    let rms = (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt();
+    format!(
+        "{:.1} s at {rate} Hz, first {:.2} s empty, peak {:.0} dBFS, level {:.0} dBFS",
+        samples.len() as f32 / rate as f32,
+        empty as f32 / rate as f32,
+        db(peak),
+        db(rms)
+    )
+}
+
 pub enum Event {
     State(State),
     Progress(f32),
@@ -325,6 +344,7 @@ impl Worker {
         std::thread::sleep(TAIL);
         let (rate, samples) = rec.finish();
         self.set_state(State::Transcribing);
+        let started = Instant::now();
         let text = match &self.model {
             Some(model) => match catch_unwind(AssertUnwindSafe(|| model.transcribe(rate, &samples))) {
                 Ok(text) => text,
@@ -336,6 +356,11 @@ impl Worker {
             None => String::new(),
         };
         self.last_used = Instant::now();
+        eprintln!(
+            "kyrr: dictation: {}, recognized in {:.1} s",
+            describe(rate, &samples),
+            started.elapsed().as_secs_f32()
+        );
         if !text.is_empty() {
             // A space to go on with, unless the text ends with a line break.
             let typed = if text.ends_with('\n') {

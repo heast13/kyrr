@@ -26,6 +26,8 @@ export global AppState {
     // the desktop may have no tray.
     in property <bool> linux;
     in property <bool> tray: true;
+    // Without a tray, closing minimizes where the desktop can (not tiling ones).
+    in property <bool> can-minimize: true;
     in property <FilterState> filter-state: FilterState.checking;
     in property <string> filter-detail; // technical, not translated
     in property <[string]> microphones;
@@ -149,6 +151,8 @@ export global AppState {
     callback autostart-toggled(bool);
     // Puts the window away, like its close button; quitting is in the tray.
     callback hide();
+    // Quits kyrr; the button for it shows only where there is no tray.
+    callback quit();
     callback page-changed();
     callback dictation-retry();
     callback repair();
@@ -815,18 +819,39 @@ component AlertLine inherits Text {
     animate opacity { duration: 450ms; easing: ease-in-out; }
 }
 
-component HideRow inherits HorizontalLayout {
-    spacing: 8px;
-    Hint {
-        text: !AppState.linux ? @tr("Everything keeps running in the tray, bottom right. Quit there with a right-click.")
-            : AppState.tray ? @tr("Everything keeps running in the tray. Quit there with a right-click.")
-            : @tr("No tray on this desktop: kyrr waits in the taskbar. Closing the window quits it.");
-        vertical-alignment: center;
+component HideRow inherits VerticalLayout {
+    // Without a tray there is a second button; the note then gets the full
+    // width above both.
+    property <bool> quit-here: AppState.linux && !AppState.tray && AppState.can-minimize;
+    spacing: 6px;
+    if !root.quit-here: HorizontalLayout {
+        spacing: 8px;
+        Hint {
+            text: !AppState.linux ? @tr("Everything keeps running in the tray, bottom right. Quit there with a right-click.")
+                : AppState.tray ? @tr("Everything keeps running in the tray. Quit there with a right-click.")
+                : @tr("No tray on this desktop: kyrr waits in the taskbar. Closing the window quits it.");
+            vertical-alignment: center;
+        }
+        Button {
+            text: @tr("Off to the corner");
+            horizontal-stretch: 0;
+            clicked => { AppState.hide(); }
+        }
     }
-    Button {
-        text: @tr("Off to the corner");
-        horizontal-stretch: 0;
-        clicked => { AppState.hide(); }
+    if root.quit-here: Hint {
+        text: @tr("No tray on this desktop: the window's X only minimizes kyrr. To end it, click Quit.");
+    }
+    if root.quit-here: HorizontalLayout {
+        spacing: 8px;
+        alignment: end;
+        Button {
+            text: @tr("Off to the corner");
+            clicked => { AppState.hide(); }
+        }
+        Button {
+            text: @tr("Quit");
+            clicked => { AppState.quit(); }
+        }
     }
 }
 
