@@ -182,9 +182,11 @@ jobs:
           signed=; [ "$SIGNED" = true ] && signed=--signed
           python3 scripts/release-notes.py "$version" $signed --out dist/notes.md
           # Also without the version, so releases/latest/download/kyrr-setup.exe
-          # always fetches the newest one.
+          # and .../kyrr-x86_64.AppImage always fetch the newest one.
           cp "dist/kyrr-setup-$version.exe" dist/kyrr-setup.exe
+          cp "dist/kyrr-$version-x86_64.AppImage" dist/kyrr-x86_64.AppImage
           gh release create "$TAG" --draft --title "kyrr $TAG" --notes-file dist/notes.md \
             "dist/kyrr-setup-$version.exe" "dist/kyrr-setup-$version.exe.sha256" dist/kyrr-setup.exe \
             "dist/kyrr-$version-x86_64.AppImage" "dist/kyrr-$version-x86_64.AppImage.sha256" \
+            dist/kyrr-x86_64.AppImage \
             "dist/kyrr-$version-linux-x86_64.tar.gz" "dist/kyrr-$version-linux-x86_64.tar.gz.sha256"
