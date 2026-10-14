@@ -769,3 +769,36 @@ msgstr "Diktat per Taste starten, sprechen, beenden: kyrr tippt, was du gesagt h
 
 msgid "{} is not set up yet: kyrr needs your desktop's OK for it."
 msgstr "{} ist noch nicht eingerichtet: Dafür braucht kyrr das OK deines Desktops."
+
+msgid "Dictation uses {}. Your desktop has to allow that once: click below, then “Add” in its window."
+msgstr "Diktiert wird mit {}. Dein Desktop muss das einmal erlauben: Klick unten, dann in seinem Fenster auf „Hinzufügen“."
+
+msgid "Now click “Add” in your desktop's window."
+msgstr "Jetzt im Fenster deines Desktops auf „Hinzufügen“ klicken."
+
+msgid "{} is not set up yet: the window was closed without “Add”. Try again?"
+msgstr "{} ist noch nicht eingerichtet: Das Fenster wurde ohne „Hinzufügen“ geschlossen. Nochmal?"
+
+msgid "✓ {} works."
+msgstr "✓ {} funktioniert."
+
+msgid "✓ {} is set up. Try it: press {} once."
+msgstr "✓ {} ist eingerichtet. Probier's aus: Drück einmal {}."
+
+msgid "Set up {}"
+msgstr "{} einrichten"
+
+msgid "Last step: kyrr types your words into other apps. Your desktop asks once (“Remote Desktop”): switch on “Allow Remote Interaction”, then click “Share”."
+msgstr "Letzter Schritt: kyrr tippt deine Worte in andere Apps. Dafür fragt dein Desktop einmal nach („Remote Desktop“ oder „Entfernter Bildschirm“): „Fernzugriff zulassen“ einschalten, dann „Freigeben“ klicken."
+
+msgid "In your desktop's window: switch on “Allow Remote Interaction”, then click “Share”."
+msgstr "Im Fenster deines Desktops: „Fernzugriff zulassen“ einschalten, dann „Freigeben“ klicken."
+
+msgid "Not allowed, so kyrr cannot type for you. Try again?"
+msgstr "Nicht erlaubt, also kann kyrr nicht für dich tippen. Nochmal?"
+
+msgid "✓ kyrr may type."
+msgstr "✓ kyrr darf tippen."
+
+msgid "Allow typing"
+msgstr "Tippen erlauben"

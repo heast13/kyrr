@@ -30,7 +30,7 @@ use slint::{ComponentHandle, LogicalSize, ModelRc, PhysicalPosition, SharedStrin
 
 use config::Config;
 use dictation::{Command, Event, State};
-use platform::{Desktop, FilterStatus, KeyNote, Microphone, SetupError};
+use platform::{Desktop, FilterStatus, KeyBinding, KeyNote, Microphone, SetupError};
 
 slint::include_modules!();
 
@@ -418,6 +418,8 @@ struct App {
     news_window: RefCell<Option<NewsWindow>>,
     /// Tap mode for the dictation key, read by the key thread.
     key_toggle: Arc<AtomicBool>,
+    /// Key presses counted when the key was set up, to see it pressed since.
+    presses_at_bound: Cell<Option<u32>>,
     microphones: RefCell<Vec<Microphone>>,
     worker: mpsc::Sender<Command>,
     window: Weak<MainWindow>,
@@ -922,6 +924,27 @@ impl App {
         if state.get_key_button() != button {
             state.set_key_button(button.into());
         }
+        // The setup's walk through the desktop's questions.
+        state.set_guide(fixed);
+        let key_state = match platform::key_binding() {
+            KeyBinding::NotAsked => 0,
+            KeyBinding::Asking => 1,
+            KeyBinding::Bound => 2,
+            KeyBinding::Refused => 3,
+        };
+        state.set_key_state(key_state);
+        let presses = platform::key_presses();
+        if key_state == 2 {
+            let base = self.presses_at_bound.get().unwrap_or(presses);
+            self.presses_at_bound.set(Some(base));
+            state.set_key_tried(presses > base);
+        } else {
+            self.presses_at_bound.set(None);
+            state.set_key_tried(false);
+        }
+        if state.get_typing_state() == 0 && !platform::typing_needs_permission() {
+            state.set_typing_state(2);
+        }
     }
 
     fn set_language(&self, language: Language) {
@@ -1095,7 +1118,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         Language::German => "kyrr: Diktieren (Taste halten)",
         Language::English => "kyrr: Dictate (hold the key)",
     };
-    if let Some(keys) = platform::start_hotkey(description) {
+    if let Some(keys) = platform::start_hotkey(description, config.setup_done) {
         let worker = worker.clone();
         let (recording, key_toggle) = (Arc::clone(&recording), Arc::clone(&key_toggle));
         std::thread::spawn(move || {
@@ -1132,6 +1155,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         listening: RefCell::new(None),
         news_window: RefCell::new(None),
         key_toggle,
+        presses_at_bound: Cell::new(None),
         microphones: RefCell::new(Vec::new()),
         worker: worker.clone(),
         window: window.as_weak(),
@@ -1300,6 +1324,34 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 platform::open_key_settings();
             }
             app.refresh_key_note();
+        }
+    });
+    state.on_setup_key({
+        let app = Rc::clone(&app);
+        move || {
+            platform::bind_key_again();
+            // The portal thread takes a moment to say it is asking.
+            if let Some(w) = app.window.upgrade() {
+                w.global::<AppState>().set_key_state(1);
+            }
+        }
+    });
+    state.on_allow_typing({
+        let weak = window.as_weak();
+        move || {
+            if let Some(w) = weak.upgrade() {
+                w.global::<AppState>().set_typing_state(1);
+            }
+            let weak = weak.clone();
+            std::thread::spawn(move || {
+                let allowed = platform::allow_typing();
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(w) = weak.upgrade() {
+                        w.global::<AppState>().set_typing_state(if allowed { 2 } else { 3 });
+                        fit(&weak);
+                    }
+                });
+            });
         }
     });
     state.on_key_toggle_changed({
@@ -1504,6 +1556,31 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         move || {
             app.refresh_filter();
             app.refresh_key_note();
+        }
+    });
+    // In the setup the answers to the desktop's questions and the first
+    // press of the key show at once.
+    let guide_poll = slint::Timer::default();
+    guide_poll.start(slint::TimerMode::Repeated, Duration::from_millis(250), {
+        let app = Rc::clone(&app);
+        move || {
+            let Some(w) = app.window.upgrade() else {
+                return;
+            };
+            if w.get_setup_mode() && w.get_setup_step() == 1 && w.global::<AppState>().get_guide() {
+                let before = (
+                    w.global::<AppState>().get_key_state(),
+                    w.global::<AppState>().get_key_tried(),
+                );
+                app.refresh_key_note();
+                let after = (
+                    w.global::<AppState>().get_key_state(),
+                    w.global::<AppState>().get_key_tried(),
+                );
+                if before != after {
+                    fit(&app.window);
+                }
+            }
         }
     });
     if let Some(requests) = show_requests {

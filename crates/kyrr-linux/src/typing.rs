@@ -27,7 +27,9 @@ const KEY_DELAY: std::time::Duration = std::time::Duration::from_millis(2);
 
 enum Backend {
     Wayland(wayland::Keyboard),
-    Portal(portal::Keyboard),
+    /// The portal works; a session is opened for each text (see
+    /// [`portal::Keyboard`]).
+    Portal,
     X11(Box<x11::Keyboard>),
 }
 
@@ -56,12 +58,19 @@ pub fn type_text(text: &str) -> bool {
     }
     let done = match backend.as_mut() {
         Some(Backend::Wayland(keyboard)) => keyboard.type_keysyms(&keysyms),
-        Some(Backend::Portal(keyboard)) => {
+        Some(Backend::Portal) => {
             let missing = layout::keysyms().is_some_and(|layout| keysyms.iter().any(|k| !layout.contains(k)));
             if missing {
                 return false;
             }
-            keyboard.type_keysyms(&keysyms)
+            match portal::Keyboard::open() {
+                Some(mut keyboard) => {
+                    let typed = keyboard.type_keysyms(&keysyms);
+                    keyboard.close();
+                    typed
+                }
+                None => false,
+            }
         }
         Some(Backend::X11(keyboard)) => keyboard.type_keysyms(&keysyms),
         None => false,
@@ -72,6 +81,17 @@ pub fn type_text(text: &str) -> bool {
         *backend = None;
     }
     done
+}
+
+/// Gets the permission to type now instead of on the first dictation:
+/// GNOME and KDE ask with their dialog. Blocks until answered. True when
+/// typing will work.
+pub fn prepare() -> bool {
+    let mut backend = lock(&BACKEND);
+    if backend.is_none() {
+        *backend = probe();
+    }
+    backend.is_some()
 }
 
 /// The portal's restore token, to be saved by the app. It changes only when
@@ -88,9 +108,12 @@ pub fn set_restore_token(token: Option<String>) {
 
 fn probe() -> Option<Backend> {
     if std::env::var_os("WAYLAND_DISPLAY").is_some_and(|display| !display.is_empty()) {
-        return wayland::Keyboard::connect()
-            .map(Backend::Wayland)
-            .or_else(|| portal::Keyboard::open().map(Backend::Portal));
+        return wayland::Keyboard::connect().map(Backend::Wayland).or_else(|| {
+            portal::Keyboard::open().map(|keyboard| {
+                keyboard.close();
+                Backend::Portal
+            })
+        });
     }
     x11::Keyboard::connect().map(|keyboard| Backend::X11(Box::new(keyboard)))
 }

@@ -86,6 +86,17 @@ export global AppState {
     // A button for the key in the settings ("Set up key", "Change key"); "" for none.
     in property <string> key-button;
     callback key-button-clicked();
+    // The setup walks through the desktop's two questions (GNOME, KDE): the
+    // key and the permission to type.
+    in property <bool> guide;
+    // 0 not asked, 1 the desktop is asking, 2 set up, 3 cancelled.
+    in property <int> key-state;
+    // The key was pressed since it was set up.
+    in property <bool> key-tried;
+    // 0 not asked, 1 the desktop is asking, 2 allowed, 3 not allowed.
+    in property <int> typing-state;
+    callback setup-key();
+    callback allow-typing();
     // "Check for updates", on request only.
     in property <UpdateState> update-state;
     in property <string> update-version;
@@ -545,6 +556,8 @@ component VoiceCard inherits Card {
 }
 
 component DictationCard inherits Card {
+    // The setup asks for the key itself, below the card.
+    in property <bool> in-setup;
     RowHead {
         title: @tr("Dictation");
         checked <=> AppState.dictation-enabled;
@@ -555,8 +568,8 @@ component DictationCard inherits Card {
             : AppState.dictation-state == DictationState.no-model ? @tr("One download first ({}), then it is yours.", AppState.download-size)
             : AppState.dictation-state == DictationState.downloading ? @tr("Downloading the speech model… {}%", round(AppState.download-progress * 100))
             : AppState.dictation-state == DictationState.loading ? @tr("Loading the speech model…")
-            : AppState.dictation-state == DictationState.ready && AppState.key-unbound ? @tr("{} is not set up yet: kyrr needs your desktop's OK for it.", AppState.key-name)
-            : AppState.dictation-state == DictationState.ready && AppState.key-note != "" ? @tr("Dictate with your key, the text lands at your cursor. Setting up the key: see Settings.")
+            : AppState.dictation-state == DictationState.ready && AppState.key-unbound && !root.in-setup ? @tr("{} is not set up yet: kyrr needs your desktop's OK for it.", AppState.key-name)
+            : AppState.dictation-state == DictationState.ready && AppState.key-note != "" && !(root.in-setup && AppState.guide) ? @tr("Dictate with your key, the text lands at your cursor. Setting up the key: see Settings.")
             : AppState.dictation-state == DictationState.ready ? (AppState.key-toggle ? @tr("Tap {}, talk, tap again. The text lands at your cursor.", AppState.key-name) : @tr("Hold {}, talk, let go. The text lands at your cursor.", AppState.key-name))
             : AppState.dictation-state == DictationState.recording ? @tr("Listening…")
             : AppState.dictation-state == DictationState.transcribing ? @tr("Writing…")
@@ -569,7 +582,7 @@ component DictationCard inherits Card {
         text: @tr("Try again");
         clicked => { AppState.dictation-retry(); }
     }
-    if AppState.dictation-state == DictationState.ready && AppState.key-unbound: Button {
+    if AppState.dictation-state == DictationState.ready && AppState.key-unbound && !root.in-setup: Button {
         text: AppState.key-button;
         primary: true;
         clicked => { AppState.key-button-clicked(); }
@@ -1128,7 +1141,7 @@ component SetupPage inherits VerticalLayout {
     if step == 1: Hint { text: @tr("Step 2 of 2"); }
     if step == 1: Heading { text: @tr("Talk instead of typing"); font-size: 20px; }
     if step == 1: Caption {
-        text: AppState.key-note == "" ? @tr("Hold {} anywhere, speak, release: kyrr types what you said. It runs on your computer, nothing is sent anywhere.", AppState.key-name)
+        text: AppState.key-note == "" || AppState.guide ? @tr("Hold {} anywhere, speak, release: kyrr types what you said. It runs on your computer, nothing is sent anywhere.", AppState.key-name)
             : @tr("Start dictation with a key, speak, end it: kyrr types what you said. It runs on your computer, nothing is sent anywhere.");
     }
     if step == 1: Caption { text: @tr("Language"); }
@@ -1137,12 +1150,37 @@ component SetupPage inherits VerticalLayout {
         selected <=> AppState.language-index;
         changed(i) => { AppState.language-changed(i); }
     }
-    if step == 1: DictationCard { }
-    if step == 1 && AppState.key-note != "": Hint { text: AppState.key-note; }
+    if step == 1: DictationCard { in-setup: true; }
+    if step == 1 && AppState.key-note != "" && !AppState.guide: Hint { text: AppState.key-note; }
+    // The desktop's questions, one at a time, each said before it comes.
+    if step == 1 && AppState.guide: Caption {
+        text: AppState.key-state == 0 ? @tr("Dictation uses {}. Your desktop has to allow that once: click below, then “Add” in its window.", AppState.key-name)
+            : AppState.key-state == 1 ? @tr("Now click “Add” in your desktop's window.")
+            : AppState.key-state == 3 ? @tr("{} is not set up yet: the window was closed without “Add”. Try again?", AppState.key-name)
+            : AppState.key-tried ? @tr("✓ {} works.", AppState.key-name)
+            : @tr("✓ {} is set up. Try it: press {} once.", AppState.key-name, AppState.key-name);
+    }
+    if step == 1 && AppState.guide && (AppState.key-state == 0 || AppState.key-state == 3): Button {
+        text: AppState.key-state == 0 ? @tr("Set up {}", AppState.key-name) : @tr("Try again");
+        primary: true;
+        clicked => { AppState.setup-key(); }
+    }
+    if step == 1 && AppState.guide && AppState.key-state == 2: Caption {
+        text: AppState.typing-state == 0 ? @tr("Last step: kyrr types your words into other apps. Your desktop asks once (“Remote Desktop”): switch on “Allow Remote Interaction”, then click “Share”.")
+            : AppState.typing-state == 1 ? @tr("In your desktop's window: switch on “Allow Remote Interaction”, then click “Share”.")
+            : AppState.typing-state == 3 ? @tr("Not allowed, so kyrr cannot type for you. Try again?")
+            : @tr("✓ kyrr may type.");
+    }
+    if step == 1 && AppState.guide && AppState.key-state == 2 && (AppState.typing-state == 0 || AppState.typing-state == 3): Button {
+        text: AppState.typing-state == 0 ? @tr("Allow typing") : @tr("Try again");
+        primary: true;
+        clicked => { AppState.allow-typing(); }
+    }
     if step == 1: Hint { text: (AppState.linux ? @tr("kyrr starts when you sign in and lives in the tray, if your desktop has one. Both can be changed in the settings.") : @tr("kyrr starts with Windows and lives in the tray, bottom right (maybe behind the little arrow). Both can be changed in the settings.")); }
     if step == 1: Button {
         text: @tr("Done");
-        primary: AppState.dictation-state != DictationState.no-model;
+        primary: AppState.dictation-state != DictationState.no-model
+            && (!AppState.guide || (AppState.key-state == 2 && AppState.typing-state == 2));
         clicked => { AppState.finish-setup(); }
     }
 }

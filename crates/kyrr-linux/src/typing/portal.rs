@@ -9,8 +9,10 @@ use futures_lite::future::block_on;
 
 use super::{restore_token, set_restore_token, APP_ID};
 
-/// A started session, kept for the next dictation. The portal drops it when
-/// the user revokes the permission, and the next call then asks again.
+/// A started session. It lives only while text is typed: GNOME shows a
+/// "remote control" indicator in the top bar for as long as one is open.
+/// The restore token opens the next one without asking; if the user revoked
+/// the permission, the portal asks again.
 pub struct Keyboard {
     remote: RemoteDesktop,
     session: Session<RemoteDesktop>,
@@ -48,6 +50,11 @@ impl Keyboard {
 
     pub fn type_keysyms(&mut self, keysyms: &[u32]) -> bool {
         block_on(self.press_all(keysyms)).is_ok()
+    }
+
+    /// Ends the session, and with it the desktop's indicator.
+    pub fn close(self) {
+        let _ = block_on(self.session.close());
     }
 
     /// Each call is a round trip to the portal, which paces the keys.

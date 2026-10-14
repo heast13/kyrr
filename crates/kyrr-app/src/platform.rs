@@ -66,6 +66,16 @@ pub enum KeyNote {
     Command(String),
 }
 
+/// Where getting the desktop's OK for the key stands (GNOME, KDE).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(windows, allow(dead_code))]
+pub enum KeyBinding {
+    NotAsked,
+    Asking,
+    Bound,
+    Refused,
+}
+
 /// Desktops whose own settings change the key, so the note can say where.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(windows, allow(dead_code))]
@@ -171,8 +181,23 @@ mod imp {
     }
 
     /// Push-to-talk events; `None` when the key could not be hooked.
-    pub fn start_hotkey(_description: &str) -> Option<std::sync::mpsc::Receiver<hotkey::KeyEvent>> {
+    pub fn start_hotkey(_description: &str, _setup_done: bool) -> Option<std::sync::mpsc::Receiver<hotkey::KeyEvent>> {
         hotkey::start().ok()
+    }
+
+    /// The hook needs no one's OK.
+    pub fn key_binding() -> KeyBinding {
+        KeyBinding::Bound
+    }
+
+    /// Not counted: the setup shows no key test on Windows.
+    pub fn key_presses() -> u32 {
+        0
+    }
+
+    /// Typing needs no one's OK.
+    pub fn allow_typing() -> bool {
+        true
     }
 
     /// The hook needs no one's OK.
@@ -538,9 +563,38 @@ mod imp {
     }
 
     /// `description` names the shortcut in the desktop's dialog and settings.
-    pub fn start_hotkey(description: &str) -> Option<std::sync::mpsc::Receiver<KeyEvent>> {
+    /// Before the setup is done, GNOME and KDE are asked for the key only
+    /// when the setup gets to it, not out of the blue at the start.
+    pub fn start_hotkey(description: &str, setup_done: bool) -> Option<std::sync::mpsc::Receiver<KeyEvent>> {
         integrate_appimage();
-        kyrr_linux::hotkey::start(description).ok()
+        kyrr_linux::hotkey::start(description, setup_done || desktop() == Desktop::Other).ok()
+    }
+
+    pub fn key_binding() -> KeyBinding {
+        use kyrr_linux::hotkey::Binding;
+        match kyrr_linux::hotkey::binding() {
+            Binding::NotAsked => KeyBinding::NotAsked,
+            Binding::Asking => KeyBinding::Asking,
+            Binding::Bound => KeyBinding::Bound,
+            Binding::Refused => KeyBinding::Refused,
+        }
+    }
+
+    pub fn key_presses() -> u32 {
+        kyrr_linux::hotkey::presses()
+    }
+
+    /// Asks for the permission to type now (GNOME and KDE show a dialog) and
+    /// keeps the answer. Blocks until answered.
+    pub fn allow_typing() -> bool {
+        let allowed = kyrr_linux::typing::prepare();
+        let token = kyrr_linux::typing::restore_token();
+        let mut s = state();
+        if token != s.saved.portal_token {
+            s.saved.portal_token = token;
+            s.saved.save();
+        }
+        allowed
     }
 
     pub fn bind_key_again() {
