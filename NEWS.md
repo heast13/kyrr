@@ -7,6 +7,14 @@ after the version when it is released (`## 0.6.0`, say); `scripts/release-notes.
 puts it into the release description, where kyrr reads it. Never put `-->` in
 the text.
 
+## 0.5.1
+
+- Noise removal now also works after you switch to some other microphones (it stayed silent on a RØDE PodMic USB). If it was off for your new microphone, kyrr shows a "Repair" button.
+
+### Deutsch
+
+- Die Rauschunterdrückung funktioniert jetzt auch nach dem Wechsel auf manche andere Mikrofone (beim RØDE PodMic USB blieb sie stumm). War sie bei deinem neuen Mikro aus, zeigt kyrr einen „Reparieren“-Knopf.
+
 ## 0.5.0
 
 - The main window keeps its height now, so it no longer gets pulled out of shape.
