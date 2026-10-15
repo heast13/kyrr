@@ -110,8 +110,10 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr
 
 The last line also deletes your settings and the downloaded speech models;
 leave it out to keep them. Used a different place for the file? Delete that
-instead of `~/.local/bin/kyrr`. On Hyprland, remove the kyrr lines you added
-to your key bindings too.
+instead of `~/.local/bin/kyrr`. On Hyprland, Sway, river and niri, delete
+the blocks between the `>>> kyrr` and `<<< kyrr` lines (key and start at
+sign-in) from your config; on GNOME, delete the "kyrr" entry under Custom
+Shortcuts in the keyboard settings.
 
 64-bit Intel or AMD with glibc 2.39 or newer (Ubuntu 24.04, Fedora 40, Debian
 13, Linux Mint 22, Arch or newer). The noise filter needs PipeWire, which

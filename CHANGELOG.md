@@ -4,10 +4,10 @@
 
 - Fewer technical texts in the window: when kyrr cannot set the dictation
   key up by itself, it no longer shows config file paths and lines (they go
-  to the log) but asks for the command on a key in the
-  desktop's keyboard settings. A taken key just says it is taken. Failed
-  tests, listening and setup say what to check instead of showing raw error
-  text, and the installer no longer shows exit codes.
+  to the log) but asks for the command on a key in the desktop's keyboard
+  settings. A taken key just says it is taken. Failed tests, listening and
+  setup say what to check instead of showing raw error text, and the
+  installer no longer shows exit codes.
 - On Hyprland (Omarchy, say), Sway, river and niri the dictation key works
   without any hand work: kyrr adds it to the key bindings itself, in a block
   between two marker lines that it keeps up to date when the key changes,
@@ -26,7 +26,8 @@
   shortcuts itself. Each press starts or ends dictation.
 - No PipeWire? kyrr no longer just says so: "Set up PipeWire" installs it
   with your system's package manager (apt, dnf, pacman or zypper) after your
-  system asks for your password, then kyrr starts again. Where that cannot
+  system asks for your password, then kyrr starts again. PipeWire takes
+  over from PulseAudio, which the package manager removes. Where that cannot
   work, kyrr shows the command for a terminal. The AppImage now also starts
   on systems without the PipeWire library at all. In a Flatpak kyrr says
   what to install.

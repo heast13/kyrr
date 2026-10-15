@@ -28,7 +28,7 @@ is for both, so it names neither. Linux lists the versions from 0.5.3 on.
 - (Linux) „Ab in die Ecke“ erscheint nur noch, wo es etwas bewirkt, und kyrr stürzt beim Abmelden nicht mehr ab.
 - Wo kyrr deine Hilfe braucht, sagt es einfach, was zu tun ist, ohne Dateinamen oder Fehlercodes.
 - Steckst du ein Mikrofon genau dann aus, wenn kyrr gerade darauf wechselt, bleibt kyrr beim bisherigen.
-- Die Knöpfe unter Einstellungen, Über werden nicht mehr abgeschnitten.
+- Die Knöpfe unter Einstellungen, Über kyrr werden nicht mehr abgeschnitten.
 - Die Statuszeile hat ein paar neue Wörter zum Zeitvertreib. Rülpsversichert, zum Beispiel.
 
 ## 0.5.3
