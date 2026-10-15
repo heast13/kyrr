@@ -18,6 +18,7 @@ pkgbase = kyrr-bin
 	optdepends = pipewire-alsa: dictation records through the ALSA default, which this routes to PipeWire
 	provides = kyrr
 	conflicts = kyrr
+	options = !debug
 	source = https://github.com/heast13/kyrr/releases/download/v0.5.3/kyrr-0.5.3-linux-x86_64.tar.gz
 	sha256sums = 6ab3111e719b0b7764e51a46a0364fea7562b523183fea19c778970229861be8
 
