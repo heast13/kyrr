@@ -13,7 +13,9 @@ binary is checked (scripts/check-binaries.py --linux) before staging.
 The AppImage is the tree plus the libraries a desktop may lack, bundled by
 linuxdeploy. It is built on the CI runner's glibc, so it runs on that glibc
 or newer. libpipewire, libspa and libasound stay out: they must match the
-PipeWire and ALSA setup of the machine kyrr runs on.
+PipeWire and ALSA setup of the machine kyrr runs on. Where libpipewire is
+missing (a system still on PulseAudio), AppRun puts a stand-in for it on the
+library path, so kyrr starts, finds no PipeWire and offers to install it.
 
 The tools and the AppImage runtime are downloaded into target/linux-tools/ and checked against the
 SHA256 below. They are AppImages and run extracted, so no FUSE is needed.
@@ -79,10 +81,24 @@ EXTRA_LIBRARIES = ["libxkbcommon-x11.so.0"]
 BUNDLED_NOTICES = ["libxkbcommon0", "libxkbcommon-x11-0", "libxcb-xkb1"]
 
 
+# Where the stand-in for libpipewire lies in the AppImage.
+NO_PIPEWIRE = "usr/lib/kyrr-no-pipewire"
+
 # linuxdeploy's default AppRun is a symlink to the program, which then shows
-# up as "AppRun" in process lists; exec makes it "kyrr" again.
-APPRUN = """#!/bin/sh
-exec "$(dirname "$(readlink -f "$0")")/usr/bin/kyrr" "$@"
+# up as "AppRun" in process lists; exec makes it "kyrr" again. The quick
+# look in the usual library folders spares the loader's check on the start
+# a dictation key makes.
+APPRUN = f"""#!/bin/sh
+here="$(dirname "$(readlink -f "$0")")"
+found=
+for dir in /usr/lib/x86_64-linux-gnu /usr/lib64 /usr/lib /lib/x86_64-linux-gnu; do
+    [ -e "$dir/libpipewire-0.3.so.0" ] && found=1 && break
+done
+if [ -z "$found" ] && LD_TRACE_LOADED_OBJECTS=1 /lib64/ld-linux-x86-64.so.2 "$here/usr/bin/kyrr" 2>/dev/null | grep -q 'libpipewire-0.3.so.0 => not found'; then
+    export KYRR_PIPEWIRE_STAND_IN="$here/{NO_PIPEWIRE}"
+    export LD_LIBRARY_PATH="$KYRR_PIPEWIRE_STAND_IN${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
+fi
+exec "$here/usr/bin/kyrr" "$@"
 """
 
 
@@ -211,6 +227,7 @@ def make_appimage(root: Path, work: Path, dest: Path) -> None:
     for lib in EXTRA_LIBRARIES:
         cmd += [f"--library={find_library(lib)}"]
     subprocess.run(cmd, check=True, env=env)
+    make_pipewire_stand_in(usr / "bin" / "kyrr", appdir / NO_PIPEWIRE)
     # The bundled libraries' notices (MIT), from the build system's packages.
     licenses = usr / "share" / "doc" / "kyrr" / "licenses"
     for package in BUNDLED_NOTICES:
@@ -224,13 +241,46 @@ def make_appimage(root: Path, work: Path, dest: Path) -> None:
     dest.chmod(0o755)
 
 
-def find_library(soname: str) -> Path:
+def make_pipewire_stand_in(binary: Path, dest: Path) -> None:
+    """A libpipewire-0.3.so.0 with the functions kyrr calls, each returning 0.
+
+    kyrr calls pw_init and then pw_main_loop_new, whose NULL the pipewire
+    crate reports as an error: the noise filter is off and the window offers
+    to install PipeWire. Nothing else in kyrr calls into PipeWire before
+    that. Built from the symbols the binary needs and the real library has,
+    so a new call in kyrr cannot be missing from it.
+    """
+    def symbols(path: Path, flag: str) -> dict[str, str]:
+        out = subprocess.run(["nm", "-D", flag, str(path)], capture_output=True, text=True, check=True).stdout
+        found = {}
+        for line in out.splitlines():
+            parts = line.split()
+            if len(parts) >= 2:
+                found[parts[-1].split("@")[0]] = parts[-2]
+        return found
+
+    real = symbols(find_library("libpipewire-0.3.so.0", "libpipewire-0.3-0"), "--defined-only")
+    used = sorted(set(symbols(binary, "--undefined-only")) & set(real))
+    if not used or any(real[name] != "T" for name in used):
+        sys.exit(f"libpipewire stand-in: unexpected symbols {[(n, real[n]) for n in used]}")
+    source = "".join(f"void *{name}(void) {{ return 0; }}\n" for name in used)
+    dest.mkdir(parents=True, exist_ok=True)
+    lib = dest / "libpipewire-0.3.so.0"
+    subprocess.run(
+        ["cc", "-shared", "-fPIC", "-O2", "-Wl,-soname,libpipewire-0.3.so.0", "-o", str(lib), "-x", "c", "-"],
+        input=source, text=True, check=True,
+    )
+    subprocess.run(["strip", "--strip-unneeded", str(lib)], check=True)
+    lib.chmod(0o644)
+
+
+def find_library(soname: str, package: str = "libxkbcommon-x11-0") -> Path:
     ldconfig = shutil.which("ldconfig") or "/sbin/ldconfig"  # /sbin is not on every user's PATH
     out = subprocess.run([ldconfig, "-p"], capture_output=True, text=True, check=True).stdout
     for line in out.splitlines():
         if line.split()[:1] == [soname] and "x86-64" in line:
             return Path(line.split(" => ")[1])
-    sys.exit(f"{soname} not found (install libxkbcommon-x11-0)")
+    sys.exit(f"{soname} not found (install {package})")
 
 
 def main() -> None:

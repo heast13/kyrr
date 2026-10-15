@@ -1,9 +1,10 @@
 //! Push-to-talk key. Wayland has no way to read keys of other windows, so the
 //! key is caught through the compositor: the XDG GlobalShortcuts portal
 //! (GNOME 48+, KDE Plasma, Hyprland), or on an X11 session a passive key grab
-//! on the root window. Without either, the user binds `kyrr --dictate` to a
-//! key in the desktop settings; that start of kyrr hands it to the running
-//! one, which calls [`toggle`].
+//! on the root window. Without either, `kyrr --dictate` (or
+//! `--dictate-start` and `--dictate-stop`) goes on a key in the desktop's
+//! own settings, by kyrr ([`crate::binds`], [`crate::gnome`]) or by hand;
+//! that start of kyrr hands it to the running one, which calls [`toggle`].
 //!
 //! With the portal the compositor, not kyrr, owns the key: kyrr only suggests
 //! it when the shortcut is bound. GNOME and KDE show their own dialog or
@@ -13,7 +14,7 @@
 //!
 //! Hyprland (xdg-desktop-portal-hyprland) offers no trigger of its own: a
 //! `bind = , F9, global, io.github.heast13.kyrr:dictate` has to be in its
-//! config, which [`crate::hyprland`] puts there. The portal forwards the compositor's key press and key
+//! config, which [`crate::binds`] puts there. The portal forwards the compositor's key press and key
 //! release of that bind as `Activated` and `Deactivated`, because Hyprland
 //! releases "global" binds as soon as the key goes up, whatever modifiers are
 //! held by then. The shortcut names show in `hyprctl globalshortcuts`.
@@ -74,7 +75,8 @@ pub enum Backend {
     Portal,
     /// A key grab on the X server.
     X11,
-    /// Not caught; the user binds `kyrr --dictate` themselves.
+    /// Not caught; `kyrr --dictate` goes on a key in the desktop's own
+    /// settings ([`crate::binds`], [`crate::gnome`], or by hand).
     None,
 }
 

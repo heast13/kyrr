@@ -62,14 +62,23 @@ pub enum KeyNote {
     /// The desktop could own the key, but has not bound it to kyrr: the user
     /// cancelled its dialog, or it failed. [`bind_key_again`] asks again.
     Unbound,
-    /// Hyprland binds the key and kyrr could not add the lines itself: they
-    /// belong in this config file.
-    Hyprland { file: String, lines: String },
+    /// The compositor (Hyprland, Sway, river, niri) binds keys in its config
+    /// and kyrr could not add the lines itself: they belong in this file.
+    Lines {
+        desktop: &'static str,
+        file: String,
+        lines: String,
+    },
     /// Another bind of the user's in this config file already has the key.
-    HyprlandTaken { file: String, key: String },
+    Taken { file: String, key: String },
     /// Hyprland without the shortcut portal: lines that run kyrr on the
     /// key's press and release, for this config file.
     HyprlandCommands { file: String, lines: String },
+    /// kyrr bound the key, but the desktop runs it on presses only (GNOME
+    /// before 48, niri): each press starts or ends dictation.
+    PressOnly { desktop: &'static str, key: String },
+    /// Another of GNOME's custom shortcuts already has the key.
+    GnomeTaken { key: String },
     /// Nothing catches keys: bind this command to a key.
     Command(String),
 }
@@ -91,6 +100,18 @@ pub enum Desktop {
     Gnome,
     Kde,
     Other,
+}
+
+/// How installing PipeWire went (Linux).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(windows, allow(dead_code))]
+pub enum PipewireInstall {
+    Running,
+    /// Installed; it starts with the next sign-in.
+    AfterSignIn,
+    /// The password prompt was cancelled.
+    Declined,
+    Failed,
 }
 
 #[derive(Debug)]
@@ -304,6 +325,20 @@ mod imp {
         true
     }
 
+    pub fn pipewire_missing() -> bool {
+        false
+    }
+
+    pub fn pipewire_plan() -> Option<(bool, String)> {
+        None
+    }
+
+    pub fn install_pipewire() -> PipewireInstall {
+        PipewireInstall::Failed
+    }
+
+    pub fn restart_after_quit() {}
+
     pub fn key_note() -> KeyNote {
         KeyNote::None
     }
@@ -351,7 +386,8 @@ mod imp {
     use std::path::PathBuf;
     use std::sync::{Mutex, MutexGuard, OnceLock};
 
-    use kyrr_linux::hyprland;
+    use kyrr_linux::binds::{self, Compositor};
+    use kyrr_linux::gnome;
     use kyrr_linux::mic::Status;
     use serde::{Deserialize, Serialize};
 
@@ -547,7 +583,11 @@ mod imp {
         let s = state();
         let wanted = s.saved.microphone.clone().unwrap_or_default();
         match &s.filter {
-            // Nothing chosen yet: the setup asks for a microphone.
+            // Nothing chosen yet: the setup asks for a microphone, once
+            // there is PipeWire to take it from.
+            Filter::Off if s.saved.microphone.is_none() && !kyrr_linux::pipewire_setup::running() => {
+                FilterStatus::Unsupported
+            }
             Filter::Off if s.saved.microphone.is_none() => FilterStatus::NotAttached,
             Filter::Off | Filter::Starting => FilterStatus::Waiting(wanted),
             Filter::Failed(_) => FilterStatus::Unsupported,
@@ -664,6 +704,9 @@ mod imp {
     /// when the setup gets to it, not out of the blue at the start.
     pub fn start_hotkey(description: &str, setup_done: bool) -> Option<std::sync::mpsc::Receiver<KeyEvent>> {
         integrate_appimage();
+        if !flatpak() {
+            start_in_compositor(autostart_enabled());
+        }
         kyrr_linux::hotkey::start(description, setup_done || desktop() == Desktop::Other).ok()
     }
 
@@ -814,95 +857,169 @@ mod imp {
 
     pub fn key_note() -> KeyNote {
         use kyrr_linux::hotkey::{self, Backend};
-        let hyprland = std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some()
-            || std::env::var("XDG_CURRENT_DESKTOP").is_ok_and(|d| d.to_ascii_lowercase().contains("hyprland"));
+        let compositor = Compositor::detect();
+        let hyprland = compositor == Some(Compositor::Hyprland);
         let backend = hotkey::backend();
         if !hyprland && hotkey::unbound() {
             return KeyNote::Unbound;
         }
-        if !hyprland || backend == Backend::X11 {
-            return match backend {
-                Backend::X11 => KeyNote::None,
-                Backend::Portal => KeyNote::Desktop(desktop()),
-                Backend::None => KeyNote::Command(dictate_command("--dictate")),
-            };
+        if backend == Backend::X11 {
+            return KeyNote::None;
         }
-        let keys = hyprland::Keys {
-            key: hotkey::key_name().to_string(),
-            portal: backend == Backend::Portal,
-            start: dictate_command("--dictate-start"),
-            stop: dictate_command("--dictate-stop"),
+        // Hyprland's portal only forwards a bind of the config; the other
+        // tiling ones have no portal at all.
+        if let Some(compositor) = compositor.filter(|_| hyprland || backend == Backend::None) {
+            return compositor_note(compositor, backend == Backend::Portal);
+        }
+        match backend {
+            Backend::Portal => KeyNote::Desktop(desktop()),
+            _ if desktop() == Desktop::Gnome && !flatpak() => gnome_note(),
+            _ => KeyNote::Command(dictate_command("--dictate")),
+        }
+    }
+
+    fn compositor_note(compositor: Compositor, portal: bool) -> KeyNote {
+        let keys = binds::Keys {
+            key: kyrr_linux::hotkey::key_name().to_string(),
+            portal,
+            program: program(),
         };
-        let dir = hyprland::config_dir();
+        let base = binds::config_home();
         // Dictation is off: nothing to bind, so nothing to say.
-        let Some(outcome) = hyprland_outcome(&dir, &keys) else {
+        let Some(outcome) = compositor_outcome(compositor, &base, &keys) else {
             return KeyNote::None;
         };
         match outcome {
-            hyprland::Outcome::Bound { .. } => KeyNote::None,
-            hyprland::Outcome::Taken { file } => KeyNote::HyprlandTaken {
-                file: hyprland::display(&file),
+            binds::Outcome::Bound { .. } if compositor.holds() => KeyNote::None,
+            binds::Outcome::Bound { .. } => KeyNote::PressOnly {
+                desktop: compositor.name(),
                 key: keys.key,
             },
-            hyprland::Outcome::Failed => {
-                let (file, syntax) = match hyprland::target(&dir) {
-                    Some(t) => (t.path, t.syntax),
-                    None => (dir.join("hyprland.conf"), hyprland::Syntax::Conf),
-                };
-                let (file, lines) = (hyprland::display(&file), hyprland::lines(syntax, &keys));
-                if keys.portal {
-                    KeyNote::Hyprland { file, lines }
-                } else {
+            binds::Outcome::Taken { file } => KeyNote::Taken {
+                file: binds::display(&file),
+                key: keys.key,
+            },
+            binds::Outcome::Failed => {
+                let target = binds::target_or_default(compositor, &base);
+                let (file, lines) = (binds::display(&target.path), binds::lines(target.syntax, &keys));
+                if compositor == Compositor::Hyprland && !portal {
                     KeyNote::HyprlandCommands { file, lines }
+                } else {
+                    KeyNote::Lines {
+                        desktop: compositor.name(),
+                        file,
+                        lines,
+                    }
                 }
             }
         }
     }
 
-    /// Whether dictation is on, so kyrr may set its key up in Hyprland.
+    /// GNOME before 48 on Wayland: kyrr adds a custom shortcut of GNOME's.
+    fn gnome_note() -> KeyNote {
+        let key = kyrr_linux::hotkey::key_name().to_string();
+        let command = binds::command(&program(), "--dictate");
+        let Some(outcome) = gnome_outcome(&key, &command) else {
+            return KeyNote::None;
+        };
+        match outcome {
+            gnome::Outcome::Bound { .. } => KeyNote::PressOnly { desktop: "GNOME", key },
+            gnome::Outcome::Taken => KeyNote::GnomeTaken { key },
+            gnome::Outcome::Failed => KeyNote::Command(dictate_command("--dictate")),
+        }
+    }
+
+    /// Whether dictation is on, so kyrr may set its key up in the desktop.
     pub fn set_key_wanted(wanted: bool) {
         KEY_WANTED.store(wanted, std::sync::atomic::Ordering::Relaxed);
     }
 
     static KEY_WANTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    static HYPRLAND: std::sync::Mutex<Option<(hyprland::Keys, hyprland::Outcome)>> = std::sync::Mutex::new(None);
+    type Memo<K, O> = std::sync::Mutex<Option<(K, O)>>;
+    static COMPOSITOR: Memo<(Compositor, binds::Keys), binds::Outcome> = std::sync::Mutex::new(None);
+    static GNOME: Memo<(String, String), gnome::Outcome> = std::sync::Mutex::new(None);
 
-    /// Puts the key into Hyprland's config while dictation is on. Done once
-    /// per key and way of catching it: the answer stands until one changes, so
-    /// a key freed in the config is noticed after the next start.
-    fn hyprland_outcome(dir: &std::path::Path, keys: &hyprland::Keys) -> Option<hyprland::Outcome> {
+    /// Runs `bind` while dictation is on, once per what it binds: the answer
+    /// stands until that changes, so a key freed elsewhere is noticed after
+    /// the next start.
+    fn memo<K: PartialEq, O: Clone>(memo: &Memo<K, O>, key: K, bind: impl FnOnce() -> O) -> Option<O> {
         if !KEY_WANTED.load(std::sync::atomic::Ordering::Relaxed) {
             return None;
         }
-        let mut memo = HYPRLAND.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut memo = memo.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some((seen, outcome)) = memo.as_ref() {
-            if seen == keys {
+            if *seen == key {
                 return Some(outcome.clone());
             }
         }
-        let outcome = hyprland::ensure(dir, keys);
-        if matches!(outcome, hyprland::Outcome::Bound { written: true, .. }) && !flatpak() {
-            // Hyprland sees the change by itself; this only makes it quicker.
-            std::thread::spawn(|| {
-                let _ = std::process::Command::new("hyprctl").arg("reload").status();
-            });
-        }
-        *memo = Some((keys.clone(), outcome.clone()));
+        let outcome = bind();
+        *memo = Some((key, outcome.clone()));
         Some(outcome)
     }
 
-    /// How this kyrr is started with `flag`: through Flatpak, the
-    /// AppImage's path, or the program's own.
-    fn dictate_command(flag: &str) -> String {
+    /// Puts the key into the compositor's config and has it read the file.
+    fn compositor_outcome(
+        compositor: Compositor,
+        base: &std::path::Path,
+        keys: &binds::Keys,
+    ) -> Option<binds::Outcome> {
+        memo(&COMPOSITOR, (compositor, keys.clone()), || {
+            let before = binds::bound_key(compositor, base);
+            let outcome = binds::ensure(compositor, base, keys);
+            if matches!(outcome, binds::Outcome::Bound { written: true, .. }) && !flatpak() {
+                let lines = binds::target(compositor, base).map(|t| binds::lines(t.syntax, keys));
+                let key = keys.key.clone();
+                std::thread::spawn(move || reload(compositor, before, &key, lines));
+            }
+            outcome
+        })
+    }
+
+    /// Makes the compositor take the new key now. Hyprland and niri see the
+    /// change by themselves (this only makes Hyprland quicker), sway reads
+    /// the file on `reload`, river only at its start: there the lines run.
+    fn reload(compositor: Compositor, before: Option<String>, key: &str, lines: Option<String>) {
+        let run = |program: &str, args: &[&str]| {
+            let _ = std::process::Command::new(program).args(args).status();
+        };
+        match compositor {
+            Compositor::Hyprland => run("hyprctl", &["reload"]),
+            Compositor::Sway => run("swaymsg", &["reload"]),
+            Compositor::Niri => {}
+            Compositor::River => {
+                if let Some(old) = before.filter(|old| old != key) {
+                    run("riverctl", &["unmap", "normal", "None", &old]);
+                    run("riverctl", &["unmap", "-release", "normal", "None", &old]);
+                }
+                if let Some(lines) = lines {
+                    run("sh", &["-c", &lines]);
+                }
+            }
+        }
+    }
+
+    fn gnome_outcome(key: &str, command: &str) -> Option<gnome::Outcome> {
+        memo(&GNOME, (key.to_string(), command.to_string()), || {
+            gnome::ensure(key, command)
+        })
+    }
+
+    /// How this kyrr is started: through Flatpak, the AppImage's path, or the
+    /// program's own; the flag goes after it.
+    fn program() -> Vec<String> {
         if let Ok(id) = std::env::var("FLATPAK_ID") {
-            return format!("flatpak run {id} {flag}");
+            return vec!["flatpak".into(), "run".into(), id];
         }
         let program = std::env::var_os("APPIMAGE")
             .map(PathBuf::from)
             .or_else(|| std::env::current_exe().ok())
             .filter(|p| !p.starts_with("/usr/bin"))
             .map_or_else(|| "kyrr".to_string(), |p| p.display().to_string());
-        format!("{program} {flag}")
+        vec![program]
+    }
+
+    fn dictate_command(flag: &str) -> String {
+        binds::command(&program(), flag)
     }
 
     /// Shows the license notices that ship with kyrr.
@@ -1004,6 +1121,7 @@ mod imp {
             });
             return;
         }
+        start_in_compositor(on);
         let file = autostart_file();
         if !on {
             let _ = std::fs::remove_file(file);
@@ -1022,6 +1140,67 @@ mod imp {
             exec_quoted(&path)
         );
         write_if_changed(&file, Some(entry.into_bytes()));
+    }
+
+    /// Tiling compositors started without uwsm or a systemd session leave
+    /// the XDG autostart folder unread: there the start at sign-in goes into
+    /// their config too, in a block of kyrr's. Where the folder is read the
+    /// block goes, so kyrr does not start twice.
+    fn start_in_compositor(on: bool) {
+        let Some(compositor) = Compositor::detect() else {
+            return;
+        };
+        let wanted = on && !xdg_autostart_read();
+        let program = program();
+        binds::set_start(compositor, &binds::config_home(), wanted.then_some(program.as_slice()));
+    }
+
+    /// Whether this session starts the XDG autostart files: systemd's target
+    /// for them is active, or still activating while it starts kyrr (uwsm,
+    /// niri-session, GNOME, KDE).
+    fn xdg_autostart_read() -> bool {
+        std::process::Command::new("systemctl")
+            .args([
+                "--user",
+                "show",
+                "--property=ActiveState",
+                "--value",
+                "xdg-desktop-autostart.target",
+            ])
+            .output()
+            .is_ok_and(|o| matches!(String::from_utf8_lossy(&o.stdout).trim(), "active" | "activating"))
+    }
+
+    /// Whether PipeWire is missing, so the window offers to set it up.
+    pub fn pipewire_missing() -> bool {
+        !kyrr_linux::pipewire_setup::running()
+    }
+
+    /// How PipeWire gets onto this system: whether kyrr can do it after the
+    /// system's password prompt, and the command for a terminal. `None` where
+    /// kyrr does not know (a Flatpak, a read-only system).
+    pub fn pipewire_plan() -> Option<(bool, String)> {
+        use kyrr_linux::pipewire_setup as setup;
+        setup::plan().map(|p| (setup::can_ask(), p.shown))
+    }
+
+    /// Installs PipeWire; blocks for the download.
+    pub fn install_pipewire() -> PipewireInstall {
+        use kyrr_linux::pipewire_setup::{self as setup, Installed};
+        let Some(plan) = setup::plan() else {
+            return PipewireInstall::Failed;
+        };
+        match setup::install(&plan) {
+            Installed::Running => PipewireInstall::Running,
+            Installed::AfterSignIn => PipewireInstall::AfterSignIn,
+            Installed::Declined => PipewireInstall::Declined,
+            Installed::Failed => PipewireInstall::Failed,
+        }
+    }
+
+    /// Starts kyrr again once this one has quit.
+    pub fn restart_after_quit() {
+        kyrr_linux::pipewire_setup::restart_after_exit(&[]);
     }
 
     /// The screen the window is on (panels included; a Wayland app cannot

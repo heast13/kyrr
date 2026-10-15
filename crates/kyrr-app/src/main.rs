@@ -31,7 +31,7 @@ use slint::{ComponentHandle, LogicalSize, ModelRc, PhysicalPosition, SharedStrin
 
 use config::Config;
 use dictation::{Command, Event, State};
-use platform::{Desktop, FilterStatus, KeyBinding, KeyNote, Microphone, SetupError};
+use platform::{Desktop, FilterStatus, KeyBinding, KeyNote, Microphone, PipewireInstall, SetupError};
 
 slint::include_modules!();
 
@@ -39,6 +39,8 @@ slint::include_modules!();
 const STRENGTHS: [u32; 3] = [24, 48, 100];
 
 fn main() {
+    #[cfg(not(windows))]
+    kyrr_linux::pipewire_setup::forget_stand_in();
     let args: Vec<String> = std::env::args().collect();
     #[cfg(windows)]
     if args.get(1).map(String::as_str) == Some("--setup") {
@@ -146,18 +148,30 @@ fn key_note_only(note: KeyNote, german: bool) -> String {
             "Your desktop hands out the key and asks once for it. That question was cancelled, so the key does not reach kyrr. “Set up key” asks again."
                 .into()
         }
-        KeyNote::Hyprland { file, lines } if german => format!(
-            "Hyprland lässt kyrr nicht an seine Tastenbelegung. Mit diesen Zeilen in der Datei {file} klappt es:\n{lines}"
+        KeyNote::Lines { desktop, file, lines } if german => format!(
+            "{desktop} lässt kyrr nicht an seine Tastenbelegung. Mit diesen Zeilen in der Datei {file} klappt es:\n{lines}"
         ),
-        KeyNote::Hyprland { file, lines } => {
-            format!("Hyprland will not let kyrr near its key bindings. These lines in {file} do the trick:\n{lines}")
+        KeyNote::Lines { desktop, file, lines } => {
+            format!("{desktop} will not let kyrr near its key bindings. These lines in {file} do the trick:\n{lines}")
         }
-        KeyNote::HyprlandTaken { file, key } if german => format!(
+        KeyNote::Taken { file, key } if german => format!(
             "In {file} hat {key} schon einen anderen Job. Such dir hier eine andere Taste aus, oder gib {key} dort frei."
         ),
-        KeyNote::HyprlandTaken { file, key } => {
+        KeyNote::Taken { file, key } => {
             format!("{key} already has another job in {file}. Pick another key here, or free {key} there.")
         }
+        KeyNote::PressOnly { desktop, key } if german => format!(
+            "{desktop} kann die Taste nur drücken, nicht halten: {key} einmal drücken startet das Diktat, nochmal drücken beendet es."
+        ),
+        KeyNote::PressOnly { desktop, key } => format!(
+            "{desktop} only knows pressing, not holding: press {key} once to start dictating, once more to finish."
+        ),
+        KeyNote::GnomeTaken { key } if german => format!(
+            "{key} hat in GNOMEs eigenen Tastenkürzeln schon einen Job. Such dir hier eine andere Taste aus, oder gib {key} unter Einstellungen › Tastatur › Tastenkürzel frei."
+        ),
+        KeyNote::GnomeTaken { key } => format!(
+            "{key} already has a job in GNOME's own shortcuts. Pick another key here, or free {key} under Settings › Keyboard › Keyboard Shortcuts."
+        ),
         KeyNote::HyprlandCommands { file, lines } if german => format!(
             "Hyprlands Tastenkürzel-Portal antwortet nicht. Mit diesen Zeilen in der Datei {file} diktierst du wie gewohnt mit gehaltener Taste:\n{lines}"
         ),
@@ -170,6 +184,48 @@ fn key_note_only(note: KeyNote, german: bool) -> String {
         KeyNote::Command(command) => format!(
             "This desktop passes no key to kyrr. Put this command on a key in its keyboard settings, each press starts or ends dictation:\n{command}"
         ),
+    }
+}
+
+/// Where setting up PipeWire stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PipewireStep {
+    Offer,
+    Installing,
+    AfterSignIn,
+    Declined,
+    Failed,
+}
+
+/// What the window says under "PipeWire is not running": what the button
+/// does, how it went, or what to do by hand.
+fn pipewire_note(step: PipewireStep, plan: Option<(bool, String)>, german: bool) -> String {
+    let Some((can_ask, command)) = plan else {
+        return if german {
+            "Hol dir PipeWire aus der Softwareverwaltung deines Systems (Paket „pipewire-pulse“), dann einmal ab- und wieder anmelden.".into()
+        } else {
+            "Get PipeWire from your system's software manager (package “pipewire-pulse”), then sign out and back in once.".into()
+        };
+    };
+    match step {
+        _ if !can_ask && german => format!("Im Terminal geht's so, danach einmal ab- und wieder anmelden:\n{command}"),
+        _ if !can_ask => format!("In a terminal it goes like this, then sign out and back in once:\n{command}"),
+        PipewireStep::Offer if german => {
+            "Ein Klick, dein System fragt nach deinem Passwort, kyrr holt PipeWire und startet neu.".into()
+        }
+        PipewireStep::Offer => {
+            "One click, your system asks for your password, kyrr fetches PipeWire and restarts.".into()
+        }
+        PipewireStep::Installing if german => "Hole PipeWire… dauert so lang wie der Download.".into(),
+        PipewireStep::Installing => "Fetching PipeWire… takes as long as the download.".into(),
+        PipewireStep::AfterSignIn if german => {
+            "PipeWire ist drauf. Einmal ab- und wieder anmelden, dann läuft's.".into()
+        }
+        PipewireStep::AfterSignIn => "PipeWire is in. Sign out and back in once, then it runs.".into(),
+        PipewireStep::Declined if german => "Ohne Passwort geht's nicht. Der Knopf wartet geduldig.".into(),
+        PipewireStep::Declined => "No password, no PipeWire. The button waits patiently.".into(),
+        PipewireStep::Failed if german => format!("Das hat nicht geklappt. Im Terminal geht's so:\n{command}"),
+        PipewireStep::Failed => format!("That did not work. In a terminal it goes like this:\n{command}"),
     }
 }
 
@@ -459,6 +515,8 @@ struct App {
     /// Key presses counted when the key was set up, to see it pressed since.
     presses_at_bound: Cell<Option<u32>>,
     microphones: RefCell<Vec<Microphone>>,
+    /// Where setting up PipeWire stands (Linux without it).
+    pipewire: Cell<PipewireStep>,
     /// The microphone list has been read once (before that, "none" means nothing).
     mics_seen: Cell<bool>,
     /// A microphone that just showed up, and when: shown for a few seconds.
@@ -678,6 +736,54 @@ impl App {
         tray.set_filter_enabled(filter.enabled && supported);
         tray.set_voice_enabled(filter.voice.enabled && supported);
         tray.set_active(filter.enabled && matches!(fs, FilterState::Running | FilterState::Checking));
+        self.refresh_pipewire(!supported && platform::pipewire_missing());
+    }
+
+    /// The button and words that set PipeWire up where it is missing.
+    fn refresh_pipewire(&self, missing: bool) {
+        let Some(w) = self.window.upgrade() else {
+            return;
+        };
+        let state = w.global::<AppState>();
+        let german = self.language() == Language::German;
+        let plan = platform::pipewire_plan();
+        let step = self.pipewire.get();
+        let button = missing && matches!(plan, Some((true, _))) && step != PipewireStep::Installing;
+        let note = if missing {
+            pipewire_note(step, plan, german)
+        } else {
+            String::new()
+        };
+        state.set_pipewire_button(button);
+        if state.get_pipewire_note() != note.as_str() {
+            state.set_pipewire_note(note.into());
+        }
+    }
+
+    fn install_pipewire(self: &Rc<Self>) {
+        self.pipewire.set(PipewireStep::Installing);
+        self.refresh_pipewire(true);
+        let weak = self.window.clone();
+        std::thread::spawn(move || {
+            let result = platform::install_pipewire();
+            let _ = slint::invoke_from_event_loop(move || {
+                let Some(w) = weak.upgrade() else {
+                    return;
+                };
+                let step = match result {
+                    // Its sound runs now: kyrr starts again on it.
+                    PipewireInstall::Running => {
+                        platform::restart_after_quit();
+                        w.global::<AppState>().invoke_quit_app();
+                        return;
+                    }
+                    PipewireInstall::AfterSignIn => PipewireStep::AfterSignIn,
+                    PipewireInstall::Declined => PipewireStep::Declined,
+                    PipewireInstall::Failed => PipewireStep::Failed,
+                };
+                w.global::<AppState>().invoke_pipewire_step(step as i32);
+            });
+        });
     }
 
     /// Changes the filter settings and stores only the values that changed:
@@ -1379,6 +1485,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         key_toggle,
         presses_at_bound: Cell::new(None),
         microphones: RefCell::new(Vec::new()),
+        pipewire: Cell::new(PipewireStep::Offer),
         mics_seen: Cell::new(false),
         connected: RefCell::new(None),
         follower: RefCell::new(follow::Follower::with_pinned(pinned)),
@@ -1515,6 +1622,22 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         let worker = worker.clone();
         move || {
             let _ = worker.send(Command::Retry);
+        }
+    });
+    state.on_install_pipewire({
+        let app = Rc::clone(&app);
+        move || app.install_pipewire()
+    });
+    state.on_pipewire_step({
+        let app = Rc::clone(&app);
+        move |step| {
+            let step = match step {
+                2 => PipewireStep::AfterSignIn,
+                3 => PipewireStep::Declined,
+                _ => PipewireStep::Failed,
+            };
+            app.pipewire.set(step);
+            app.refresh_pipewire(true);
         }
     });
     state.on_repair({
@@ -1882,8 +2005,9 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
 
     let setup_done = app.config.borrow().setup_done;
     window.set_setup_mode(!setup_done);
-    // No filter on this PC: the setup starts with dictation.
-    if state.get_filter_state() == FilterState::Unsupported {
+    // No filter on this PC: the setup starts with dictation. Without
+    // PipeWire it starts with setting that up.
+    if state.get_filter_state() == FilterState::Unsupported && !platform::pipewire_missing() {
         window.set_setup_step(1);
     }
     if !setup_done || !background {

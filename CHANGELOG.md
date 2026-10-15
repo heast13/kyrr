@@ -2,13 +2,30 @@
 
 ## Unreleased
 
-- On Hyprland (Omarchy, say) the dictation key works without any hand work:
-  kyrr adds it to the key bindings itself, in a block between two marker
-  lines that it keeps up to date when the key changes, and leaves the rest
-  of the file as it is. A key that another bind of yours already uses is not
-  touched; kyrr says so and you pick another one. Where the config cannot be
-  written (a read-only config, a Flatpak without access), kyrr shows the
-  lines as before.
+- On Hyprland (Omarchy, say), Sway, river and niri the dictation key works
+  without any hand work: kyrr adds it to the key bindings itself, in a block
+  between two marker lines that it keeps up to date when the key changes,
+  and leaves the rest of the file as it is. Holding the key works everywhere
+  but on niri, which only knows presses: there each press starts or ends
+  dictation. A key that another bind of yours already uses is not touched;
+  kyrr says so and you pick another one. Where the config cannot be written
+  (a read-only config, a Flatpak without access), kyrr shows the lines as
+  before.
+- Where such a desktop is started without uwsm or a systemd session (and so
+  skips the usual start-at-sign-in entries), kyrr puts its start at sign-in
+  into the same config, in a block of its own that goes when you switch the
+  start off.
+- GNOME 46 and 47 (Ubuntu 24.04, say) have no shortcut dialog for apps on
+  Wayland: kyrr now adds the dictation key to GNOME's own keyboard
+  shortcuts itself. Each press starts or ends dictation.
+- No PipeWire? kyrr no longer just says so: "Set up PipeWire" installs it
+  with your system's package manager (apt, dnf, pacman or zypper) after your
+  system asks for your password, then kyrr starts again. Where that cannot
+  work, kyrr shows the command for a terminal. The AppImage now also starts
+  on systems without the PipeWire library at all. In a Flatpak kyrr says
+  what to install.
+- A second start at sign-in while kyrr already runs no longer opens its
+  window.
 - A microphone that is unplugged while kyrr moves to it (on Windows while
   the permission prompt is open) no longer leaves kyrr on no microphone:
   the move changes nothing and kyrr stays where it was, without restarting
