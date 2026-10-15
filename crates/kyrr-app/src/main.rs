@@ -838,12 +838,12 @@ impl App {
 
     /// The window went away: no meter, no listening.
     /// Minimizes the window. The meter keeps its timer, which idles while
-    /// the window is minimized: nothing starts it again when the taskbar
-    /// brings the window back.
+    /// the window is minimized (on Wayland it cannot tell and goes on):
+    /// nothing starts it again when the taskbar brings the window back.
     fn minimize(&self) {
         self.stop_listening();
         if let Some(w) = self.window.upgrade() {
-            w.window().set_minimized(true);
+            platform::minimize(w.window());
         }
     }
 
