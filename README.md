@@ -4,7 +4,7 @@
 
 <p>
   <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-setup.exe"><img src="https://img.shields.io/github/v/release/heast13/kyrr?label=Download%20for%20Windows&style=for-the-badge&color=005fb8" alt="Download kyrr for Windows"></a>
-  <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage"><img src="https://img.shields.io/github/v/release/heast13/kyrr?label=Download%20for%20Linux&style=for-the-badge&color=005fb8" alt="Download kyrr for Linux (AppImage)"></a>
+  <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage"><img src="https://img.shields.io/github/v/release/heast13/kyrr?label=Download%20for%20Linux%20(beta)&style=for-the-badge&color=005fb8" alt="Download kyrr for Linux (AppImage, beta)"></a>
 </p>
 
 Website: [heast13.github.io/kyrr](https://heast13.github.io/kyrr/) (Deutsch: [/de/](https://heast13.github.io/kyrr/de/))
@@ -79,8 +79,10 @@ from the release page first.
 Uninstalling takes the filter off the microphone, puts the Windows setting
 described under "How it works" back and asks whether to delete the downloaded speech models.
 
-**Linux.** One file, an AppImage, for every distribution. Paste this into a
-terminal; it downloads kyrr, makes it executable and starts it:
+**Linux (beta).** The Linux version works, but has been tested on fewer
+systems than the Windows version. One file, an AppImage, for every
+distribution. Paste this into a terminal; it downloads kyrr, makes it
+executable and starts it:
 
 ```sh
 mkdir -p ~/.local/bin

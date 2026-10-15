@@ -882,10 +882,10 @@ component HideRow inherits HorizontalLayout {
     }
     Hint {
         // Without a tray, the window's X minimizes kyrr where the desktop
-        // can; tiling ones cannot, there it quits.
+        // can (which needs no word); tiling ones cannot, there it quits.
         text: !AppState.linux ? @tr("kyrr keeps running in the tray, bottom right.")
             : AppState.tray ? @tr("kyrr keeps running in the tray.")
-            : AppState.can-minimize ? @tr("No tray here: the window's X only minimizes kyrr.")
+            : AppState.can-minimize ? ""
             : @tr("No tray here: closing the window quits kyrr.");
         horizontal-alignment: center;
         vertical-alignment: center;
@@ -1334,8 +1334,11 @@ export component MainWindow inherits Window {
     // Other pages: the height the app picked (Linux only). Floating Wayland
     // compositors honour a minimum size, not a resize.
     in property <length> fit-height: 0px;
+    // The same height as a maximum for a moment, so a compositor that keeps
+    // its own idea of the size (Hyprland) lets the window shrink too.
+    in property <bool> fit-hold;
     min-height: main-page ? layout.preferred-height : root.fit-height;
-    max-height: main-page ? layout.preferred-height : 16384px;
+    max-height: main-page ? layout.preferred-height : root.fit-hold ? root.fit-height : 16384px;
 
     // A new page starts at the top, not where the last one was scrolled to.
     public function reset-scroll() {
@@ -1459,7 +1462,7 @@ export component MainWindow inherits Window {
                 font-italic: true;
             }
             if settings-page: Caption {
-                text: "kyrr " + AppState.version;
+                text: "kyrr " + AppState.version + (AppState.linux ? " Beta" : "");
                 horizontal-alignment: center;
                 font-size: 11px;
             }

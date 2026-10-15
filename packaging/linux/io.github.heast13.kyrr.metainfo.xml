@@ -71,6 +71,7 @@
     <keyword>speech to text</keyword>
   </keywords>
   <releases>
+    <release version="0.5.5" date="2026-10-15"/>
     <release version="0.5.4" date="2026-10-15"/>
     <release version="0.5.3" date="2026-10-14"/>
   </releases>

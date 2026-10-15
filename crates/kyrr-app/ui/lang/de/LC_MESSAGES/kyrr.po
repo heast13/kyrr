@@ -713,9 +713,6 @@ msgstr "Dein Mikro ist stummgeschaltet."
 msgid "kyrr keeps running in the tray."
 msgstr "kyrr läuft im Tray weiter."
 
-msgid "No tray here: the window's X only minimizes kyrr."
-msgstr "Kein Tray hier: Das X des Fensters minimiert kyrr nur."
-
 msgid "No tray here: closing the window quits kyrr."
 msgstr "Kein Tray hier: Fenster schließen beendet kyrr."
 

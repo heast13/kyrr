@@ -11,6 +11,18 @@ An item for one system only starts with `(Windows)` or `(Linux)`, as in
 `- (Linux) …`; kyrr shows it only there, without the mark. Everything else
 is for both, so it names neither. Linux lists the versions from 0.5.3 on.
 
+## 0.5.5
+
+- (Linux) Dictating letters your keyboard layout does not have, like umlauts on a US keyboard, now lands in the window by itself, without Ctrl+V.
+- (Linux) The window's X minimizes kyrr every time, not just the first time.
+- (Linux) Going back from advanced to simple settings makes the window smaller again.
+
+### Deutsch
+
+- (Linux) Diktierst du Buchstaben, die deine Tastaturbelegung nicht hat, etwa Umlaute auf einer US-Tastatur, landet der Text jetzt von selbst im Fenster, ohne Strg+V.
+- (Linux) Das X des Fensters minimiert kyrr jedes Mal, nicht nur beim ersten Mal.
+- (Linux) Zurück von erweiterten auf einfache Einstellungen wird das Fenster wieder kleiner.
+
 ## 0.5.4
 
 - (Linux) On Hyprland (Omarchy, say), Sway, river and niri kyrr now sets up the dictation key itself, and the start at sign-in where your desktop needs it. On GNOME 46 and 47 it adds the key to GNOME's own keyboard shortcuts.

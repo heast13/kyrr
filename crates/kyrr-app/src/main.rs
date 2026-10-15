@@ -288,15 +288,39 @@ fn wanted_height(w: &MainWindow) -> f32 {
     w.get_content_height().min(cap)
 }
 
+#[cfg(target_os = "linux")]
+thread_local! {
+    /// Ends the maximum that lets a window shrink (see [`resize`]).
+    static FIT_HOLD: slint::Timer = slint::Timer::default();
+}
+
 /// Sets the window's height (its width is the page's) and moves it up or
 /// left when it would end up behind the taskbar or off the screen.
 fn resize(w: &MainWindow, height: f32) {
     let win = w.window();
     let width = w.get_page_width();
+    #[cfg(target_os = "linux")]
+    let shrinking = height < win.size().to_logical(win.scale_factor()).height;
     win.set_size(LogicalSize::new(width, height));
     #[cfg(target_os = "linux")]
     {
         w.set_fit_height(height);
+        // Some compositors keep a floating window at the size they last
+        // gave it and only follow the limits (Hyprland): growing works
+        // through the minimum, shrinking needs the maximum for a moment.
+        if shrinking {
+            w.set_fit_hold(true);
+            // Then the window can be dragged taller again. One timer, so a
+            // newer resize keeps its own hold.
+            let weak = w.as_weak();
+            FIT_HOLD.with(|timer| {
+                timer.start(slint::TimerMode::SingleShot, Duration::from_millis(500), move || {
+                    if let Some(w) = weak.upgrade() {
+                        w.set_fit_hold(false);
+                    }
+                });
+            });
+        }
         // The new minimum reaches the compositor with the next frame; until
         // then a smaller size is held at the old minimum (GNOME), so ask
         // once more after it.
