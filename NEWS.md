@@ -16,6 +16,7 @@ is for both, so it names neither. Linux lists the versions from 0.5.3 on.
 - (Linux) On Hyprland (Omarchy, say), Sway, river and niri kyrr now sets up the dictation key itself, and the start at sign-in where your desktop needs it. On GNOME 46 and 47 it adds the key to GNOME's own keyboard shortcuts.
 - (Linux) No PipeWire on your system? "Set up PipeWire" installs it for you.
 - (Linux) "Off to the corner" only shows where it can do something, and kyrr no longer crashes when you sign out.
+- Where something needs your help, kyrr says plainly what to do, without file names or error codes.
 - If you unplug a microphone just as kyrr moves to it, kyrr stays on the one you had.
 - The buttons under Settings, About no longer get cut off.
 - The status line has a few new words to pass the time. Burpinsured, for one.
@@ -25,6 +26,7 @@ is for both, so it names neither. Linux lists the versions from 0.5.3 on.
 - (Linux) Unter Hyprland (etwa Omarchy), Sway, river und niri richtet kyrr die Diktiertaste jetzt selbst ein, und wo dein Desktop es braucht auch den Start bei der Anmeldung. Unter GNOME 46 und 47 trägt es die Taste in GNOMEs eigene Tastenkürzel ein.
 - (Linux) Kein PipeWire auf deinem System? „PipeWire einrichten“ installiert es für dich.
 - (Linux) „Ab in die Ecke“ erscheint nur noch, wo es etwas bewirkt, und kyrr stürzt beim Abmelden nicht mehr ab.
+- Wo kyrr deine Hilfe braucht, sagt es einfach, was zu tun ist, ohne Dateinamen oder Fehlercodes.
 - Steckst du ein Mikrofon genau dann aus, wenn kyrr gerade darauf wechselt, bleibt kyrr beim bisherigen.
 - Die Knöpfe unter Einstellungen, Über werden nicht mehr abgeschnitten.
 - Die Statuszeile hat ein paar neue Wörter zum Zeitvertreib. Rülpsversichert, zum Beispiel.

@@ -15,8 +15,8 @@
   but on niri, which only knows presses: there each press starts or ends
   dictation. A key that another bind of yours already uses is not touched;
   kyrr says so and you pick another one. Where the config cannot be written
-  (a read-only config, a Flatpak without access), kyrr shows the lines as
-  before.
+  (a read-only config, a Flatpak without access), kyrr asks for its
+  command on a key in the desktop's keyboard settings.
 - Where such a desktop is started without uwsm or a systemd session (and so
   skips the usual start-at-sign-in entries), kyrr puts its start at sign-in
   into the same config, in a block of its own that goes when you switch the
