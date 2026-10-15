@@ -206,10 +206,10 @@ fn pipewire_note(step: PipewireStep, plan: Option<(bool, String)>, german: bool)
         _ if !can_ask && german => format!("Im Terminal geht's so, danach einmal ab- und wieder anmelden:\n{command}"),
         _ if !can_ask => format!("In a terminal it goes like this, then sign out and back in once:\n{command}"),
         PipewireStep::Offer if german => {
-            "Ein Klick, dein System fragt nach deinem Passwort, kyrr holt PipeWire und startet neu.".into()
+            "Ein Klick, dein System fragt nach deinem Passwort, kyrr holt PipeWire (es löst PulseAudio ab) und startet neu.".into()
         }
         PipewireStep::Offer => {
-            "One click, your system asks for your password, kyrr fetches PipeWire and restarts.".into()
+            "One click, your system asks for your password, kyrr fetches PipeWire (it takes over from PulseAudio) and restarts.".into()
         }
         PipewireStep::Installing if german => "Hole PipeWire… dauert so lang wie der Download.".into(),
         PipewireStep::Installing => "Fetching PipeWire… takes as long as the download.".into(),
