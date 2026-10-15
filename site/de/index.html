@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>kyrr: Nur deine Stimme</title>
-<meta name="description" content="kyrr macht dein Mikrofon sauber und tippt, was du sagst. Kostenlos, privat, auf deinem Computer. Für Windows und Linux.">
+<title>kyrr: Sauberer Mikrofonton und Diktat</title>
+<meta name="description" content="kyrr entfernt Störgeräusche aus deinem Mikrofon und tippt, was du sagst. Kostenlos und privat, auf deinem eigenen Computer. Für Windows und Linux.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" type="image/svg+xml" href="../kyrr.svg">
 <link rel="alternate" hreflang="en" href="https://heast13.github.io/kyrr/">
@@ -29,8 +29,8 @@
 
   <main id="main">
     <div class="hero">
-      <h1>Nur deine Stimme.</h1>
-      <p class="lead">Tastatur, Lüfter und Hund bleiben draußen. Was du sagst, wird getippt. Alles auf deinem Computer.</p>
+      <h1>Sauberer Mikrofonton und Diktat, auf deinem eigenen PC.</h1>
+      <p class="lead">kyrr entfernt Störgeräusche aus deinem Mikrofon und tippt, was du sagst. Kostenlos und privat, für Windows und Linux.</p>
       <div class="actions">
         <a class="btn primary" href="#download">Herunterladen</a>
         <a class="more" href="https://github.com/heast13/kyrr#readme">Details auf GitHub (Englisch) ›</a>
@@ -39,35 +39,46 @@
       <p class="small kyrr-note"><i>kyrr</i> (Altnordisch): still, ruhig, in Ruhe.</p>
     </div>
 
+    <h2 class="section-title" id="h-what">Was es kann</h2>
     <div class="features">
       <div class="feature">
-        <h3>Ruhe, bitte.</h3>
-        <p>Tippen, Lüfter, Verkehr: weg, bevor es jemand hört. In jeder App, ohne etwas einzustellen.</p>
+        <h3>Entfernt Störgeräusche</h3>
+        <p>Tastaturklappern, Lüfter und Verkehr werden aus deinem Mikrofon gefiltert, bevor es jemand hört. Gut für Telefonate, Streams und Aufnahmen, in jeder App: Teams, Zoom, Discord, OBS, dein Browser.</p>
       </div>
       <div class="feature">
-        <h3>Du, an einem guten Tag.</h3>
-        <p>Klar, gleichmäßig, nie zu leise. Von Anfang an eingeschaltet. Regler gibt es, falls du Regler magst.</p>
+        <h3>Verbessert deine Stimme</h3>
+        <p>Gleicht laute und leise Stellen an, mildert scharfe S-Laute und schneidet tiefes Dröhnen ab. Von Anfang an eingeschaltet; Regler gibt es in den Einstellungen, falls du etwas einstellen willst.</p>
       </div>
       <div class="feature">
-        <h3>Sprechen. Getippt.</h3>
-        <p>F9 halten, sprechen, loslassen. Deine Worte erscheinen dort, wo der Cursor steht. Deutsch oder Englisch.</p>
+        <h3>Tippt, was du sagst</h3>
+        <p>F9 halten, sprechen, loslassen: Deine Worte erscheinen dort, wo der Cursor steht, in einer E-Mail, einem Dokument oder einem Chat. Deutsch und Englisch. Sag „neue Zeile“ für einen Zeilenumbruch.</p>
       </div>
     </div>
+
+    <section class="steps" aria-labelledby="h-how">
+      <h2 class="section-title" id="h-how">So funktioniert’s</h2>
+      <ol>
+        <li><b>kyrr installieren.</b> Beim ersten Start richtet es sich selbst ein.</li>
+        <li><b>Das Mikrofon wie gewohnt nutzen.</b> kyrr sitzt zwischen Mikrofon und deinen Apps, sie bekommen den bereinigten Ton ganz ohne Einstellung. Unter Linux legt kyrr ein Mikrofon namens „kyrr“ an und macht es zum Standard.</li>
+        <li><b>Zum Diktieren F9 halten und sprechen.</b> Beim ersten Mal lädt kyrr einmalig das Sprachmodell (bis zu 900 MB). Danach läuft alles auf deinem PC.</li>
+        <li><b>Hören, was kyrr bewirkt.</b> In den Einstellungen gibt es einen Zehn-Sekunden-Test: Er spielt deine Stimme vor und nach kyrr ab.</li>
+      </ol>
+    </section>
   </main>
 </div>
 
 <section class="band" id="privacy" aria-labelledby="h-privacy">
   <div class="wrap">
-    <h2 id="h-privacy">Bleibt hier.</h2>
-    <p class="lead">Deine Stimme und deine Worte verlassen deinen Computer nie. Keine Cloud, kein Konto, kein Tracking.</p>
-    <p class="small">Läuft offline, nachdem das Sprachmodell einmal geladen ist. <a href="https://github.com/heast13/kyrr#privacy">Genau nachlesen, was wohin verbindet (Englisch)</a></p>
+    <h2 id="h-privacy">Bleibt auf deinem PC.</h2>
+    <p class="lead">Deine Stimme und dein Text verlassen deinen Computer nie. Keine Cloud, kein Konto, kein Tracking.</p>
+    <p class="small">kyrr geht nur online, um einmal das Sprachmodell zu laden und um einmal täglich nach einer neuen Version zu schauen (abschaltbar). <a href="https://github.com/heast13/kyrr#privacy">Genau nachlesen, was wohin verbindet (Englisch)</a></p>
   </div>
 </section>
 
 <section class="download" id="download" aria-labelledby="h-download">
   <div class="wrap">
-    <h2 id="h-download">Kostenlos, wirklich.</h2>
-    <p class="lead">Such dir dein System aus.</p>
+    <h2 id="h-download">Herunterladen</h2>
+    <p class="lead">Kostenlos. Such dir dein System aus.</p>
     <div data-tabs>
       <div class="panel" id="windows" data-label="Windows">
         <h3>Windows</h3>
@@ -78,21 +89,17 @@
             <summary>Beim Anmelden starten</summary>
             <p>kyrr startet von selbst beim Anmelden, sobald die Einrichtung beim ersten Start fertig ist. Ändern geht in den Einstellungen von kyrr unter „Beim Anmelden starten“.</p>
           </details>
-          <details>
-            <summary>Deinstallieren</summary>
-            <p>Windows-Einstellungen, Apps, Installierte Apps, kyrr, Deinstallieren. Es fragt, ob auch die heruntergeladenen Sprachmodelle gelöscht werden sollen.</p>
-          </details>
         </div>
       </div>
 
       <div class="panel" id="appimage" data-label="Linux">
         <h3>Linux</h3>
-        <p>Kopier das in ein Terminal:</p>
+        <p>Kopier das in ein Terminal. Es lädt kyrr herunter und startet es:</p>
         <div class="codebox"><pre tabindex="0"><code>mkdir -p ~/.local/bin
 curl -L -o ~/.local/bin/kyrr https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage
 chmod +x ~/.local/bin/kyrr
 ~/.local/bin/kyrr &amp;</code></pre></div>
-        <p class="small">Für aktuelle 64-Bit-Distributionen mit PipeWire (Ubuntu 24.04+, Fedora, Arch und Co.). Lieber klicken? <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">Die Datei holen</a>, als Programm ausführen erlauben, doppelklicken. Weitere Details: <a href="https://github.com/heast13/kyrr#install">README (Englisch)</a></p>
+        <p class="small">Für aktuelle 64-Bit-Distributionen mit PipeWire (Ubuntu 24.04+, Fedora, Arch und Co.). Lieber klicken? <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">Die Datei holen</a>, als Programm ausführen erlauben, doppelklicken. Beim ersten Start fragt dein Desktop eventuell einmal nach der Diktier-Taste und ob kyrr tippen darf; kyrr führt dich durch. Weitere Details: <a href="https://github.com/heast13/kyrr#install">README (Englisch)</a></p>
         <div class="more-info">
           <details>
             <summary>Beim Anmelden starten</summary>
@@ -119,15 +126,19 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
   <h2 id="h-faq">Fragen</h2>
   <details>
     <summary>Brauche ich Internet?</summary>
-    <p>Nur einmal, um das Sprachmodell zu laden. Danach läuft kyrr offline.</p>
+    <p>Nur, um beim ersten Diktieren das Sprachmodell zu laden, und für die tägliche Suche nach einer neuen Version. Die Störgeräusch-Entfernung braucht gar keinen Download.</p>
   </details>
   <details>
     <summary>Brauche ich einen Spitzenrechner?</summary>
-    <p>Nein. Jeder 64-Bit-PC mit Intel oder AMD reicht, eine Grafikkarte brauchst du nicht. Für ältere Laptops gibt es einen kleinen Filter.</p>
+    <p>Nein. Jeder 64-Bit-PC mit Intel oder AMD reicht, eine Grafikkarte brauchst du nicht. Für ältere Laptops gibt es einen kleinen Filter. (Windows auf ARM: nur Diktat.)</p>
   </details>
   <details>
     <summary>Welche Sprachen?</summary>
-    <p>Deutsch und Englisch.</p>
+    <p>Das Diktat versteht Deutsch und Englisch. Der Störgeräusch-Filter funktioniert in jeder Sprache.</p>
+  </details>
+  <details>
+    <summary>Gibt es das für den Mac?</summary>
+    <p>Nein, kyrr gibt es für Windows und Linux.</p>
   </details>
   <details>
     <summary>Was kostet es?</summary>
