@@ -5,7 +5,7 @@
 //! is going to. Every backend takes keysyms, so the text can contain any
 //! character without depending on the keyboard layout. The one exception is
 //! the portal, which can only type what the layout has: there a text with an
-//! "ä" on a US layout is pasted with Shift+Insert (see [`paste`]).
+//! "ä" on a US layout is pasted with Shift+Insert (see `set_selections`).
 //!
 //! The first backend that works is remembered:
 //! 1. the Wayland virtual keyboard protocol (Hyprland, Sway and other wlroots
@@ -46,9 +46,9 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 /// Types `text` into the focused window, line breaks as Return. Blocks until
 /// done; the first call under GNOME or KDE also waits for the permission
-/// dialog. Returns false when no backend could type, or the user's layout
-/// lacks a character the portal would then drop, so the caller can put the
-/// text on the clipboard instead.
+/// dialog. A text the layout cannot type through the portal is pasted
+/// instead. Returns false when no backend could type, or a paste found no
+/// clipboard, so the caller can try the clipboard and tell the user.
 pub fn type_text(text: &str) -> bool {
     let keysyms: Vec<u32> = text.chars().filter_map(keysym).collect();
     if keysyms.is_empty() {
@@ -62,13 +62,18 @@ pub fn type_text(text: &str) -> bool {
         Some(Backend::Wayland(keyboard)) => keyboard.type_keysyms(&keysyms),
         Some(Backend::Portal) => {
             let missing = layout::keysyms().is_some_and(|layout| keysyms.iter().any(|k| !layout.contains(k)));
-            if missing && !set_selections(text) {
-                return false;
+            if missing {
+                if !set_selections(text) {
+                    return false;
+                }
+                // Time for the desktop to take over the new clipboard from
+                // X11, before the portal's indicator comes up.
+                std::thread::sleep(std::time::Duration::from_millis(100));
             }
             match portal::Keyboard::open() {
                 Some(mut keyboard) => {
                     let done = if missing {
-                        paste(&mut keyboard)
+                        keyboard.press_paste()
                     } else {
                         keyboard.type_keysyms(&keysyms)
                     };
@@ -124,18 +129,11 @@ fn probe() -> Option<Backend> {
     x11::Keyboard::connect().map(|keyboard| Backend::X11(Box::new(keyboard)))
 }
 
-/// Shift+Insert, for text the layout cannot type, once it is on the
-/// clipboard and in the primary selection: GTK, Qt, browsers and office apps
-/// paste the clipboard with it, terminals the primary selection, which then
-/// holds the same text. Ctrl+V would type a control character in a terminal.
-fn paste(keyboard: &mut portal::Keyboard) -> bool {
-    // Time for the desktop to take over the new clipboard from X11.
-    std::thread::sleep(std::time::Duration::from_millis(100));
-    keyboard.press_paste()
-}
-
 /// The text on the clipboard and, as far as the desktop has one, in the
-/// primary selection. False when the clipboard was out of reach.
+/// primary selection, for a paste with Shift+Insert: GTK, Qt, browsers and
+/// office apps paste the clipboard with it, terminals the primary selection.
+/// Ctrl+V would type a control character in a terminal. False when the
+/// clipboard was out of reach.
 fn set_selections(text: &str) -> bool {
     if !copy_to_clipboard(text) {
         return false;
