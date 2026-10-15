@@ -115,6 +115,10 @@ code { background: var(--code); padding: 0.1em 0.35em; border-radius: 4px; }
 }
 .copy:hover { border-color: var(--accent); }
 
+.more-info { max-width: 44rem; margin: 1.5rem auto 0; text-align: left; }
+.more-info details:first-child { border-top: 1px solid var(--border); }
+.more-info .codebox { margin-top: 0.8rem; }
+
 /* faq */
 .faq { max-width: 44rem; margin: 0 auto; padding: clamp(3rem, 9vw, 6rem) 20px; }
 .faq h2 { text-align: center; margin-bottom: 1rem; }

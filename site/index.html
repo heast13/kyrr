@@ -85,6 +85,16 @@
         <h3>Windows</h3>
         <p><a class="btn primary" href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-setup.exe">Download for Windows</a></p>
         <p class="small">64-bit Windows 10 (22H2) or 11 on Intel or AMD. Not code-signed yet, so Windows may warn you: “More info”, then “Run anyway”. <a href="https://github.com/heast13/kyrr#code-signing-policy">Why, and more</a></p>
+        <div class="more-info">
+          <details>
+            <summary>Start at sign-in</summary>
+            <p>kyrr starts by itself when you sign in, once its first-start setup is done. To change that: Settings in kyrr, “Start when you sign in”.</p>
+          </details>
+          <details>
+            <summary>Uninstall</summary>
+            <p>Windows Settings, Apps, Installed apps, kyrr, Uninstall. It asks whether to delete the downloaded speech models too.</p>
+          </details>
+        </div>
       </div>
 
       <div class="panel" id="appimage" data-label="Linux">
@@ -94,7 +104,24 @@
 curl -L -o ~/.local/bin/kyrr https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage
 chmod +x ~/.local/bin/kyrr
 ~/.local/bin/kyrr &amp;</code></pre></div>
-        <p class="small">For current 64-bit distributions with PipeWire (Ubuntu 24.04+, Fedora, Arch and friends). Prefer clicking? <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">Get the file</a>, allow it to run as a program, double click. Uninstall and other details: <a href="https://github.com/heast13/kyrr#install">README</a></p>
+        <p class="small">For current 64-bit distributions with PipeWire (Ubuntu 24.04+, Fedora, Arch and friends). Prefer clicking? <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">Get the file</a>, allow it to run as a program, double click. More details: <a href="https://github.com/heast13/kyrr#install">README</a></p>
+        <div class="more-info">
+          <details>
+            <summary>Start at sign-in</summary>
+            <p>kyrr starts by itself when you sign in, once its first-start setup is done. To change that: Settings in kyrr, “Start when you sign in”.</p>
+          </details>
+          <details>
+            <summary>Uninstall</summary>
+            <p>Quit kyrr (“Quit”, bottom left), then paste:</p>
+            <div class="codebox"><pre tabindex="0"><code>rm -f ~/.local/bin/kyrr \
+  ~/.config/autostart/io.github.heast13.kyrr.desktop \
+  ~/.local/share/applications/io.github.heast13.kyrr.desktop \
+  ~/.local/share/icons/hicolor/256x256/apps/io.github.heast13.kyrr.png \
+  ~/.local/share/icons/hicolor/scalable/apps/io.github.heast13.kyrr.svg
+rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
+            <p class="small">The last line also deletes your settings and the speech models. Leave it out to keep them.</p>
+          </details>
+        </div>
       </div>
     </div>
   </div>

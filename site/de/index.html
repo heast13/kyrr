@@ -73,6 +73,16 @@
         <h3>Windows</h3>
         <p><a class="btn primary" href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-setup.exe">Für Windows herunterladen</a></p>
         <p class="small">64-Bit-Windows 10 (22H2) oder 11 auf Intel oder AMD. Noch nicht signiert, deshalb warnt Windows eventuell: „Weitere Informationen“, dann „Trotzdem ausführen“. <a href="https://github.com/heast13/kyrr#code-signing-policy">Warum, und mehr (Englisch)</a></p>
+        <div class="more-info">
+          <details>
+            <summary>Beim Anmelden starten</summary>
+            <p>kyrr startet von selbst beim Anmelden, sobald die Einrichtung beim ersten Start fertig ist. Ändern geht in den Einstellungen von kyrr unter „Beim Anmelden starten“.</p>
+          </details>
+          <details>
+            <summary>Deinstallieren</summary>
+            <p>Windows-Einstellungen, Apps, Installierte Apps, kyrr, Deinstallieren. Es fragt, ob auch die heruntergeladenen Sprachmodelle gelöscht werden sollen.</p>
+          </details>
+        </div>
       </div>
 
       <div class="panel" id="appimage" data-label="Linux">
@@ -82,7 +92,24 @@
 curl -L -o ~/.local/bin/kyrr https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage
 chmod +x ~/.local/bin/kyrr
 ~/.local/bin/kyrr &amp;</code></pre></div>
-        <p class="small">Für aktuelle 64-Bit-Distributionen mit PipeWire (Ubuntu 24.04+, Fedora, Arch und Co.). Lieber klicken? <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">Die Datei holen</a>, als Programm ausführen erlauben, doppelklicken. Deinstallieren und weitere Details: <a href="https://github.com/heast13/kyrr#install">README (Englisch)</a></p>
+        <p class="small">Für aktuelle 64-Bit-Distributionen mit PipeWire (Ubuntu 24.04+, Fedora, Arch und Co.). Lieber klicken? <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">Die Datei holen</a>, als Programm ausführen erlauben, doppelklicken. Weitere Details: <a href="https://github.com/heast13/kyrr#install">README (Englisch)</a></p>
+        <div class="more-info">
+          <details>
+            <summary>Beim Anmelden starten</summary>
+            <p>kyrr startet von selbst beim Anmelden, sobald die Einrichtung beim ersten Start fertig ist. Ändern geht in den Einstellungen von kyrr unter „Beim Anmelden starten“.</p>
+          </details>
+          <details>
+            <summary>Deinstallieren</summary>
+            <p>kyrr beenden („Beenden“, unten links), dann einfügen:</p>
+            <div class="codebox"><pre tabindex="0"><code>rm -f ~/.local/bin/kyrr \
+  ~/.config/autostart/io.github.heast13.kyrr.desktop \
+  ~/.local/share/applications/io.github.heast13.kyrr.desktop \
+  ~/.local/share/icons/hicolor/256x256/apps/io.github.heast13.kyrr.png \
+  ~/.local/share/icons/hicolor/scalable/apps/io.github.heast13.kyrr.svg
+rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
+            <p class="small">Die letzte Zeile löscht auch deine Einstellungen und die Sprachmodelle. Lass sie weg, wenn du sie behalten willst.</p>
+          </details>
+        </div>
       </div>
     </div>
   </div>
