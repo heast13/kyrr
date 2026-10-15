@@ -33,11 +33,11 @@
   next to it already says that closing the window quits kyrr there.
 - A second start at sign-in while kyrr already runs no longer opens its
   window.
-- Flatpak on Hyprland, sway and similar: dictation types again. Those
-  desktops keep sandboxed apps from sending keys; the Flatpak now reaches the
-  compositor's own socket for that, and only for typing. If typing still is
-  not possible there, kyrr says that the Flatpak is the reason and that the
-  AppImage can do it, instead of "could not type".
+- Flatpak on Hyprland, sway and similar: those desktops keep sandboxed apps
+  from sending keys and have no portal to ask instead, so dictation cannot
+  type there. kyrr now says so ("the Flatpak is the reason, the AppImage can
+  do it") instead of a bare "could not type". GNOME and KDE are not
+  affected.
 - Flatpak: "Start when you sign in" writes the autostart entry itself where
   the desktop has no Background portal (Hyprland), and reports it in the
   settings when nothing could be set up or the desktop said no. The switch

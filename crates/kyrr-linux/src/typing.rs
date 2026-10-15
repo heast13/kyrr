@@ -7,8 +7,7 @@
 //!
 //! The first backend that works is remembered:
 //! 1. the Wayland virtual keyboard protocol (Hyprland, Sway and other wlroots
-//!    compositors, no dialog); in a Flatpak also on the compositor's own
-//!    socket, because those compositors keep it from sandboxed clients,
+//!    compositors, no dialog),
 //! 2. the XDG RemoteDesktop portal (GNOME, KDE), which asks once and then
 //!    remembers the answer through a restore token,
 //! 3. X11 XTest, when there is no Wayland session.
@@ -117,15 +116,12 @@ pub fn set_restore_token(token: Option<String>) {
 
 fn probe() -> Option<Backend> {
     if std::env::var_os("WAYLAND_DISPLAY").is_some_and(|display| !display.is_empty()) {
-        return wayland::Keyboard::connect()
-            .or_else(wayland::Keyboard::connect_host)
-            .map(Backend::Wayland)
-            .or_else(|| {
-                portal::Keyboard::open().map(|keyboard| {
-                    keyboard.close();
-                    Backend::Portal
-                })
-            });
+        return wayland::Keyboard::connect().map(Backend::Wayland).or_else(|| {
+            portal::Keyboard::open().map(|keyboard| {
+                keyboard.close();
+                Backend::Portal
+            })
+        });
     }
     x11::Keyboard::connect().map(|keyboard| Backend::X11(Box::new(keyboard)))
 }

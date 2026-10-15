@@ -20,15 +20,6 @@ finish-args:
   - --device=dri
   # Speech model download on first dictation and "Check for updates".
   - --share=network
-  # Typing the dictated text into other windows. The socket a Flatpak gets
-  # is tagged with a security context, and Hyprland, sway and others keep
-  # the virtual keyboard (and the clipboard protocol) from such clients;
-  # their portals have no RemoteDesktop to ask instead. The compositor's
-  # own socket lies next to it in the runtime folder (wayland-1 on
-  # Hyprland and sway; names that do not exist are skipped). kyrr connects
-  # to it only to type, and only when the sandboxed one does not allow it.
-  - --filesystem=xdg-run/wayland-1
-  - --filesystem=xdg-run/wayland-2
   # Start at sign-in. The Background portal is asked first; where it is
   # missing (Hyprland) or writes nothing, kyrr puts the same file
   # (io.github.heast13.kyrr.desktop) into the user's autostart folder.

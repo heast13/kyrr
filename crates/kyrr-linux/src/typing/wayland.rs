@@ -5,9 +5,6 @@
 use std::fs::File;
 use std::io::Write;
 use std::os::fd::AsFd;
-use std::os::unix::fs::FileTypeExt;
-use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
 use std::time::Instant;
 
 use rustix::fs::{memfd_create, MemfdFlags};
@@ -40,23 +37,7 @@ struct State;
 impl Keyboard {
     /// None when there is no Wayland compositor or it has no virtual keyboard.
     pub fn connect() -> Option<Keyboard> {
-        Self::on(Connection::connect_to_env().ok()?)
-    }
-
-    /// In a Flatpak: the same, on the compositor's own socket. The one a
-    /// sandboxed app gets is tagged with a security context, and Hyprland,
-    /// sway and others keep the virtual keyboard from such clients. The
-    /// manifest lets kyrr see the compositor's socket next to it; the first
-    /// that has a virtual keyboard is used. None outside a Flatpak, where
-    /// `connect` already is the compositor's own socket.
-    pub fn connect_host() -> Option<Keyboard> {
-        host_sockets().into_iter().find_map(|path| {
-            let connection = Connection::from_socket(UnixStream::connect(path).ok()?).ok()?;
-            Self::on(connection)
-        })
-    }
-
-    fn on(connection: Connection) -> Option<Keyboard> {
+        let connection = Connection::connect_to_env().ok()?;
         let (globals, mut queue) = registry_queue_init::<State>(&connection).ok()?;
         let handle = queue.handle();
         let seat: WlSeat = globals.bind(&handle, 1..=1, ()).ok()?;
@@ -106,38 +87,6 @@ impl Keyboard {
             .keymap(KeymapFormat::XkbV1.into(), file.as_fd(), text.len() as u32 + 1);
         self.queue.roundtrip(&mut State).ok().map(drop)
     }
-}
-
-/// The Wayland sockets in the runtime folder other than the sandbox's own
-/// (`WAYLAND_DISPLAY`): the ones a Flatpak was given access to by name.
-fn host_sockets() -> Vec<PathBuf> {
-    if std::env::var_os("FLATPAK_ID").is_none() {
-        return Vec::new();
-    }
-    let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from) else {
-        return Vec::new();
-    };
-    let own = std::env::var_os("WAYLAND_DISPLAY");
-    let mut found: Vec<PathBuf> = std::fs::read_dir(&dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|entry| {
-            let name = entry.file_name();
-            is_socket_name(&name.to_string_lossy())
-                && own.as_deref() != Some(name.as_os_str())
-                && entry.file_type().is_ok_and(|kind| kind.is_socket())
-        })
-        .map(|entry| entry.path())
-        .collect();
-    found.sort();
-    found
-}
-
-/// `wayland-1`, not `wayland-1.lock` or `wayland-x`.
-fn is_socket_name(name: &str) -> bool {
-    name.strip_prefix("wayland-")
-        .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// An XKB keymap with one key per keysym, in the order of `keysyms`.
@@ -202,17 +151,7 @@ ignore_events!(WlSeat, ZwpVirtualKeyboardManagerV1, ZwpVirtualKeyboardV1);
 
 #[cfg(test)]
 mod tests {
-    use super::{is_socket_name, keymap, name};
-
-    #[test]
-    fn only_sockets_named_by_number_count() {
-        assert!(is_socket_name("wayland-0"));
-        assert!(is_socket_name("wayland-12"));
-        assert!(!is_socket_name("wayland-1.lock"));
-        assert!(!is_socket_name("wayland-"));
-        assert!(!is_socket_name("wayland-x"));
-        assert!(!is_socket_name("pipewire-0"));
-    }
+    use super::{keymap, name};
 
     #[test]
     fn names_are_what_xkb_parses() {
