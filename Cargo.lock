@@ -2941,6 +2941,7 @@ dependencies = [
  "async-signal",
  "futures-lite",
  "kyrr-common",
+ "libc",
  "pipewire",
  "rustix 1.1.5",
  "wayland-client",

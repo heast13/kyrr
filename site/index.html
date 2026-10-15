@@ -30,10 +30,13 @@
 <div class="wrap">
   <header class="top">
     <a class="brand" href="./"><img src="kyrr.svg" width="36" height="36" alt="">kyrr</a>
-    <nav class="lang" aria-label="Language">
-      <a href="./" lang="en" aria-current="true">English</a> ·
-      <a href="de/" lang="de" hreflang="de" data-lang-switch="de">Deutsch</a>
-    </nav>
+    <div class="top-links">
+      <a class="lang" href="https://github.com/heast13/kyrr">GitHub</a>
+      <nav class="lang" aria-label="Language">
+        <a href="./" lang="en" aria-current="true">English</a> ·
+        <a href="de/" lang="de" hreflang="de" data-lang-switch="de">Deutsch</a>
+      </nav>
+    </div>
   </header>
 
   <main id="main">
@@ -118,9 +121,9 @@
     <aside class="notes" id="linux" aria-labelledby="h-linux">
       <h3 id="h-linux">Linux notes</h3>
       <ul>
-        <li><strong>PipeWire is required.</strong> It is the default on current Ubuntu, Fedora, Arch and Debian 12 and newer.</li>
+        <li><strong>PipeWire is required</strong> for the noise filter. It is the default on current Ubuntu, Fedora, Arch, Mint and Debian; where it is missing, kyrr installs it with one button.</li>
         <li><strong>The “kyrr” microphone.</strong> kyrr adds a virtual microphone called “kyrr” and makes it your default. Apps that use the default microphone get the clean voice right away. Apps set to a specific microphone need to be switched to “kyrr”.</li>
-        <li><strong>The dictation key</strong> goes through your desktop's global shortcut dialog (GNOME 48+, KDE Plasma). kyrr walks you through it the first time; F9 is already filled in. On Hyprland (Omarchy, say) kyrr shows the lines to add to your key bindings. On X11 the key just works. Anywhere else, put the command kyrr shows in its settings on a key in your desktop's keyboard settings.</li>
+        <li><strong>The dictation key</strong> goes through your desktop's global shortcut dialog (GNOME 48+, KDE Plasma). kyrr walks you through it the first time; F9 is already filled in. On GNOME 46 and 47 kyrr adds it to GNOME's own keyboard shortcuts. On Hyprland (Omarchy, say), Sway, river and niri kyrr adds the key to your key bindings itself. On X11 (Linux Mint, say) the key just works. Anywhere else, put the command kyrr shows in its settings on a key in your desktop's keyboard settings.</li>
         <li><strong>Typing.</strong> Dictated text is typed into the focused window. The first time, GNOME or KDE asks whether kyrr may do that. Say yes; otherwise kyrr can only put the text on the clipboard.</li>
       </ul>
     </aside>

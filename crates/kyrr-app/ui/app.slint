@@ -118,6 +118,13 @@ export global AppState {
     in property <bool> update-dismissed;
 
     in-out property <bool> autostart;
+    // PipeWire is missing (Linux): a button that installs it, and what to
+    // say about it ("" for nothing).
+    in property <bool> pipewire-button;
+    in property <string> pipewire-note;
+    callback install-pipewire();
+    // How installing it went, a PipewireStep from Rust.
+    callback pipewire-step(int);
     in property <string> error-text;
     in property <string> version;
 
@@ -534,6 +541,12 @@ component NoiseCard inherits Card {
             : AppState.filter-state == FilterState.setting-up ? @tr("Setting up… sound pauses for a moment.")
             : AppState.error-text;
     }
+    if AppState.filter-state == FilterState.unsupported && AppState.pipewire-button: Button {
+        text: @tr("Set up PipeWire");
+        primary: true;
+        clicked => { AppState.install-pipewire(); }
+    }
+    if AppState.filter-state == FilterState.unsupported && AppState.pipewire-note != "": Hint { text: AppState.pipewire-note; }
     if AppState.filter-state == FilterState.not-attached: Button {
         text: @tr("Set up microphone");
         primary: true;
@@ -859,7 +872,9 @@ component HideRow inherits HorizontalLayout {
         horizontal-alignment: center;
         vertical-alignment: center;
     }
-    Button {
+    // Where there is neither a tray nor a minimizing desktop (Hyprland
+    // without a bar tray), the button would do nothing: it stays away.
+    if AppState.tray || AppState.can-minimize: Button {
         text: @tr("Off to the corner");
         horizontal-stretch: 0;
         clicked => { AppState.hide(); }
@@ -1150,18 +1165,30 @@ component GeneralSettings inherits Card {
 
 component SetupPage inherits VerticalLayout {
     in property <int> step;
+    // Linux without PipeWire: the first step offers to set it up instead.
+    property <bool> no-pipewire: AppState.linux && AppState.filter-state == FilterState.unsupported
+        && (AppState.pipewire-button || AppState.pipewire-note != "");
     spacing: 12px;
     // Every element carries its own `if`: Slint measures wrapped text
     // wrongly inside a nested layout that is itself conditional.
     if step == 0: Hint { text: @tr("Step 1 of 2"); }
     if step == 0: Heading { text: @tr("Welcome to kyrr"); font-size: 20px; }
-    if step == 0: Caption { text: @tr("kyrr removes background noise from your microphone, for every app. Which microphone do you use?"); }
-    if step == 0: ComboBox {
+    if step == 0: Caption {
+        text: root.no-pipewire ? @tr("kyrr removes background noise from your microphone, for every app. For that it needs PipeWire, the sound system of modern Linux desktops, which is missing here.")
+            : @tr("kyrr removes background noise from your microphone, for every app. Which microphone do you use?");
+    }
+    if step == 0 && root.no-pipewire && AppState.pipewire-button: Button {
+        text: @tr("Set up PipeWire");
+        primary: true;
+        clicked => { AppState.install-pipewire(); }
+    }
+    if step == 0 && root.no-pipewire && AppState.pipewire-note != "": Hint { text: AppState.pipewire-note; }
+    if step == 0 && !root.no-pipewire: ComboBox {
         model: AppState.microphones;
         current-index <=> AppState.mic-index;
     }
-    if step == 0: Caption { text: (AppState.linux ? @tr("kyrr adds a microphone called “kyrr” and makes it the default. Apps set to a particular microphone need to be switched to “kyrr”.") : @tr("Windows will ask for permission. Sound pauses for a moment while kyrr sets up.")); }
-    if step == 0: Button {
+    if step == 0 && !root.no-pipewire: Caption { text: (AppState.linux ? @tr("kyrr adds a microphone called “kyrr” and makes it the default. Apps set to a particular microphone need to be switched to “kyrr”.") : @tr("Windows will ask for permission. Sound pauses for a moment while kyrr sets up.")); }
+    if step == 0 && !root.no-pipewire: Button {
         text: AppState.filter-state == FilterState.setting-up ? @tr("Setting up…") : @tr("Set up microphone");
         primary: true;
         enabled: AppState.filter-state != FilterState.setting-up && AppState.microphones.length > 0;

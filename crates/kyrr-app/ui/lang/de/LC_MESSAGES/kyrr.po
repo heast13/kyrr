@@ -389,6 +389,9 @@ msgstr "Mikrofon wechseln"
 msgid "Welcome to kyrr"
 msgstr "Willkommen bei kyrr"
 
+msgid "kyrr removes background noise from your microphone, for every app. For that it needs PipeWire, the sound system of modern Linux desktops, which is missing here."
+msgstr "kyrr entfernt Hintergrundgeräusche aus deinem Mikrofon, für jede App. Dafür braucht es PipeWire, das Soundsystem moderner Linux-Desktops, und das fehlt hier noch."
+
 msgid "kyrr removes background noise from your microphone, for every app. Which microphone do you use?"
 msgstr "kyrr entfernt Hintergrundgeräusche aus deinem Mikrofon, für jede App. Welches Mikrofon verwendest du?"
 
@@ -714,6 +717,9 @@ msgstr "Schließen"
 
 msgid "PipeWire is not running, and kyrr needs it. Dictation works."
 msgstr "PipeWire läuft nicht, und kyrr braucht es. Diktieren geht."
+
+msgid "Set up PipeWire"
+msgstr "PipeWire einrichten"
 
 msgid "Needs PipeWire too."
 msgstr "Braucht auch PipeWire."

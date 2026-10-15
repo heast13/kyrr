@@ -15,3 +15,15 @@ pub fn on_terminate(quit: impl FnOnce() + Send + 'static) {
         }
     });
 }
+
+/// Ends kyrr once it has cleaned up, without the exit handlers of the C++
+/// libraries inside (the speech models). They have nothing left to save,
+/// and at sign-out the AppImage's mount can be gone before them: running
+/// code not read from it yet then crashes kyrr (SIGBUS) on its way out.
+pub fn exit_now(code: i32) -> ! {
+    use std::io::Write;
+    let _ = std::io::stdout().flush();
+    let _ = std::io::stderr().flush();
+    // SAFETY: _exit ends the process at once; nothing runs after it.
+    unsafe { libc::_exit(code) }
+}
