@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.4 (2026-10-15)
 
 - Fewer technical texts in the window: when kyrr cannot set the dictation
   key up by itself, it no longer shows config file paths and lines (they go
@@ -45,6 +45,12 @@
   the audio. A move attaches to the new microphone before it lets go of the
   old one, and a filter that is set up but on no microphone goes back onto
   the default one by itself, or offers it as a button. Windows and Linux.
+- kyrr no longer crashes at sign-out on Linux once the AppImage is gone.
+- Settings, About: the buttons sit on two rows, so they fit in German and
+  with wider fonts.
+- The status line has more words to pass the time while the filter runs
+  (Burpinsured, Fanmuzzled, Snoreproof and friends); "Keyboard clatter
+  ban" gave way to "Keyclackfree".
 
 ## 0.5.3 (2026-10-14)
 

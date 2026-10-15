@@ -11,6 +11,24 @@ An item for one system only starts with `(Windows)` or `(Linux)`, as in
 `- (Linux) …`; kyrr shows it only there, without the mark. Everything else
 is for both, so it names neither. Linux lists the versions from 0.5.3 on.
 
+## 0.5.4
+
+- (Linux) On Hyprland (Omarchy, say), Sway, river and niri kyrr now sets up the dictation key itself, and the start at sign-in where your desktop needs it. On GNOME 46 and 47 it adds the key to GNOME's own keyboard shortcuts.
+- (Linux) No PipeWire on your system? "Set up PipeWire" installs it for you.
+- (Linux) "Off to the corner" only shows where it can do something, and kyrr no longer crashes when you sign out.
+- If you unplug a microphone just as kyrr moves to it, kyrr stays on the one you had.
+- The buttons under Settings, About no longer get cut off.
+- The status line has a few new words to pass the time. Burpinsured, for one.
+
+### Deutsch
+
+- (Linux) Unter Hyprland (etwa Omarchy), Sway, river und niri richtet kyrr die Diktiertaste jetzt selbst ein, und wo dein Desktop es braucht auch den Start bei der Anmeldung. Unter GNOME 46 und 47 trägt es die Taste in GNOMEs eigene Tastenkürzel ein.
+- (Linux) Kein PipeWire auf deinem System? „PipeWire einrichten“ installiert es für dich.
+- (Linux) „Ab in die Ecke“ erscheint nur noch, wo es etwas bewirkt, und kyrr stürzt beim Abmelden nicht mehr ab.
+- Steckst du ein Mikrofon genau dann aus, wenn kyrr gerade darauf wechselt, bleibt kyrr beim bisherigen.
+- Die Knöpfe unter Einstellungen, Über werden nicht mehr abgeschnitten.
+- Die Statuszeile hat ein paar neue Wörter zum Zeitvertreib. Rülpsversichert, zum Beispiel.
+
 ## 0.5.3
 
 - (Linux) kyrr is here for Linux: the noise removal works on a microphone of its own called "kyrr", which your apps get as their microphone, and dictation types into any window with F9.

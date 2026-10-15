@@ -485,9 +485,6 @@ msgstr "Hundeausblender."
 msgid "Fan whisperer."
 msgstr "Lüfterflüsterer."
 
-msgid "Keyboard clatter ban."
-msgstr "Tastaturgeklapperverbot."
-
 msgid "Quiet zone management."
 msgstr "Ruhezonenverwaltung."
 
@@ -508,6 +505,63 @@ msgstr "Stuhlknarzschlucker."
 
 msgid "Noise quarantine."
 msgstr "Lärmquarantäne."
+
+msgid "Slurpless."
+msgstr "Schmatzfrei."
+
+msgid "Barkblocked."
+msgstr "Hundegebellverbot."
+
+msgid "Vacuumexiled."
+msgstr "Staubsaugerexil."
+
+msgid "Drillnope."
+msgstr "Nachbarbohrerfrei."
+
+msgid "Chewproof."
+msgstr "Mampfmaskiert."
+
+msgid "Burpinsured."
+msgstr "Rülpsversichert."
+
+msgid "Fanmuzzled."
+msgstr "Lüfterknebel."
+
+msgid "Keyclackfree."
+msgstr "Tastaturgeklapperweg."
+
+msgid "Sniffleproof."
+msgstr "Räusperfilter."
+
+msgid "Leafblowerbanned."
+msgstr "Laubbläserverbannt."
+
+msgid "Coworkerpuffstop."
+msgstr "Kollegenschnaufstopp."
+
+msgid "Babywailbreak."
+msgstr "Babygeschreipause."
+
+msgid "Jackhammerhushed."
+msgstr "Bauarbeiterstumm."
+
+msgid "Snoreproof."
+msgstr "Schnarchsicher."
+
+msgid "Flushfree."
+msgstr "Klospülungsfrei."
+
+msgid "Doorbelldeaf."
+msgstr "Türklingeltaub."
+
+msgid "Mowermuzzled."
+msgstr "Rasenmähermaulkorb."
+
+msgid "Hiccupshielded."
+msgstr "Schluckaufschutz."
+
+msgid "Sneezeswallowed."
+msgstr "Niesgeschluckt."
 
 msgid "On-call napping."
 msgstr "Bereitschaftsdösen."
