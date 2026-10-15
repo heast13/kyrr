@@ -1,9 +1,11 @@
 //! Putting dictated text into whatever window has the focus on Linux.
 //!
-//! The text is typed as key events, never pasted: a paste needs Ctrl+V in
-//! most apps but Ctrl+Shift+V in terminals, and the dictation cannot know
-//! which window it is going to. Every backend takes keysyms, so the text can
-//! contain any character without depending on the keyboard layout.
+//! The text is typed as key events: a paste needs Ctrl+V in most apps but
+//! Ctrl+Shift+V in terminals, and the dictation cannot know which window it
+//! is going to. Every backend takes keysyms, so the text can contain any
+//! character without depending on the keyboard layout. The one exception is
+//! the portal, which can only type what the layout has: there a text with an
+//! "ä" on a US layout is pasted with Shift+Insert (see `set_selections`).
 //!
 //! The first backend that works is remembered:
 //! 1. the Wayland virtual keyboard protocol (Hyprland, Sway and other wlroots
@@ -44,9 +46,9 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 /// Types `text` into the focused window, line breaks as Return. Blocks until
 /// done; the first call under GNOME or KDE also waits for the permission
-/// dialog. Returns false when no backend could type, or the user's layout
-/// lacks a character the portal would then drop, so the caller can put the
-/// text on the clipboard instead.
+/// dialog. A text the layout cannot type through the portal is pasted
+/// instead. Returns false when no backend could type, or a paste found no
+/// clipboard, so the caller can try the clipboard and tell the user.
 pub fn type_text(text: &str) -> bool {
     let keysyms: Vec<u32> = text.chars().filter_map(keysym).collect();
     if keysyms.is_empty() {
@@ -61,13 +63,22 @@ pub fn type_text(text: &str) -> bool {
         Some(Backend::Portal) => {
             let missing = layout::keysyms().is_some_and(|layout| keysyms.iter().any(|k| !layout.contains(k)));
             if missing {
-                return false;
+                if !set_selections(text) {
+                    return false;
+                }
+                // Time for the desktop to take over the new clipboard from
+                // X11, before the portal's indicator comes up.
+                std::thread::sleep(std::time::Duration::from_millis(100));
             }
             match portal::Keyboard::open() {
                 Some(mut keyboard) => {
-                    let typed = keyboard.type_keysyms(&keysyms);
+                    let done = if missing {
+                        keyboard.press_paste()
+                    } else {
+                        keyboard.type_keysyms(&keysyms)
+                    };
                     keyboard.close();
-                    typed
+                    done
                 }
                 None => false,
             }
@@ -116,6 +127,22 @@ fn probe() -> Option<Backend> {
         });
     }
     x11::Keyboard::connect().map(|keyboard| Backend::X11(Box::new(keyboard)))
+}
+
+/// The text on the clipboard and, as far as the desktop has one, in the
+/// primary selection, for a paste with Shift+Insert: GTK, Qt, browsers and
+/// office apps paste the clipboard with it, terminals the primary selection.
+/// Ctrl+V would type a control character in a terminal. False when the
+/// clipboard was out of reach.
+fn set_selections(text: &str) -> bool {
+    if !copy_to_clipboard(text) {
+        return false;
+    }
+    if let Some(clipboard) = lock(&CLIPBOARD).as_mut() {
+        use arboard::{LinuxClipboardKind, SetExtLinux};
+        let _ = clipboard.set().clipboard(LinuxClipboardKind::Primary).text(text);
+    }
+    true
 }
 
 /// Puts `text` on the clipboard, for when typing was not possible: the user

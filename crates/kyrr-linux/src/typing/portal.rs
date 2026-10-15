@@ -52,9 +52,34 @@ impl Keyboard {
         block_on(self.press_all(keysyms)).is_ok()
     }
 
+    /// Presses Shift+Insert. Sent as key codes, which are the same on every
+    /// layout, unlike keysyms.
+    pub fn press_paste(&mut self) -> bool {
+        block_on(self.shift_insert()).is_ok()
+    }
+
     /// Ends the session, and with it the desktop's indicator.
     pub fn close(self) {
         let _ = block_on(self.session.close());
+    }
+
+    /// Shift is let go again even when Insert failed.
+    async fn shift_insert(&self) -> Result<(), Error> {
+        // Linux input event codes (KEY_LEFTSHIFT, KEY_INSERT).
+        const SHIFT: i32 = 42;
+        const INSERT: i32 = 110;
+        let key = |code, state| {
+            self.remote
+                .notify_keyboard_keycode(&self.session, code, state, Default::default())
+        };
+        key(SHIFT, KeyState::Pressed).await?;
+        let insert = async {
+            key(INSERT, KeyState::Pressed).await?;
+            key(INSERT, KeyState::Released).await
+        }
+        .await;
+        let shift = key(SHIFT, KeyState::Released).await;
+        insert.and(shift)
     }
 
     /// Each call is a round trip to the portal, which paces the keys.

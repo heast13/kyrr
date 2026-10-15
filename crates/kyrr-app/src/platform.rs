@@ -296,6 +296,10 @@ mod imp {
         }
     }
 
+    pub fn minimize(window: &slint::Window) {
+        window.set_minimized(true);
+    }
+
     /// Left, top, right and bottom of the free screen at a point, in
     /// physical pixels.
     pub fn work_area(window: &slint::Window) -> Option<(i32, i32, i32, i32)> {
@@ -1239,6 +1243,26 @@ mod imp {
     }
 
     pub fn bring_to_front(_: &slint::Window) {}
+
+    /// Minimizes the window. A Wayland compositor never tells a window that
+    /// it came back, so Slint would take it as minimized for good: the next
+    /// close or "Off to the corner" would do nothing, and the window would
+    /// no longer fit its content. On Wayland the flag goes back right away;
+    /// unminimizing asks nothing of the compositor there.
+    pub fn minimize(window: &slint::Window) {
+        use slint::winit_030::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        use slint::winit_030::WinitWindowAccessor;
+        window.set_minimized(true);
+        let wayland = window
+            .with_winit_window(|w| {
+                w.window_handle()
+                    .is_ok_and(|h| matches!(h.as_raw(), RawWindowHandle::Wayland(_)))
+            })
+            .unwrap_or(false);
+        if wayland {
+            window.set_minimized(false);
+        }
+    }
 
     pub fn run_installer(_: &std::path::Path) -> Result<(), SetupError> {
         Err(SetupError::Failed("updates come from your package manager".into()))

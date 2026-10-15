@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Linux, GNOME and KDE: a dictation with letters your keyboard layout does
+  not have (German umlauts on a US layout, say) is now pasted into the
+  window by itself instead of only landing on the clipboard. kyrr presses
+  Shift+Insert for it, which pastes in terminals too.
+- Linux on Wayland: closing the window (or "Off to the corner") without a
+  tray minimizes it every time, not only the first time, and the window
+  fits its content again after it came back.
+
 ## 0.5.4 (2026-10-15)
 
 - Fewer technical texts in the window: when kyrr cannot set the dictation
