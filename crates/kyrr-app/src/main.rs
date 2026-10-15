@@ -68,6 +68,8 @@ fn main() {
         eprintln!("kyrr: {e}");
     }
     platform::shutdown();
+    #[cfg(target_os = "linux")]
+    kyrr_linux::signals::exit_now(0);
 }
 
 /// Texts set from Rust; everything else is translated in the .slint file.
@@ -154,23 +156,29 @@ fn key_note_only(note: KeyNote, german: bool) -> String {
         KeyNote::Lines { desktop, file, lines } => {
             format!("{desktop} will not let kyrr near its key bindings. These lines in {file} do the trick:\n{lines}")
         }
-        KeyNote::Taken { file, key } if german => format!(
-            "In {file} hat {key} schon einen anderen Job. Such dir hier eine andere Taste aus, oder gib {key} dort frei."
+        KeyNote::Taken { file, key, line, bind } if german => format!(
+            "{key} hat schon einen anderen Job, in {file}, Zeile {line}:\n{bind}\nSuch dir hier eine andere Taste aus, oder nimm die Zeile dort raus."
         ),
-        KeyNote::Taken { file, key } => {
-            format!("{key} already has another job in {file}. Pick another key here, or free {key} there.")
-        }
+        KeyNote::Taken { file, key, line, bind } => format!(
+            "{key} already has another job, in {file}, line {line}:\n{bind}\nPick another key here, or take that line out there."
+        ),
         KeyNote::PressOnly { desktop, key } if german => format!(
             "{desktop} kann die Taste nur drücken, nicht halten: {key} einmal drücken startet das Diktat, nochmal drücken beendet es."
         ),
         KeyNote::PressOnly { desktop, key } => format!(
             "{desktop} only knows pressing, not holding: press {key} once to start dictating, once more to finish."
         ),
-        KeyNote::GnomeTaken { key } if german => format!(
+        KeyNote::GnomeTaken { key, name } if name.is_empty() && german => format!(
             "{key} hat in GNOMEs eigenen Tastenkürzeln schon einen Job. Such dir hier eine andere Taste aus, oder gib {key} unter Einstellungen › Tastatur › Tastenkürzel frei."
         ),
-        KeyNote::GnomeTaken { key } => format!(
+        KeyNote::GnomeTaken { key, name } if name.is_empty() => format!(
             "{key} already has a job in GNOME's own shortcuts. Pick another key here, or free {key} under Settings › Keyboard › Keyboard Shortcuts."
+        ),
+        KeyNote::GnomeTaken { key, name } if german => format!(
+            "{key} hat schon einen Job, im GNOME-Tastenkürzel „{name}“. Such dir hier eine andere Taste aus, oder gib {key} unter Einstellungen › Tastatur › Tastenkürzel frei."
+        ),
+        KeyNote::GnomeTaken { key, name } => format!(
+            "{key} already has a job, in GNOME's shortcut “{name}”. Pick another key here, or free {key} under Settings › Keyboard › Keyboard Shortcuts."
         ),
         KeyNote::HyprlandCommands { file, lines } if german => format!(
             "Hyprlands Tastenkürzel-Portal antwortet nicht. Mit diesen Zeilen in der Datei {file} diktierst du wie gewohnt mit gehaltener Taste:\n{lines}"

@@ -69,16 +69,22 @@ pub enum KeyNote {
         file: String,
         lines: String,
     },
-    /// Another bind of the user's in this config file already has the key.
-    Taken { file: String, key: String },
+    /// Another bind of the user's already has the key: in this config file,
+    /// on this line (from 1), written like this.
+    Taken {
+        file: String,
+        key: String,
+        line: usize,
+        bind: String,
+    },
     /// Hyprland without the shortcut portal: lines that run kyrr on the
     /// key's press and release, for this config file.
     HyprlandCommands { file: String, lines: String },
     /// kyrr bound the key, but the desktop runs it on presses only (GNOME
     /// before 48, niri): each press starts or ends dictation.
     PressOnly { desktop: &'static str, key: String },
-    /// Another of GNOME's custom shortcuts already has the key.
-    GnomeTaken { key: String },
+    /// Another of GNOME's custom shortcuts, by this name, already has the key.
+    GnomeTaken { key: String, name: String },
     /// Nothing catches keys: bind this command to a key.
     Command(String),
 }
@@ -837,18 +843,23 @@ mod imp {
         }
     }
 
-    fn write_if_changed(path: &std::path::Path, contents: Option<Vec<u8>>) {
+    /// True when the file is new or changed.
+    fn write_if_changed(path: &std::path::Path, contents: Option<Vec<u8>>) -> bool {
         let Some(contents) = contents else {
-            return;
+            return false;
         };
         if std::fs::read(path).is_ok_and(|old| old == contents) {
-            return;
+            return false;
         }
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        if let Err(e) = std::fs::write(path, contents) {
-            eprintln!("kyrr: writing {}: {e}", path.display());
+        match std::fs::write(path, contents) {
+            Ok(()) => true,
+            Err(e) => {
+                eprintln!("kyrr: writing {}: {e}", path.display());
+                false
+            }
         }
     }
 
@@ -896,9 +907,11 @@ mod imp {
                 desktop: compositor.name(),
                 key: keys.key,
             },
-            binds::Outcome::Taken { file } => KeyNote::Taken {
+            binds::Outcome::Taken { file, line, bind } => KeyNote::Taken {
                 file: binds::display(&file),
                 key: keys.key,
+                line,
+                bind,
             },
             binds::Outcome::Failed => {
                 let target = binds::target_or_default(compositor, &base);
@@ -925,7 +938,7 @@ mod imp {
         };
         match outcome {
             gnome::Outcome::Bound { .. } => KeyNote::PressOnly { desktop: "GNOME", key },
-            gnome::Outcome::Taken => KeyNote::GnomeTaken { key },
+            gnome::Outcome::Taken { name } => KeyNote::GnomeTaken { key, name },
             gnome::Outcome::Failed => KeyNote::Command(dictate_command("--dictate")),
         }
     }
@@ -1125,7 +1138,9 @@ mod imp {
         start_in_compositor(on);
         let file = autostart_file();
         if !on {
-            let _ = std::fs::remove_file(file);
+            if std::fs::remove_file(file).is_ok() {
+                autostart_changed();
+            }
             return;
         }
         let Ok(exe) = std::env::current_exe() else {
@@ -1140,7 +1155,28 @@ mod imp {
             path.replace('\\', "\\\\"),
             exec_quoted(&path)
         );
-        write_if_changed(&file, Some(entry.into_bytes()));
+        if write_if_changed(&file, Some(entry.into_bytes())) {
+            autostart_changed();
+        }
+    }
+
+    /// systemd turns the autostart files into services when it starts, and
+    /// keeps that copy across a sign-out: without a reload the next sign-in
+    /// starts the old file (an AppImage since moved). Where systemd runs the
+    /// session it reloads now; elsewhere the file is read at sign-in anyway.
+    fn autostart_changed() {
+        let user_systemd =
+            std::env::var_os("XDG_RUNTIME_DIR").is_some_and(|d| std::path::Path::new(&d).join("systemd").is_dir());
+        if !user_systemd {
+            return;
+        }
+        std::thread::spawn(|| {
+            let _ = std::process::Command::new("systemctl")
+                .args(["--user", "daemon-reload"])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+        });
     }
 
     /// Tiling compositors started without uwsm or a systemd session leave
