@@ -16,12 +16,14 @@ is for both, so it names neither. Linux lists the versions from 0.5.3 on.
 - (Linux) Dictating letters your keyboard layout does not have, like umlauts on a US keyboard, now lands in the window by itself, without Ctrl+V.
 - (Linux) The window's X minimizes kyrr every time, not just the first time.
 - (Linux) Going back from advanced to simple settings makes the window smaller again.
+- (Windows) Nothing changes on Windows this time: this update brings fixes for the Linux version.
 
 ### Deutsch
 
 - (Linux) Diktierst du Buchstaben, die deine Tastaturbelegung nicht hat, etwa Umlaute auf einer US-Tastatur, landet der Text jetzt von selbst im Fenster, ohne Strg+V.
 - (Linux) Das X des Fensters minimiert kyrr jedes Mal, nicht nur beim ersten Mal.
 - (Linux) Zurück von erweiterten auf einfache Einstellungen wird das Fenster wieder kleiner.
+- (Windows) Unter Windows ändert sich diesmal nichts: Dieses Update bringt Korrekturen für die Linux-Version.
 
 ## 0.5.4
 
