@@ -76,19 +76,19 @@ fn main() {
 fn text(language: Language, english: &str) -> String {
     let german = match english {
         "permission" => "Windows hat die Erlaubnis nicht erteilt. Bitte versuche es noch einmal.",
-        "setup failed" => "Die Einrichtung ist fehlgeschlagen:",
+        "setup failed" => "Die Einrichtung hat nicht geklappt. Nochmal versuchen, sonst kyrr neu installieren.",
         "disconnected" => "nicht angeschlossen",
-        "probe failed" => "Der Test hat nicht geklappt:",
-        "listen failed" => "Mithören hat nicht geklappt:",
+        "probe failed" => "Der Test hat nicht geklappt. Sind Lautsprecher oder Kopfhörer angeschlossen?",
+        "listen failed" => "Mithören hat nicht geklappt. Sind Mikrofon und Kopfhörer angeschlossen?",
         "right ctrl" => "Strg rechts",
         other => other,
     };
     let english = match english {
         "permission" => "Windows did not grant permission. Please try again.",
-        "setup failed" => "Setup failed:",
+        "setup failed" => "Setup did not finish. Try again, or reinstall kyrr.",
         "disconnected" => "disconnected",
-        "probe failed" => "The test did not work:",
-        "listen failed" => "Listening did not work:",
+        "probe failed" => "The test did not work. Are your speakers or headphones plugged in?",
+        "listen failed" => "Listening did not work. Are your microphone and headphones plugged in?",
         "right ctrl" => "Right Ctrl",
         other => other,
     };
@@ -150,18 +150,10 @@ fn key_note_only(note: KeyNote, german: bool) -> String {
             "Your desktop hands out the key and asks once for it. That question was cancelled, so the key does not reach kyrr. “Set up key” asks again."
                 .into()
         }
-        KeyNote::Lines { desktop, file, lines } if german => format!(
-            "{desktop} lässt kyrr nicht an seine Tastenbelegung. Mit diesen Zeilen in der Datei {file} klappt es:\n{lines}"
-        ),
-        KeyNote::Lines { desktop, file, lines } => {
-            format!("{desktop} will not let kyrr near its key bindings. These lines in {file} do the trick:\n{lines}")
+        KeyNote::Taken { key } if german => {
+            format!("{key} hat schon einen anderen Job. Such dir hier eine andere Taste aus.")
         }
-        KeyNote::Taken { file, key, line, bind } if german => format!(
-            "{key} hat schon einen anderen Job, in {file}, Zeile {line}:\n{bind}\nSuch dir hier eine andere Taste aus, oder nimm die Zeile dort raus."
-        ),
-        KeyNote::Taken { file, key, line, bind } => format!(
-            "{key} already has another job, in {file}, line {line}:\n{bind}\nPick another key here, or take that line out there."
-        ),
+        KeyNote::Taken { key } => format!("{key} already has another job. Pick another key here."),
         KeyNote::PressOnly { desktop, key } if german => format!(
             "{desktop} kann die Taste nur drücken, nicht halten: {key} einmal drücken startet das Diktat, nochmal drücken beendet es."
         ),
@@ -180,17 +172,11 @@ fn key_note_only(note: KeyNote, german: bool) -> String {
         KeyNote::GnomeTaken { key, name } => format!(
             "{key} already has a job, in GNOME's shortcut “{name}”. Pick another key here, or free {key} under Settings › Keyboard › Keyboard Shortcuts."
         ),
-        KeyNote::HyprlandCommands { file, lines } if german => format!(
-            "Hyprlands Tastenkürzel-Portal antwortet nicht. Mit diesen Zeilen in der Datei {file} diktierst du wie gewohnt mit gehaltener Taste:\n{lines}"
-        ),
-        KeyNote::HyprlandCommands { file, lines } => format!(
-            "Hyprland's shortcut portal does not answer. Add these lines to {file} and holding the key dictates as usual:\n{lines}"
-        ),
         KeyNote::Command(command) if german => format!(
-            "Dieser Desktop reicht keine Taste an kyrr weiter. Leg in seinen Tastatur-Einstellungen diesen Befehl auf eine Taste, jeder Druck startet oder beendet das Diktat:\n{command}"
+            "kyrr kann die Taste hier nicht selbst einrichten. Leg in den Tastatur-Einstellungen deines Desktops diesen Befehl auf eine Taste, jeder Druck startet oder beendet das Diktat:\n{command}"
         ),
         KeyNote::Command(command) => format!(
-            "This desktop passes no key to kyrr. Put this command on a key in its keyboard settings, each press starts or ends dictation:\n{command}"
+            "kyrr cannot set the key up here by itself. Put this command on a key in your desktop's keyboard settings, each press starts or ends dictation:\n{command}"
         ),
     }
 }
@@ -210,9 +196,9 @@ enum PipewireStep {
 fn pipewire_note(step: PipewireStep, plan: Option<(bool, String)>, german: bool) -> String {
     let Some((can_ask, command)) = plan else {
         return if german {
-            "Hol dir PipeWire aus der Softwareverwaltung deines Systems (Paket „pipewire-pulse“), dann einmal ab- und wieder anmelden.".into()
+            "Hol dir PipeWire aus der Softwareverwaltung deines Systems (such nach „PipeWire“), dann einmal ab- und wieder anmelden.".into()
         } else {
-            "Get PipeWire from your system's software manager (package “pipewire-pulse”), then sign out and back in once.".into()
+            "Get PipeWire from your system's software manager (search for “PipeWire”), then sign out and back in once.".into()
         };
     };
     match step {
@@ -994,7 +980,8 @@ impl App {
             }
             probe::Event::Failed(e) => {
                 state.set_probe_state(ProbeState::Idle);
-                state.set_probe_error(format!("{} {e}", text(self.language(), "probe failed")).into());
+                eprintln!("kyrr: test: {e}");
+                state.set_probe_error(text(self.language(), "probe failed").into());
             }
         }
         fit(&self.window);
@@ -1172,7 +1159,8 @@ impl App {
             let _ = weak.upgrade_in_event_loop(move |w| {
                 let state = w.global::<AppState>();
                 state.set_listening(false);
-                state.set_probe_error(format!("{prefix} {e}").into());
+                eprintln!("kyrr: listening: {e}");
+                state.set_probe_error(prefix.into());
             });
         });
         *self.listening.borrow_mut() = Some(listening);
@@ -1349,7 +1337,10 @@ impl App {
                     Err(e) => {
                         let msg = match e {
                             SetupError::Declined | SetupError::Gone => text(language, "permission"),
-                            SetupError::Failed(e) => format!("{} {e}", text(language, "setup failed")),
+                            SetupError::Failed(e) => {
+                                eprintln!("kyrr: setup: {e}");
+                                text(language, "setup failed")
+                            }
                         };
                         state.set_error_text(msg.into());
                         state.set_filter_state(FilterState::Error);

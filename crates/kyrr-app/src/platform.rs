@@ -62,24 +62,9 @@ pub enum KeyNote {
     /// The desktop could own the key, but has not bound it to kyrr: the user
     /// cancelled its dialog, or it failed. [`bind_key_again`] asks again.
     Unbound,
-    /// The compositor (Hyprland, Sway, river, niri) binds keys in its config
-    /// and kyrr could not add the lines itself: they belong in this file.
-    Lines {
-        desktop: &'static str,
-        file: String,
-        lines: String,
-    },
-    /// Another bind of the user's already has the key: in this config file,
-    /// on this line (from 1), written like this.
-    Taken {
-        file: String,
-        key: String,
-        line: usize,
-        bind: String,
-    },
-    /// Hyprland without the shortcut portal: lines that run kyrr on the
-    /// key's press and release, for this config file.
-    HyprlandCommands { file: String, lines: String },
+    /// Another bind of the user's already has the key. Where it is goes to
+    /// the log, the window only says that the key is taken.
+    Taken { key: String },
     /// kyrr bound the key, but the desktop runs it on presses only (GNOME
     /// before 48, niri): each press starts or ends dictation.
     PressOnly { desktop: &'static str, key: String },
@@ -907,24 +892,20 @@ mod imp {
                 desktop: compositor.name(),
                 key: keys.key,
             },
-            binds::Outcome::Taken { file, line, bind } => KeyNote::Taken {
-                file: binds::display(&file),
-                key: keys.key,
-                line,
-                bind,
-            },
+            binds::Outcome::Taken { file, line, bind } => {
+                eprintln!("kyrr: {} is taken in {} line {line}: {bind}", keys.key, binds::display(&file));
+                KeyNote::Taken { key: keys.key }
+            }
             binds::Outcome::Failed => {
+                // The window only asks for a key on the command; the config
+                // lines go to the log for those who want them.
                 let target = binds::target_or_default(compositor, &base);
-                let (file, lines) = (binds::display(&target.path), binds::lines(target.syntax, &keys));
-                if compositor == Compositor::Hyprland && !portal {
-                    KeyNote::HyprlandCommands { file, lines }
-                } else {
-                    KeyNote::Lines {
-                        desktop: compositor.name(),
-                        file,
-                        lines,
-                    }
-                }
+                eprintln!(
+                    "kyrr: could not write {}; lines for it:\n{}",
+                    binds::display(&target.path),
+                    binds::lines(target.syntax, &keys)
+                );
+                KeyNote::Command(dictate_command("--dictate"))
             }
         }
     }
