@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>kyrr: Clean mic sound and dictation</title>
-<meta name="description" content="kyrr removes background noise from your microphone and types what you say. Free and private, on your own computer. For Windows and Linux.">
+<title>kyrr: noise suppression and dictation for Windows and Linux</title>
+<meta name="description" content="kyrr is a free, open-source app for Windows and Linux. It removes background noise from your microphone and converts speech to text in German and English, processed locally on your computer.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" type="image/svg+xml" href="kyrr.svg">
 <link rel="alternate" hreflang="en" href="https://heast13.github.io/kyrr/">
@@ -41,39 +41,42 @@
 
   <main id="main">
     <div class="hero">
-      <h1>Clean mic sound and dictation, on your own PC.</h1>
-      <p class="lead">kyrr removes background noise from your microphone and types what you say. Free and private, for Windows and Linux.</p>
+      <h1>Noise suppression and dictation for Windows and Linux</h1>
+      <p class="lead">kyrr is a free, open-source app. It removes background noise from your microphone and converts speech to text in German and English. All audio is processed on your computer.</p>
       <div class="actions">
         <a class="btn primary" href="#download">Download</a>
-        <a class="more" href="https://github.com/heast13/kyrr#readme">Details on GitHub ›</a>
+        <a class="more" href="https://github.com/heast13/kyrr#readme">README on GitHub ›</a>
       </div>
       <img src="main.png" width="570" height="606" alt="kyrr's window: noise filter, improve voice and dictation, each with one switch">
-      <p class="small kyrr-note"><i>kyrr</i> (Old Norse): still, quiet, at rest.</p>
     </div>
 
-    <h2 class="section-title" id="h-what">What it does</h2>
+    <h2 class="section-title" id="h-what">Features</h2>
     <div class="features">
       <div class="feature">
-        <h3>Removes background noise</h3>
-        <p>Keyboard clatter, fans and traffic are filtered out of your microphone before anyone hears them. Good for calls, streams and recordings, in every app: Teams, Zoom, Discord, OBS, your browser.</p>
+        <h3>Noise suppression</h3>
+        <p>Removes background noise such as typing, fans or traffic from the microphone signal in real time. kyrr uses the neural network DPDFNet, with a large model and a small one that needs less processing power. Apps such as Teams, Zoom, Discord, OBS or a browser receive the cleaned sound without any change to their settings.</p>
       </div>
       <div class="feature">
-        <h3>Improves your voice</h3>
-        <p>Evens out loud and quiet parts, softens harsh S sounds and cuts low rumble. It is on from the start; sliders in Settings if you want to tune it.</p>
+        <h3>Voice processing</h3>
+        <p>Filter for low rumble, tone presets (Neutral, Warm, Clear, Bright or custom), compressor, de-esser, pop protection and automatic volume. Default: neutral tone, medium compression, light de-essing, rumble filter and automatic volume. Everything can be changed in Settings.</p>
       </div>
       <div class="feature">
-        <h3>Types what you say</h3>
-        <p>Hold F9, speak, let go: your words appear wherever your cursor is, in an email, a document or a chat. German and English. Say “new line” for a line break.</p>
+        <h3>Dictation</h3>
+        <p>Hold F9 while you speak. When you release it, kyrr types the text at the cursor, in the app you are typing in. German and English. “New line” inserts a line break. Instead of F9 you can use F8, Pause or right Ctrl, or tap once to start and once to stop.</p>
+      </div>
+      <div class="feature">
+        <h3>Level check</h3>
+        <p>Meters show what the microphone picks up and what apps receive. A ten-second test records your voice and plays it back before and after processing. You can also listen to yourself live on headphones.</p>
       </div>
     </div>
 
     <section class="steps" aria-labelledby="h-how">
       <h2 class="section-title" id="h-how">How it works</h2>
       <ol>
-        <li><b>Install kyrr.</b> It sets itself up the first time it starts.</li>
-        <li><b>Use your microphone as always.</b> kyrr sits between the microphone and your apps, so they get the cleaned sound without any setting. On Linux it adds a microphone called “kyrr” and makes it your default.</li>
-        <li><b>To dictate, hold F9 and talk.</b> The first time, kyrr downloads the speech model once (up to 900 MB). After that it all runs on your PC.</li>
-        <li><b>Want proof?</b> Settings has a ten-second test: it plays your voice before and after kyrr.</li>
+        <li><b>Installation.</b> Windows: an installer, which needs administrator rights. Linux: a single AppImage file, no administrator rights. kyrr sets itself up on first start.</li>
+        <li><b>Audio.</b> On Windows, kyrr adds a filter to the Windows audio system that runs directly on the microphone. On Linux, kyrr creates a PipeWire microphone called “kyrr” and makes it the default. Your apps need no changes. If you switch to another microphone, kyrr switches with it.</li>
+        <li><b>Dictation.</b> The first time you dictate, kyrr downloads the speech model for your language once (German 900 MB, English 663 MB). After that, dictation works offline.</li>
+        <li><b>Updates.</b> kyrr checks once a day for a new version and tells you about it. On Windows, “Update” installs it. On Linux, quit kyrr and run the install commands again.</li>
       </ol>
     </section>
   </main>
@@ -81,41 +84,66 @@
 
 <section class="band" id="privacy" aria-labelledby="h-privacy">
   <div class="wrap">
-    <h2 id="h-privacy">Stays on your PC.</h2>
-    <p class="lead">Your voice and your text never leave your computer. No cloud, no account, no tracking.</p>
-    <p class="small">kyrr only goes online to fetch the speech model once and to check once a day for a new version (you can switch that off). <a href="https://github.com/heast13/kyrr#privacy">Exactly what connects where</a></p>
+    <h2 id="h-privacy">Privacy</h2>
+    <p class="lead">Audio and text are processed only on your computer. kyrr needs no account and sends no usage data.</p>
+    <p class="small">kyrr connects to the internet for three things: downloading the speech model once (each file checked against a SHA256 hash), a daily update check with GitHub (can be switched off in Settings), and downloading an update when you click “Update”. <a href="https://github.com/heast13/kyrr#privacy">Details in the README</a></p>
+  </div>
+</section>
+
+<section class="specs" id="requirements" aria-labelledby="h-req">
+  <div class="wrap">
+    <h2 class="section-title" id="h-req">System requirements</h2>
+    <div class="spec-cols">
+      <div>
+        <h3>Windows</h3>
+        <ul>
+          <li>Windows 10 (22H2) or Windows 11, 64-bit</li>
+          <li>Intel or AMD processor. On Windows on ARM, only dictation works.</li>
+          <li>Administrator rights for installing</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Linux</h3>
+        <ul>
+          <li>64-bit Intel or AMD, glibc 2.39 or newer: Ubuntu 24.04, Fedora 40, Debian 13, Linux Mint 22, Arch, or newer</li>
+          <li>PipeWire. If it is missing, kyrr offers to install it.</li>
+          <li>Noise suppression needs a processor with AVX2 (most from 2015 onwards).</li>
+        </ul>
+      </div>
+    </div>
+    <p class="small spec-note">Both: no graphics card needed. Disk space for the speech model: 663 MB (English) or 900 MB (German).</p>
   </div>
 </section>
 
 <section class="download" id="download" aria-labelledby="h-download">
   <div class="wrap">
     <h2 id="h-download">Download</h2>
-    <p class="lead">Free. Pick your system.</p>
+    <p class="lead">Free of charge. Source code on GitHub under MIT or Apache 2.0.</p>
     <div data-tabs>
       <div class="panel" id="windows" data-label="Windows">
         <h3>Windows</h3>
         <p><a class="btn primary" href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-setup.exe">Download for Windows</a></p>
-        <p class="small">64-bit Windows 10 (22H2) or 11 on Intel or AMD. Not code-signed yet, so Windows may warn you: “More info”, then “Run anyway”. <a href="https://github.com/heast13/kyrr#code-signing-policy">Why, and more</a></p>
+        <p class="small">The installer is not code-signed yet, so Windows SmartScreen shows a warning: click “More info”, then “Run anyway”. <a href="https://github.com/heast13/kyrr#code-signing-policy">Why it is not signed, and how to verify the file</a></p>
         <div class="more-info">
           <details>
             <summary>Start at sign-in</summary>
-            <p>kyrr starts by itself when you sign in, once its first-start setup is done. To change that: Settings in kyrr, “Start when you sign in”.</p>
+            <p>kyrr starts automatically when you sign in, once its first-start setup is done. To change this: Settings in kyrr, “Start with Windows”.</p>
           </details>
         </div>
       </div>
 
       <div class="panel" id="appimage" data-label="Linux">
         <h3>Linux</h3>
-        <p>Paste this into a terminal. It downloads kyrr and starts it:</p>
+        <p>Paste this into a terminal. It downloads kyrr to <code>~/.local/bin</code>, makes it executable and starts it:</p>
         <div class="codebox"><pre tabindex="0"><code>mkdir -p ~/.local/bin
 curl -L -o ~/.local/bin/kyrr https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage
 chmod +x ~/.local/bin/kyrr
 ~/.local/bin/kyrr &amp;</code></pre></div>
-        <p class="small">For current 64-bit distributions with PipeWire (Ubuntu 24.04+, Fedora, Arch and friends). Prefer clicking? <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">Get the file</a>, allow it to run as a program, double click. On first start your desktop may ask once for the dictation key and whether kyrr may type; kyrr walks you through it. More details: <a href="https://github.com/heast13/kyrr#install">README</a></p>
+        <p class="small">Without a terminal: <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">download the AppImage</a>, allow it to run as a program in your file manager (right click, Properties) and double click it. On first start kyrr adds itself to your app menu. On GNOME and KDE the desktop asks once for the dictation key and once whether kyrr may type; kyrr explains both steps. <a href="https://github.com/heast13/kyrr#install">Notes for other desktops</a></p>
         <div class="more-info">
           <details>
             <summary>Start at sign-in</summary>
-            <p>kyrr starts by itself when you sign in, once its first-start setup is done. To change that: Settings in kyrr, “Start when you sign in”.</p>
+            <p>kyrr starts automatically when you sign in, once its first-start setup is done. To change this: Settings in kyrr, “Start when you sign in”.</p>
           </details>
           <details>
             <summary>Uninstall</summary>
@@ -137,28 +165,24 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
 <section class="faq" id="faq" aria-labelledby="h-faq">
   <h2 id="h-faq">Questions</h2>
   <details>
-    <summary>Does it need the internet?</summary>
-    <p>Only to download the speech model the first time you dictate, and for the daily check for a new version. Noise removal needs no download at all.</p>
+    <summary>Does kyrr need an internet connection?</summary>
+    <p>Only to download the speech model the first time you dictate, for the daily update check, which you can switch off, and to download an update when you click “Update”. Noise suppression works without internet.</p>
   </details>
   <details>
-    <summary>Do I need a fancy computer?</summary>
-    <p>No. Any 64-bit PC with Intel or AMD will do, no graphics card needed. A small filter is there for older laptops. (Windows on ARM: dictation only.)</p>
+    <summary>Which apps get the cleaned sound?</summary>
+    <p>On Windows, every app that uses the microphone. On Linux, every app that uses the default microphone, which kyrr sets to its own “kyrr” microphone.</p>
   </details>
   <details>
-    <summary>Which languages?</summary>
-    <p>Dictation understands German and English. The noise filter works whatever language you speak.</p>
+    <summary>Is there a Mac version?</summary>
+    <p>No. kyrr is available for Windows and Linux.</p>
   </details>
   <details>
-    <summary>Does it work on a Mac?</summary>
-    <p>No, kyrr is for Windows and Linux.</p>
+    <summary>How does kyrr compare with NVIDIA Broadcast and Krisp?</summary>
+    <p>NVIDIA Broadcast needs an NVIDIA RTX graphics card. Krisp needs an account and is free for 60 minutes a day, with a subscription beyond that. Both work as a virtual microphone that you select in each app. kyrr needs no selection in the apps, because it filters the microphone itself on Windows and sets its own microphone as the default on Linux. It needs no account and includes dictation. As of October 2026; corrections welcome.</p>
   </details>
   <details>
-    <summary>What does it cost?</summary>
-    <p>Nothing. It's free and open source, and there is no account to make.</p>
-  </details>
-  <details>
-    <summary>How is it different from NVIDIA Broadcast or Krisp?</summary>
-    <p>Broadcast needs an RTX graphics card, Krisp an account and, for full use, a subscription. kyrr needs neither, and it types what you say on top. As far as we know in October 2026; corrections welcome.</p>
+    <summary>Is kyrr finished?</summary>
+    <p>kyrr is in active development. Bug reports and suggestions are welcome on <a href="https://github.com/heast13/kyrr/issues">GitHub</a>.</p>
   </details>
 </section>
 
@@ -170,7 +194,8 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
       <a href="https://github.com/heast13/kyrr/releases/latest">Releases</a>
       <a href="https://github.com/heast13/kyrr#privacy">Privacy</a>
     </p>
-    <p>Free software, MIT OR Apache-2.0. No cookies, no trackers, not even a font.</p>
+    <p>Free software under MIT or Apache 2.0. This website sets no cookies and uses no trackers; a language choice is stored only in your browser.</p>
+    <p><i>kyrr</i> is Old Norse for “still, quiet”.</p>
   </div>
 </footer>
 </body>

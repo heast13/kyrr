@@ -76,7 +76,6 @@ code { background: var(--code); padding: 0.1em 0.35em; border-radius: 4px; }
 .btn:hover { filter: brightness(1.1); }
 .more { font-weight: 600; text-decoration: none; }
 .more:hover { text-decoration: underline; }
-.kyrr-note { font-style: italic; margin: 1.5rem 0 0; }
 
 /* features */
 .features { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; padding-bottom: clamp(3rem, 8vw, 6rem); }
@@ -141,7 +140,15 @@ footer { border-top: 1px solid var(--border); padding: 1.5rem 0 2.5rem; color: v
 footer p { margin: 0 0 0.5rem; }
 footer .links a { margin: 0 0.6rem; white-space: nowrap; }
 
+/* System requirements */
+.specs { padding: clamp(3rem, 9vw, 6rem) 0 0; }
+.spec-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem 2.5rem; max-width: 52rem; margin: 0 auto; }
+.spec-cols ul { margin: 0; padding-left: 1.2rem; color: var(--muted); font-size: 1.05rem; }
+.spec-cols li { margin-bottom: 0.4rem; }
+.spec-note { text-align: center; margin: 1.5rem auto 0; }
+
 @media (min-width: 860px) {
-  .features { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .spec-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

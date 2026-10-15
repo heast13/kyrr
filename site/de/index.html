@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>kyrr: Sauberer Mikrofonton und Diktat</title>
-<meta name="description" content="kyrr entfernt Störgeräusche aus deinem Mikrofon und tippt, was du sagst. Kostenlos und privat, auf deinem eigenen Computer. Für Windows und Linux.">
+<title>kyrr: Rauschunterdrückung und Diktat für Windows und Linux</title>
+<meta name="description" content="kyrr ist eine kostenlose Open-Source-App für Windows und Linux. Sie entfernt Störgeräusche aus dem Mikrofon und wandelt Sprache in Text um, auf Deutsch und Englisch, lokal auf deinem Computer.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" type="image/svg+xml" href="../kyrr.svg">
 <link rel="alternate" hreflang="en" href="https://heast13.github.io/kyrr/">
@@ -29,39 +29,42 @@
 
   <main id="main">
     <div class="hero">
-      <h1>Sauberer Mikrofonton und Diktat, auf deinem eigenen PC.</h1>
-      <p class="lead">kyrr entfernt Störgeräusche aus deinem Mikrofon und tippt, was du sagst. Kostenlos und privat, für Windows und Linux.</p>
+      <h1>Rauschunterdrückung und Diktat für Windows und Linux</h1>
+      <p class="lead">kyrr ist eine kostenlose Open-Source-App. Sie entfernt Störgeräusche aus deinem Mikrofon und wandelt Sprache in Text um, auf Deutsch und Englisch. Der gesamte Ton wird auf deinem Computer verarbeitet.</p>
       <div class="actions">
         <a class="btn primary" href="#download">Herunterladen</a>
-        <a class="more" href="https://github.com/heast13/kyrr#readme">Details auf GitHub (Englisch) ›</a>
+        <a class="more" href="https://github.com/heast13/kyrr#readme">README auf GitHub (Englisch) ›</a>
       </div>
       <img src="../main.png" width="570" height="606" alt="Das kyrr-Fenster: Störgeräusche entfernen, Stimme verbessern und Diktat, jeweils mit einem Schalter (Oberfläche auf Englisch)">
-      <p class="small kyrr-note"><i>kyrr</i> (Altnordisch): still, ruhig, in Ruhe.</p>
     </div>
 
-    <h2 class="section-title" id="h-what">Was es kann</h2>
+    <h2 class="section-title" id="h-what">Funktionen</h2>
     <div class="features">
       <div class="feature">
-        <h3>Entfernt Störgeräusche</h3>
-        <p>Tastaturklappern, Lüfter und Verkehr werden aus deinem Mikrofon gefiltert, bevor es jemand hört. Gut für Telefonate, Streams und Aufnahmen, in jeder App: Teams, Zoom, Discord, OBS, dein Browser.</p>
+        <h3>Rauschunterdrückung</h3>
+        <p>Entfernt Hintergrundgeräusche wie Tippen, Lüfter oder Verkehr in Echtzeit aus dem Mikrofonsignal. kyrr nutzt dafür das neuronale Netz DPDFNet, mit einem großen Modell und einem kleinen, das weniger Rechenleistung braucht. Apps wie Teams, Zoom, Discord, OBS oder der Browser bekommen den bereinigten Ton, ohne dass du dort etwas einstellen musst.</p>
       </div>
       <div class="feature">
-        <h3>Verbessert deine Stimme</h3>
-        <p>Gleicht laute und leise Stellen an, mildert scharfe S-Laute und schneidet tiefes Dröhnen ab. Von Anfang an eingeschaltet; Regler gibt es in den Einstellungen, falls du etwas einstellen willst.</p>
+        <h3>Stimmbearbeitung</h3>
+        <p>Filter gegen tiefes Rumpeln, Klang-Voreinstellungen (Neutral, Warm, Klar, Hell oder eigene), Kompressor, De-Esser, Popschutz und automatische Lautstärke. Voreingestellt: neutraler Klang, mittlere Kompression, leichte S-Laut-Dämpfung, Rumpelfilter und automatische Lautstärke. Alles lässt sich in den Einstellungen ändern.</p>
       </div>
       <div class="feature">
-        <h3>Tippt, was du sagst</h3>
-        <p>F9 halten, sprechen, loslassen: Deine Worte erscheinen dort, wo der Cursor steht, in einer E-Mail, einem Dokument oder einem Chat. Deutsch und Englisch. Sag „neue Zeile“ für einen Zeilenumbruch.</p>
+        <h3>Diktat</h3>
+        <p>Halte F9 gedrückt, während du sprichst. Beim Loslassen tippt kyrr den Text an der Cursorposition ein, in der App, in der du gerade schreibst. Deutsch und Englisch. „Neue Zeile“ fügt einen Zeilenumbruch ein. Statt F9 gehen auch F8, Pause oder Strg rechts, oder einmal tippen zum Starten und einmal zum Beenden.</p>
+      </div>
+      <div class="feature">
+        <h3>Pegelkontrolle</h3>
+        <p>Anzeigen zeigen, was das Mikrofon aufnimmt und was bei den Apps ankommt. Ein Zehn-Sekunden-Test nimmt deine Stimme auf und spielt sie vor und nach der Bearbeitung ab. Du kannst dich auch live über Kopfhörer mithören.</p>
       </div>
     </div>
 
     <section class="steps" aria-labelledby="h-how">
-      <h2 class="section-title" id="h-how">So funktioniert’s</h2>
+      <h2 class="section-title" id="h-how">Funktionsweise</h2>
       <ol>
-        <li><b>kyrr installieren.</b> Beim ersten Start richtet es sich selbst ein.</li>
-        <li><b>Das Mikrofon wie gewohnt nutzen.</b> kyrr sitzt zwischen Mikrofon und deinen Apps, sie bekommen den bereinigten Ton ganz ohne Einstellung. Unter Linux legt kyrr ein Mikrofon namens „kyrr“ an und macht es zum Standard.</li>
-        <li><b>Zum Diktieren F9 halten und sprechen.</b> Beim ersten Mal lädt kyrr einmalig das Sprachmodell (bis zu 900 MB). Danach läuft alles auf deinem PC.</li>
-        <li><b>Hören, was kyrr bewirkt.</b> In den Einstellungen gibt es einen Zehn-Sekunden-Test: Er spielt deine Stimme vor und nach kyrr ab.</li>
+        <li><b>Installation.</b> Windows: ein Installationsprogramm, das Administratorrechte braucht. Linux: eine einzelne AppImage-Datei, ohne Administratorrechte. Beim ersten Start richtet sich kyrr selbst ein.</li>
+        <li><b>Ton.</b> Unter Windows fügt kyrr dem Windows-Audiosystem einen Filter hinzu, der direkt am Mikrofon arbeitet. Unter Linux legt kyrr ein PipeWire-Mikrofon namens „kyrr“ an und macht es zum Standard. Deine Apps brauchen keine Änderung. Wechselst du das Mikrofon, wechselt kyrr mit.</li>
+        <li><b>Diktat.</b> Beim ersten Diktieren lädt kyrr einmalig das Sprachmodell für deine Sprache herunter (Deutsch 900 MB, Englisch 663 MB). Danach funktioniert das Diktat offline.</li>
+        <li><b>Updates.</b> kyrr sucht einmal täglich nach einer neuen Version und zeigt sie an. Unter Windows installiert „Aktualisieren“ sie. Unter Linux beendest du kyrr und führst die Installationsbefehle erneut aus.</li>
       </ol>
     </section>
   </main>
@@ -69,41 +72,66 @@
 
 <section class="band" id="privacy" aria-labelledby="h-privacy">
   <div class="wrap">
-    <h2 id="h-privacy">Bleibt auf deinem PC.</h2>
-    <p class="lead">Deine Stimme und dein Text verlassen deinen Computer nie. Keine Cloud, kein Konto, kein Tracking.</p>
-    <p class="small">kyrr geht nur online, um einmal das Sprachmodell zu laden und um einmal täglich nach einer neuen Version zu schauen (abschaltbar). <a href="https://github.com/heast13/kyrr#privacy">Genau nachlesen, was wohin verbindet (Englisch)</a></p>
+    <h2 id="h-privacy">Datenschutz</h2>
+    <p class="lead">Ton und Text werden nur auf deinem Computer verarbeitet. kyrr braucht kein Konto und sendet keine Nutzungsdaten.</p>
+    <p class="small">kyrr verbindet sich für drei Dinge mit dem Internet: einmal zum Herunterladen des Sprachmodells (jede Datei wird per SHA256-Prüfsumme kontrolliert), täglich zur Update-Suche bei GitHub (in den Einstellungen abschaltbar) und zum Herunterladen eines Updates, wenn du auf „Aktualisieren“ klickst. <a href="https://github.com/heast13/kyrr#privacy">Details im README (Englisch)</a></p>
+  </div>
+</section>
+
+<section class="specs" id="requirements" aria-labelledby="h-req">
+  <div class="wrap">
+    <h2 class="section-title" id="h-req">Systemanforderungen</h2>
+    <div class="spec-cols">
+      <div>
+        <h3>Windows</h3>
+        <ul>
+          <li>Windows 10 (22H2) oder Windows 11, 64 Bit</li>
+          <li>Intel- oder AMD-Prozessor. Unter Windows auf ARM funktioniert nur das Diktat.</li>
+          <li>Administratorrechte für die Installation</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Linux</h3>
+        <ul>
+          <li>64 Bit Intel oder AMD, glibc 2.39 oder neuer: Ubuntu 24.04, Fedora 40, Debian 13, Linux Mint 22, Arch oder neuer</li>
+          <li>PipeWire. Ist es nicht installiert, bietet kyrr die Installation an.</li>
+          <li>Die Rauschunterdrückung braucht einen Prozessor mit AVX2 (die meisten ab 2015).</li>
+        </ul>
+      </div>
+    </div>
+    <p class="small spec-note">Beide: keine Grafikkarte nötig. Speicherplatz für das Sprachmodell: 663 MB (Englisch) oder 900 MB (Deutsch).</p>
   </div>
 </section>
 
 <section class="download" id="download" aria-labelledby="h-download">
   <div class="wrap">
     <h2 id="h-download">Herunterladen</h2>
-    <p class="lead">Kostenlos. Such dir dein System aus.</p>
+    <p class="lead">Kostenlos. Quellcode auf GitHub unter MIT oder Apache 2.0.</p>
     <div data-tabs>
       <div class="panel" id="windows" data-label="Windows">
         <h3>Windows</h3>
         <p><a class="btn primary" href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-setup.exe">Für Windows herunterladen</a></p>
-        <p class="small">64-Bit-Windows 10 (22H2) oder 11 auf Intel oder AMD. Noch nicht signiert, deshalb warnt Windows eventuell: „Weitere Informationen“, dann „Trotzdem ausführen“. <a href="https://github.com/heast13/kyrr#code-signing-policy">Warum, und mehr (Englisch)</a></p>
+        <p class="small">Das Installationsprogramm ist noch nicht signiert, deshalb zeigt Windows SmartScreen eine Warnung: „Weitere Informationen“ klicken, dann „Trotzdem ausführen“. <a href="https://github.com/heast13/kyrr#code-signing-policy">Warum es nicht signiert ist und wie du die Datei prüfst (Englisch)</a></p>
         <div class="more-info">
           <details>
             <summary>Beim Anmelden starten</summary>
-            <p>kyrr startet von selbst beim Anmelden, sobald die Einrichtung beim ersten Start fertig ist. Ändern geht in den Einstellungen von kyrr unter „Beim Anmelden starten“.</p>
+            <p>kyrr startet automatisch beim Anmelden, sobald die Einrichtung beim ersten Start fertig ist. Ändern: Einstellungen in kyrr, „Mit Windows starten“.</p>
           </details>
         </div>
       </div>
 
       <div class="panel" id="appimage" data-label="Linux">
         <h3>Linux</h3>
-        <p>Kopier das in ein Terminal. Es lädt kyrr herunter und startet es:</p>
+        <p>Kopier das in ein Terminal. Es lädt kyrr nach <code>~/.local/bin</code>, macht es ausführbar und startet es:</p>
         <div class="codebox"><pre tabindex="0"><code>mkdir -p ~/.local/bin
 curl -L -o ~/.local/bin/kyrr https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage
 chmod +x ~/.local/bin/kyrr
 ~/.local/bin/kyrr &amp;</code></pre></div>
-        <p class="small">Für aktuelle 64-Bit-Distributionen mit PipeWire (Ubuntu 24.04+, Fedora, Arch und Co.). Lieber klicken? <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">Die Datei holen</a>, als Programm ausführen erlauben, doppelklicken. Beim ersten Start fragt dein Desktop eventuell einmal nach der Diktier-Taste und ob kyrr tippen darf; kyrr führt dich durch. Weitere Details: <a href="https://github.com/heast13/kyrr#install">README (Englisch)</a></p>
+        <p class="small">Ohne Terminal: <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">AppImage herunterladen</a>, im Dateimanager als Programm ausführen erlauben (Rechtsklick, Eigenschaften) und doppelklicken. Beim ersten Start legt kyrr einen Eintrag im App-Menü an. Unter GNOME und KDE fragt der Desktop einmal nach der Diktier-Taste und einmal, ob kyrr tippen darf; kyrr erklärt beide Schritte. <a href="https://github.com/heast13/kyrr#install">Hinweise zu anderen Desktops (Englisch)</a></p>
         <div class="more-info">
           <details>
             <summary>Beim Anmelden starten</summary>
-            <p>kyrr startet von selbst beim Anmelden, sobald die Einrichtung beim ersten Start fertig ist. Ändern geht in den Einstellungen von kyrr unter „Beim Anmelden starten“.</p>
+            <p>kyrr startet automatisch beim Anmelden, sobald die Einrichtung beim ersten Start fertig ist. Ändern: Einstellungen in kyrr, „Beim Anmelden starten“.</p>
           </details>
           <details>
             <summary>Deinstallieren</summary>
@@ -125,28 +153,24 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
 <section class="faq" id="faq" aria-labelledby="h-faq">
   <h2 id="h-faq">Fragen</h2>
   <details>
-    <summary>Brauche ich Internet?</summary>
-    <p>Nur, um beim ersten Diktieren das Sprachmodell zu laden, und für die tägliche Suche nach einer neuen Version. Die Störgeräusch-Entfernung braucht gar keinen Download.</p>
+    <summary>Braucht kyrr eine Internetverbindung?</summary>
+    <p>Nur zum Herunterladen des Sprachmodells beim ersten Diktieren für die tägliche Update-Suche, die du abschalten kannst, und zum Herunterladen eines Updates, wenn du auf „Aktualisieren“ klickst. Die Rauschunterdrückung funktioniert ohne Internet.</p>
   </details>
   <details>
-    <summary>Brauche ich einen Spitzenrechner?</summary>
-    <p>Nein. Jeder 64-Bit-PC mit Intel oder AMD reicht, eine Grafikkarte brauchst du nicht. Für ältere Laptops gibt es einen kleinen Filter. (Windows auf ARM: nur Diktat.)</p>
+    <summary>Welche Apps bekommen den bereinigten Ton?</summary>
+    <p>Unter Windows jede App, die das Mikrofon nutzt. Unter Linux jede App, die das Standardmikrofon nutzt; kyrr stellt dafür sein eigenes Mikrofon „kyrr“ als Standard ein.</p>
   </details>
   <details>
-    <summary>Welche Sprachen?</summary>
-    <p>Das Diktat versteht Deutsch und Englisch. Der Störgeräusch-Filter funktioniert in jeder Sprache.</p>
+    <summary>Gibt es eine Mac-Version?</summary>
+    <p>Nein. kyrr gibt es für Windows und Linux.</p>
   </details>
   <details>
-    <summary>Gibt es das für den Mac?</summary>
-    <p>Nein, kyrr gibt es für Windows und Linux.</p>
+    <summary>Was unterscheidet kyrr von NVIDIA Broadcast und Krisp?</summary>
+    <p>NVIDIA Broadcast braucht eine NVIDIA-RTX-Grafikkarte. Krisp braucht ein Konto und ist 60 Minuten pro Tag kostenlos, danach nur mit Abo. Beide arbeiten als virtuelles Mikrofon, das du in jeder App auswählst. Bei kyrr ist in den Apps keine Auswahl nötig: Unter Windows filtert es das Mikrofon selbst, unter Linux stellt es sein eigenes Mikrofon als Standard ein. kyrr braucht kein Konto und hat zusätzlich ein Diktat. Stand Oktober 2026; Korrekturen willkommen.</p>
   </details>
   <details>
-    <summary>Was kostet es?</summary>
-    <p>Nichts. Es ist kostenlos und Open Source, ein Konto brauchst du auch nicht.</p>
-  </details>
-  <details>
-    <summary>Was unterscheidet kyrr von NVIDIA Broadcast oder Krisp?</summary>
-    <p>Broadcast braucht eine RTX-Grafikkarte, Krisp ein Konto und für die volle Nutzung ein Abo. kyrr braucht beides nicht und tippt obendrein, was du sagst. Nach unserem Wissen, Stand Oktober 2026; Korrekturen willkommen.</p>
+    <summary>Ist kyrr fertig?</summary>
+    <p>kyrr wird aktiv weiterentwickelt. Fehlermeldungen und Vorschläge bitte über <a href="https://github.com/heast13/kyrr/issues">GitHub</a>.</p>
   </details>
 </section>
 
@@ -158,7 +182,8 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
       <a href="https://github.com/heast13/kyrr/releases/latest">Releases</a>
       <a href="https://github.com/heast13/kyrr#privacy">Datenschutz</a>
     </p>
-    <p>Freie Software, MIT OR Apache-2.0. Keine Cookies, keine Tracker, nicht mal eine Schrift.</p>
+    <p>Freie Software unter MIT oder Apache 2.0. Diese Website setzt keine Cookies und verwendet keine Tracker; eine Sprachwahl wird nur in deinem Browser gespeichert.</p>
+    <p><i>kyrr</i> ist Altnordisch für „still, ruhig“.</p>
   </div>
 </footer>
 </body>
