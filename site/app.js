@@ -11,6 +11,26 @@
     });
   });
 
+  // Copy buttons on the install commands (the commands stay selectable without this).
+  var de = (root.lang || "").slice(0, 2) === "de";
+  var txt = de ? { copy: "Kopieren", done: "Kopiert!", fail: "Markieren und Strg+C" }
+               : { copy: "Copy", done: "Copied!", fail: "Select and press Ctrl+C" };
+  document.querySelectorAll(".codebox").forEach(function (box) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "copy";
+    b.setAttribute("aria-live", "polite");
+    b.textContent = txt.copy;
+    b.addEventListener("click", function () {
+      var code = box.querySelector("code").textContent;
+      var ok = function () { b.textContent = txt.done; setTimeout(function () { b.textContent = txt.copy; }, 2000); };
+      var fail = function () { b.textContent = txt.fail; setTimeout(function () { b.textContent = txt.copy; }, 3000); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(ok, fail);
+      else fail();
+    });
+    box.appendChild(b);
+  });
+
   // Install tabs: built from the panels, so without JS they simply stack.
   var wrap = document.querySelector("[data-tabs]");
   if (!wrap) return;
