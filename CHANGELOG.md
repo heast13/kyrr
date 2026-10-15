@@ -12,6 +12,8 @@
   that only said so is gone.
 - Linux: switching the settings from advanced back to simple makes the
   window smaller again, also on Hyprland, which kept the bigger size.
+- The Linux version is marked as a beta: in kyrr's About, on the website,
+  in the README and in the release notes.
 
 ## 0.5.4 (2026-10-15)
 

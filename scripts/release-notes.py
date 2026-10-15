@@ -85,7 +85,7 @@ def main() -> None:
         f"{section(version)}\n\n"
         f"Windows 10 22H2 or Windows 11, 64-bit. {signing} Compare the installer with "
         f"`kyrr-setup-{version}.exe.sha256` first. See the README for what the installer changes.\n\n"
-        f"Linux (64-bit Intel or AMD, glibc 2.39 or newer: Ubuntu 24.04, Fedora 40, Debian 13, Arch; "
+        f"Linux, still a beta (64-bit Intel or AMD, glibc 2.39 or newer: Ubuntu 24.04, Fedora 40, Debian 13, Arch; "
         f"needs PipeWire; the noise filter needs AVX2): "
         f"make `kyrr-{version}-x86_64.AppImage` executable and run it. "
         f"`kyrr-{version}-linux-x86_64.tar.gz` holds the same files as an install tree for packagers. "

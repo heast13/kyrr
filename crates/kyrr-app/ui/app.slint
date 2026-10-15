@@ -1462,7 +1462,7 @@ export component MainWindow inherits Window {
                 font-italic: true;
             }
             if settings-page: Caption {
-                text: "kyrr " + AppState.version;
+                text: "kyrr " + AppState.version + (AppState.linux ? " Beta" : "");
                 horizontal-alignment: center;
                 font-size: 11px;
             }
