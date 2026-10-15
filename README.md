@@ -63,26 +63,41 @@ October 2026; corrections welcome.
 
 ## Install
 
-**Windows.** Download `kyrr-setup-<version>.exe` from the [latest
-release](https://github.com/heast13/kyrr/releases/latest) and run it (see the
-[code signing policy](#code-signing-policy)).
+### Windows
 
-Windows 10 22H2 or Windows 11, 64-bit. The installer needs administrator
-rights, and sound drops out for a second while kyrr sets up its filter.
-On Windows on ARM (Snapdragon and other ARM processors) kyrr only
-dictates: its noise filter is built for Intel and AMD processors, and the
-audio engine there cannot load it.
-Until the installer is code-signed, Windows SmartScreen warns about it
-("More info", "Run anyway"); compare the installer with its `.sha256` file
-from the release page first.
+Windows 10 22H2 or Windows 11, 64-bit.
+
+1. Download `kyrr-setup-<version>.exe` from the [latest
+   release](https://github.com/heast13/kyrr/releases/latest) (see the [code
+   signing policy](#code-signing-policy)).
+2. Run it. The installer needs administrator rights, and sound drops out for
+   a second while kyrr sets up its filter.
+3. Until the installer is code-signed, Windows SmartScreen warns about it
+   ("More info", "Run anyway"); compare the installer with its `.sha256`
+   file from the release page first.
+
+On Windows on ARM (Snapdragon and other ARM processors) kyrr only dictates:
+its noise filter is built for Intel and AMD processors, and the audio engine
+there cannot load it.
+
+<details>
+<summary>Uninstall</summary>
 
 Uninstalling takes the filter off the microphone, puts the Windows setting
-described under "How it works" back and asks whether to delete the downloaded speech models.
+described under "How it works" back and asks whether to delete the downloaded
+speech models.
 
-<a id="install-on-linux"></a>**Linux (beta).** The Linux version works, but has been tested on fewer
-systems than the Windows version. One file, an AppImage, for every
-distribution. Paste this into a terminal; it downloads kyrr, makes it
-executable and starts it:
+</details>
+
+<a id="install-on-linux"></a>
+
+### Linux (beta, AppImage)
+
+The Linux version works, but has been tested on fewer systems than the
+Windows version. One file, an AppImage, for every distribution.
+
+**With a terminal.** Paste this; it downloads kyrr, makes it executable and
+starts it:
 
 ```sh
 mkdir -p ~/.local/bin
@@ -91,15 +106,51 @@ chmod +x ~/.local/bin/kyrr
 ~/.local/bin/kyrr &
 ```
 
-Prefer clicking? Download `kyrr-x86_64.AppImage` from the [latest
-release](https://github.com/heast13/kyrr/releases/latest), allow executing it
-as a program in your file manager (right click, Properties) and double click
-it. Either way kyrr adds itself to your app menu on its first start.
+**Prefer clicking?**
+
+1. Download `kyrr-x86_64.AppImage` from the [latest
+   release](https://github.com/heast13/kyrr/releases/latest).
+2. Allow executing it as a program in your file manager (right click,
+   Properties).
+3. Double click it.
+
+Either way kyrr adds itself to your app menu on its first start.
 
 **Start at sign-in** switches on by itself when the first-start setup is
 done. Switch it off or on again in Settings, "Start when you sign in".
 
-**Uninstall.** Quit kyrr ("Quit" at the bottom left), then:
+**Updates** are not installed by themselves: kyrr says when there is a new
+version; quit kyrr and paste the install commands again to replace the file.
+
+**Requirements**
+
+- 64-bit Intel or AMD with glibc 2.39 or newer (Ubuntu 24.04, Fedora 40,
+  Debian 13, Linux Mint 22, Arch or newer).
+- PipeWire for the noise filter, which these use anyway; where it is
+  missing, a button in kyrr installs it (your system asks for your password).
+- A processor with AVX2 for the noise filter (most from 2015 on); dictation
+  works without.
+- No administrator rights needed.
+
+**Desktop notes**
+
+- GNOME 48+ and KDE: your desktop asks once for the dictation key and once
+  whether kyrr may type; kyrr walks you through both.
+- GNOME 46 and 47: kyrr adds the key to GNOME's own keyboard shortcuts, where
+  each press starts or ends dictation.
+- Hyprland (Omarchy, say), Sway, river and niri: kyrr adds the key to your
+  key bindings itself, in a block of its own that it keeps up to date, and
+  the start at sign-in too where the session does not start XDG autostart
+  entries.
+- X11 desktops (Linux Mint, XFCE): the key just works.
+- Without a tray icon the window's X minimizes kyrr where the desktop can
+  bring it back (GNOME, say) and quits it on tiling ones; "Quit" always ends
+  it.
+
+<details>
+<summary>Uninstall</summary>
+
+Quit kyrr ("Quit" at the bottom left), then:
 
 ```sh
 rm -f ~/.local/bin/kyrr \
@@ -112,28 +163,13 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr
 
 The last line also deletes your settings and the downloaded speech models;
 leave it out to keep them. Used a different place for the file? Delete that
-instead of `~/.local/bin/kyrr`. On Hyprland, Sway, river and niri, delete
-the blocks between the `>>> kyrr` and `<<< kyrr` lines (key and start at
-sign-in) from your config; on GNOME, delete the "kyrr" entry under Custom
-Shortcuts in the keyboard settings.
+instead of `~/.local/bin/kyrr`.
 
-64-bit Intel or AMD with glibc 2.39 or newer (Ubuntu 24.04, Fedora 40, Debian
-13, Linux Mint 22, Arch or newer). The noise filter needs PipeWire, which
-these use anyway; where it is missing, a button in kyrr installs it (your
-system asks for your password). The noise filter also needs a processor with
-AVX2 (most from 2015 on); dictation works without. No administrator rights
-needed. On GNOME 48+ and KDE your desktop asks once for the dictation key and
-once whether kyrr may type; kyrr walks you through both. On GNOME 46 and 47
-kyrr adds the key to GNOME's own keyboard shortcuts, where each press starts
-or ends dictation. On Hyprland (Omarchy, say), Sway, river
-and niri kyrr adds the key to your key bindings itself, in a block of its own
-that it keeps up to date, and the start at sign-in too where the session does
-not start XDG autostart entries; on X11 desktops (Linux Mint, XFCE) the key
-just works. Without a tray icon the window's X
-minimizes kyrr where the desktop can bring it back (GNOME, say) and quits it
-on tiling ones; "Quit" always ends it.
-Updates are not installed by themselves: kyrr says when there is a new
-version; quit kyrr and paste the install commands again to replace the file.
+On Hyprland, Sway, river and niri, delete the blocks between the `>>> kyrr`
+and `<<< kyrr` lines (key and start at sign-in) from your config; on GNOME,
+delete the "kyrr" entry under Custom Shortcuts in the keyboard settings.
+
+</details>
 
 ## How it works
 
