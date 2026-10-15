@@ -4,6 +4,7 @@
 //! often do not), so the caller needs to tell "said no" from "not there".
 
 use ashpd::desktop::background::Background;
+use ashpd::desktop::ResponseError;
 use ashpd::Error;
 use futures_lite::future;
 
@@ -35,10 +36,8 @@ pub fn request_autostart(on: bool) -> Result<bool, Failure> {
 }
 
 fn failure(e: Error) -> Failure {
-    // ashpd does not export the type of the response error; its debug name
-    // is the variant's.
     match e {
-        Error::Response(r) if format!("{r:?}") == "Cancelled" => Failure::Cancelled,
+        Error::Response(ResponseError::Cancelled) => Failure::Cancelled,
         e => Failure::Unavailable(e.to_string()),
     }
 }

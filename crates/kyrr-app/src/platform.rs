@@ -716,7 +716,9 @@ mod imp {
     /// Typing failed and kyrr runs in a Flatpak: the sandbox is the likely
     /// reason, which the message can name.
     pub fn typing_blocked_by_sandbox() -> bool {
-        kyrr_linux::typing::blocked_by_sandbox()
+        // GNOME and KDE type through the portal: there a "no" in its dialog
+        // is the likely reason, and the AppImage would ask the same.
+        desktop() == Desktop::Other && kyrr_linux::typing::blocked_by_sandbox()
     }
 
     pub fn set_hotkey_key(vk: u32) {
@@ -1192,13 +1194,19 @@ mod imp {
         }
         let result = if on {
             match answer {
-                Ok(false) | Err(Failure::Cancelled) => Autostart::Declined,
+                Ok(false) | Err(Failure::Cancelled) => {
+                    // A "no" holds: an entry kyrr wrote before goes too.
+                    let _ = std::fs::remove_file(&file);
+                    Autostart::Declined
+                }
                 // Said yes, or is not there. With the folder in sight a
                 // missing file means nothing was written.
                 Ok(true) | Err(Failure::Unavailable(_)) => {
                     let visible = file.parent().is_some_and(std::path::Path::is_dir);
                     let portal_said_yes = matches!(answer, Ok(true));
-                    if file.is_file() || (portal_said_yes && !visible) || (visible && write_flatpak_entry(&file)) {
+                    // An entry the desktop's settings switched off is written anew.
+                    let present = std::fs::read_to_string(&file).is_ok_and(|entry| !autostart_switched_off(&entry));
+                    if present || (portal_said_yes && !visible) || (visible && write_flatpak_entry(&file)) {
                         Autostart::Done
                     } else {
                         Autostart::Failed
