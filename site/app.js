@@ -31,6 +31,25 @@
     box.appendChild(b);
   });
 
+  // The remark under the hero text swaps to another one every few seconds.
+  // Not with reduced motion, and not while the tab is in the background.
+  var quip = document.querySelector("[data-quips]");
+  var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (quip && !still) {
+    var line = quip.parentNode;
+    var words = quip.getAttribute("data-quips").split("|");
+    var at = 0;
+    setInterval(function () {
+      if (document.hidden) return;
+      line.classList.add("out");
+      setTimeout(function () {
+        at = (at + 1) % words.length;
+        quip.textContent = words[at];
+        line.classList.remove("out");
+      }, 450);
+    }, 6000);
+  }
+
   // Install tabs: built from the panels, so without JS they simply stack.
   var wrap = document.querySelector("[data-tabs]");
   if (!wrap) return;
