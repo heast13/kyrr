@@ -91,13 +91,20 @@ executing file as program" (the wording differs a little per desktop), then
 a double click. On its first start kyrr adds itself to your app menu.
 
 64-bit Intel or AMD with glibc 2.39 or newer (Ubuntu 24.04, Fedora 40, Debian
-13, Arch or newer) and PipeWire, which these use anyway. The noise filter
-needs a processor with AVX2 (most from 2015 on); dictation works without. No
-administrator rights needed. On GNOME and KDE your desktop asks once for the
-dictation key and once whether kyrr may type; kyrr walks you through both. On
-Hyprland (Omarchy, say) kyrr shows the lines to add to your key bindings;
-without a tray icon the window's X minimizes kyrr where the desktop can bring
-it back (GNOME, say) and quits it on tiling ones; "Quit" always ends it.
+13, Linux Mint 22, Arch or newer). The noise filter needs PipeWire, which
+these use anyway; where it is missing, a button in kyrr installs it (your
+system asks for your password). The noise filter also needs a processor with
+AVX2 (most from 2015 on); dictation works without. No administrator rights
+needed. On GNOME 48+ and KDE your desktop asks once for the dictation key and
+once whether kyrr may type; kyrr walks you through both. On GNOME 46 and 47
+kyrr adds the key to GNOME's own keyboard shortcuts, where each press starts
+or ends dictation. On Hyprland (Omarchy, say), Sway, river
+and niri kyrr adds the key to your key bindings itself, in a block of its own
+that it keeps up to date, and the start at sign-in too where the session does
+not start XDG autostart entries; on X11 desktops (Linux Mint, XFCE) the key
+just works. Without a tray icon the window's X
+minimizes kyrr where the desktop can bring it back (GNOME, say) and quits it
+on tiling ones; "Quit" always ends it.
 Updates are not installed by themselves: kyrr says when there is a new
 version, and you download the new AppImage.
 
