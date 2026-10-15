@@ -77,18 +77,39 @@ from the release page first.
 Uninstalling takes the filter off the microphone, puts the Windows setting
 described under "How it works" back and asks whether to delete the downloaded speech models.
 
-**Linux.** Download `kyrr-x86_64.AppImage` from the [latest
-release](https://github.com/heast13/kyrr/releases/latest), make it executable
-and start it:
+**Linux.** One file, an AppImage, for every distribution. Paste this into a
+terminal; it downloads kyrr, makes it executable and starts it:
 
 ```sh
-chmod +x kyrr-x86_64.AppImage
-./kyrr-x86_64.AppImage
+mkdir -p ~/.local/bin
+curl -L -o ~/.local/bin/kyrr https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage
+chmod +x ~/.local/bin/kyrr
+~/.local/bin/kyrr &
 ```
 
-In a file manager the same works with a right click, Properties, "Allow
-executing file as program" (the wording differs a little per desktop), then
-a double click. On its first start kyrr adds itself to your app menu.
+Prefer clicking? Download `kyrr-x86_64.AppImage` from the [latest
+release](https://github.com/heast13/kyrr/releases/latest), allow executing it
+as a program in your file manager (right click, Properties) and double click
+it. Either way kyrr adds itself to your app menu on its first start.
+
+**Start at sign-in** switches on by itself when the first-start setup is
+done. Switch it off or on again in Settings, "Start when you sign in".
+
+**Uninstall.** Quit kyrr ("Quit" at the bottom left), then:
+
+```sh
+rm -f ~/.local/bin/kyrr \
+  ~/.config/autostart/io.github.heast13.kyrr.desktop \
+  ~/.local/share/applications/io.github.heast13.kyrr.desktop \
+  ~/.local/share/icons/hicolor/256x256/apps/io.github.heast13.kyrr.png \
+  ~/.local/share/icons/hicolor/scalable/apps/io.github.heast13.kyrr.svg
+rm -rf ~/.config/kyrr ~/.local/share/kyrr
+```
+
+The last line also deletes your settings and the downloaded speech models;
+leave it out to keep them. Used a different place for the file? Delete that
+instead of `~/.local/bin/kyrr`. On Hyprland, remove the kyrr lines you added
+to your key bindings too.
 
 64-bit Intel or AMD with glibc 2.39 or newer (Ubuntu 24.04, Fedora 40, Debian
 13, Arch or newer) and PipeWire, which these use anyway. The noise filter
@@ -99,11 +120,7 @@ Hyprland (Omarchy, say) kyrr shows the lines to add to your key bindings;
 without a tray icon the window's X minimizes kyrr where the desktop can bring
 it back (GNOME, say) and quits it on tiling ones; "Quit" always ends it.
 Updates are not installed by themselves: kyrr says when there is a new
-version, and you download the new AppImage.
-
-To remove kyrr, quit it ("Quit" at the bottom left) and delete the
-AppImage; the app menu and the start at sign-in skip it from then on. Your
-settings are in `~/.config/kyrr`, the speech models in `~/.local/share/kyrr`.
+version; quit kyrr and paste the install commands again to replace the file.
 
 ## How it works
 

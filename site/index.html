@@ -107,11 +107,21 @@
       <div class="panel" id="appimage" data-label="Linux">
         <h3>Linux</h3>
         <p>One file for every distribution, an AppImage. 64-bit Intel or AMD with glibc 2.39 or newer: Ubuntu 24.04+, Fedora 40+, Debian 13, Arch. The noise filter needs AVX2 (most processors from 2015 on).</p>
-        <p><a class="btn primary" href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">Download kyrr-x86_64.AppImage</a></p>
-        <p>Make it executable and start it:</p>
-        <pre tabindex="0"><code>chmod +x kyrr-x86_64.AppImage
-./kyrr-x86_64.AppImage</code></pre>
-        <p>Or in your file manager: right click, Properties, allow executing it as a program, then double click. On its first start kyrr adds itself to your app menu. To be sure, compare its SHA256 with the one on the <a href="https://github.com/heast13/kyrr/releases/latest">release page</a>.</p>
+        <p>Paste this into a terminal. It downloads kyrr, makes it executable and starts it:</p>
+        <pre tabindex="0"><code>mkdir -p ~/.local/bin
+curl -L -o ~/.local/bin/kyrr https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage
+chmod +x ~/.local/bin/kyrr
+~/.local/bin/kyrr &amp;</code></pre>
+        <p>Prefer clicking? <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">Download the AppImage</a>, allow executing it as a program in your file manager (right click, Properties) and double click it. On its first start kyrr adds itself to your app menu.</p>
+        <p><strong>Start at sign-in</strong> switches on by itself once the first-start setup is done. Switch it off or on again in Settings, “Start when you sign in”.</p>
+        <p><strong>Uninstall.</strong> Quit kyrr (“Quit”, bottom left), then paste:</p>
+        <pre tabindex="0"><code>rm -f ~/.local/bin/kyrr \
+  ~/.config/autostart/io.github.heast13.kyrr.desktop \
+  ~/.local/share/applications/io.github.heast13.kyrr.desktop \
+  ~/.local/share/icons/hicolor/256x256/apps/io.github.heast13.kyrr.png \
+  ~/.local/share/icons/hicolor/scalable/apps/io.github.heast13.kyrr.svg
+rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre>
+        <p class="small">The last line also deletes your settings and the downloaded speech models; leave it out to keep them. On Hyprland, also remove the kyrr lines you added to your key bindings. To update, quit kyrr and paste the install commands again. To check the download, compare its SHA256 with the one on the <a href="https://github.com/heast13/kyrr/releases/latest">release page</a>.</p>
       </div>
     </div>
 
