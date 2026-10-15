@@ -11,9 +11,9 @@
 //! has no effect there. On X11 the key follows [`set_key`] and is only grabbed
 //! while [`set_active`] is on, so it reaches apps normally otherwise.
 //!
-//! Hyprland (xdg-desktop-portal-hyprland) offers no trigger of its own: the
-//! user adds `bind = , F9, global, io.github.heast13.kyrr:dictate` to
-//! hyprland.conf. The portal forwards the compositor's key press and key
+//! Hyprland (xdg-desktop-portal-hyprland) offers no trigger of its own: a
+//! `bind = , F9, global, io.github.heast13.kyrr:dictate` has to be in its
+//! config, which [`crate::hyprland`] puts there. The portal forwards the compositor's key press and key
 //! release of that bind as `Activated` and `Deactivated`, because Hyprland
 //! releases "global" binds as soon as the key goes up, whatever modifiers are
 //! held by then. The shortcut names show in `hyprctl globalshortcuts`.

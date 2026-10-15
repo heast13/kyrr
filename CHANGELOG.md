@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- On Hyprland (Omarchy, say) the dictation key works without any hand work:
+  kyrr adds it to the key bindings itself, in a block between two marker
+  lines that it keeps up to date when the key changes, and leaves the rest
+  of the file as it is. A key that another bind of yours already uses is not
+  touched; kyrr says so and you pick another one. Where the config cannot be
+  written (a read-only config, a Flatpak without access), kyrr shows the
+  lines as before.
 - A microphone that is unplugged while kyrr moves to it (on Windows while
   the permission prompt is open) no longer leaves kyrr on no microphone:
   the move changes nothing and kyrr stays where it was, without restarting

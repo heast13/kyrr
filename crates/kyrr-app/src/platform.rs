@@ -62,8 +62,11 @@ pub enum KeyNote {
     /// The desktop could own the key, but has not bound it to kyrr: the user
     /// cancelled its dialog, or it failed. [`bind_key_again`] asks again.
     Unbound,
-    /// Hyprland binds the key: these lines belong in this config file.
+    /// Hyprland binds the key and kyrr could not add the lines itself: they
+    /// belong in this config file.
     Hyprland { file: String, lines: String },
+    /// Another bind of the user's in this config file already has the key.
+    HyprlandTaken { file: String, key: String },
     /// Hyprland without the shortcut portal: lines that run kyrr on the
     /// key's press and release, for this config file.
     HyprlandCommands { file: String, lines: String },
@@ -242,6 +245,8 @@ mod imp {
         hotkey::set_active(active);
     }
 
+    pub fn set_key_wanted(_wanted: bool) {}
+
     pub fn enable_autostart() {
         if !autostart::is_enabled() {
             let _ = autostart::enable();
@@ -346,6 +351,7 @@ mod imp {
     use std::path::PathBuf;
     use std::sync::{Mutex, MutexGuard, OnceLock};
 
+    use kyrr_linux::hyprland;
     use kyrr_linux::mic::Status;
     use serde::{Deserialize, Serialize};
 
@@ -821,53 +827,68 @@ mod imp {
                 Backend::None => KeyNote::Command(dictate_command("--dictate")),
             };
         }
-        let key = hotkey::key_name();
-        let start = dictate_command("--dictate-start");
-        let stop = dictate_command("--dictate-stop");
-        let global = "io.github.heast13.kyrr:dictate";
-        // Hyprland reads hyprland.lua instead of hyprland.conf when it exists;
-        // Omarchy keeps its key bindings in a file of their own.
-        let hypr = crate::config::config_dir().with_file_name("hypr");
-        let lua = ["bindings.lua", "hyprland.lua"]
-            .into_iter()
-            .find(|f| hypr.join(f).is_file());
-        let (file, lines) = match (lua, backend) {
-            // Omarchy puts its own tools on some keys; unbinding frees the key.
-            (Some(f), Backend::Portal) => (
-                f,
-                format!("hl.unbind(\"{key}\")\nhl.bind(\"{key}\", hl.dsp.global(\"{global}\"))"),
-            ),
-            (Some(f), _) => (
-                f,
-                format!(
-                    "hl.unbind(\"{key}\")\nhl.bind(\"{key}\", hl.dsp.exec_cmd(\"{}\"))\nhl.bind(\"{key}\", hl.dsp.exec_cmd(\"{}\"), {{ release = true }})",
-                    lua_quoted(&start),
-                    lua_quoted(&stop)
-                ),
-            ),
-            (None, Backend::Portal) => ("hyprland.conf", format!("bind = , {key}, global, {global}")),
-            (None, _) => ("hyprland.conf", format!("bind = , {key}, exec, {start}\nbindr = , {key}, exec, {stop}")),
+        let keys = hyprland::Keys {
+            key: hotkey::key_name().to_string(),
+            portal: backend == Backend::Portal,
+            start: dictate_command("--dictate-start"),
+            stop: dictate_command("--dictate-stop"),
         };
-        let file = match lua {
-            Some(f) => {
-                let path = hypr.join(f);
-                let home = std::env::var_os("HOME").map(PathBuf::from);
-                match home.as_deref().and_then(|h| path.strip_prefix(h).ok()) {
-                    Some(rest) => format!("~/{}", rest.display()),
-                    None => path.display().to_string(),
+        let dir = hyprland::config_dir();
+        // Dictation is off: nothing to bind, so nothing to say.
+        let Some(outcome) = hyprland_outcome(&dir, &keys) else {
+            return KeyNote::None;
+        };
+        match outcome {
+            hyprland::Outcome::Bound { .. } => KeyNote::None,
+            hyprland::Outcome::Taken { file } => KeyNote::HyprlandTaken {
+                file: hyprland::display(&file),
+                key: keys.key,
+            },
+            hyprland::Outcome::Failed => {
+                let (file, syntax) = match hyprland::target(&dir) {
+                    Some(t) => (t.path, t.syntax),
+                    None => (dir.join("hyprland.conf"), hyprland::Syntax::Conf),
+                };
+                let (file, lines) = (hyprland::display(&file), hyprland::lines(syntax, &keys));
+                if keys.portal {
+                    KeyNote::Hyprland { file, lines }
+                } else {
+                    KeyNote::HyprlandCommands { file, lines }
                 }
             }
-            None => file.to_string(),
-        };
-        match backend {
-            Backend::Portal => KeyNote::Hyprland { file, lines },
-            _ => KeyNote::HyprlandCommands { file, lines },
         }
     }
 
-    /// `s` for inside a double-quoted Lua string.
-    fn lua_quoted(s: &str) -> String {
-        s.replace('\\', "\\\\").replace('"', "\\\"")
+    /// Whether dictation is on, so kyrr may set its key up in Hyprland.
+    pub fn set_key_wanted(wanted: bool) {
+        KEY_WANTED.store(wanted, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    static KEY_WANTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    static HYPRLAND: std::sync::Mutex<Option<(hyprland::Keys, hyprland::Outcome)>> = std::sync::Mutex::new(None);
+
+    /// Puts the key into Hyprland's config while dictation is on. Done once
+    /// per key and way of catching it: the answer stands until one changes, so
+    /// a key freed in the config is noticed after the next start.
+    fn hyprland_outcome(dir: &std::path::Path, keys: &hyprland::Keys) -> Option<hyprland::Outcome> {
+        if !KEY_WANTED.load(std::sync::atomic::Ordering::Relaxed) {
+            return None;
+        }
+        let mut memo = HYPRLAND.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some((seen, outcome)) = memo.as_ref() {
+            if seen == keys {
+                return Some(outcome.clone());
+            }
+        }
+        let outcome = hyprland::ensure(dir, keys);
+        if matches!(outcome, hyprland::Outcome::Bound { written: true, .. }) && !flatpak() {
+            // Hyprland sees the change by itself; this only makes it quicker.
+            std::thread::spawn(|| {
+                let _ = std::process::Command::new("hyprctl").arg("reload").status();
+            });
+        }
+        *memo = Some((keys.clone(), outcome.clone()));
+        Some(outcome)
     }
 
     /// How this kyrr is started with `flag`: through Flatpak, the

@@ -5,6 +5,7 @@
 
 pub mod background;
 pub mod hotkey;
+pub mod hyprland;
 pub mod instance;
 pub mod mic;
 pub mod signals;

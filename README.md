@@ -95,9 +95,10 @@ a double click. On its first start kyrr adds itself to your app menu.
 needs a processor with AVX2 (most from 2015 on); dictation works without. No
 administrator rights needed. On GNOME and KDE your desktop asks once for the
 dictation key and once whether kyrr may type; kyrr walks you through both. On
-Hyprland (Omarchy, say) kyrr shows the lines to add to your key bindings;
-without a tray icon the window's X minimizes kyrr where the desktop can bring
-it back (GNOME, say) and quits it on tiling ones; "Quit" always ends it.
+Hyprland (Omarchy, say) kyrr adds the key to your key bindings itself, in a
+block of its own that it keeps up to date; without a tray icon the window's X
+minimizes kyrr where the desktop can bring it back (GNOME, say) and quits it
+on tiling ones; "Quit" always ends it.
 Updates are not installed by themselves: kyrr says when there is a new
 version, and you download the new AppImage.
 

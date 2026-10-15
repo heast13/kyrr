@@ -146,8 +146,18 @@ fn key_note_only(note: KeyNote, german: bool) -> String {
             "Your desktop hands out the key and asks once for it. That question was cancelled, so the key does not reach kyrr. “Set up key” asks again."
                 .into()
         }
-        KeyNote::Hyprland { file, lines } if german => format!("Für Hyprland gehört das in die Datei {file}:\n{lines}"),
-        KeyNote::Hyprland { file, lines } => format!("For Hyprland, add this to {file}:\n{lines}"),
+        KeyNote::Hyprland { file, lines } if german => format!(
+            "Hyprland lässt kyrr nicht an seine Tastenbelegung. Mit diesen Zeilen in der Datei {file} klappt es:\n{lines}"
+        ),
+        KeyNote::Hyprland { file, lines } => {
+            format!("Hyprland will not let kyrr near its key bindings. These lines in {file} do the trick:\n{lines}")
+        }
+        KeyNote::HyprlandTaken { file, key } if german => format!(
+            "In {file} hat {key} schon einen anderen Job. Such dir hier eine andere Taste aus, oder gib {key} dort frei."
+        ),
+        KeyNote::HyprlandTaken { file, key } => {
+            format!("{key} already has another job in {file}. Pick another key here, or free {key} there.")
+        }
         KeyNote::HyprlandCommands { file, lines } if german => format!(
             "Hyprlands Tastenkürzel-Portal antwortet nicht. Mit diesen Zeilen in der Datei {file} diktierst du wie gewohnt mit gehaltener Taste:\n{lines}"
         ),
@@ -1072,6 +1082,7 @@ impl App {
                 .unwrap_or(1);
             (index, config.dictation_toggle)
         };
+        platform::set_key_wanted(self.config.borrow().dictation);
         platform::set_hotkey_key(config::DICTATION_KEYS[index]);
         self.key_toggle.store(toggle, Ordering::Relaxed);
         let name = match index {
@@ -1167,6 +1178,7 @@ impl App {
             config.save();
         }
         let _ = self.worker.send(Command::Enable(on));
+        platform::set_key_wanted(on);
         if let Some(w) = self.window.upgrade() {
             w.global::<AppState>().set_dictation_enabled(on);
         }
