@@ -149,6 +149,7 @@ First submission:
 | `--share=network` | Speech model download on first dictation, "Check for updates" |
 | `--filesystem=xdg-run/pipewire-0:ro` | The virtual microphone: a PipeWire source node and the default-source setting. As EasyEffects on Flathub. There is no portal for creating audio devices |
 | `--socket=pulseaudio` | cpal records and plays through ALSA, and ALSA's default device in the Freedesktop runtime is the PulseAudio plugin (`/etc/alsa/conf.d/99-pulseaudio-default.conf`). Dictation, listening to yourself and the before/after test need it |
+| `--filesystem=xdg-config/hypr` | Hyprland only: kyrr writes the `bind = , F9, global, io.github.heast13.kyrr:dictate` line for the dictation key into the user's Hyprland config, because xdg-desktop-portal-hyprland has no way to set a key. Write access to that one folder, nothing else of `~/.config`. Without it the app shows the line to add by hand |
 
 Portals cover the rest without static permissions: GlobalShortcuts (the
 push-to-talk key), RemoteDesktop (typing where the Wayland virtual keyboard

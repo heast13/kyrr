@@ -28,6 +28,10 @@ finish-args:
   # through cpal -> ALSA, whose default device in the Freedesktop runtime is
   # the PulseAudio plugin.
   - --socket=pulseaudio
+  # Hyprland only: kyrr adds the global dictation key (`bind = , F9, global,
+  # io.github.heast13.kyrr:dictate`) to the user's Hyprland config itself;
+  # the portal offers no way to set a key there. Other desktops never use it.
+  - --filesystem=xdg-config/hypr
 cleanup:
   - /include
   - /lib/libonnxruntime.so
