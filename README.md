@@ -7,6 +7,8 @@
   <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage"><img src="https://img.shields.io/github/v/release/heast13/kyrr?label=Download%20for%20Linux&style=for-the-badge&color=005fb8" alt="Download kyrr for Linux (AppImage)"></a>
 </p>
 
+Website: [heast13.github.io/kyrr](https://heast13.github.io/kyrr/) (Deutsch: [/de/](https://heast13.github.io/kyrr/de/))
+
 [![Made with Slint](https://raw.githubusercontent.com/slint-ui/slint/master/logo/MadeWithSlint-logo-whitebg.png)](https://slint.dev)
 
 A small, free app for your microphone, for **Windows** and **Linux**:
