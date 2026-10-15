@@ -4,7 +4,7 @@
 # release changes pkgver and the checksum: run `packaging/aur/update.sh <version>`
 # after the release is published, then push this folder to the AUR.
 pkgname=kyrr-bin
-pkgver=0.4.0
+pkgver=0.5.3
 pkgrel=1
 pkgdesc='Noise suppression on a virtual PipeWire microphone, and push-to-talk dictation, all on your computer'
 arch=('x86_64')
@@ -16,8 +16,9 @@ optdepends=('xdg-desktop-portal: push-to-talk key and typing on GNOME and KDE'
             'pipewire-alsa: dictation records through the ALSA default, which this routes to PipeWire')
 provides=('kyrr')
 conflicts=('kyrr')
+options=('!debug')
 source=("https://github.com/heast13/kyrr/releases/download/v$pkgver/kyrr-$pkgver-linux-x86_64.tar.gz")
-sha256sums=('3b022ad169cb2cfe0fb2f394fe523f76786bb2a8038ae16de539d76a445c5e3f')
+sha256sums=('6ab3111e719b0b7764e51a46a0364fea7562b523183fea19c778970229861be8')
 
 package() {
   cd "kyrr-$pkgver-linux-x86_64"

@@ -1,6 +1,7 @@
 # Flatpak
 
-The Flatpak of kyrr, written for a later submission to Flathub.
+The Flatpak of kyrr, for Flathub. The manifest builds the tagged release
+(`v0.5.3`) from source.
 
 | File | What it is |
 | --- | --- |
@@ -43,9 +44,17 @@ flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest packagin
 flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo $HOME/.cache/kyrr-flatpak/repo
 ```
 
-The app source is `type: dir` with `path: ../..`, the working tree as it is
-(minus `target/`, `.git/`, `assets/` and flatpak-builder's own folders). The
-noise models come from the manifest's own `file` sources, not from `assets/`.
+The app source is the manifest's `git` source (tag and commit of the
+release), not the working tree. To build the working tree instead, swap that
+source for this one (and keep it out of commits):
+
+```yaml
+      - type: dir
+        path: ../..
+        skip: [.flatpak-builder, .git, assets, build-dir, dist, repo, target]
+```
+
+The noise models come from the manifest's own `file` sources, not from `assets/`.
 
 ### What the build does
 
@@ -110,19 +119,25 @@ ONNX Runtime version in `cmake/onnxruntime-linux-x86_64.cmake`.
 
 ## For the Flathub submission
 
-1. Tag a release that has the Linux port and add it to the `<releases>` of
-   `packaging/linux/io.github.heast13.kyrr.metainfo.xml` (Flathub shows the
-   newest one; it must match what ships).
-2. In the manifest, replace the `type: dir` source of the kyrr module with
-   the commented-out `type: git` block: `url`, the release `tag` and its
-   `commit` (`git rev-parse v0.X.Y^{commit}`).
-3. Regenerate `cargo-sources.json` from that tag's `Cargo.lock`.
-4. The pull request against `flathub/flathub` (branch `new-pr`) contains
-   `io.github.heast13.kyrr.yml`, `cargo-sources.json` and `flathub.json`, side
-   by side at the top level. Nothing else: no binaries, no copies of the
-   desktop file or MetaInfo.
-5. Run `flatpak-builder-lint` on the manifest and on the built repo first.
-6. After the app is accepted, the ID `io.github.heast13.kyrr` can be
+On every release the manifest moves with it:
+
+1. `<releases>` in `packaging/linux/io.github.heast13.kyrr.metainfo.xml` has
+   the new version (Flathub shows the newest one; it must match what ships).
+   The tag has to carry it, so this goes in before the tag.
+2. In the manifest, `tag` and `commit` of the kyrr git source
+   (`git rev-parse v0.X.Y^{commit}`).
+3. `cargo-sources.json` is regenerated from that tag's `Cargo.lock` (next
+   section; a byte-identical result means nothing changed).
+
+First submission:
+
+1. Run `flatpak-builder-lint` on the manifest and on the built repo (see
+   "Building locally").
+2. Pull request against `flathub/flathub` (base branch `new-pr`) with
+   `io.github.heast13.kyrr.yml`, `cargo-sources.json` and `flathub.json`
+   side by side at the top level. Nothing else: no binaries, no copies of
+   the desktop file or MetaInfo.
+3. After the app is accepted, the ID `io.github.heast13.kyrr` can be
    verified on Flathub through the GitHub account `heast13`.
 
 ## Permissions
@@ -134,6 +149,7 @@ ONNX Runtime version in `cmake/onnxruntime-linux-x86_64.cmake`.
 | `--share=network` | Speech model download on first dictation, "Check for updates" |
 | `--filesystem=xdg-run/pipewire-0:ro` | The virtual microphone: a PipeWire source node and the default-source setting. As EasyEffects on Flathub. There is no portal for creating audio devices |
 | `--socket=pulseaudio` | cpal records and plays through ALSA, and ALSA's default device in the Freedesktop runtime is the PulseAudio plugin (`/etc/alsa/conf.d/99-pulseaudio-default.conf`). Dictation, listening to yourself and the before/after test need it |
+| `--filesystem=xdg-config/hypr` | Hyprland only: kyrr writes the `bind = , F9, global, io.github.heast13.kyrr:dictate` line for the dictation key into the user's Hyprland config, because xdg-desktop-portal-hyprland has no way to set a key. Write access to that one folder, nothing else of `~/.config`. Without it the app shows the line to add by hand |
 
 Portals cover the rest without static permissions: GlobalShortcuts (the
 push-to-talk key), RemoteDesktop (typing where the Wayland virtual keyboard
@@ -179,16 +195,21 @@ modules stay as they are:
   Flathub's builders); set `-j` low enough or add
   `build-options: { cflags: -g1 }` if memory runs out.
 
-### Tray icon: no well-known D-Bus name in the sandbox
+### Tray icon: D-Bus names in the sandbox
 
-Slint's tray (ksni 0.3) claims `org.kde.StatusNotifierItem-<pid>-<n>` on the
-session bus. A Flatpak may only own names under its own ID, and Flathub's
-linter rejects `--own-name=org.kde.*` without exception
-(`finish-args-own-name-cpt`). ksni has `disable_dbus_name(true)` for exactly
-this case; Slint does not use it. Until Slint does, or kyrr gets a tray of
-its own on Linux, the app treats a Flatpak like a desktop without a tray:
-the window minimizes instead of hiding, and closing it quits. Add
-`--talk-name=org.kde.StatusNotifierWatcher` back once the tray works.
+Slint's tray (ksni 0.3) talks to `org.kde.StatusNotifierWatcher` and claims
+`org.kde.StatusNotifierItem-<pid>-<n>` on the session bus. The manifest
+allows exactly that (`--talk-name=org.kde.StatusNotifierWatcher`,
+`--own-name=org.kde.StatusNotifierItem-2-1`: in the sandbox the process id
+is 2 and the first tray is 1). Tested by hand on Hyprland with Waybar: with
+both flags the icon shows, with neither ksni fails with `ServiceUnknown`.
+
+Open: Flathub's linter flags `--own-name=org.kde.*`
+(`finish-args-own-name-cpt`), so this needs an exception in the review;
+ksni's `disable_dbus_name(true)` would make it unnecessary, but Slint does
+not offer it. The app uses the tray in a Flatpak like anywhere else
+(`platform.rs` `has_tray()` asks the watcher), from the release that
+carries that change on (the manifest's tag must be that release or newer).
 
 ### Handled in the app
 
