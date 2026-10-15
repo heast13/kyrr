@@ -32,6 +32,12 @@ finish-args:
   # io.github.heast13.kyrr:dictate`) to the user's Hyprland config itself;
   # the portal offers no way to set a key there. Other desktops never use it.
   - --filesystem=xdg-config/hypr
+  # Tray icon (StatusNotifierItem): Slint's tray (ksni) registers with the
+  # watcher and claims org.kde.StatusNotifierItem-<pid>-<n>; in the sandbox
+  # that is always -2-1, the one name allowed here. Tested on Hyprland
+  # (Waybar): the icon shows.
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --own-name=org.kde.StatusNotifierItem-2-1
 cleanup:
   - /include
   - /lib/libonnxruntime.so

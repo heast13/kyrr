@@ -195,16 +195,21 @@ modules stay as they are:
   Flathub's builders); set `-j` low enough or add
   `build-options: { cflags: -g1 }` if memory runs out.
 
-### Tray icon: no well-known D-Bus name in the sandbox
+### Tray icon: D-Bus names in the sandbox
 
-Slint's tray (ksni 0.3) claims `org.kde.StatusNotifierItem-<pid>-<n>` on the
-session bus. A Flatpak may only own names under its own ID, and Flathub's
-linter rejects `--own-name=org.kde.*` without exception
-(`finish-args-own-name-cpt`). ksni has `disable_dbus_name(true)` for exactly
-this case; Slint does not use it. Until Slint does, or kyrr gets a tray of
-its own on Linux, the app treats a Flatpak like a desktop without a tray:
-the window minimizes instead of hiding, and closing it quits. Add
-`--talk-name=org.kde.StatusNotifierWatcher` back once the tray works.
+Slint's tray (ksni 0.3) talks to `org.kde.StatusNotifierWatcher` and claims
+`org.kde.StatusNotifierItem-<pid>-<n>` on the session bus. The manifest
+allows exactly that (`--talk-name=org.kde.StatusNotifierWatcher`,
+`--own-name=org.kde.StatusNotifierItem-2-1`: in the sandbox the process id
+is 2 and the first tray is 1). Tested by hand on Hyprland with Waybar: with
+both flags the icon shows, with neither ksni fails with `ServiceUnknown`.
+
+Open: Flathub's linter flags `--own-name=org.kde.*`
+(`finish-args-own-name-cpt`), so this needs an exception in the review;
+ksni's `disable_dbus_name(true)` would make it unnecessary, but Slint does
+not offer it. And the app still treats a Flatpak as having no tray
+(`platform.rs` `has_tray()`), so the window minimizes or quits on close
+instead of hiding; that has to change with the next release.
 
 ### Handled in the app
 
