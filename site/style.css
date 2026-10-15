@@ -63,6 +63,7 @@ pre code { background: none; padding: 0; overflow-wrap: normal; }
 .top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 0; }
 .brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.3rem; color: var(--text); text-decoration: none; }
 .brand img { width: 36px; height: 36px; }
+.top-links { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
 .lang { font-size: 0.95rem; color: var(--muted); }
 .lang [aria-current] { color: var(--text); font-weight: 700; text-decoration: none; }
 
