@@ -24,6 +24,13 @@
   work, kyrr shows the command for a terminal. The AppImage now also starts
   on systems without the PipeWire library at all. In a Flatpak kyrr says
   what to install.
+- In a Flatpak, kyrr now looks for the desktop's tray like everywhere else
+  (it used to assume there was none), so the icon shows up where the
+  sandbox lets kyrr reach the tray host. Without a tray host kyrr no longer
+  logs a tray error at start; it waits for one, as before.
+- "Off to the corner" is hidden where it could do nothing: no tray, and a
+  desktop that cannot minimize (Hyprland and other tiling ones). The hint
+  next to it already says that closing the window quits kyrr there.
 - A second start at sign-in while kyrr already runs no longer opens its
   window.
 - A microphone that is unplugged while kyrr moves to it (on Windows while

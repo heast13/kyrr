@@ -867,7 +867,9 @@ component HideRow inherits HorizontalLayout {
         horizontal-alignment: center;
         vertical-alignment: center;
     }
-    Button {
+    // Where there is neither a tray nor a minimizing desktop (Hyprland
+    // without a bar tray), the button would do nothing: it stays away.
+    if AppState.tray || AppState.can-minimize: Button {
         text: @tr("Off to the corner");
         horizontal-stretch: 0;
         clicked => { AppState.hide(); }

@@ -2029,7 +2029,11 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         });
     }
     let tray_at_start = platform::has_tray();
-    tray.show()?;
+    // Without a tray host Slint would only log a complaint: wait for one
+    // (the retry below) instead of shouting at start.
+    if tray_at_start {
+        tray.show()?;
+    }
     drop(tray);
     // A panel that hosts tray icons may start after kyrr (both at login).
     // An icon can only register once one is there: make a new one then.

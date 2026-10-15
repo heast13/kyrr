@@ -659,11 +659,12 @@ mod imp {
         state().filter = Filter::Off;
     }
 
-    /// Whether the desktop shows kyrr's tray icon. Not from a Flatpak: the
-    /// tray (Slint's, through ksni) claims a D-Bus name the sandbox may not
-    /// own, so it never registers there.
+    /// Whether the desktop shows kyrr's tray icon: a tray host is on the
+    /// bus. In a Flatpak the manifest lets kyrr talk to the watcher and own
+    /// its icon's name, so it is asked there like anywhere else; without
+    /// those rights the sandbox hides the watcher and this stays false.
     pub fn has_tray() -> bool {
-        !flatpak() && kyrr_linux::tray::available()
+        kyrr_linux::tray::available()
     }
 
     /// Whether the desktop minimizes windows. Tiling compositors (Hyprland,
