@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fewer technical texts in the window: when kyrr cannot set the dictation
+  key up by itself, it no longer shows config file paths and lines (they go
+  to the log) but asks for the command on a key in the
+  desktop's keyboard settings. A taken key just says it is taken. Failed
+  tests, listening and setup say what to check instead of showing raw error
+  text, and the installer no longer shows exit codes.
 - On Hyprland (Omarchy, say), Sway, river and niri the dictation key works
   without any hand work: kyrr adds it to the key bindings itself, in a block
   between two marker lines that it keeps up to date when the key changes,
