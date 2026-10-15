@@ -1,0 +1,53 @@
+name: flatpak
+
+# Builds the Flatpak (packaging/flatpak) and hands it out as a .flatpak bundle
+# to try on GNOME and KDE (a Live USB is enough). Slow: ONNX Runtime and
+# sherpa-onnx are built into it. Runs when the packaging changes, and by hand.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/flatpak.yml"
+      - "packaging/flatpak/**"
+      - "packaging/linux/**"
+      - "Cargo.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  flatpak:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v7
+      - name: Free disk space
+        # The runtime, the SDK and the build need about 12 GB.
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL
+      - name: Flatpak
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          # bubblewrap needs user namespaces, which Ubuntu 24.04 restricts.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+      - name: Build
+        run: |
+          flatpak-builder --user --force-clean --install-deps-from=flathub \
+            --repo="$RUNNER_TEMP/repo" --install "$RUNNER_TEMP/build" \
+            packaging/flatpak/io.github.heast13.kyrr.yml
+      - name: Every library the program needs is in the Flatpak
+        run: |
+          missing=$(flatpak run --command=sh io.github.heast13.kyrr -c 'ldd /app/bin/kyrr | grep "not found"' || true)
+          if [ -n "$missing" ]; then echo "$missing"; exit 1; fi
+      - name: Bundle
+        run: |
+          flatpak build-bundle "$RUNNER_TEMP/repo" "$RUNNER_TEMP/kyrr.flatpak" io.github.heast13.kyrr
+          (cd "$RUNNER_TEMP" && sha256sum kyrr.flatpak > kyrr.flatpak.sha256)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kyrr-flatpak
+          path: |
+            ${{ runner.temp }}/kyrr.flatpak
+            ${{ runner.temp }}/kyrr.flatpak.sha256
+          retention-days: 14

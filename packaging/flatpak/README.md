@@ -132,8 +132,10 @@ ONNX Runtime version in `cmake/onnxruntime-linux-x86_64.cmake`.
 | `--socket=wayland`, `--socket=fallback-x11`, `--share=ipc` | The window; X11 only without Wayland, IPC for X11 shared memory |
 | `--device=dri` | OpenGL drawing (Slint's default renderer); without it Mesa draws on the CPU |
 | `--share=network` | Speech model download on first dictation, "Check for updates" |
+| `--filesystem=xdg-config/autostart:create` | Start at sign-in. The Background portal is asked first (the desktop then lists kyrr in its settings); where it is missing (Hyprland) or wrote nothing, kyrr writes the same file, `io.github.heast13.kyrr.desktop`, into the user's autostart folder itself. If the user answers "no" in the portal's dialog, kyrr writes nothing. The file is read at the next sign-in; a systemd user manager that survives the sign-out (lingering) only sees it after `systemctl --user daemon-reload`, which the sandbox cannot run. Like `xdg-config/hypr`, this is write access to a place that starts programs |
 | `--filesystem=xdg-run/pipewire-0:ro` | The virtual microphone: a PipeWire source node and the default-source setting. As EasyEffects on Flathub. There is no portal for creating audio devices |
 | `--socket=pulseaudio` | cpal records and plays through ALSA, and ALSA's default device in the Freedesktop runtime is the PulseAudio plugin (`/etc/alsa/conf.d/99-pulseaudio-default.conf`). Dictation, listening to yourself and the before/after test need it |
+| `--filesystem=xdg-config/hypr` | Hyprland only: kyrr writes the `bind = , F9, global, io.github.heast13.kyrr:dictate` line for the dictation key into the user's Hyprland config, because xdg-desktop-portal-hyprland has no way to set a key. Write access to that one folder, nothing else of `~/.config`. Without it the app shows the line to add by hand |
 
 Portals cover the rest without static permissions: GlobalShortcuts (the
 push-to-talk key), RemoteDesktop (typing where the Wayland virtual keyboard
@@ -179,16 +181,21 @@ modules stay as they are:
   Flathub's builders); set `-j` low enough or add
   `build-options: { cflags: -g1 }` if memory runs out.
 
-### Tray icon: no well-known D-Bus name in the sandbox
+### Tray icon: D-Bus names in the sandbox
 
-Slint's tray (ksni 0.3) claims `org.kde.StatusNotifierItem-<pid>-<n>` on the
-session bus. A Flatpak may only own names under its own ID, and Flathub's
-linter rejects `--own-name=org.kde.*` without exception
-(`finish-args-own-name-cpt`). ksni has `disable_dbus_name(true)` for exactly
-this case; Slint does not use it. Until Slint does, or kyrr gets a tray of
-its own on Linux, the app treats a Flatpak like a desktop without a tray:
-the window minimizes instead of hiding, and closing it quits. Add
-`--talk-name=org.kde.StatusNotifierWatcher` back once the tray works.
+Slint's tray (ksni 0.3) talks to `org.kde.StatusNotifierWatcher` and claims
+`org.kde.StatusNotifierItem-<pid>-<n>` on the session bus. The manifest
+allows exactly that (`--talk-name=org.kde.StatusNotifierWatcher`,
+`--own-name=org.kde.StatusNotifierItem-2-1`: in the sandbox the process id
+is 2 and the first tray is 1). Tested by hand on Hyprland with Waybar: with
+both flags the icon shows, with neither ksni fails with `ServiceUnknown`.
+
+Open: Flathub's linter flags `--own-name=org.kde.*`
+(`finish-args-own-name-cpt`), so this needs an exception in the review;
+ksni's `disable_dbus_name(true)` would make it unnecessary, but Slint does
+not offer it. The app uses the tray in a Flatpak like anywhere else
+(`platform.rs` `has_tray()` asks the watcher), from the release that
+carries that change on (the manifest's tag must be that release or newer).
 
 ### Handled in the app
 

@@ -31,7 +31,7 @@ use slint::{ComponentHandle, LogicalSize, ModelRc, PhysicalPosition, SharedStrin
 
 use config::Config;
 use dictation::{Command, Event, State};
-use platform::{Desktop, FilterStatus, KeyBinding, KeyNote, Microphone, PipewireInstall, SetupError};
+use platform::{Autostart, Desktop, FilterStatus, KeyBinding, KeyNote, Microphone, PipewireInstall, SetupError};
 
 slint::include_modules!();
 
@@ -115,6 +115,25 @@ fn key_note(language: Language) -> String {
         typing.into()
     } else {
         format!("{note}\n\n{typing}")
+    }
+}
+
+/// What the settings say when the start at sign-in did not work out.
+fn autostart_note(result: Autostart, language: Language) -> &'static str {
+    match (result, language) {
+        (Autostart::Done, _) => "",
+        (Autostart::Declined, Language::German) => {
+            "Dein Desktop hat das Starten beim Anmelden nicht erlaubt. Ändern geht in seinen Einstellungen unter Hintergrund-Apps."
+        }
+        (Autostart::Declined, Language::English) => {
+            "Your desktop did not allow starting at sign-in. You can change that in its settings under background apps."
+        }
+        (Autostart::Failed, Language::German) => {
+            "Starten beim Anmelden ging nicht: Weder dein Desktop noch kyrr konnte den Eintrag anlegen."
+        }
+        (Autostart::Failed, Language::English) => {
+            "Starting at sign-in did not work: neither your desktop nor kyrr could create the entry."
+        }
     }
 }
 
@@ -766,6 +785,27 @@ impl App {
         if state.get_pipewire_note() != note.as_str() {
             state.set_pipewire_note(note.into());
         }
+    }
+
+    /// Switches the start at sign-in. Off the window's thread: in a Flatpak
+    /// the desktop may ask the user first. The switch then shows what
+    /// really happened, with a note when it is not what was asked.
+    fn change_autostart(self: &Rc<Self>, on: bool) {
+        if let Some(w) = self.window.upgrade() {
+            w.global::<AppState>().set_autostart_note("".into());
+        }
+        let (weak, language) = (self.window.clone(), self.language());
+        std::thread::spawn(move || {
+            let result = platform::set_autostart(on);
+            let _ = slint::invoke_from_event_loop(move || {
+                let Some(w) = weak.upgrade() else {
+                    return;
+                };
+                let state = w.global::<AppState>();
+                state.set_autostart(platform::autostart_enabled());
+                state.set_autostart_note(autostart_note(result, language).into());
+            });
+        });
     }
 
     fn install_pipewire(self: &Rc<Self>) {
@@ -1530,7 +1570,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         let app = Rc::clone(&app);
         move |i| app.set_filter(|f| f.limit_db = STRENGTHS[(i as usize).min(2)])
     });
-    state.on_autostart_toggled(platform::set_autostart);
+    state.on_autostart_toggled({
+        let app = Rc::clone(&app);
+        move |on| app.change_autostart(on)
+    });
     state.on_open_licenses(platform::open_licenses);
     state.on_check_updates({
         let app = Rc::clone(&app);
@@ -1890,7 +1933,9 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 config.setup_done = true;
                 config.save();
             }
-            platform::enable_autostart();
+            if !platform::autostart_enabled() {
+                app.change_autostart(true);
+            }
             if let Some(w) = app.window.upgrade() {
                 w.global::<AppState>().set_autostart(platform::autostart_enabled());
                 w.set_setup_mode(false);

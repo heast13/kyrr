@@ -94,6 +94,14 @@ pub fn prepare() -> bool {
     backend.is_some()
 }
 
+/// True in a Flatpak when no way to type was found: the sandbox is the likely
+/// reason (the compositor keeps the virtual keyboard from sandboxed clients
+/// and has no RemoteDesktop portal, or the user said no to the portal), so the
+/// app can say so instead of a bare "could not type".
+pub fn blocked_by_sandbox() -> bool {
+    std::env::var_os("FLATPAK_ID").is_some() && lock(&BACKEND).is_none()
+}
+
 /// The portal's restore token, to be saved by the app. It changes only when
 /// the permission was granted anew, so reading it after `type_text` is enough.
 pub fn restore_token() -> Option<String> {

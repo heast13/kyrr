@@ -51,6 +51,18 @@ pub struct Take {
     pub after: Vec<f32>,
 }
 
+/// How switching the start at sign-in went.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(windows, allow(dead_code))]
+pub enum Autostart {
+    /// As asked.
+    Done,
+    /// The desktop asked the user and the answer was no.
+    Declined,
+    /// Neither the desktop's portal nor kyrr itself could do it.
+    Failed,
+}
+
 /// What the user has to do so the dictation key reaches kyrr.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(windows, allow(dead_code))]
@@ -210,6 +222,10 @@ mod imp {
         typing::copy_to_clipboard(text)
     }
 
+    pub fn typing_blocked_by_sandbox() -> bool {
+        false
+    }
+
     pub fn set_hotkey_key(vk: u32) {
         hotkey::set_key(vk);
     }
@@ -274,18 +290,13 @@ mod imp {
 
     pub fn set_key_wanted(_wanted: bool) {}
 
-    pub fn enable_autostart() {
-        if !autostart::is_enabled() {
-            let _ = autostart::enable();
-        }
-    }
-
     pub fn autostart_enabled() -> bool {
         autostart::is_enabled()
     }
 
-    pub fn set_autostart(on: bool) {
+    pub fn set_autostart(on: bool) -> Autostart {
         let _ = if on { autostart::enable() } else { autostart::disable() };
+        Autostart::Done
     }
 
     /// Runs a downloaded kyrr installer as an update: no wizard, only its
@@ -702,6 +713,14 @@ mod imp {
         kyrr_linux::typing::copy_to_clipboard(text)
     }
 
+    /// Typing failed and kyrr runs in a Flatpak: the sandbox is the likely
+    /// reason, which the message can name.
+    pub fn typing_blocked_by_sandbox() -> bool {
+        // GNOME and KDE type through the portal: there a "no" in its dialog
+        // is the likely reason, and the AppImage would ask the same.
+        desktop() == Desktop::Other && kyrr_linux::typing::blocked_by_sandbox()
+    }
+
     pub fn set_hotkey_key(vk: u32) {
         kyrr_linux::hotkey::set_key(vk);
     }
@@ -1064,12 +1083,6 @@ mod imp {
             .join("io.github.heast13.kyrr.desktop")
     }
 
-    pub fn enable_autostart() {
-        if !autostart_enabled() {
-            set_autostart(true);
-        }
-    }
-
     /// A path for inside the quotes of a desktop entry's Exec: the quoting
     /// escapes `"`, `` ` ``, `$` and `\` with a backslash, the value's own
     /// escaping doubles that backslash, and `%` is doubled for field codes.
@@ -1095,6 +1108,12 @@ mod imp {
 
     pub fn autostart_enabled() -> bool {
         if flatpak() {
+            // The user's autostart folder tells, where the manifest lets
+            // kyrr see it; the portal's own record is out of reach.
+            let file = host_autostart_file();
+            if file.parent().is_some_and(std::path::Path::is_dir) {
+                return std::fs::read_to_string(file).is_ok_and(|entry| !autostart_switched_off(&entry));
+            }
             return state().saved.autostart;
         }
         std::fs::read_to_string(autostart_file()).is_ok_and(|entry| !autostart_switched_off(&entry))
@@ -1117,23 +1136,10 @@ mod imp {
         assert!(autostart_switched_off(&format!("{ours}Hidden=true\n")));
     }
 
-    pub fn set_autostart(on: bool) {
+    /// Blocks: in a Flatpak the desktop may ask the user first.
+    pub fn set_autostart(on: bool) -> Autostart {
         if flatpak() {
-            // Taken as asked; the desktop may ask the user first, and its
-            // answer lands in the settings the next time they are shown.
-            {
-                let mut s = state();
-                s.saved.autostart = on;
-                s.saved.save();
-            }
-            std::thread::spawn(move || {
-                if let Ok(enabled) = kyrr_linux::background::request_autostart(on) {
-                    let mut s = state();
-                    s.saved.autostart = enabled;
-                    s.saved.save();
-                }
-            });
-            return;
+            return set_autostart_flatpak(on);
         }
         start_in_compositor(on);
         let file = autostart_file();
@@ -1141,10 +1147,10 @@ mod imp {
             if std::fs::remove_file(file).is_ok() {
                 autostart_changed();
             }
-            return;
+            return Autostart::Done;
         }
         let Ok(exe) = std::env::current_exe() else {
-            return;
+            return Autostart::Done;
         };
         // An AppImage runs from a temporary mount; start the AppImage itself.
         // TryExec: a deleted AppImage is skipped at sign-in instead of failing.
@@ -1158,6 +1164,96 @@ mod imp {
         if write_if_changed(&file, Some(entry.into_bytes())) {
             autostart_changed();
         }
+        Autostart::Done
+    }
+
+    /// The same file in the user's own autostart folder, which the Flatpak
+    /// manifest opens up.
+    fn host_autostart_file() -> PathBuf {
+        binds::config_home()
+            .join("autostart")
+            .join("io.github.heast13.kyrr.desktop")
+    }
+
+    /// Start at sign-in from a Flatpak. The Background portal is asked first:
+    /// the desktop then knows about it and lists it in its settings. It is
+    /// missing on Hyprland and other tiling compositors, and it may report
+    /// success without anything written. Then kyrr writes the file in the
+    /// autostart folder itself (the portal writes the same file name, so
+    /// the two never add up to a double start). What the user decided in the
+    /// desktop's dialog stays decided: kyrr does not write around a "no".
+    fn set_autostart_flatpak(on: bool) -> Autostart {
+        use kyrr_linux::background::{request_autostart, Failure};
+
+        // Taken as asked until the answer is in.
+        remember_autostart(on);
+        let file = host_autostart_file();
+        let answer = request_autostart(on);
+        if let Err(Failure::Unavailable(e)) = &answer {
+            eprintln!("kyrr: start at sign-in: the Background portal did not work ({e})");
+        }
+        let result = if on {
+            match answer {
+                Ok(false) | Err(Failure::Cancelled) => {
+                    // A "no" holds: an entry kyrr wrote before goes too.
+                    let _ = std::fs::remove_file(&file);
+                    Autostart::Declined
+                }
+                // Said yes, or is not there. With the folder in sight a
+                // missing file means nothing was written.
+                Ok(true) | Err(Failure::Unavailable(_)) => {
+                    let visible = file.parent().is_some_and(std::path::Path::is_dir);
+                    let portal_said_yes = matches!(answer, Ok(true));
+                    // An entry the desktop's settings switched off is written anew.
+                    let present = std::fs::read_to_string(&file).is_ok_and(|entry| !autostart_switched_off(&entry));
+                    if present || (portal_said_yes && !visible) || (visible && write_flatpak_entry(&file)) {
+                        Autostart::Done
+                    } else {
+                        Autostart::Failed
+                    }
+                }
+            }
+        } else {
+            // The portal took its file away; kyrr's own goes the same way.
+            match std::fs::remove_file(&file) {
+                Ok(()) => Autostart::Done,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Autostart::Done,
+                Err(e) => {
+                    eprintln!("kyrr: removing {}: {e}", file.display());
+                    // Not seeing the folder is no reason to keep the switch on.
+                    if file.exists() {
+                        Autostart::Failed
+                    } else {
+                        Autostart::Done
+                    }
+                }
+            }
+        };
+        remember_autostart(match result {
+            Autostart::Done => on,
+            Autostart::Declined => false,
+            Autostart::Failed => !on,
+        });
+        result
+    }
+
+    fn remember_autostart(on: bool) {
+        let mut s = state();
+        s.saved.autostart = on;
+        s.saved.save();
+    }
+
+    /// The autostart entry for a Flatpak. True when it is in place.
+    fn write_flatpak_entry(file: &std::path::Path) -> bool {
+        let entry = "[Desktop Entry]\nType=Application\nName=kyrr\nTryExec=flatpak\nExec=flatpak run io.github.heast13.kyrr --background\nIcon=io.github.heast13.kyrr\nX-GNOME-Autostart-enabled=true\nX-Flatpak=io.github.heast13.kyrr\n";
+        let written = file
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|()| std::fs::write(file, entry));
+        if let Err(e) = &written {
+            eprintln!("kyrr: writing {}: {e}", file.display());
+        }
+        written.is_ok()
     }
 
     /// systemd turns the autostart files into services when it starts, and

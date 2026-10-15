@@ -33,6 +33,15 @@
   next to it already says that closing the window quits kyrr there.
 - A second start at sign-in while kyrr already runs no longer opens its
   window.
+- Flatpak on Hyprland, sway and similar: those desktops keep sandboxed apps
+  from sending keys and have no portal to ask instead, so dictation cannot
+  type there. kyrr now says so ("the Flatpak is the reason, the AppImage can
+  do it") instead of a bare "could not type". GNOME and KDE are not
+  affected.
+- Flatpak: "Start when you sign in" writes the autostart entry itself where
+  the desktop has no Background portal (Hyprland), and reports it in the
+  settings when nothing could be set up or the desktop said no. The switch
+  shows what really happened.
 - A microphone that is unplugged while kyrr moves to it (on Windows while
   the permission prompt is open) no longer leaves kyrr on no microphone:
   the move changes nothing and kyrr stays where it was, without restarting

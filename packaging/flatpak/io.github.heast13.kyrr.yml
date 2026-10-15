@@ -20,6 +20,10 @@ finish-args:
   - --device=dri
   # Speech model download on first dictation and "Check for updates".
   - --share=network
+  # Start at sign-in. The Background portal is asked first; where it is
+  # missing (Hyprland) or writes nothing, kyrr puts the same file
+  # (io.github.heast13.kyrr.desktop) into the user's autostart folder.
+  - --filesystem=xdg-config/autostart:create
   # The virtual microphone "kyrr": a PipeWire source node and the default
   # source in PipeWire's metadata. Read-only bind of the socket, as
   # EasyEffects does; connecting to it works the same.
@@ -28,7 +32,16 @@ finish-args:
   # through cpal -> ALSA, whose default device in the Freedesktop runtime is
   # the PulseAudio plugin.
   - --socket=pulseaudio
-  # Tray icon (StatusNotifierItem).
+  # Hyprland only: kyrr adds the global dictation key (`bind = , F9, global,
+  # io.github.heast13.kyrr:dictate`) to the user's Hyprland config itself;
+  # the portal offers no way to set a key there. Other desktops never use it.
+  - --filesystem=xdg-config/hypr
+  # Tray icon (StatusNotifierItem): Slint's tray (ksni) registers with the
+  # watcher and claims org.kde.StatusNotifierItem-<pid>-<n>; in the sandbox
+  # that is always -2-1, the one name allowed here. Tested on Hyprland
+  # (Waybar): the icon shows.
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --own-name=org.kde.StatusNotifierItem-2-1
 cleanup:
   - /include
   - /lib/libonnxruntime.so

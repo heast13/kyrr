@@ -118,6 +118,8 @@ export global AppState {
     in property <bool> update-dismissed;
 
     in-out property <bool> autostart;
+    // Why the start at sign-in did not work out; "" for nothing to say.
+    in property <string> autostart-note;
     // PipeWire is missing (Linux): a button that installs it, and what to
     // say about it ("" for nothing).
     in property <bool> pipewire-button;
@@ -1094,6 +1096,7 @@ component GeneralSettings inherits Card {
             toggled => { AppState.autostart-toggled(self.checked); }
         }
     }
+    if AppState.autostart-note != "": Caption { text: AppState.autostart-note; color: #e5484d; }
     if AppState.advanced: Separator { }
     if AppState.advanced: HorizontalLayout {
         Caption { text: @tr("Check for updates automatically"); vertical-alignment: center; }
