@@ -893,7 +893,11 @@ mod imp {
                 key: keys.key,
             },
             binds::Outcome::Taken { file, line, bind } => {
-                eprintln!("kyrr: {} is taken in {} line {line}: {bind}", keys.key, binds::display(&file));
+                eprintln!(
+                    "kyrr: {} is taken in {} line {line}: {bind}",
+                    keys.key,
+                    binds::display(&file)
+                );
                 KeyNote::Taken { key: keys.key }
             }
             binds::Outcome::Failed => {

@@ -198,7 +198,8 @@ fn pipewire_note(step: PipewireStep, plan: Option<(bool, String)>, german: bool)
         return if german {
             "Hol dir PipeWire aus der Softwareverwaltung deines Systems (such nach „PipeWire“), dann einmal ab- und wieder anmelden.".into()
         } else {
-            "Get PipeWire from your system's software manager (search for “PipeWire”), then sign out and back in once.".into()
+            "Get PipeWire from your system's software manager (search for “PipeWire”), then sign out and back in once."
+                .into()
         };
     };
     match step {
