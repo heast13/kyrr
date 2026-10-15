@@ -82,7 +82,6 @@ code { background: var(--code); padding: 0.1em 0.35em; border-radius: 4px; }
 .quip { display: flex; justify-content: center; align-items: center; gap: 0.6rem; margin: 0 0 1.75rem; min-height: 1.5rem; font-size: 0.95rem; font-style: italic; color: var(--muted); }
 .quip { transition: opacity 0.45s ease-in-out; }
 .quip.out { opacity: 0; }
-@media (max-width: 400px) { .quip { min-height: 2.9rem; } }
 .wave { display: inline-flex; align-items: center; gap: 2px; height: 16px; flex: none; }
 .wave i { display: block; width: 2px; height: 12px; border-radius: 1px; background: var(--accent); opacity: 0.85; transform: scaleY(0.2); animation: sway 2.2s ease-in-out infinite; }
 .wave i:nth-child(2) { animation-delay: -0.45s; }

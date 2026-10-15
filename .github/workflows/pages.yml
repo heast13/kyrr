@@ -28,6 +28,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/configure-pages@v5
+      # Browsers keep style.css and app.js for a while; a new version in the
+      # link makes a visitor get the files that belong to the page.
+      - name: Version the CSS and JS links
+        run: sed -i "s/?v=dev/?v=${GITHUB_SHA::8}/" site/index.html site/de/index.html
       - uses: actions/upload-pages-artifact@v4
         with:
           path: site
