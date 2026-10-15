@@ -297,6 +297,10 @@ fn resize(w: &MainWindow, height: f32) {
     #[cfg(target_os = "linux")]
     {
         w.set_fit_height(height);
+        // Some compositors keep a floating window at the size they last
+        // gave it and only follow the limits (Hyprland): growing works
+        // through the minimum, shrinking needs the maximum for a moment.
+        w.set_fit_hold(true);
         // The new minimum reaches the compositor with the next frame; until
         // then a smaller size is held at the old minimum (GNOME), so ask
         // once more after it.
@@ -304,6 +308,13 @@ fn resize(w: &MainWindow, height: f32) {
         slint::Timer::single_shot(Duration::from_millis(50), move || {
             if let Some(w) = weak.upgrade() {
                 w.window().set_size(LogicalSize::new(width, height));
+            }
+        });
+        // Then the window can be dragged taller again.
+        let weak = w.as_weak();
+        slint::Timer::single_shot(Duration::from_millis(500), move || {
+            if let Some(w) = weak.upgrade() {
+                w.set_fit_hold(false);
             }
         });
     }

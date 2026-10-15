@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.5 (2026-10-15)
 
 - Linux, GNOME and KDE: a dictation with letters your keyboard layout does
   not have (German umlauts on a US layout, say) is now pasted into the
@@ -8,7 +8,10 @@
   Shift+Insert for it, which pastes in terminals too.
 - Linux on Wayland: closing the window (or "Off to the corner") without a
   tray minimizes it every time, not only the first time, and the window
-  fits its content again after it came back.
+  fits its content again after it came back. The note under the buttons
+  that only said so is gone.
+- Linux: switching the settings from advanced back to simple makes the
+  window smaller again, also on Hyprland, which kept the bigger size.
 
 ## 0.5.4 (2026-10-15)
 
