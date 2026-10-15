@@ -31,7 +31,7 @@
     box.appendChild(b);
   });
 
-  // The remark under the hero text swaps to another one every few seconds.
+  // The remark under the hero text swaps to another one every twelve seconds.
   // Not with reduced motion, and not while the tab is in the background.
   var quip = document.querySelector("[data-quips]");
   var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -47,7 +47,7 @@
         quip.textContent = words[at];
         line.classList.remove("out");
       }, 450);
-    }, 6000);
+    }, 12000);
   }
 
   // Install tabs: built from the panels, so without JS they simply stack.
