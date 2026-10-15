@@ -2029,6 +2029,9 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         });
     }
     let tray_at_start = platform::has_tray();
+    // One lookup for both, so a host that turns up in between cannot leave
+    // the window saying "no tray" next to a visible icon.
+    window.global::<AppState>().set_tray(tray_at_start);
     // Without a tray host Slint would only log a complaint: wait for one
     // (the retry below) instead of shouting at start.
     if tray_at_start {
