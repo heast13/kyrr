@@ -207,9 +207,9 @@ both flags the icon shows, with neither ksni fails with `ServiceUnknown`.
 Open: Flathub's linter flags `--own-name=org.kde.*`
 (`finish-args-own-name-cpt`), so this needs an exception in the review;
 ksni's `disable_dbus_name(true)` would make it unnecessary, but Slint does
-not offer it. And the app still treats a Flatpak as having no tray
-(`platform.rs` `has_tray()`), so the window minimizes or quits on close
-instead of hiding; that has to change with the next release.
+not offer it. The app uses the tray in a Flatpak like anywhere else
+(`platform.rs` `has_tray()` asks the watcher), from the release that
+carries that change on (the manifest's tag must be that release or newer).
 
 ### Handled in the app
 
