@@ -719,13 +719,18 @@ component AboutSettings inherits Card {
     if root.credits: Hint { text: @tr("German dictation: parakeet-primeline by primeLine AI (CC-BY-4.0), based on NVIDIA Parakeet."); }
     if root.credits: Hint { text: @tr("English dictation: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX by sherpa-onnx."); }
     if root.credits: Hint { text: @tr("Plus the work of many more not named here. Raising a beer to you all."); }
-    HorizontalLayout {
-        spacing: 8px;
+    // Up to two rows: three buttons side by side overflow the card in German and
+    // with wider system fonts, and the window has a fixed width.
+    if !AppState.advanced: HorizontalLayout {
         Rectangle { }
-        if !AppState.advanced: Button {
+        Button {
             text: root.unfolded ? @tr("Less") : @tr("Credits");
             clicked => { root.unfolded = !root.unfolded; }
         }
+    }
+    HorizontalLayout {
+        spacing: 8px;
+        Rectangle { }
         Button { text: @tr("What's new"); clicked => { AppState.show-current-news(); } }
         Button { text: @tr("Licenses"); clicked => { AppState.open-licenses(); } }
     }
