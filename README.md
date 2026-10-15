@@ -96,9 +96,9 @@ these use anyway; where it is missing, a button in kyrr installs it (your
 system asks for your password). The noise filter also needs a processor with
 AVX2 (most from 2015 on); dictation works without. No administrator rights
 needed. On GNOME 48+ and KDE your desktop asks once for the dictation key and
-once whether kyrr may type; kyrr walks you through both. On older GNOME
-(Ubuntu 24.04, say) kyrr adds the key to GNOME's own keyboard shortcuts, where
-each press starts or ends dictation. On Hyprland (Omarchy, say), Sway, river
+once whether kyrr may type; kyrr walks you through both. On GNOME 46 and 47
+kyrr adds the key to GNOME's own keyboard shortcuts, where each press starts
+or ends dictation. On Hyprland (Omarchy, say), Sway, river
 and niri kyrr adds the key to your key bindings itself, in a block of its own
 that it keeps up to date, and the start at sign-in too where the session does
 not start XDG autostart entries; on X11 desktops (Linux Mint, XFCE) the key

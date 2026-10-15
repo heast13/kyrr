@@ -1,4 +1,4 @@
-//! GNOME before 48 (Ubuntu 24.04, say) has no shortcut portal on Wayland:
+//! GNOME before 48 has no shortcut portal on Wayland:
 //! kyrr cannot catch a key there. A custom shortcut of GNOME's own can run
 //! `kyrr --dictate`, though, and kyrr adds that one itself, through
 //! `gsettings`, like the user would under Settings › Keyboard › Custom

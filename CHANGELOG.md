@@ -15,7 +15,7 @@
   skips the usual start-at-sign-in entries), kyrr puts its start at sign-in
   into the same config, in a block of its own that goes when you switch the
   start off.
-- GNOME 46 and 47 (Ubuntu 24.04, say) have no shortcut dialog for apps on
+- GNOME 46 and 47 have no shortcut dialog for apps on
   Wayland: kyrr now adds the dictation key to GNOME's own keyboard
   shortcuts itself. Each press starts or ends dictation.
 - No PipeWire? kyrr no longer just says so: "Set up PipeWire" installs it
