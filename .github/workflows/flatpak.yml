@@ -43,7 +43,7 @@ jobs:
       - name: Bundle
         run: |
           flatpak build-bundle "$RUNNER_TEMP/repo" "$RUNNER_TEMP/kyrr.flatpak" io.github.heast13.kyrr
-          sha256sum "$RUNNER_TEMP/kyrr.flatpak" > "$RUNNER_TEMP/kyrr.flatpak.sha256"
+          (cd "$RUNNER_TEMP" && sha256sum kyrr.flatpak > kyrr.flatpak.sha256)
       - uses: actions/upload-artifact@v7
         with:
           name: kyrr-flatpak
