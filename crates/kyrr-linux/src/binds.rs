@@ -383,8 +383,14 @@ pub fn ensure(compositor: Compositor, base: &Path, keys: &Keys) -> Outcome {
                 }
             }
             Claim::Other { line, bind } => {
+                // Sway without a config of the user's reads the system's.
+                let read_from = if file.path.exists() {
+                    file.path.clone()
+                } else {
+                    PathBuf::from(SWAY_SYSTEM)
+                };
                 taken = taken.or(Some(Outcome::Taken {
-                    file: file.path.clone(),
+                    file: read_from,
                     line,
                     bind,
                 }))
