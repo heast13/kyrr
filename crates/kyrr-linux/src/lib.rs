@@ -4,9 +4,12 @@
 #![cfg(target_os = "linux")]
 
 pub mod background;
+pub mod binds;
+pub mod gnome;
 pub mod hotkey;
 pub mod instance;
 pub mod mic;
+pub mod pipewire_setup;
 pub mod signals;
 pub mod tray;
 pub mod typing;

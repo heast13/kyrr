@@ -21,6 +21,9 @@ const SHOW: &[u8] = b"show";
 const DICTATE: &[u8] = b"dictate";
 const DICTATE_START: &[u8] = b"dictate-start";
 const DICTATE_STOP: &[u8] = b"dictate-stop";
+/// A start at sign-in while kyrr already runs (the session's autostart and
+/// the compositor's both started it): nothing to do.
+const BACKGROUND: &[u8] = b"background";
 
 fn socket_path() -> PathBuf {
     let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from) else {
@@ -48,6 +51,8 @@ pub fn claim(args: &[String]) -> Instance {
         DICTATE_START
     } else if has("--dictate-stop") {
         DICTATE_STOP
+    } else if has("--background") {
+        BACKGROUND
     } else {
         SHOW
     };
@@ -76,6 +81,7 @@ fn serve(listener: UnixListener, show: mpsc::Sender<()>) {
             DICTATE => crate::hotkey::toggle(),
             DICTATE_START => crate::hotkey::remote_press(),
             DICTATE_STOP => crate::hotkey::remote_release(),
+            BACKGROUND => {}
             _ => {
                 if show.send(()).is_err() {
                     break;
