@@ -146,7 +146,12 @@ pub enum Outcome {
     /// the compositor has to read the file again.
     Bound { file: PathBuf, written: bool },
     /// Another bind of the user's already uses the key.
-    Taken { file: PathBuf },
+    Taken {
+        file: PathBuf,
+        /// The line (from 1) of that bind, and the bind as written there.
+        line: usize,
+        bind: String,
+    },
     /// The file cannot be found or written (Flatpak without access, a config
     /// kept read-only): the lines have to be added by hand.
     Failed,
@@ -366,10 +371,10 @@ pub fn ensure(compositor: Compositor, base: &Path, keys: &Keys) -> Outcome {
         let Some(content) = read(file) else {
             return Outcome::Failed;
         };
-        let Ok(rest) = strip_block(&content, file.syntax, Block::Key) else {
+        let Ok(claim) = claim(&content, file.syntax, &keys.key) else {
             return Outcome::Failed;
         };
-        match claim(&rest, file.syntax, &keys.key) {
+        match claim {
             Claim::Free => {}
             Claim::Kyrr => {
                 return Outcome::Bound {
@@ -377,11 +382,17 @@ pub fn ensure(compositor: Compositor, base: &Path, keys: &Keys) -> Outcome {
                     written: false,
                 }
             }
-            Claim::Other => taken = taken.or(Some(file.path.clone())),
+            Claim::Other { line, bind } => {
+                taken = taken.or(Some(Outcome::Taken {
+                    file: file.path.clone(),
+                    line,
+                    bind,
+                }))
+            }
         }
     }
-    if let Some(file) = taken {
-        return Outcome::Taken { file };
+    if let Some(taken) = taken {
+        return taken;
     }
     let block = lines(target.syntax, keys);
     match put_block(target, Block::Key, Some(&block)) {
@@ -602,12 +613,16 @@ fn strip_block(text: &str, syntax: Syntax, block: Block) -> Result<String, ()> {
     Ok(format!("{}{}", rows[..a].concat(), rows[b + 1..].concat()))
 }
 
+#[derive(Debug)]
 enum Claim {
     Free,
     /// A bind of kyrr's that was added by hand, as an earlier kyrr asked.
     Kyrr,
-    /// Something else is on the key.
-    Other,
+    /// Something else is on the key: the first such bind and its line.
+    Other {
+        line: usize,
+        bind: String,
+    },
 }
 
 /// The bare key (no modifiers) that `row` binds, if it is a bind.
@@ -661,13 +676,19 @@ fn key_of(row: &str, syntax: Syntax) -> Option<String> {
     }
 }
 
-/// Who has the bare `key` in `text`. Binds in sway's modes and outside
-/// niri's `binds` do not count.
-fn claim(text: &str, syntax: Syntax, key: &str) -> Claim {
+/// Who has the bare `key` in `text`, kyrr's own block aside. Binds in
+/// sway's modes and outside niri's `binds` do not count. `Err` when kyrr's
+/// block lost its end (see [`find_block`]).
+fn claim(text: &str, syntax: Syntax, key: &str) -> Result<Claim, ()> {
+    let rows: Vec<&str> = text.lines().collect();
+    let ours = find_block(&rows, syntax, Block::Key)?;
     let mut claim = Claim::Free;
     // The blocks around the row: whether each is one where binds count.
     let mut nesting: Vec<bool> = Vec::new();
-    for row in text.lines().map(str::trim) {
+    for (i, row) in rows.iter().map(|r| r.trim()).enumerate() {
+        if ours.is_some_and(|(a, b)| (a..=b).contains(&i)) {
+            continue;
+        }
         let counts = match syntax {
             Syntax::Sway => nesting.iter().all(|&c| c),
             Syntax::Niri => nesting == [true],
@@ -688,11 +709,16 @@ fn claim(text: &str, syntax: Syntax, key: &str) -> Claim {
             continue;
         }
         if row.contains(APP_ID) || row.contains("--dictate") {
-            return Claim::Kyrr;
+            return Ok(Claim::Kyrr);
         }
-        claim = Claim::Other;
+        if matches!(claim, Claim::Free) {
+            claim = Claim::Other {
+                line: i + 1,
+                bind: row.to_string(),
+            };
+        }
     }
-    claim
+    Ok(claim)
 }
 
 #[cfg(test)]
@@ -793,26 +819,39 @@ mod tests {
     #[test]
     fn finds_who_has_the_key() {
         let free = "bind = SUPER, F9, exec, x\nbind = , F10, exec, y\n# bind = , F9, exec, z\nunbind = , F9\n";
-        assert!(matches!(claim(free, Syntax::Conf, "F9"), Claim::Free));
+        assert!(matches!(claim(free, Syntax::Conf, "F9").unwrap(), Claim::Free));
         assert!(matches!(
-            claim("bind = , F9, exec, x", Syntax::Conf, "F9"),
-            Claim::Other
+            claim("bind = , F9, exec, x", Syntax::Conf, "F9").unwrap(),
+            Claim::Other { .. }
         ));
-        assert!(matches!(claim("bindd=,f9,Do,exec,x", Syntax::Conf, "F9"), Claim::Other));
+        assert!(matches!(
+            claim("bindd=,f9,Do,exec,x", Syntax::Conf, "F9").unwrap(),
+            Claim::Other { .. }
+        ));
         assert!(matches!(
             claim(
                 "bind = , F9, global, io.github.heast13.kyrr:dictate",
                 Syntax::Conf,
                 "F9"
-            ),
+            )
+            .unwrap(),
             Claim::Kyrr
         ));
         assert!(matches!(
-            claim("hl.bind(\"F9\", hl.dsp.exec_cmd(\"x\"))", Syntax::Lua, "F9"),
-            Claim::Other
+            claim("hl.bind(\"F9\", hl.dsp.exec_cmd(\"x\"))", Syntax::Lua, "F9").unwrap(),
+            Claim::Other { .. }
         ));
+        // Flo's Omarchy test: kyrr's own block on F9, someone else's F8 below.
+        let lua = "-- >>> kyrr: dictation key (kyrr keeps this block up to date)\nhl.unbind(\"F9\")\nhl.bind(\"F9\", hl.dsp.global(\"io.github.heast13.kyrr:dictate\"))\n-- <<< kyrr\n\nhl.bind(\"F8\", hl.dsp.exec_cmd(\"true\"))\n";
+        match claim(lua, Syntax::Lua, "F8").unwrap() {
+            Claim::Other { line, bind } => {
+                assert_eq!(line, 6);
+                assert_eq!(bind, "hl.bind(\"F8\", hl.dsp.exec_cmd(\"true\"))");
+            }
+            other => panic!("{other:?}"),
+        }
         assert!(matches!(
-            claim("hl.bind(\"SUPER + F9\", x)", Syntax::Lua, "F9"),
+            claim("hl.bind(\"SUPER + F9\", x)", Syntax::Lua, "F9").unwrap(),
             Claim::Free
         ));
     }
@@ -820,21 +859,22 @@ mod tests {
     #[test]
     fn sway() {
         let config = "set $mod Mod4\nbindsym $mod+F9 exec x\nmode \"resize\" {\n    bindsym F9 resize grow\n}\n";
-        assert!(matches!(claim(config, Syntax::Sway, "F9"), Claim::Free));
+        assert!(matches!(claim(config, Syntax::Sway, "F9").unwrap(), Claim::Free));
         let mine = format!("{config}bindsym --to-code F9 exec mute\n");
-        assert!(matches!(claim(&mine, Syntax::Sway, "F9"), Claim::Other));
+        assert!(matches!(claim(&mine, Syntax::Sway, "F9").unwrap(), Claim::Other { .. }));
         let new = block(config, Syntax::Sway, &keys("F9", false)).unwrap();
         assert!(new.contains(
             "bindsym --no-repeat F9 exec kyrr --dictate-start\nbindsym --release F9 exec kyrr --dictate-stop\n"
         ));
-        assert!(matches!(claim(&new, Syntax::Sway, "F9"), Claim::Kyrr));
+        // kyrr's own block does not count.
+        assert!(matches!(claim(&new, Syntax::Sway, "F9").unwrap(), Claim::Free));
     }
 
     #[test]
     fn river() {
         let init = "#!/bin/sh\nriverctl map normal Super F9 spawn x\nriverctl map -layout 0 normal None F8 spawn y\nexec rivertile\n";
-        assert!(matches!(claim(init, Syntax::River, "F9"), Claim::Free));
-        assert!(matches!(claim(init, Syntax::River, "F8"), Claim::Other));
+        assert!(matches!(claim(init, Syntax::River, "F9").unwrap(), Claim::Free));
+        assert!(matches!(claim(init, Syntax::River, "F8").unwrap(), Claim::Other { .. }));
         let new = block(init, Syntax::River, &keys("F9", false)).unwrap();
         // Before the exec, which never returns.
         assert!(new.ends_with("# <<< kyrr\n\nexec rivertile\n"));
@@ -861,14 +901,18 @@ mod tests {
     #[test]
     fn niri() {
         let config = "input {\n    keyboard {\n    }\n}\n\nbinds {\n    Mod+F9 { spawn \"x\"; }\n    /- F9 { spawn \"y\"; }\n}\n\nwindow-rule {\n    F9 { }\n}\n";
-        assert!(matches!(claim(config, Syntax::Niri, "F9"), Claim::Free));
+        assert!(matches!(claim(config, Syntax::Niri, "F9").unwrap(), Claim::Free));
         let new = block(config, Syntax::Niri, &keys("F9", false)).unwrap();
         assert!(new.contains(
             "binds {\n    // >>> kyrr: dictation key (kyrr keeps this block up to date)\n    F9 repeat=false { spawn \"kyrr\" \"--dictate\"; }\n    // <<< kyrr\n    Mod+F9"
         ));
-        assert!(matches!(claim(&new, Syntax::Niri, "F9"), Claim::Kyrr));
+        // kyrr's own block does not count.
+        assert!(matches!(claim(&new, Syntax::Niri, "F9").unwrap(), Claim::Free));
         let theirs = config.replace("Mod+F9", "F9");
-        assert!(matches!(claim(&theirs, Syntax::Niri, "F9"), Claim::Other));
+        assert!(matches!(
+            claim(&theirs, Syntax::Niri, "F9").unwrap(),
+            Claim::Other { .. }
+        ));
         assert_eq!(with_block("input {\n}\n", Syntax::Niri, Block::Key, "x"), Err(()));
         let start = start_lines(Syntax::Niri, &["flatpak".into(), "run".into(), APP_ID.into()]);
         assert_eq!(
@@ -939,7 +983,11 @@ mod tests {
         .unwrap();
         assert_eq!(
             ensure(hypr, &base, &keys("Pause", true)),
-            Outcome::Taken { file: main.clone() }
+            Outcome::Taken {
+                file: main.clone(),
+                line: 2,
+                bind: "bind = , Pause, exec, mute".into()
+            }
         );
         assert_eq!(
             ensure(hypr, &base, &keys("F8", true)),

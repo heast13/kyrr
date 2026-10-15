@@ -19,8 +19,8 @@ const OURS: &str = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybind
 pub enum Outcome {
     /// The shortcut is there. `written` when kyrr just added or changed it.
     Bound { written: bool },
-    /// Another custom shortcut already uses the key.
-    Taken,
+    /// Another custom shortcut, by this name, already uses the key.
+    Taken { name: String },
     /// `gsettings` is missing or refused.
     Failed,
 }
@@ -41,7 +41,8 @@ pub fn ensure(key: &str, command: &str) -> Outcome {
         if theirs.contains("--dictate") || theirs.contains(APP_ID) {
             return Outcome::Bound { written: false };
         }
-        return Outcome::Taken;
+        let name = get(&entry, "name").and_then(|v| parse_str(&v)).unwrap_or_default();
+        return Outcome::Taken { name };
     }
     let entry = format!("{ENTRY}:{OURS}");
     let mut written = false;
