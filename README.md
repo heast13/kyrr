@@ -230,8 +230,8 @@ from the shared block.
 On Linux the filter runs inside the app, which reads the levels and the
 take directly.
 
-**Dictation.** kyrr records while the key is held and transcribes locally
-with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (its build without
+**Dictation.** kyrr records while the key is held (up to 15 minutes) and
+transcribes locally with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (its build without
 text-to-speech). The speech model is downloaded once on first use and let go
 of after a quarter of an hour without dictation:
 

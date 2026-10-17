@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- A dictation can now be 15 minutes long instead of 2. The recording is
+  recognized in pieces of about 30 seconds, cut at pauses, and typed or
+  pasted as one text. (Windows) A long text typed key by key, because the
+  clipboard was out of reach, goes out in batches, which makes lost keys
+  less likely.
 - The sentence at the top of setup step 2 reads simpler now: hold the key,
   speak, let go.
 - Linux, Hyprland: kyrr opened from the tray comes up as a floating window

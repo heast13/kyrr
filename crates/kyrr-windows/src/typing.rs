@@ -229,8 +229,24 @@ fn type_keys(text: &str) -> bool {
     send(&inputs)
 }
 
+/// Key events per call to `SendInput`. The input queue of a window holds
+/// about 10,000 messages; a long dictation typed in one go would overflow it.
+/// An even number, so no key goes down in one batch and up in the next.
+const BATCH: usize = 256;
+
+/// Pause between batches, for the receiving window to empty its queue.
+const BATCH_PAUSE: Duration = Duration::from_millis(5);
+
 fn send(inputs: &[INPUT]) -> bool {
-    inputs.is_empty() || unsafe { SendInput(inputs, std::mem::size_of::<INPUT>() as i32) } as usize == inputs.len()
+    for (index, batch) in inputs.chunks(BATCH).enumerate() {
+        if index > 0 {
+            std::thread::sleep(BATCH_PAUSE);
+        }
+        if unsafe { SendInput(batch, std::mem::size_of::<INPUT>() as i32) } as usize != batch.len() {
+            return false;
+        }
+    }
+    true
 }
 
 #[cfg(test)]

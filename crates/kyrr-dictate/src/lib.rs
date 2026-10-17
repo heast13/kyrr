@@ -22,6 +22,18 @@ pub const MIN_SECONDS: f32 = 0.3;
 /// sherpa-onnx, which logs every resampler it creates.
 const MODEL_RATE: u32 = 16_000;
 
+/// Longest piece handed to the model in one go. Attention memory and time
+/// grow with the square of the length, so a long dictation is cut into
+/// pieces of about this size (at pauses) and the texts are joined.
+const PIECE_SECONDS: usize = 30;
+
+/// The cut is looked for in the last stretch of a piece, so no piece gets
+/// much shorter than `PIECE_SECONDS - SEARCH_SECONDS`.
+const SEARCH_SECONDS: usize = 8;
+
+/// Length of the windows compared when looking for the quietest spot.
+const WINDOW: usize = MODEL_RATE as usize / 50;
+
 /// A loaded dictation model. Loading takes a few seconds and about 1 GB of
 /// memory, so the app keeps it only while dictation is in use.
 pub struct Dictation {
@@ -67,11 +79,46 @@ impl Dictation {
         let Ok(audio) = resample(sample_rate, samples) else {
             return String::new();
         };
-        let stream = self.recognizer.create_stream();
-        stream.accept_waveform(MODEL_RATE as i32, &audio);
-        self.recognizer.decode(&stream);
-        stream.get_result().map(|r| tidy(&r.text)).unwrap_or_default()
+        let mut texts = Vec::new();
+        for piece in pieces(&audio) {
+            let stream = self.recognizer.create_stream();
+            stream.accept_waveform(MODEL_RATE as i32, piece);
+            self.recognizer.decode(&stream);
+            texts.extend(stream.get_result().map(|r| r.text));
+        }
+        tidy(&texts.join(" "))
     }
+}
+
+/// Cuts a 16 kHz recording into pieces of at most `PIECE_SECONDS`, each at
+/// the quietest spot in the end of its stretch, so a word is rarely split.
+/// A recording that fits is one piece.
+fn pieces(audio: &[f32]) -> Vec<&[f32]> {
+    let limit = PIECE_SECONDS * MODEL_RATE as usize;
+    let search = SEARCH_SECONDS * MODEL_RATE as usize;
+    let mut out = Vec::new();
+    let mut rest = audio;
+    // A tail shorter than the shortest recording worth decoding stays with
+    // the piece before it.
+    let shortest = (MIN_SECONDS * MODEL_RATE as f32) as usize;
+    while rest.len() > limit {
+        let from = limit - search;
+        let quietest = rest[from..limit]
+            .as_chunks::<WINDOW>()
+            .0
+            .iter()
+            .enumerate()
+            .map(|(i, w)| (i, w.iter().map(|s| s * s).sum::<f32>()))
+            // The latest of equally quiet windows: digital silence is common.
+            .min_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0)))
+            .map_or(limit, |(i, _)| from + i * WINDOW + WINDOW / 2);
+        let quietest = quietest.min(rest.len().saturating_sub(shortest)).max(1);
+        let (piece, tail) = rest.split_at(quietest);
+        out.push(piece);
+        rest = tail;
+    }
+    out.push(rest);
+    out
 }
 
 /// Converts a mono recording to 16 kHz.
@@ -173,6 +220,51 @@ mod tests {
             "In der nächsten Zeile steht es."
         );
         assert_eq!(commands("Kein Befehl hier."), "Kein Befehl hier.");
+    }
+
+    #[test]
+    fn a_short_recording_is_one_piece() {
+        let audio = vec![0.1; PIECE_SECONDS * MODEL_RATE as usize];
+        assert_eq!(pieces(&audio), vec![&audio[..]]);
+    }
+
+    #[test]
+    fn no_piece_is_too_short_to_decode() {
+        let limit = PIECE_SECONDS * MODEL_RATE as usize;
+        for extra in [1, 100, 4800, 5000] {
+            let audio = vec![0.1; limit + extra];
+            let cut = pieces(&audio);
+            assert_eq!(cut.concat(), audio);
+            let shortest = (MIN_SECONDS * MODEL_RATE as f32) as usize;
+            assert!(cut.iter().all(|p| p.len() >= shortest), "{extra}");
+        }
+    }
+
+    #[test]
+    fn a_long_recording_is_cut_at_pauses_without_losing_audio() {
+        let rate = MODEL_RATE as usize;
+        // Speech everywhere except a pause 3 s before each 30 s mark.
+        let audio: Vec<f32> = (0..95 * rate)
+            .map(|i| {
+                let second = i / rate;
+                if second % 30 == 27 {
+                    0.0
+                } else {
+                    0.3
+                }
+            })
+            .collect();
+        let cut = pieces(&audio);
+        assert_eq!(cut.len(), 4);
+        assert!(cut.iter().all(|p| p.len() <= PIECE_SECONDS * rate));
+        assert_eq!(cut.concat(), audio);
+        // The cuts fall into the pauses.
+        let mut at = 0;
+        for piece in &cut[..3] {
+            at += piece.len();
+            assert_eq!(audio[at - 1], 0.0);
+            assert_eq!(audio[at], 0.0);
+        }
     }
 
     #[test]

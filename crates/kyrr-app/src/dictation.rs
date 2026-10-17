@@ -94,6 +94,14 @@ pub type Clipboard = fn(&str) -> bool;
 /// language of the window).
 fn say(language: Language, what: &str) -> String {
     let german = language == Language::German;
+    if what == "cut" {
+        let minutes = MAX_SECONDS / 60;
+        return if german {
+            format!("Nach {minutes} Minuten ist Schluss: Der Rest kam nicht mit.")
+        } else {
+            format!("{minutes} minutes is the limit: the rest was not written.")
+        };
+    }
     match (what, german) {
         ("offline", true) => "Kein Internet oder der Server antwortet nicht. Nochmal versuchen?",
         ("offline", false) => "No internet, or the server does not answer. Try again?",
@@ -123,8 +131,6 @@ fn say(language: Language, what: &str) -> String {
         }
         ("muted", true) => "Dein Mikrofon ist stummgeschaltet. Auf der Hauptseite kannst du das aufheben.",
         ("muted", false) => "Your microphone is muted. You can switch that off on the main page.",
-        ("cut", true) => "Nach zwei Minuten ist Schluss: Der Rest kam nicht mit.",
-        ("cut", false) => "Two minutes is the limit: the rest was not written.",
         (other, _) => other,
     }
     .to_string()
