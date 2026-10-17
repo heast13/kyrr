@@ -1222,8 +1222,8 @@ component SetupPage inherits VerticalLayout {
     if step == 1: Hint { text: @tr("Step 2 of 2"); }
     if step == 1: Heading { text: @tr("Talk instead of typing"); font-size: 20px; }
     if step == 1: Caption {
-        text: AppState.key-note == "" || AppState.guide ? @tr("Hold {} anywhere, speak, release: kyrr types what you said. It runs on your computer, nothing is sent anywhere.", AppState.key-name)
-            : @tr("Start dictation with a key, speak, end it: kyrr types what you said. It runs on your computer, nothing is sent anywhere.");
+        text: AppState.key-note == "" || AppState.guide ? @tr("Hold {} and speak. When you let go, kyrr types what you said, in any app. It runs on your computer, nothing is sent anywhere.", AppState.key-name)
+            : @tr("Start dictation with a key and speak. When you end it, kyrr types what you said, in any app. It runs on your computer, nothing is sent anywhere.");
     }
     if step == 1: Caption { text: @tr("Language"); }
     if step == 1: Segmented {

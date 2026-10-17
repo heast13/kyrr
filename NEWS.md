@@ -11,6 +11,16 @@ An item for one system only starts with `(Windows)` or `(Linux)`, as in
 `- (Linux) …`; kyrr shows it only there, without the mark. Everything else
 is for both, so it names neither. Linux lists the versions from 0.5.3 on.
 
+## Unreleased
+
+- The short explanation in the dictation setup reads simpler now.
+- (Linux) On Hyprland, kyrr opened from the tray appears as a floating window instead of a tiled one.
+
+### Deutsch
+
+- Die kurze Erklärung beim Einrichten des Diktierens ist jetzt einfacher formuliert.
+- (Linux) Unter Hyprland erscheint kyrr aus dem Tray als schwebendes Fenster statt gekachelt.
+
 ## 0.5.5
 
 - (Linux) Dictating letters your keyboard layout does not have, like umlauts on a US keyboard, now lands in the window by itself, without Ctrl+V.

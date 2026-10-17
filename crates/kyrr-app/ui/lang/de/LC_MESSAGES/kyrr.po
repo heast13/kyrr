@@ -596,8 +596,8 @@ msgstr "Halten"
 msgid "Hold while you talk, let go when you are done. Walkie-talkie style."
 msgstr "Halten, solange du redest, loslassen, wenn du fertig bist. Wie beim Funkgerät."
 
-msgid "Hold {} anywhere, speak, release: kyrr types what you said. It runs on your computer, nothing is sent anywhere."
-msgstr "Halte {} irgendwo, sprich, lass los: kyrr tippt, was du gesagt hast. Läuft auf deinem Rechner, nichts wird verschickt."
+msgid "Hold {} and speak. When you let go, kyrr types what you said, in any app. It runs on your computer, nothing is sent anywhere."
+msgstr "Halte {} gedrückt und sprich. Beim Loslassen tippt kyrr, was du gesagt hast, in jeder App. Läuft auf deinem Rechner, nichts wird verschickt."
 
 msgid "Hold {}, talk, let go. The text lands at your cursor."
 msgstr "{} halten, reden, loslassen. Der Text landet an deinem Cursor."
@@ -802,8 +802,8 @@ msgstr "kyrr startet beim Anmelden und wohnt im Tray, wenn dein Desktop eins hat
 msgid "Dictate with your key, the text lands at your cursor. Setting up the key: see Settings."
 msgstr "Diktieren per Taste, der Text landet an deinem Cursor. Taste einrichten: siehe Einstellungen."
 
-msgid "Start dictation with a key, speak, end it: kyrr types what you said. It runs on your computer, nothing is sent anywhere."
-msgstr "Diktat per Taste starten, sprechen, beenden: kyrr tippt, was du gesagt hast. Läuft auf deinem Rechner, nichts wird verschickt."
+msgid "Start dictation with a key and speak. When you end it, kyrr types what you said, in any app. It runs on your computer, nothing is sent anywhere."
+msgstr "Starte das Diktat per Taste und sprich. Beim Beenden tippt kyrr, was du gesagt hast, in jeder App. Läuft auf deinem Rechner, nichts wird verschickt."
 
 msgid "{} is not set up yet: kyrr needs your desktop's OK for it."
 msgstr "{} ist noch nicht eingerichtet: Dafür braucht kyrr das OK deines Desktops."
