@@ -31,8 +31,8 @@ What it does:
   your microphone is set.
 - **Dictation.** Hold F9 (or F8, Pause, right Ctrl; or tap to start and
   stop), speak, release. The text appears where your cursor is. German and
-  English, transcribed on your PC. Say "new line" or "neue
-  Zeile" for a line break.
+  English, transcribed on your PC, up to 15 minutes per dictation. Say
+  "new line" or "neue Zeile" for a line break.
 - **Check.** A live level of what the microphone hears and what apps get,
   a ten-second test (record once, then play the take before and after kyrr)
   and listening to yourself live on headphones.
@@ -230,8 +230,8 @@ from the shared block.
 On Linux the filter runs inside the app, which reads the levels and the
 take directly.
 
-**Dictation.** kyrr records while the key is held and transcribes locally
-with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (its build without
+**Dictation.** kyrr records while the key is held, for up to 15 minutes, and
+transcribes locally with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (its build without
 text-to-speech). The speech model is downloaded once on first use and let go
 of after a quarter of an hour without dictation:
 
