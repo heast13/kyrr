@@ -11,6 +11,11 @@ An item for one system only starts with `(Windows)` or `(Linux)`, as in
 `- (Linux) …`; kyrr shows it only there, without the mark. Everything else
 is for both, so it names neither. Linux lists the versions from 0.5.3 on.
 
+Every version needs at least one item Windows sees (one for both, or one
+marked `(Windows)`), or the Windows test fails. A release that only changes
+Linux still gets a plain line like `(Windows) General bug fixes.`, never a
+line saying nothing changes on Windows.
+
 ## Unreleased
 
 - While you dictate, a small wave shows at the bottom of the screen: it moves with your voice while kyrr listens and runs faster while kyrr writes.
@@ -28,14 +33,14 @@ is for both, so it names neither. Linux lists the versions from 0.5.3 on.
 - (Linux) Dictating letters your keyboard layout does not have, like umlauts on a US keyboard, now lands in the window by itself, without Ctrl+V.
 - (Linux) The window's X minimizes kyrr every time, not just the first time.
 - (Linux) Going back from advanced to simple settings makes the window smaller again.
-- (Windows) Nothing changes on Windows this time: this update brings fixes for the Linux version.
+- (Windows) General bug fixes.
 
 ### Deutsch
 
 - (Linux) Diktierst du Buchstaben, die deine Tastaturbelegung nicht hat, etwa Umlaute auf einer US-Tastatur, landet der Text jetzt von selbst im Fenster, ohne Strg+V.
 - (Linux) Das X des Fensters minimiert kyrr jedes Mal, nicht nur beim ersten Mal.
 - (Linux) Zurück von erweiterten auf einfache Einstellungen wird das Fenster wieder kleiner.
-- (Windows) Unter Windows ändert sich diesmal nichts: Dieses Update bringt Korrekturen für die Linux-Version.
+- (Windows) Allgemeine Fehlerbehebungen.
 
 ## 0.5.4
 
