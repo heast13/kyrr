@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- While you dictate, a small dark pill with kyrr's teal wave shows at the
+  bottom of the screen: the bars move with your voice while kyrr listens,
+  and a quicker wave runs through them while it writes. It fades out when
+  the text is in. It never takes the focus and lets clicks through, so the
+  text still lands where you were typing. Windows: on the screen of the
+  window you work in. Linux: a layer surface on Hyprland, KDE, Sway and
+  other wlroots desktops; on GNOME and X11 desktops an X window (through
+  XWayland on GNOME), which needs a compositor.
 - The sentence at the top of setup step 2 reads simpler now: hold the key,
   speak, let go.
 - Linux, Hyprland: kyrr opened from the tray comes up as a floating window

@@ -13,11 +13,13 @@ is for both, so it names neither. Linux lists the versions from 0.5.3 on.
 
 ## Unreleased
 
+- While you dictate, a small wave shows at the bottom of the screen: it moves with your voice while kyrr listens and runs faster while kyrr writes.
 - The short explanation in the dictation setup reads simpler now.
 - (Linux) On Hyprland, kyrr opened from the tray appears as a floating window instead of a tiled one.
 
 ### Deutsch
 
+- Während du diktierst, zeigt sich unten am Bildschirm eine kleine Welle: Sie bewegt sich mit deiner Stimme, solange kyrr zuhört, und läuft schneller, während kyrr schreibt.
 - Die kurze Erklärung beim Einrichten des Diktierens ist jetzt einfacher formuliert.
 - (Linux) Unter Hyprland erscheint kyrr aus dem Tray als schwebendes Fenster statt gekachelt.
 

@@ -2946,6 +2946,7 @@ dependencies = [
  "rustix 1.1.5",
  "wayland-client",
  "wayland-protocols-misc",
+ "wayland-protocols-wlr",
  "x11rb",
  "xkbcommon",
  "zbus",

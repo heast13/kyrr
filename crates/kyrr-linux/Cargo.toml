@@ -19,11 +19,15 @@ ashpd = { version = "0.13", default-features = false, features = ["async-io", "g
 futures-lite = "2"
 # Asking the portal thread to bind the shortcut again.
 async-channel = "2"
-x11rb = { version = "0.13", features = ["xtest", "xkb"] }
+# The dictation wave: an X window with an empty input shape, on the primary
+# monitor (randr).
+x11rb = { version = "0.13", features = ["xtest", "xkb", "shape", "randr"] }
 # Typing on Wayland compositors with the virtual keyboard protocol
 # (Hyprland, Sway and other wlroots compositors).
 wayland-client = "0.31"
 wayland-protocols-misc = { version = "0.3", features = ["client"] }
+# The dictation wave as a layer surface (Hyprland, KDE, Sway and others).
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 async-signal = "0.2"
 # Ending without the C++ exit handlers (see signals::exit_now).
 libc = "0.2"
