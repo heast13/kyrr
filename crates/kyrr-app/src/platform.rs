@@ -312,6 +312,11 @@ mod imp {
     /// The filter lives in the audio service; nothing to stop.
     pub fn shutdown() {}
 
+    /// A window for the dictation wave, on the screen the user types on.
+    pub fn open_wave() -> Option<Box<dyn kyrr_common::wave::Surface>> {
+        kyrr_windows::overlay::Overlay::open().map(|o| Box::new(o) as Box<dyn kyrr_common::wave::Surface>)
+    }
+
     pub fn has_tray() -> bool {
         true
     }
@@ -652,6 +657,11 @@ mod imp {
     /// Gives the default microphone back before kyrr ends.
     pub fn shutdown() {
         state().filter = Filter::Off;
+    }
+
+    /// A surface for the dictation wave, on the screen the user types on.
+    pub fn open_wave() -> Option<Box<dyn kyrr_common::wave::Surface>> {
+        kyrr_linux::overlay::open()
     }
 
     /// Whether the desktop shows kyrr's tray icon: a tray host is on the

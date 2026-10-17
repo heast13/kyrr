@@ -25,6 +25,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
+use kyrr_common::wave::{Mode, Overlay};
 use kyrr_common::{Amount, FilterSettings, Look, VoiceSettings};
 use kyrr_dictate::Language;
 use slint::{ComponentHandle, LogicalSize, ModelRc, PhysicalPosition, SharedString, VecModel, Weak};
@@ -1428,9 +1429,15 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     let key_toggle = Arc::new(AtomicBool::new(false));
     let weak = window.as_weak();
     let recording_flag = Arc::clone(&recording);
+    let wave = Overlay::spawn(platform::open_wave, recorder::level);
     let notify: dictation::Notify = Arc::new(move |event| {
         if let Event::State(s) = &event {
             recording_flag.store(*s == State::Recording, Ordering::Relaxed);
+            wave.set(match s {
+                State::Recording => Mode::Listening,
+                State::Transcribing => Mode::Writing,
+                _ => Mode::Hidden,
+            });
         }
         let weak = weak.clone();
         let _ = slint::invoke_from_event_loop(move || {

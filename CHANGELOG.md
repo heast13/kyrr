@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- While you dictate, a small dark pill with kyrr's teal wave shows at the
+  bottom of the screen: the bars move with your voice while kyrr listens,
+  and a quicker wave runs through them while it writes. It fades out when
+  the text is in. It never takes the focus and lets clicks through, so the
+  text still lands where you were typing. Windows: on the screen of the
+  window you work in. Linux: a layer surface on Hyprland, KDE, Sway and
+  other wlroots desktops; on GNOME and X11 desktops an X window (through
+  XWayland on GNOME), which needs a compositor.
 - A dictation can now be 15 minutes long instead of 2. The recording is
   recognized in pieces of about 30 seconds, cut at pauses, and typed or
   pasted as one text. (Windows) A long text typed key by key, because the

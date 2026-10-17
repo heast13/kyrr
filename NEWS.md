@@ -18,12 +18,14 @@ line saying nothing changes on Windows.
 
 ## Unreleased
 
+- While you dictate, a small wave shows at the bottom of the screen: it moves with your voice while kyrr listens and runs faster while kyrr writes.
 - Dictating works for up to 15 minutes at a stretch now, not just 2. A long dictation can take a while to be written after you let go.
 - The short explanation in the dictation setup reads simpler now.
 - (Linux) On Hyprland, kyrr opened from the tray appears as a floating window instead of a tiled one.
 
 ### Deutsch
 
+- Während du diktierst, zeigt sich unten am Bildschirm eine kleine Welle: Sie bewegt sich mit deiner Stimme, solange kyrr zuhört, und läuft schneller, während kyrr schreibt.
 - Diktieren geht jetzt bis zu 15 Minuten am Stück, nicht nur 2. Nach dem Loslassen kann es bei langen Diktaten dauern, bis der Text da ist.
 - Die kurze Erklärung beim Einrichten des Diktierens ist jetzt einfacher formuliert.
 - (Linux) Unter Hyprland erscheint kyrr aus dem Tray als schwebendes Fenster statt gekachelt.

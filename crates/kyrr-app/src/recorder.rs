@@ -2,6 +2,7 @@
 //! stream is only open during a recording, so Windows shows the microphone
 //! as in use only then.
 
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -10,6 +11,14 @@ use cpal::{SampleFormat, SizedSample};
 /// Longest recording kept. It is held in memory at the microphone's rate (about
 /// 170 MB at 48 kHz for this long) and recognized in pieces afterwards.
 pub const MAX_SECONDS: usize = 15 * 60;
+
+/// The level (RMS) of the latest audio, for the wave on the screen.
+static LEVEL: AtomicU32 = AtomicU32::new(0);
+
+/// How loud the running recording is right now (RMS, linear).
+pub fn level() -> f32 {
+    f32::from_bits(LEVEL.load(Ordering::Relaxed))
+}
 
 pub struct Recording {
     _stream: cpal::Stream,
@@ -21,12 +30,18 @@ fn mono<T: SizedSample>(data: &[T], channels: usize, convert: fn(T) -> f32, out:
     let Ok(mut out) = out.lock() else {
         return;
     };
+    let (mut power, mut count) = (0.0f32, 0);
     for frame in data.chunks_exact(channels) {
         if out.len() >= max {
             break;
         }
-        out.push(frame.iter().map(|&s| convert(s)).sum::<f32>() / channels as f32);
+        let sample = frame.iter().map(|&s| convert(s)).sum::<f32>() / channels as f32;
+        out.push(sample);
+        power += sample * sample;
+        count += 1;
     }
+    let rms = if count > 0 { (power / count as f32).sqrt() } else { 0.0 };
+    LEVEL.store(rms.to_bits(), Ordering::Relaxed);
 }
 
 /// The input device whose endpoint id ends with `guid` (the microphone kyrr
@@ -47,6 +62,7 @@ pub fn device(guid: Option<&str>) -> Option<cpal::Device> {
 
 impl Recording {
     pub fn start(microphone: Option<&str>) -> Result<Recording, String> {
+        LEVEL.store(0, Ordering::Relaxed);
         let device = device(microphone).ok_or("no microphone found")?;
         let supported = device.default_input_config().map_err(|e| e.to_string())?;
         let config = supported.config();

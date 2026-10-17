@@ -1,8 +1,10 @@
 //! Identifiers and settings shared by kyrr's app, installer and the audio
 //! filter running inside the Windows audio engine. Plain data only, so every
-//! part can use it without pulling in platform code.
+//! part can use it without pulling in platform code; the one exception is
+//! the dictation wave, drawn here in plain Rust for both systems.
 
 pub mod mic_move;
+pub mod wave;
 
 /// COM class of kyrr's audio processing object.
 pub const APO_CLSID: u128 = 0xfce4df8f_fc7f_4164_be4a_c3e4a078cfb2;

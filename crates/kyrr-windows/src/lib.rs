@@ -1,8 +1,8 @@
 //! Windows integration for kyrr: installing the audio filter and attaching
 //! it to a microphone (elevated), the filter's settings, status and live
-//! monitor, the
-//! push-to-talk key, typing text, and app plumbing (single instance,
-//! autostart, elevation, screen size).
+//! monitor, the push-to-talk key, typing text, the dictation wave on the
+//! screen, and app plumbing (single instance, autostart, elevation, screen
+//! size).
 
 #![cfg(windows)]
 
@@ -13,6 +13,7 @@ pub mod filter;
 pub mod hotkey;
 pub mod instance;
 pub mod monitor;
+pub mod overlay;
 mod privilege;
 mod reg;
 pub mod screen;
