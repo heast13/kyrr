@@ -16,12 +16,13 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
-## Unreleased
+## 0.5.6
 
 - While you dictate, a small wave shows at the bottom of the screen: it moves with your voice while kyrr listens and runs faster while kyrr writes.
 - Dictating works for up to 15 minutes at a stretch now, not just 2. A long dictation can take a while to be written after you let go.
 - The short explanation in the dictation setup reads simpler now.
 - (Linux) On Hyprland, kyrr opened from the tray appears as a floating window instead of a tiled one.
+- (Linux) On Hyprland, the second dictation no longer comes out as other letters.
 
 ### Deutsch
 
@@ -29,6 +30,7 @@ line saying nothing changes on Windows.
 - Diktieren geht jetzt bis zu 15 Minuten am Stück, nicht nur 2. Nach dem Loslassen kann es bei langen Diktaten dauern, bis der Text da ist.
 - Die kurze Erklärung beim Einrichten des Diktierens ist jetzt einfacher formuliert.
 - (Linux) Unter Hyprland erscheint kyrr aus dem Tray als schwebendes Fenster statt gekachelt.
+- (Linux) Unter Hyprland kommt das zweite Diktat nicht mehr als andere Buchstaben heraus.
 
 ## 0.5.5
 
