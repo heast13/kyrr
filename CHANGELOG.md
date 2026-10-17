@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- The sentence at the top of setup step 2 reads simpler now: hold the key,
+  speak, let go.
+- Linux, Hyprland: kyrr opened from the tray comes up as a floating window
+  again instead of being tiled.
+
 ## 0.5.5 (2026-10-15)
 
 - Linux, GNOME and KDE: a dictation with letters your keyboard layout does
