@@ -60,7 +60,9 @@ impl Keyboard {
     }
 
     pub fn type_keysyms(&mut self, keysyms: &[u32]) -> bool {
-        segments(keysyms).into_iter().all(|segment| self.type_chunk(segment).is_some())
+        segments(keysyms)
+            .into_iter()
+            .all(|segment| self.type_chunk(segment).is_some())
     }
 
     fn type_chunk(&mut self, keysyms: &[u32]) -> Option<()> {
