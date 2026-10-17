@@ -2,10 +2,11 @@
 //! made up for the text, one key per distinct character, so the layout of the
 //! user does not matter.
 
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
 use std::os::fd::AsFd;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use rustix::fs::{memfd_create, MemfdFlags};
 use wayland_client::globals::{registry_queue_init, GlobalListContents};
@@ -18,8 +19,15 @@ use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::zwp_virtual_keyboar
 
 use super::KEY_DELAY;
 
-/// Characters per keymap, so it stays small and far from the keycode limits.
-const CHUNK: usize = 100;
+/// Distinct characters per keymap, far from the keycode limits. A text with
+/// at most this many gets one keymap for all of it: a keymap that changes in the middle
+/// of a text reaches the apps late on some compositors (Hyprland), and the
+/// rest of the text then comes out as other letters.
+const MAX_KEYS: usize = 200;
+
+/// Apps read a new keymap when it arrives; they need a moment before the
+/// first key of the text.
+const KEYMAP_SETTLE: Duration = Duration::from_millis(30);
 
 /// Evdev keycode 0 is reserved, and XKB counts 8 above evdev.
 const FIRST_KEY: usize = 1;
@@ -52,7 +60,7 @@ impl Keyboard {
     }
 
     pub fn type_keysyms(&mut self, keysyms: &[u32]) -> bool {
-        keysyms.chunks(CHUNK).all(|chunk| self.type_chunk(chunk).is_some())
+        segments(keysyms).into_iter().all(|segment| self.type_chunk(segment).is_some())
     }
 
     fn type_chunk(&mut self, keysyms: &[u32]) -> Option<()> {
@@ -60,6 +68,7 @@ impl Keyboard {
         distinct.sort_unstable();
         distinct.dedup();
         self.upload_keymap(&distinct)?;
+        std::thread::sleep(KEYMAP_SETTLE);
         for keysym in keysyms {
             let key = (distinct.binary_search(keysym).ok()? + FIRST_KEY) as u32;
             self.key(key, true)?;
@@ -87,6 +96,24 @@ impl Keyboard {
             .keymap(KeymapFormat::XkbV1.into(), file.as_fd(), text.len() as u32 + 1);
         self.queue.roundtrip(&mut State).ok().map(drop)
     }
+}
+
+/// The text cut into pieces of at most `MAX_KEYS` distinct keysyms, which is
+/// one piece for any ordinary text.
+fn segments(keysyms: &[u32]) -> Vec<&[u32]> {
+    let mut pieces = Vec::new();
+    let mut seen = HashSet::new();
+    let mut start = 0;
+    for (index, keysym) in keysyms.iter().enumerate() {
+        if !seen.contains(keysym) && seen.len() == MAX_KEYS {
+            pieces.push(&keysyms[start..index]);
+            start = index;
+            seen.clear();
+        }
+        seen.insert(*keysym);
+    }
+    pieces.push(&keysyms[start..]);
+    pieces
 }
 
 /// An XKB keymap with one key per keysym, in the order of `keysyms`.
@@ -151,7 +178,27 @@ ignore_events!(WlSeat, ZwpVirtualKeyboardManagerV1, ZwpVirtualKeyboardV1);
 
 #[cfg(test)]
 mod tests {
-    use super::{keymap, name};
+    use super::{keymap, name, segments, MAX_KEYS};
+
+    #[test]
+    fn a_long_ordinary_text_is_one_segment() {
+        let text: Vec<u32> = "Ich muss ja irgendwie Schulen finanzieren, ich habe Staatsbedienstete. "
+            .repeat(20)
+            .chars()
+            .map(u32::from)
+            .collect();
+        assert!(text.len() > 1000);
+        assert_eq!(segments(&text), vec![&text[..]]);
+    }
+
+    #[test]
+    fn many_distinct_characters_are_split_without_losing_any() {
+        let text: Vec<u32> = (0x100..0x100 + 3 * MAX_KEYS as u32 + 5).collect();
+        let pieces = segments(&text);
+        assert_eq!(pieces.len(), 4);
+        assert!(pieces.iter().all(|piece| piece.len() <= MAX_KEYS));
+        assert_eq!(pieces.concat(), text);
+    }
 
     #[test]
     fn names_are_what_xkb_parses() {
