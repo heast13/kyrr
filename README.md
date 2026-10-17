@@ -32,7 +32,8 @@ What it does:
 - **Dictation.** Hold F9 (or F8, Pause, right Ctrl; or tap to start and
   stop), speak, release. The text appears where your cursor is. German and
   English, transcribed on your PC. Say "new line" or "neue
-  Zeile" for a line break.
+  Zeile" for a line break. While you dictate, a small wave at the bottom of
+  the screen shows that kyrr is listening, and then that it is writing.
 - **Check.** A live level of what the microphone hears and what apps get,
   a ten-second test (record once, then play the take before and after kyrr)
   and listening to yourself live on headphones.

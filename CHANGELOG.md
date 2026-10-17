@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.6 (2026-10-17)
 
 - While you dictate, a small dark pill with kyrr's teal wave shows at the
   bottom of the screen: the bars move with your voice while kyrr listens,
@@ -19,6 +19,9 @@
   speak, let go.
 - Linux, Hyprland: kyrr opened from the tray comes up as a floating window
   again instead of being tiled.
+- Linux, Wayland (Hyprland): the second dictation no longer comes out as
+  other letters, and neither does the end of a long one. Every text now
+  gets a keyboard of its own and a single keymap.
 
 ## 0.5.5 (2026-10-15)
 
