@@ -260,7 +260,8 @@ the internet for exactly these things:
   kyrr only asks when you click "Check for updates".
 - **An update**, only when you click "Update": the installer of the new
   version from this repository's releases, checked against its SHA256 file.
-  On Linux kyrr opens the release page instead.
+  Where kyrr cannot install it itself (Linux, or a failed download), it
+  opens the download page on the website instead.
 
 Nothing is installed without your click. (Building kyrr also downloads its
 assets and libraries, from kyrr's mirror on GitHub first.)

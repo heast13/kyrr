@@ -6,15 +6,25 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::time::Duration;
 
+use kyrr_dictate::Language;
 use sha2::{Digest, Sha256};
 
 const LATEST: &str = "https://api.github.com/repos/heast13/kyrr/releases/latest";
 
-/// Only release pages of kyrr are opened, whatever the answer says.
+/// Only answers that point at kyrr's own release pages are trusted.
 const RELEASES: &str = "https://github.com/heast13/kyrr/releases/";
 
 /// Only installers from kyrr's own releases are downloaded.
 const DOWNLOADS: &str = "https://github.com/heast13/kyrr/releases/download/";
+
+/// The download page of the website, the way out when kyrr cannot install the
+/// update itself. The German page for German, the English one otherwise.
+pub fn download_page(language: Language) -> &'static str {
+    match language {
+        Language::German => "https://heast13.github.io/kyrr/de/#download",
+        Language::English => "https://heast13.github.io/kyrr/#download",
+    }
+}
 
 /// The installer of a release and the file with its SHA256.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -36,8 +46,6 @@ pub enum Outcome {
     UpToDate,
     Available {
         version: String,
-        /// The release page, the way out when the installer cannot be used.
-        url: String,
         installer: Option<Installer>,
         /// None for releases without a summary.
         news: Option<News>,
@@ -105,7 +113,6 @@ fn parse(body: &str, current: &str, linux: bool) -> Outcome {
         .map(|(url, sha256_url)| Installer { url, sha256_url });
     Outcome::Available {
         version,
-        url: url.to_string(),
         installer,
         news: json["body"].as_str().and_then(|body| news(body, SYSTEM)),
     }
@@ -350,7 +357,6 @@ mod tests {
             parse(&answer("v0.2.0", url), "0.1.0", false),
             Outcome::Available {
                 version: "0.2.0".into(),
-                url: url.into(),
                 installer: None,
                 news: None,
             }
