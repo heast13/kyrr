@@ -228,7 +228,8 @@ pub fn all_news() -> Option<News> {
 fn all_news_of(markdown: &str, system: &str) -> Option<News> {
     let (mut en, mut de) = (String::new(), String::new());
     for v in markdown.lines().filter_map(|l| l.strip_prefix("## ")).map(str::trim) {
-        if system == "Linux" && version(v).is_some_and(|v| v < FIRST_LINUX) {
+        // "Unreleased" collects what the next version will say; not shown yet.
+        if version(v).is_none() || (system == "Linux" && version(v).is_some_and(|v| v < FIRST_LINUX)) {
             continue;
         }
         let Some(news) = section(markdown, v, system, usize::MAX) else {
@@ -602,5 +603,7 @@ intro
         assert!(n.de.find("kyrr 0.5.0") < n.de.find("kyrr 0.4.0"));
         let n = all_news_of(NEWS_MD, "Linux").expect("news");
         assert!(n.en.starts_with(&this) && !n.en.contains("kyrr 0.5.2"));
+        let n = all_news_of("## Unreleased\n\n- soon\n\n## 0.1.0\n\n- first\n", "Windows").expect("news");
+        assert!(n.en.starts_with("kyrr 0.1.0") && !n.en.contains("Unreleased"));
     }
 }
