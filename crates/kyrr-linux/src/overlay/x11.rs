@@ -32,11 +32,16 @@ impl Popup {
         let screen = connection.setup().roots.get(number)?.clone();
         let root = screen.root;
         let atom = |name: &str| atom(&connection, name);
-        // Without a compositor the corners would be black.
-        let compositor = atom(&format!("_NET_WM_CM_S{number}"))?;
-        if connection.get_selection_owner(compositor).ok()?.reply().ok()?.owner == 0 {
-            return None;
+        // Without a compositor the corners would be black. XWayland always
+        // has one, the Wayland compositor (GNOME).
+        if std::env::var_os("WAYLAND_DISPLAY").is_none() {
+            let compositor = atom(&format!("_NET_WM_CM_S{number}"))?;
+            if connection.get_selection_owner(compositor).ok()?.reply().ok()?.owner == 0 {
+                return None;
+            }
         }
+        // Without SHAPE the pill would catch clicks.
+        connection.shape_query_version().ok()?.reply().ok()?;
         let visual = screen
             .allowed_depths
             .iter()
@@ -154,6 +159,9 @@ impl Surface for Popup {
     }
 
     fn show(&mut self, pixels: &[u32], width: u32, height: u32) -> bool {
+        let Some(pixels) = pixels.get(..(width * height) as usize) else {
+            return false;
+        };
         let c = &self.connection;
         if (width, height) != self.size {
             self.size = (width, height);

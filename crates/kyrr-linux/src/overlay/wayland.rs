@@ -18,7 +18,9 @@ use wayland_client::protocol::wl_shm_pool::WlShmPool;
 use wayland_client::protocol::wl_surface::{self, WlSurface};
 use wayland_client::{Connection, Dispatch, EventQueue, Proxy, QueueHandle};
 use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_shell_v1::{Layer as Level, ZwlrLayerShellV1};
-use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::{self, Anchor, ZwlrLayerSurfaceV1};
+use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_surface_v1::{
+    self, Anchor, KeyboardInteractivity, ZwlrLayerSurfaceV1,
+};
 
 pub struct Layer {
     queue: EventQueue<State>,
@@ -27,6 +29,8 @@ pub struct Layer {
     surface: WlSurface,
     layer: ZwlrLayerSurfaceV1,
     pool: Option<Pool>,
+    /// The buffers of the size before, let go once a new one is shown.
+    old: Option<Pool>,
 }
 
 /// Two buffers of one size in shared memory: one the compositor shows, one
@@ -36,6 +40,13 @@ struct Pool {
     pool: WlShmPool,
     buffers: [WlBuffer; 2],
     size: (u32, u32),
+}
+
+impl Pool {
+    fn destroy(self) {
+        self.buffers.iter().for_each(WlBuffer::destroy);
+        self.pool.destroy();
+    }
 }
 
 struct State {
@@ -65,6 +76,7 @@ impl Layer {
         layer.set_size(WIDTH, HEIGHT);
         layer.set_anchor(Anchor::Bottom);
         layer.set_margin(0, 0, MARGIN as i32, 0);
+        layer.set_keyboard_interactivity(KeyboardInteractivity::None);
         surface.commit();
         let mut state = State {
             configured: false,
@@ -86,16 +98,14 @@ impl Layer {
             surface,
             layer,
             pool: None,
+            old: None,
         })
     }
 
     /// Makes the buffers for pictures of this size, unless they are there.
     fn make_pool(&mut self, width: u32, height: u32) -> Option<()> {
         if self.pool.as_ref().is_none_or(|p| p.size != (width, height)) {
-            if let Some(old) = self.pool.take() {
-                old.buffers.iter().for_each(WlBuffer::destroy);
-                old.pool.destroy();
-            }
+            self.old = self.pool.take();
             let stride = width * 4;
             let bytes = stride * height;
             let file = File::from(memfd_create("kyrr-wave", MemfdFlags::CLOEXEC).ok()?);
@@ -134,6 +144,9 @@ impl Surface for Layer {
     }
 
     fn show(&mut self, pixels: &[u32], width: u32, height: u32) -> bool {
+        let Some(pixels) = pixels.get(..(width * height) as usize) else {
+            return false;
+        };
         // Picks up released buffers, a new scale, and a closed surface.
         if self.queue.roundtrip(&mut self.state).is_err() || self.state.closed {
             return false;
@@ -160,6 +173,9 @@ impl Surface for Layer {
         self.surface.damage(0, 0, WIDTH as i32, HEIGHT as i32);
         self.surface.commit();
         self.state.busy[index] = true;
+        if let Some(old) = self.old.take() {
+            old.destroy();
+        }
         self.queue.flush().is_ok()
     }
 }
@@ -168,10 +184,11 @@ impl Drop for Layer {
     fn drop(&mut self) {
         self.layer.destroy();
         self.surface.destroy();
-        if let Some(pool) = self.pool.take() {
-            pool.buffers.iter().for_each(WlBuffer::destroy);
-            pool.pool.destroy();
-        }
+        self.pool
+            .take()
+            .into_iter()
+            .chain(self.old.take())
+            .for_each(Pool::destroy);
         let _ = self.queue.flush();
     }
 }

@@ -156,6 +156,9 @@ impl Surface for Overlay {
     }
 
     fn show(&mut self, pixels: &[u32], width: u32, height: u32) -> bool {
+        if pixels.len() < (width * height) as usize {
+            return false;
+        }
         unsafe {
             // Nothing much arrives for a window like this; handle it anyway.
             let mut msg = MSG::default();

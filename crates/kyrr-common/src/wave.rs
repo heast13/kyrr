@@ -54,7 +54,8 @@ pub trait Surface {
     /// Physical pixels per logical one, for the next picture.
     fn scale(&mut self) -> f32;
     /// Shows a picture of `width` × `height` premultiplied ARGB pixels, row
-    /// by row. False when the surface is gone (the desktop closed it).
+    /// by row (`pixels` holds at least that many). False when the surface is
+    /// gone (the desktop closed it).
     fn show(&mut self, pixels: &[u32], width: u32, height: u32) -> bool;
 }
 
