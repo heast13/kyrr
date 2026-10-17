@@ -104,7 +104,9 @@ fn pieces(audio: &[f32]) -> Vec<&[f32]> {
     while rest.len() > limit {
         let from = limit - search;
         let quietest = rest[from..limit]
-            .chunks_exact(WINDOW)
+            .as_chunks::<WINDOW>()
+            .0
+            .iter()
             .enumerate()
             .map(|(i, w)| (i, w.iter().map(|s| s * s).sum::<f32>()))
             // The latest of equally quiet windows: digital silence is common.
