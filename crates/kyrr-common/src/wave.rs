@@ -13,14 +13,14 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
 /// The pill's size in logical pixels.
-pub const WIDTH: u32 = 180;
+pub const WIDTH: u32 = 144;
 pub const HEIGHT: u32 = 56;
 
 /// From the bottom of the screen (above the taskbar or panel) to the pill,
 /// logical pixels.
 pub const MARGIN: u32 = 40;
 
-const BARS: usize = 17;
+const BARS: usize = 13;
 const BAR_WIDTH: f32 = 4.0;
 const BAR_GAP: f32 = 5.0;
 const BAR_MIN: f32 = 6.0;
@@ -329,7 +329,7 @@ mod tests {
     fn size_follows_the_scale() {
         assert_eq!(size(1.0), (WIDTH, HEIGHT));
         assert_eq!(size(2.0), (2 * WIDTH, 2 * HEIGHT));
-        assert_eq!(size(1.25), (225, 70));
+        assert_eq!(size(1.25), (180, 70));
     }
 
     #[test]
