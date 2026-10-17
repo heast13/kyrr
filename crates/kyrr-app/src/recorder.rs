@@ -7,8 +7,9 @@ use std::sync::{Arc, Mutex};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, SizedSample};
 
-/// Longest recording kept; dictation is meant for sentences, not lectures.
-pub const MAX_SECONDS: usize = 120;
+/// Longest recording kept. It is held in memory at the microphone's rate (about
+/// 170 MB at 48 kHz for this long) and recognized in pieces afterwards.
+pub const MAX_SECONDS: usize = 15 * 60;
 
 pub struct Recording {
     _stream: cpal::Stream,
@@ -52,7 +53,15 @@ impl Recording {
         let channels = config.channels.max(1) as usize;
         let rate = config.sample_rate;
         let max = rate as usize * MAX_SECONDS;
-        let samples = Arc::new(Mutex::new(Vec::with_capacity(rate as usize * 10)));
+        // Reserved at once: the audio callback must not wait for a copy of a
+        // long recording when a vector would otherwise grow. Memory that
+        // is not written to is not used yet. If the system refuses that
+        // much, the vector grows as it goes.
+        let mut buffer = Vec::new();
+        if buffer.try_reserve_exact(max).is_err() {
+            let _ = buffer.try_reserve_exact(rate as usize * 60);
+        }
+        let samples = Arc::new(Mutex::new(buffer));
         let sink = Arc::clone(&samples);
         let err = |e| eprintln!("kyrr: recording error: {e}");
         let stream = match supported.sample_format() {

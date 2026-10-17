@@ -13,11 +13,13 @@ is for both, so it names neither. Linux lists the versions from 0.5.3 on.
 
 ## Unreleased
 
+- Dictating works for up to 15 minutes at a stretch now, not just 2. A long dictation can take a while to be written after you let go.
 - The short explanation in the dictation setup reads simpler now.
 - (Linux) On Hyprland, kyrr opened from the tray appears as a floating window instead of a tiled one.
 
 ### Deutsch
 
+- Diktieren geht jetzt bis zu 15 Minuten am Stück, nicht nur 2. Nach dem Loslassen kann es bei langen Diktaten dauern, bis der Text da ist.
 - Die kurze Erklärung beim Einrichten des Diktierens ist jetzt einfacher formuliert.
 - (Linux) Unter Hyprland erscheint kyrr aus dem Tray als schwebendes Fenster statt gekachelt.
 
