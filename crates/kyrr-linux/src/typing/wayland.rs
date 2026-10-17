@@ -33,7 +33,16 @@ const KEYMAP_SETTLE: Duration = Duration::from_millis(30);
 const FIRST_KEY: usize = 1;
 const XKB_OFFSET: usize = 8;
 
+/// Each text gets a virtual keyboard of its own (a connection of its own),
+/// the way `wtype` works: Hyprland hands a changed keymap of a keyboard that
+/// already exists to the focused window only when the focus changes, so the
+/// second text would come out as other letters.
 pub struct Keyboard {
+    /// The one made by `connect`, kept for the first text.
+    spare: Option<Session>,
+}
+
+struct Session {
     queue: EventQueue<State>,
     keyboard: ZwpVirtualKeyboardV1,
     started: Instant,
@@ -45,6 +54,24 @@ struct State;
 impl Keyboard {
     /// None when there is no Wayland compositor or it has no virtual keyboard.
     pub fn connect() -> Option<Keyboard> {
+        Some(Keyboard {
+            spare: Some(Session::open()?),
+        })
+    }
+
+    pub fn type_keysyms(&mut self, keysyms: &[u32]) -> bool {
+        let Some(mut session) = self.spare.take().or_else(Session::open) else {
+            return false;
+        };
+        // `session` is dropped at the end: the keyboard goes with the connection.
+        segments(keysyms)
+            .into_iter()
+            .all(|segment| session.type_chunk(segment).is_some())
+    }
+}
+
+impl Session {
+    fn open() -> Option<Session> {
         let connection = Connection::connect_to_env().ok()?;
         let (globals, mut queue) = registry_queue_init::<State>(&connection).ok()?;
         let handle = queue.handle();
@@ -52,17 +79,11 @@ impl Keyboard {
         let manager: ZwpVirtualKeyboardManagerV1 = globals.bind(&handle, 1..=1, ()).ok()?;
         let keyboard = manager.create_virtual_keyboard(&seat, &handle, ());
         queue.roundtrip(&mut State).ok()?;
-        Some(Keyboard {
+        Some(Session {
             queue,
             keyboard,
             started: Instant::now(),
         })
-    }
-
-    pub fn type_keysyms(&mut self, keysyms: &[u32]) -> bool {
-        segments(keysyms)
-            .into_iter()
-            .all(|segment| self.type_chunk(segment).is_some())
     }
 
     fn type_chunk(&mut self, keysyms: &[u32]) -> Option<()> {

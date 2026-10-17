@@ -1242,7 +1242,26 @@ mod imp {
             .flatten()
     }
 
-    pub fn bring_to_front(_: &slint::Window) {}
+    /// Nothing to raise on Linux, but Hyprland tiles a window it has no rule
+    /// for, and a window coming back from the tray lands in the tiling
+    /// layout (the fixed size that keeps it floating does not always reach
+    /// it). Setting "floating" is safe to repeat; it only does something to a
+    /// tiled window. The window may not be mapped yet, hence the tries.
+    pub fn bring_to_front(_: &slint::Window) {
+        if Compositor::detect() != Some(Compositor::Hyprland) {
+            return;
+        }
+        std::thread::spawn(|| {
+            for pause in [50, 150, 300] {
+                std::thread::sleep(std::time::Duration::from_millis(pause));
+                let _ = std::process::Command::new("hyprctl")
+                    .args(["dispatch", "setfloating", "class:^(io\\.github\\.heast13\\.kyrr)$"])
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status();
+            }
+        });
+    }
 
     /// Minimizes the window. A Wayland compositor never tells a window that
     /// it came back, so Slint would take it as minimized for good: the next

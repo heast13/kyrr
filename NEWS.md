@@ -16,6 +16,16 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
+## Unreleased
+
+- The short explanation in the dictation setup reads simpler now.
+- (Linux) On Hyprland, kyrr opened from the tray appears as a floating window instead of a tiled one.
+
+### Deutsch
+
+- Die kurze Erklärung beim Einrichten des Diktierens ist jetzt einfacher formuliert.
+- (Linux) Unter Hyprland erscheint kyrr aus dem Tray als schwebendes Fenster statt gekachelt.
+
 ## 0.5.5
 
 - (Linux) Dictating letters your keyboard layout does not have, like umlauts on a US keyboard, now lands in the window by itself, without Ctrl+V.
