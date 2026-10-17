@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Linux: when kyrr cannot install an update itself, "Download page" opens the
+  download page on the website, with the install steps, instead of the GitHub
+  release page. Windows uses the same page for a failed download.
+
 ## 0.5.6 (2026-10-17)
 
 - While you dictate, a small dark pill with kyrr's teal wave shows at the

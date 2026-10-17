@@ -16,6 +16,14 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
+## Unreleased
+
+- (Linux) When kyrr cannot install an update itself, "Download page" opens the download page on the website, with the install steps, instead of the GitHub release page.
+
+### Deutsch
+
+- (Linux) Wenn kyrr ein Update nicht selbst installieren kann, öffnet "Download-Seite" die Download-Seite auf der Website mit den Installationsschritten statt der GitHub-Release-Seite.
+
 ## 0.5.6
 
 - While you dictate, a small wave shows at the bottom of the screen: it moves with your voice while kyrr listens and runs faster while kyrr writes.
