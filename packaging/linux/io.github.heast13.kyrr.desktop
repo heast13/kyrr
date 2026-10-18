@@ -10,6 +10,6 @@ Icon=io.github.heast13.kyrr
 Terminal=false
 Categories=AudioVideo;Audio;
 Keywords=noise;suppression;microphone;dictation;speech;transcription;voice;
-Keywords[de]=Störgeräusche;Nebengeräusche;Mikrofon;Diktat;Sprache;Stimme;
+Keywords[de]=Störgeräusche;Nebengeräusche;Mikrofon;Diktieren;Sprache;Stimme;
 StartupNotify=true
 StartupWMClass=io.github.heast13.kyrr

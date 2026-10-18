@@ -108,7 +108,7 @@ fn key_note(language: Language) -> String {
         return note;
     }
     let typing = if german {
-        "Beim ersten Diktat fragt dein Desktop nach „Remote Desktop“ (oder „Entfernter Bildschirm“): „Fernzugriff zulassen“ einschalten, dann „Freigeben“. kyrr tippt damit nur deinen Text."
+        "Beim ersten Diktieren fragt dein Desktop nach „Remote Desktop“ (oder „Entfernter Bildschirm“): „Fernzugriff zulassen“ einschalten, dann „Freigeben“. kyrr tippt damit nur deinen Text."
     } else {
         "On the first dictation your desktop asks about “Remote Desktop”: switch on “Allow Remote Interaction”, then “Share”. kyrr only uses it to type your text."
     };
@@ -156,7 +156,7 @@ fn key_note_only(note: KeyNote, german: bool) -> String {
         }
         KeyNote::Taken { key } => format!("{key} already has another job. Pick another key here."),
         KeyNote::PressOnly { desktop, key } if german => format!(
-            "{desktop} kann die Taste nur drücken, nicht halten: {key} einmal drücken startet das Diktat, nochmal drücken beendet es."
+            "{desktop} kann die Taste nur drücken, nicht halten: {key} einmal drücken startet das Diktieren, nochmal drücken beendet es."
         ),
         KeyNote::PressOnly { desktop, key } => format!(
             "{desktop} only knows pressing, not holding: press {key} once to start dictating, once more to finish."
@@ -174,7 +174,7 @@ fn key_note_only(note: KeyNote, german: bool) -> String {
             "{key} already has a job, in GNOME's shortcut “{name}”. Pick another key here, or free {key} under Settings › Keyboard › Keyboard Shortcuts."
         ),
         KeyNote::Command(command) if german => format!(
-            "kyrr kann die Taste hier nicht selbst einrichten. Leg in den Tastatur-Einstellungen deines Desktops diesen Befehl auf eine Taste, jeder Druck startet oder beendet das Diktat:\n{command}"
+            "kyrr kann die Taste hier nicht selbst einrichten. Leg in den Tastatur-Einstellungen deines Desktops diesen Befehl auf eine Taste, jeder Druck startet oder beendet das Diktieren:\n{command}"
         ),
         KeyNote::Command(command) => format!(
             "kyrr cannot set the key up here by itself. Put this command on a key in your desktop's keyboard settings, each press starts or ends dictation:\n{command}"

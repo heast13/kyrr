@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>kyrr: Rauschunterdrückung und Diktat für Windows und Linux</title>
+<title>kyrr: Geräuschunterdrückung und Diktierfunktion für Windows und Linux</title>
 <meta name="description" content="kyrr ist eine kostenlose Open-Source-App für Windows und Linux. Sie entfernt Störgeräusche aus dem Mikrofon und wandelt Sprache in Text um, auf Deutsch und Englisch, lokal auf deinem Computer.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" type="image/svg+xml" href="../kyrr.svg">
@@ -29,7 +29,7 @@
 
   <main id="main">
     <div class="hero">
-      <h1>Rausch&shy;unterdrückung und Diktat für Windows und Linux</h1>
+      <h1>Geräusch&shy;unterdrückung und Diktierfunktion für Windows und Linux</h1>
       <p class="lead">kyrr ist eine kostenlose Open-Source-App. Sie entfernt Störgeräusche aus deinem Mikrofon und wandelt Sprache in Text um, auf Deutsch und Englisch. Der gesamte Ton wird auf deinem Computer verarbeitet.</p>
       <p class="quip" aria-hidden="true"><span class="wave"><i></i><i></i><i></i><i></i></span><span class="quip-text" data-quips="Schmatzfrei|Tastaturgeklapperweg|Hundegebellverbot|Staubsaugerexil|Nachbarbohrerfrei|Räusperfilter|Kollegenschnaufstopp|Babygeschreipause|Lüfterknebel|Bauarbeiterstumm|Rülpsversichert|Mampfmaskiert">Schmatzfrei</span></p>
       <div class="actions">
@@ -42,7 +42,7 @@
     <h2 class="section-title" id="h-what">Funktionen</h2>
     <div class="features">
       <div class="feature">
-        <h3>Rauschunterdrückung</h3>
+        <h3>Geräuschunterdrückung</h3>
         <p>Entfernt Hintergrundgeräusche wie Tippen, Lüfter oder Verkehr in Echtzeit aus dem Mikrofonsignal. kyrr nutzt dafür das neuronale Netz DPDFNet, mit einem großen Modell und einem kleinen, das weniger Rechenleistung braucht. Apps wie Teams, Zoom, Discord, OBS oder der Browser bekommen den bereinigten Ton, ohne dass du dort etwas einstellen musst.</p>
       </div>
       <div class="feature">
@@ -50,7 +50,7 @@
         <p>Filter gegen tiefes Rumpeln, Klang-Voreinstellungen (Neutral, Warm, Klar, Hell oder eigene), Kompressor, De-Esser, Popschutz und automatische Lautstärke. Voreingestellt: neutraler Klang, mittlere Kompression, leichte S-Laut-Dämpfung, Rumpelfilter und automatische Lautstärke. Alles lässt sich in den Einstellungen ändern.</p>
       </div>
       <div class="feature">
-        <h3>Diktat</h3>
+        <h3>Diktierfunktion</h3>
         <p>Halte F9 gedrückt, während du sprichst. Beim Loslassen tippt kyrr den Text an der Cursorposition ein, in der App, in der du gerade schreibst. Deutsch und Englisch. „Neue Zeile“ fügt einen Zeilenumbruch ein. Während du diktierst, zeigt eine kleine Welle am unteren Bildschirmrand, dass kyrr zuhört und danach, dass es schreibt. Statt F9 gehen auch F8, Pause oder Strg rechts, oder einmal tippen zum Starten und einmal zum Beenden.</p>
       </div>
       <div class="feature">
@@ -64,7 +64,7 @@
       <ol>
         <li><b>Installation.</b> Windows: ein Installationsprogramm, das Administratorrechte braucht. Linux: eine einzelne AppImage-Datei, ohne Administratorrechte. Beim ersten Start richtet sich kyrr selbst ein.</li>
         <li><b>Ton.</b> Unter Windows fügt kyrr dem Windows-Audiosystem einen Filter hinzu, der direkt am Mikrofon arbeitet. Unter Linux legt kyrr ein PipeWire-Mikrofon namens „kyrr“ an und macht es zum Standard. Deine Apps brauchen keine Änderung. Wechselst du das Mikrofon, wechselt kyrr mit.</li>
-        <li><b>Diktat.</b> Beim ersten Diktieren lädt kyrr einmalig das Sprachmodell für deine Sprache herunter (Deutsch 900 MB, Englisch 663 MB). Danach funktioniert das Diktat offline.</li>
+        <li><b>Diktierfunktion.</b> Beim ersten Diktieren lädt kyrr einmalig das Sprachmodell für deine Sprache herunter (Deutsch 900 MB, Englisch 663 MB). Danach funktioniert das Diktieren offline.</li>
         <li><b>Updates.</b> kyrr sucht einmal täglich nach einer neuen Version und zeigt sie an. Unter Windows installiert „Aktualisieren“ sie. Unter Linux beendest du kyrr und führst die Installationsbefehle erneut aus.</li>
       </ol>
     </section>
@@ -87,7 +87,7 @@
         <h3>Windows</h3>
         <ul>
           <li>Windows 10 (22H2) oder Windows 11, 64 Bit</li>
-          <li>Intel- oder AMD-Prozessor. Unter Windows auf ARM funktioniert nur das Diktat.</li>
+          <li>Intel- oder AMD-Prozessor. Unter Windows auf ARM funktioniert nur das Diktieren.</li>
           <li>Administratorrechte für die Installation</li>
         </ul>
       </div>
@@ -96,7 +96,7 @@
         <ul>
           <li>64 Bit Intel oder AMD, glibc 2.39 oder neuer: Ubuntu 24.04, Fedora 40, Debian 13, Linux Mint 22, Arch oder neuer</li>
           <li>PipeWire. Ist es nicht installiert, bietet kyrr die Installation an.</li>
-          <li>Die Rauschunterdrückung braucht einen Prozessor mit AVX2 (die meisten ab 2015).</li>
+          <li>Die Geräuschunterdrückung braucht einen Prozessor mit AVX2 (die meisten ab 2015).</li>
         </ul>
       </div>
     </div>
@@ -156,10 +156,10 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
   <h2 id="h-faq">Fragen</h2>
   <details>
     <summary>Braucht kyrr eine Internetverbindung?</summary>
-    <p>Nur zum Herunterladen des Sprachmodells beim ersten Diktieren, für die tägliche Update-Suche, die du abschalten kannst, und zum Herunterladen eines Updates, wenn du auf „Aktualisieren“ klickst. Die Rauschunterdrückung funktioniert ohne Internet.</p>
+    <p>Nur zum Herunterladen des Sprachmodells beim ersten Diktieren, für die tägliche Update-Suche, die du abschalten kannst, und zum Herunterladen eines Updates, wenn du auf „Aktualisieren“ klickst. Die Geräuschunterdrückung funktioniert ohne Internet.</p>
   </details>
   <details>
-    <summary>Wie lang darf ein Diktat sein?</summary>
+    <summary>Wie lang kann ich am Stück diktieren?</summary>
     <p>Bis zu 15 Minuten. Was darüber hinausgeht, wird nicht mehr aufgenommen.</p>
   </details>
   <details>
@@ -172,7 +172,7 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
   </details>
   <details>
     <summary>Was unterscheidet kyrr von NVIDIA Broadcast und Krisp?</summary>
-    <p>NVIDIA Broadcast braucht eine NVIDIA-RTX-Grafikkarte. Krisp braucht ein Konto und ist 60 Minuten pro Tag kostenlos, danach nur mit Abo. Beide arbeiten als virtuelles Mikrofon, das du in jeder App auswählst. Bei kyrr ist in den Apps keine Auswahl nötig: Unter Windows filtert es das Mikrofon selbst, unter Linux stellt es sein eigenes Mikrofon als Standard ein. kyrr braucht kein Konto und hat zusätzlich ein Diktat. Stand Oktober 2026; Korrekturen willkommen.</p>
+    <p>NVIDIA Broadcast braucht eine NVIDIA-RTX-Grafikkarte. Krisp braucht ein Konto und ist 60 Minuten pro Tag kostenlos, danach nur mit Abo. Beide arbeiten als virtuelles Mikrofon, das du in jeder App auswählst. Bei kyrr ist in den Apps keine Auswahl nötig: Unter Windows filtert es das Mikrofon selbst, unter Linux stellt es sein eigenes Mikrofon als Standard ein. kyrr braucht kein Konto und hat zusätzlich eine Diktierfunktion. Stand Oktober 2026; Korrekturen willkommen.</p>
   </details>
   <details>
     <summary>Ist kyrr fertig?</summary>
