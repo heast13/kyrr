@@ -294,10 +294,10 @@ msgid "Noise removal: DPDFNet by Ceva (Apache-2.0), via Fovty's HushMic."
 msgstr "Störgeräusche: DPDFNet von Ceva (Apache-2.0), über HushMic von Fovty."
 
 msgid "German dictation: parakeet-primeline by primeLine AI (CC-BY-4.0), based on NVIDIA Parakeet."
-msgstr "Diktat DE: parakeet-primeline von primeLine AI (CC-BY-4.0), auf Basis von NVIDIA Parakeet."
+msgstr "Diktierfunktion DE: parakeet-primeline von primeLine AI (CC-BY-4.0), auf Basis von NVIDIA Parakeet."
 
 msgid "English dictation: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX by sherpa-onnx."
-msgstr "Diktat EN: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX von sherpa-onnx."
+msgstr "Diktierfunktion EN: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX von sherpa-onnx."
 
 msgid "Plus the work of many more not named here. Raising a beer to you all."
 msgstr "Dazu die Arbeit vieler weiterer, die hier nicht stehen. Ein Bier auf euch alle."
@@ -803,7 +803,7 @@ msgid "Dictate with your key, the text lands at your cursor. Setting up the key:
 msgstr "Diktieren per Taste, der Text landet an deinem Cursor. Taste einrichten: siehe Einstellungen."
 
 msgid "Start dictation with a key and speak. When you end it, kyrr types what you said, in any app. It runs on your computer, nothing is sent anywhere."
-msgstr "Starte das Diktat per Taste und sprich. Beim Beenden tippt kyrr, was du gesagt hast, in jeder App. Läuft auf deinem Rechner, nichts wird verschickt."
+msgstr "Starte das Diktieren per Taste und sprich. Beim Beenden tippt kyrr, was du gesagt hast, in jeder App. Läuft auf deinem Rechner, nichts wird verschickt."
 
 msgid "{} is not set up yet: kyrr needs your desktop's OK for it."
 msgstr "{} ist noch nicht eingerichtet: Dafür braucht kyrr das OK deines Desktops."
