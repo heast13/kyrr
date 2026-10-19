@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Linux, Wayland (Hyprland): dictated text no longer loses its spaces in
+  browser text fields (claude.ai as a web app, for example). Browsers look at
+  the key code, and the space sat on the code of Esc; kyrr now keeps its keys
+  off Esc, Enter, Backspace, the modifiers and the like.
+
 ## 0.5.6 (2026-10-17)
 
 - While you dictate, a small dark pill with kyrr's teal wave shows at the
