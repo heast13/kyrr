@@ -8,7 +8,6 @@
   one pitch band of the voice (low sounds in the middle, high ones at the
   sides) instead of a fixed pattern. Costs next to nothing: seven bands
   from the newest 32 ms of the microphone, 30 times a second.
-
 - Linux, Wayland (Hyprland): dictated text no longer loses its spaces in
   browser text fields (claude.ai as a web app, for example). Browsers look at
   the key code, and the space sat on the code of Esc; kyrr now keeps its keys
