@@ -143,6 +143,10 @@ impl Surface for Layer {
         self.state.scale as f32
     }
 
+    fn dark(&mut self) -> bool {
+        super::dark()
+    }
+
     fn show(&mut self, pixels: &[u32], width: u32, height: u32) -> bool {
         let Some(pixels) = pixels.get(..(width * height) as usize) else {
             return false;

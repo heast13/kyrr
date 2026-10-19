@@ -7,7 +7,29 @@
 mod wayland;
 mod x11;
 
+use std::sync::mpsc;
+use std::time::Duration;
+
+use ashpd::desktop::settings::{ColorScheme, Settings};
+use futures_lite::future;
 use kyrr_common::wave::Surface;
+
+/// Whether the desktop is set to dark (asked of the settings portal). Dark when the desktop does not say: it is not worth
+/// waiting for, so a slow answer counts as no answer.
+fn dark() -> bool {
+    let (tx, rx) = mpsc::channel();
+    let asked = std::thread::Builder::new().name("kyrr-scheme".into()).spawn(move || {
+        let scheme = future::block_on(async { Settings::new().await?.color_scheme().await });
+        let _ = tx.send(scheme.ok());
+    });
+    if asked.is_err() {
+        return true;
+    }
+    !matches!(
+        rx.recv_timeout(Duration::from_millis(300)),
+        Ok(Some(ColorScheme::PreferLight))
+    )
+}
 
 /// None where none of this works (GNOME without X11 support, say).
 pub fn open() -> Option<Box<dyn Surface>> {

@@ -158,6 +158,10 @@ impl Surface for Popup {
         self.scale
     }
 
+    fn dark(&mut self) -> bool {
+        super::dark()
+    }
+
     fn show(&mut self, pixels: &[u32], width: u32, height: u32) -> bool {
         let Some(pixels) = pixels.get(..(width * height) as usize) else {
             return false;

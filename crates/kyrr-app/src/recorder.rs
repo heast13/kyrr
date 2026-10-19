@@ -2,22 +2,43 @@
 //! stream is only open during a recording, so Windows shows the microphone
 //! as in use only then.
 
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, SizedSample};
+use kyrr_common::wave::TAIL;
 
 /// Longest recording kept. It is held in memory at the microphone's rate (about
 /// 170 MB at 48 kHz for this long) and recognized in pieces afterwards.
 pub const MAX_SECONDS: usize = 15 * 60;
 
-/// The level (RMS) of the latest audio, for the wave on the screen.
-static LEVEL: AtomicU32 = AtomicU32::new(0);
+/// The newest audio of the running recording, for the wave on the screen.
+struct Tail {
+    ring: [f32; TAIL],
+    /// Where the next sample goes.
+    next: usize,
+    rate: u32,
+}
 
-/// How loud the running recording is right now (RMS, linear).
-pub fn level() -> f32 {
-    f32::from_bits(LEVEL.load(Ordering::Relaxed))
+static TAIL_OF_RECORDING: Mutex<Tail> = Mutex::new(Tail {
+    ring: [0.0; TAIL],
+    next: 0,
+    rate: 0,
+});
+
+/// Fills `out` with the newest samples (newest last) and returns their
+/// rate; 0 while nothing is recorded.
+pub fn tail(out: &mut [f32]) -> u32 {
+    let Ok(t) = TAIL_OF_RECORDING.lock() else {
+        return 0;
+    };
+    let n = out.len().min(TAIL);
+    let from = (t.next + TAIL - n) % TAIL;
+    let skip = out.len() - n;
+    for (i, o) in out[skip..].iter_mut().enumerate() {
+        *o = t.ring[(from + i) % TAIL];
+    }
+    t.rate
 }
 
 pub struct Recording {
@@ -30,18 +51,20 @@ fn mono<T: SizedSample>(data: &[T], channels: usize, convert: fn(T) -> f32, out:
     let Ok(mut out) = out.lock() else {
         return;
     };
-    let (mut power, mut count) = (0.0f32, 0);
+    // Never wait for the wave: it just misses this bit.
+    let mut tail = TAIL_OF_RECORDING.try_lock().ok();
     for frame in data.chunks_exact(channels) {
-        if out.len() >= max {
-            break;
-        }
         let sample = frame.iter().map(|&s| convert(s)).sum::<f32>() / channels as f32;
-        out.push(sample);
-        power += sample * sample;
-        count += 1;
+        // The wave keeps listening even when the recording is full.
+        if let Some(t) = tail.as_mut() {
+            let at = t.next;
+            t.ring[at] = sample;
+            t.next = (at + 1) % TAIL;
+        }
+        if out.len() < max {
+            out.push(sample);
+        }
     }
-    let rms = if count > 0 { (power / count as f32).sqrt() } else { 0.0 };
-    LEVEL.store(rms.to_bits(), Ordering::Relaxed);
 }
 
 /// The input device whose endpoint id ends with `guid` (the microphone kyrr
@@ -60,9 +83,16 @@ pub fn device(guid: Option<&str>) -> Option<cpal::Device> {
     host.default_input_device()
 }
 
+impl Drop for Recording {
+    fn drop(&mut self) {
+        if let Ok(mut t) = TAIL_OF_RECORDING.lock() {
+            t.rate = 0;
+        }
+    }
+}
+
 impl Recording {
     pub fn start(microphone: Option<&str>) -> Result<Recording, String> {
-        LEVEL.store(0, Ordering::Relaxed);
         let device = device(microphone).ok_or("no microphone found")?;
         let supported = device.default_input_config().map_err(|e| e.to_string())?;
         let config = supported.config();
@@ -102,6 +132,13 @@ impl Recording {
             other => return Err(format!("unsupported sample format {other}")),
         }
         .map_err(|e| e.to_string())?;
+        if let Ok(mut t) = TAIL_OF_RECORDING.lock() {
+            *t = Tail {
+                ring: [0.0; TAIL],
+                next: 0,
+                rate,
+            };
+        }
         stream.play().map_err(|e| e.to_string())?;
         Ok(Recording {
             _stream: stream,
@@ -114,7 +151,6 @@ impl Recording {
     pub fn finish(self) -> (u32, Vec<f32>) {
         let rate = self.rate;
         let samples = std::mem::take(&mut *self.samples.lock().unwrap_or_else(|e| e.into_inner()));
-        drop(self);
         (rate, samples)
     }
 }
