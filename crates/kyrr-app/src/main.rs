@@ -1429,7 +1429,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     let key_toggle = Arc::new(AtomicBool::new(false));
     let weak = window.as_weak();
     let recording_flag = Arc::clone(&recording);
-    let wave = Overlay::spawn(platform::open_wave, recorder::level);
+    let wave = Overlay::spawn(platform::open_wave, recorder::tail);
     let notify: dictation::Notify = Arc::new(move |event| {
         if let Event::State(s) = &event {
             recording_flag.store(*s == State::Recording, Ordering::Relaxed);

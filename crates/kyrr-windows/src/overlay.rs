@@ -5,6 +5,7 @@
 
 use std::ffi::c_void;
 
+use crate::reg::Key;
 use kyrr_common::wave::{Surface, HEIGHT, MARGIN};
 use windows::core::w;
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, SIZE, WPARAM};
@@ -14,6 +15,7 @@ use windows::Win32::Graphics::Gdi::{
     HGDIOBJ, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::Registry::HKEY_CURRENT_USER;
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetForegroundWindow, PeekMessageW,
@@ -153,6 +155,16 @@ impl Overlay {
 impl Surface for Overlay {
     fn scale(&mut self) -> f32 {
         self.scale
+    }
+
+    fn dark(&mut self) -> bool {
+        // The same setting the window follows (apps, not the taskbar).
+        let light = Key::open(
+            HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+        )
+        .and_then(|key| key.get_dword("AppsUseLightTheme"));
+        light != Some(1)
     }
 
     fn show(&mut self, pixels: &[u32], width: u32, height: u32) -> bool {
