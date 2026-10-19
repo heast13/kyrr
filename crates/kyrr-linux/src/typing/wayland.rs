@@ -19,19 +19,63 @@ use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::zwp_virtual_keyboar
 
 use super::KEY_DELAY;
 
-/// Distinct characters per keymap, far from the keycode limits. A text with
+/// Distinct characters per keymap, below what the usable key codes hold. A text with
 /// at most this many gets one keymap for all of it: a keymap that changes in the middle
 /// of a text reaches the apps late on some compositors (Hyprland), and the
 /// rest of the text then comes out as other letters.
-const MAX_KEYS: usize = 200;
+const MAX_KEYS: usize = 120;
 
 /// Apps read a new keymap when it arrives; they need a moment before the
 /// first key of the text.
 const KEYMAP_SETTLE: Duration = Duration::from_millis(30);
 
-/// Evdev keycode 0 is reserved, and XKB counts 8 above evdev.
-const FIRST_KEY: usize = 1;
+/// XKB counts 8 above evdev, and evdev codes above 247 do not fit a keymap.
 const XKB_OFFSET: usize = 8;
+const LAST_CODE: u32 = 247;
+
+/// The typing block of a keyboard (digits, the letter rows, space): the keys
+/// of the made-up keymap go here first.
+const TEXT_CODES: [std::ops::RangeInclusive<u32>; 5] = [2..=13, 16..=27, 30..=41, 43..=53, 57..=57];
+
+/// Evdev codes the made-up keys must never use. Browsers read the evdev code
+/// and not only the keysym: a character on Esc, Backspace or Enter is thrown
+/// away or acted on instead of typed (the space of a dictation was lost this
+/// way). Reserved 0, then Esc, Backspace, Tab, Enter, the modifiers, the lock
+/// keys, the function keys, the cursor block, Pause/Compose, and the keys with
+/// an effect of their own (volume, power, menu, browser and media keys).
+const SPECIAL_CODES: [std::ops::RangeInclusive<u32>; 21] = [
+    0..=1,
+    14..=15,
+    28..=29,
+    42..=42,
+    54..=56,
+    58..=70,
+    87..=88,
+    96..=97,
+    99..=100,
+    102..=111,
+    113..=116,
+    119..=119,
+    125..=127,
+    139..=139,
+    142..=143,
+    152..=152,
+    158..=160,
+    163..=165,
+    172..=174,
+    183..=194,
+    210..=247,
+];
+
+/// The evdev codes for `count` made-up keys: the typing block first (enough
+/// for any ordinary text), then whatever else is no special key, which only a
+/// text with an unusual lot of different characters reaches.
+fn key_codes(count: usize) -> Vec<u32> {
+    let is_special = |code: &u32| SPECIAL_CODES.iter().any(|range| range.contains(code));
+    let preferred = TEXT_CODES.iter().flat_map(|range| range.clone());
+    let rest = (0..=LAST_CODE).filter(|code| !is_special(code) && !TEXT_CODES.iter().any(|r| r.contains(code)));
+    preferred.chain(rest).take(count).collect()
+}
 
 /// Each text gets a virtual keyboard of its own (a connection of its own),
 /// the way `wtype` works: Hyprland hands a changed keymap of a keyboard that
@@ -92,8 +136,9 @@ impl Session {
         distinct.dedup();
         self.upload_keymap(&distinct)?;
         std::thread::sleep(KEYMAP_SETTLE);
+        let codes = key_codes(distinct.len());
         for keysym in keysyms {
-            let key = (distinct.binary_search(keysym).ok()? + FIRST_KEY) as u32;
+            let key = codes[distinct.binary_search(keysym).ok()?];
             self.key(key, true)?;
             std::thread::sleep(KEY_DELAY);
             self.key(key, false)?;
@@ -139,14 +184,15 @@ fn segments(keysyms: &[u32]) -> Vec<&[u32]> {
     pieces
 }
 
-/// An XKB keymap with one key per keysym, in the order of `keysyms`.
+/// An XKB keymap with one key per keysym, on the codes of `key_codes` in the
+/// order of `keysyms`.
 fn keymap(keysyms: &[u32]) -> String {
     let mut keycodes = String::new();
     let mut symbols = String::new();
-    for (index, &keysym) in keysyms.iter().enumerate() {
-        let key = index + FIRST_KEY;
-        keycodes += &format!("<K{key}> = {};\n", key + XKB_OFFSET);
-        symbols += &format!("key <K{key}> {{ [ {} ] }};\n", name(keysym));
+    let codes = key_codes(keysyms.len());
+    for (&keysym, &code) in keysyms.iter().zip(&codes) {
+        keycodes += &format!("<K{code}> = {};\n", code as usize + XKB_OFFSET);
+        symbols += &format!("key <K{code}> {{ [ {} ] }};\n", name(keysym));
     }
     format!(
         "xkb_keymap {{\n\
@@ -155,7 +201,7 @@ fn keymap(keysyms: &[u32]) -> String {
          xkb_compatibility \"kyrr\" {{ include \"complete\" }};\n\
          xkb_symbols \"kyrr\" {{ {symbols} }};\n\
          }};\n",
-        keysyms.len() + XKB_OFFSET,
+        codes.iter().max().map_or(0, |&code| code as usize) + XKB_OFFSET,
     )
 }
 
@@ -201,7 +247,7 @@ ignore_events!(WlSeat, ZwpVirtualKeyboardManagerV1, ZwpVirtualKeyboardV1);
 
 #[cfg(test)]
 mod tests {
-    use super::{keymap, name, segments, MAX_KEYS};
+    use super::{key_codes, keymap, name, segments, MAX_KEYS, SPECIAL_CODES, TEXT_CODES};
 
     #[test]
     fn a_long_ordinary_text_is_one_segment() {
@@ -231,12 +277,64 @@ mod tests {
     }
 
     #[test]
-    fn keymap_has_a_key_per_keysym_above_the_reserved_code() {
+    fn keymap_has_a_key_per_keysym_on_the_typing_block() {
         let text = keymap(&[0x61, 0xFF0D]);
-        assert!(text.contains("minimum = 8; maximum = 10;"));
-        assert!(text.contains("<K1> = 9;"));
+        assert!(text.contains("minimum = 8; maximum = 11;"));
         assert!(text.contains("<K2> = 10;"));
-        assert!(text.contains("key <K1> { [ U0061 ] };"));
-        assert!(text.contains("key <K2> { [ Return ] };"));
+        assert!(text.contains("<K3> = 11;"));
+        assert!(text.contains("key <K2> { [ U0061 ] };"));
+        assert!(text.contains("key <K3> { [ Return ] };"));
+    }
+
+    #[test]
+    fn no_character_lands_on_a_special_key() {
+        // The space of "Das ist ein Test" used to get code 1, which is Esc.
+        let codes = key_codes(MAX_KEYS);
+        assert_eq!(codes.len(), MAX_KEYS);
+        for special in [1, 14, 15, 28, 29, 42, 54, 56, 58, 97, 100, 125] {
+            assert!(!codes.contains(&special), "code {special} is a special key");
+        }
+        assert!(codes.iter().all(|code| SPECIAL_CODES.iter().all(|r| !r.contains(code))));
+    }
+
+    #[test]
+    fn an_ordinary_text_stays_on_the_typing_block() {
+        let codes = key_codes(48);
+        assert!(codes
+            .iter()
+            .all(|code| TEXT_CODES.iter().any(|range| range.contains(code))));
+        // Volume, power, menu and browser keys are never used either.
+        for effect in [113, 116, 139, 142, 158, 163, 172] {
+            assert!(
+                !key_codes(MAX_KEYS).contains(&effect),
+                "code {effect} has an effect of its own"
+            );
+        }
+    }
+
+    #[test]
+    fn key_codes_are_distinct_and_fit_a_keymap() {
+        let codes = key_codes(MAX_KEYS);
+        let mut sorted = codes.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), codes.len());
+        assert!(codes.iter().all(|&code| (2..=247).contains(&code)));
+    }
+
+    #[test]
+    fn xkbcommon_compiles_the_keymap_and_finds_the_space_on_a_text_key() {
+        use xkbcommon::xkb;
+        let mut keysyms: Vec<u32> = (0x21..0x21 + MAX_KEYS as u32 - 1).collect();
+        keysyms.push(0x20);
+        keysyms.sort_unstable();
+        let text = keymap(&keysyms);
+        let context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
+        let map =
+            xkb::Keymap::new_from_string(&context, text, xkb::KEYMAP_FORMAT_TEXT_V1, xkb::KEYMAP_COMPILE_NO_FLAGS)
+                .expect("keymap compiles");
+        let state = xkb::State::new(&map);
+        let space = key_codes(keysyms.len())[0];
+        assert_eq!(state.key_get_one_sym((space + 8).into()).raw(), 0x20);
     }
 }
