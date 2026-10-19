@@ -16,6 +16,18 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
+## 0.5.7
+
+- The dictation wave looks calmer and fits your system: a grey pill, dark or light like the rest of your desktop, with kyrr's green bars that follow the pitch of your voice.
+- (Linux) On Hyprland, dictated text no longer loses its spaces in browser text fields.
+- (Windows) General bug fixes.
+
+### Deutsch
+
+- Die Diktierwelle sieht ruhiger aus und passt zu deinem System: eine graue Pille, hell oder dunkel wie dein Desktop, mit kyrrs grünen Balken, die der Tonhöhe deiner Stimme folgen.
+- (Linux) Unter Hyprland verliert diktierter Text in Browser-Textfeldern die Leerzeichen nicht mehr.
+- (Windows) Allgemeine Fehlerbehebungen.
+
 ## 0.5.6
 
 - While you dictate, a small wave shows at the bottom of the screen: it moves with your voice while kyrr listens and runs faster while kyrr writes.
