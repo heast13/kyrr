@@ -84,7 +84,8 @@ fn merge(before: &[String], heard: Vec<String>, whole: bool) -> Vec<String> {
     out
 }
 
-/// Words a stretch needs before a word to hear it as well as before.
+/// The first words of a stretch, this many, are heard without enough
+/// before them.
 const CONTEXT: usize = 3;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

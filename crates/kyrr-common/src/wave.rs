@@ -601,7 +601,9 @@ impl Wave {
                         return;
                     }
                     let lx = (px as f32 + 0.5) / scale;
-                    let edge_left = 1.0 - fade_left * (1.0 - ((lx - left) / EDGE_FADE).clamp(0.0, 1.0));
+                    // Nothing left of the line, whether it has run out yet or not.
+                    let edge_left = (lx - left + 1.0).clamp(0.0, 1.0)
+                        * (1.0 - fade_left * (1.0 - ((lx - left) / EDGE_FADE).clamp(0.0, 1.0)));
                     let edge_right = ((right + 4.0 - lx) / 4.0).clamp(0.0, 1.0);
                     let flowed = ((front - lx) / FEATHER).clamp(0.0, 1.0);
                     let cell = &mut ink[(py as u32 * width + px as u32) as usize];
