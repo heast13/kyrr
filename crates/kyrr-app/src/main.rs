@@ -1082,13 +1082,11 @@ impl App {
                     update::Outcome::UpToDate | update::Outcome::Failed => {}
                     update::Outcome::Available {
                         version,
-                        url,
                         installer,
                         news,
                     } => {
                         state.set_update_dismissed(version == dismissed);
                         state.set_update_version(version.as_str().into());
-                        state.set_update_url(url.into());
                         // The installer is Windows'; elsewhere kyrr is updated
                         // where it came from (Flathub, AUR, a new AppImage).
                         let installer = installer.filter(|_| cfg!(windows));
@@ -1642,12 +1640,8 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         move || app.show_news()
     });
     state.on_open_update({
-        let weak = window.as_weak();
-        move || {
-            if let Some(w) = weak.upgrade() {
-                platform::open_url(&w.global::<AppState>().get_update_url());
-            }
-        }
+        let app = Rc::clone(&app);
+        move || platform::open_url(update::download_page(app.language()))
     });
     state.on_dictation_retry({
         let worker = worker.clone();

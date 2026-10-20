@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Linux: when kyrr cannot install an update itself, "Download page" opens the
+  download page on the website, with the install steps, instead of the GitHub
+  release page. Windows uses the same page for a failed download.
+
 ## 0.5.7 (2026-10-19)
 
 - German texts: "Geräuschunterdrückung" instead of "Rauschunterdrückung" (it
