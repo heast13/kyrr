@@ -24,6 +24,86 @@ const TAIL: Duration = Duration::from_millis(250);
 /// loaded again on the next key press, while the recording already runs.
 const IDLE_UNLOAD: Duration = Duration::from_secs(15 * 60);
 
+/// While the key is held, the newest stretch of the recording, this long,
+/// is recognised again and again for the wave on the screen (the pill shows
+/// the last few words only).
+const PREVIEW_SECONDS: f32 = 8.0;
+
+/// First look at the recording after the key goes down, and the shortest
+/// rest between two looks. A look that took longer rests as long as it
+/// took, so a slow computer works on it at most half the time.
+const PREVIEW_FIRST: Duration = Duration::from_millis(700);
+const PREVIEW_REST: Duration = Duration::from_millis(400);
+
+/// The words of the stretch just heard after the words heard before. A
+/// stretch that is the whole recording replaces them. Otherwise it starts
+/// somewhere in the middle of them (perhaps in the middle of a word): the
+/// longest run of words both have ties them together, and from that run on
+/// the newer words count, since the model hears the last words better once
+/// it knows what follows. Without such a run (a long pause before the
+/// stretch) the newer words follow the older ones.
+fn merge(before: &[String], heard: Vec<String>, whole: bool) -> Vec<String> {
+    if whole || before.is_empty() {
+        return heard;
+    }
+    let old: Vec<String> = before.iter().map(|w| key(w)).collect();
+    let new: Vec<String> = heard.iter().map(|w| key(w)).collect();
+    // (length, start in before, start in heard) of the longest run.
+    let mut best = (0, 0, 0);
+    // The stretch is a few seconds: its run is among the last words.
+    let from = old.len().saturating_sub(4 * new.len() + 8);
+    for i in from..old.len() {
+        for j in 0..new.len() {
+            let n = old[i..]
+                .iter()
+                .zip(&new[j..])
+                .take_while(|(a, b)| a == b && !a.is_empty())
+                .count();
+            if n > best.0 {
+                best = (n, i, j);
+            }
+        }
+    }
+    let (n, i, j) = best;
+    if n < 2 {
+        return before.iter().cloned().chain(heard).collect();
+    }
+    // Words at the very start of the stretch are heard without what came
+    // before them (a capital, a lost comma): there the older words stay.
+    let mut out = before[..i].to_vec();
+    for (k, word) in heard.into_iter().enumerate().skip(j) {
+        let older = before.get(i + k - j).filter(|_| k < j + n && k < CONTEXT);
+        out.push(older.cloned().unwrap_or(word));
+    }
+    out
+}
+
+/// A word apart from case and punctuation.
+fn key(word: &str) -> String {
+    word.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// Adds to `shown` the words two passes in a row agree on, from the start
+/// (case and punctuation aside), as far as they go. Shown words stay as
+/// they are, so the line on the screen only grows and nothing on it jumps;
+/// the last word or two show once the next pass has heard them alike.
+/// True when words were added.
+fn settle(shown: &mut Vec<String>, before: &[String], now: &[String]) -> bool {
+    let agreed = before.iter().zip(now).take_while(|(a, b)| key(a) == key(b)).count();
+    if agreed <= shown.len() {
+        return false;
+    }
+    shown.extend(now[shown.len()..agreed].iter().cloned());
+    true
+}
+
+/// The first words of a stretch, this many, are heard without enough
+/// before them.
+const CONTEXT: usize = 3;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum State {
     Off,
@@ -60,6 +140,8 @@ pub enum Event {
     Progress(f32),
     /// Text that was typed.
     Typed(String),
+    /// The words heard so far while the key is held, oldest first.
+    Heard(Vec<String>),
     /// Something to tell the user; `None` clears an earlier message.
     Message(Option<String>),
 }
@@ -75,6 +157,8 @@ pub enum Command {
     Microphone(Option<String>),
     /// Windows has the microphone muted (or not).
     Muted(bool),
+    /// Show the words heard so far while the key is held (or not).
+    Live(bool),
     KeyDown,
     KeyUp,
     Quit,
@@ -144,6 +228,7 @@ struct Worker {
     recording: Option<Recording>,
     microphone: Option<String>,
     muted: bool,
+    live: bool,
     download_cancel: Option<Arc<AtomicBool>>,
     /// Number of the current download, so a cancelled one finishing late
     /// does not end a newer one.
@@ -156,6 +241,11 @@ struct Worker {
     /// once is enough, a cancel or error leaves it to the user.
     upgrade_started: bool,
     last_used: Instant,
+    /// The words heard so far in the running recording, those of them on
+    /// the screen, and when to look again.
+    heard: Vec<String>,
+    shown: Vec<String>,
+    next_look: Instant,
     tx: mpsc::Sender<Command>,
     notify: Notify,
     typer: Typer,
@@ -167,6 +257,7 @@ pub fn spawn(
     root: PathBuf,
     language: Language,
     enabled: bool,
+    live: bool,
     notify: Notify,
     typer: Typer,
     clipboard: Clipboard,
@@ -180,12 +271,16 @@ pub fn spawn(
         recording: None,
         microphone: None,
         muted: false,
+        live,
         download_cancel: None,
         download_id: 0,
         download_running: false,
         download_again: false,
         upgrade_started: false,
         last_used: Instant::now(),
+        heard: Vec::new(),
+        shown: Vec::new(),
+        next_look: Instant::now(),
         tx: tx.clone(),
         notify,
         typer,
@@ -197,9 +292,11 @@ pub fn spawn(
         .spawn(move || {
             worker.refresh();
             loop {
-                match rx.recv_timeout(Duration::from_secs(60)) {
+                let wait = worker.until_look().unwrap_or(Duration::from_secs(60));
+                match rx.recv_timeout(wait) {
                     Ok(Command::Quit) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     Ok(cmd) => worker.handle(cmd),
+                    Err(mpsc::RecvTimeoutError::Timeout) if worker.until_look().is_some() => worker.look(),
                     Err(mpsc::RecvTimeoutError::Timeout) => worker.unload_when_idle(),
                 }
             }
@@ -272,6 +369,31 @@ impl Worker {
         Ok(())
     }
 
+    /// Time until the next look at the running recording; None while
+    /// nothing is recorded, the model is not there, or the words are not
+    /// wanted.
+    fn until_look(&self) -> Option<Duration> {
+        (self.live && self.recording.is_some() && self.model.is_some())
+            .then(|| self.next_look.saturating_duration_since(Instant::now()))
+    }
+
+    /// Recognises the newest stretch of the running recording and shows
+    /// the words on the screen.
+    fn look(&mut self) {
+        let (Some(rec), Some(model)) = (&self.recording, &self.model) else {
+            return;
+        };
+        let started = Instant::now();
+        let (rate, samples, whole) = rec.latest(PREVIEW_SECONDS);
+        let text = catch_unwind(AssertUnwindSafe(|| model.transcribe(rate, &samples))).unwrap_or_default();
+        let heard = merge(&self.heard, text.split_whitespace().map(str::to_owned).collect(), whole);
+        if settle(&mut self.shown, &self.heard, &heard) {
+            (self.notify)(Event::Heard(self.shown.clone()));
+        }
+        self.heard = heard;
+        self.next_look = Instant::now() + PREVIEW_REST.max(started.elapsed());
+    }
+
     /// Lets the model go after a long pause; the state stays Ready and the
     /// next key press loads it again.
     fn unload_when_idle(&mut self) {
@@ -295,6 +417,14 @@ impl Worker {
             }
             Command::Microphone(guid) => self.microphone = guid,
             Command::Muted(on) => self.muted = on,
+            Command::Live(on) => {
+                self.live = on;
+                if !on && self.recording.is_some() {
+                    self.heard.clear();
+                    self.shown.clear();
+                    (self.notify)(Event::Heard(Vec::new()));
+                }
+            }
             Command::Download => self.start_download(),
             Command::CancelDownload => {
                 self.cancel_download();
@@ -344,6 +474,9 @@ impl Worker {
         match Recording::start(self.microphone.as_deref()) {
             Ok(rec) => {
                 self.recording = Some(rec);
+                self.heard.clear();
+                self.shown.clear();
+                self.next_look = Instant::now() + PREVIEW_FIRST;
                 (self.notify)(Event::Message(None));
                 self.set_state(State::Recording);
                 // Asleep after a long pause: load while the recording runs.
@@ -451,5 +584,86 @@ impl Worker {
             self.download_id += 1;
             self.download_again = false;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn words(text: &str) -> Vec<String> {
+        text.split_whitespace().map(str::to_owned).collect()
+    }
+
+    fn merged(before: &str, heard: &str, whole: bool) -> String {
+        merge(&words(before), words(heard), whole).join(" ")
+    }
+
+    #[test]
+    fn the_whole_recording_replaces_what_was_heard() {
+        assert_eq!(
+            merged("Hallo wie geht", "Hallo, wie geht es", true),
+            "Hallo, wie geht es"
+        );
+        assert_eq!(merged("", "eins zwei", false), "eins zwei");
+    }
+
+    #[test]
+    fn a_stretch_joins_at_the_words_both_heard() {
+        // The stretch starts in the middle of "wollte" and hears "das" better.
+        assert_eq!(
+            merged(
+                "Hallo Anna, ich wollte dir nur kurz sagen das",
+                "te dir nur kurz sagen, dass wir morgen",
+                false
+            ),
+            "Hallo Anna, ich wollte dir nur kurz sagen, dass wir morgen"
+        );
+    }
+
+    #[test]
+    fn words_at_the_start_of_a_stretch_keep_their_older_form() {
+        assert_eq!(
+            merged(
+                "der Zug ist leider ausgebucht, deshalb nehmen",
+                "Deshalb nehmen wir das Auto",
+                false
+            ),
+            "der Zug ist leider ausgebucht, deshalb nehmen wir das Auto"
+        );
+    }
+
+    #[test]
+    fn the_latest_matching_run_is_not_fooled_by_a_single_word() {
+        // "und" alone is no tie; "und dann" is.
+        assert_eq!(
+            merged("eins und zwei und dann drei", "dann und dann vier", false),
+            "eins und zwei und dann vier"
+        );
+    }
+
+    #[test]
+    fn only_words_two_passes_agree_on_show() {
+        let mut shown = Vec::new();
+        assert!(!settle(&mut shown, &[], &words("Hello Hama")));
+        assert!(settle(
+            &mut shown,
+            &words("Hallo Anna, ich"),
+            &words("Hallo Anna, ich wollte dir")
+        ));
+        assert_eq!(shown, words("Hallo Anna, ich"));
+        // A later change of mind about a shown word moves nothing.
+        assert!(settle(
+            &mut shown,
+            &words("Hallo Hanna ich wollte dir nur"),
+            &words("Hallo Hanna, ich wollte dir nur kurz")
+        ));
+        assert_eq!(shown, words("Hallo Anna, ich wollte dir nur"));
+        assert!(!settle(&mut shown, &words("eins"), &words("zwei")));
+    }
+
+    #[test]
+    fn after_a_long_pause_the_new_words_follow() {
+        assert_eq!(merged("eins zwei drei", "vier fünf", false), "eins zwei drei vier fünf");
     }
 }

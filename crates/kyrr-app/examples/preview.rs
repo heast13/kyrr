@@ -154,6 +154,7 @@ fn main() {
 
     // Everything, with the custom sound so the sliders show.
     state.set_advanced(true);
+    state.set_live_words(true);
     state.set_look_index(4);
     state.set_body_db(1.5);
     state.set_presence_db(-2.0);

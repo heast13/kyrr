@@ -168,6 +168,8 @@ def stage(root: Path) -> None:
     # ONNX Runtime is linked in with sherpa-onnx.
     for f in ("LICENSE-onnxruntime", "ThirdPartyNotices-onnxruntime"):
         copy(ASSETS / f"{f}-1.28.2.txt", doc / "licenses" / f"{f}.txt")
+    # The font of the words in the dictation wave, built into kyrr.
+    copy(ROOT / "crates" / "kyrr-common" / "fonts" / "OFL.txt", doc / "licenses" / "OFL-Inter.txt")
     subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "collect-licenses.py"), "--linux", str(doc / "licenses" / "crates")],
         check=True,

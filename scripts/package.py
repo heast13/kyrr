@@ -80,6 +80,8 @@ def stage() -> None:
         shutil.copy2(ROOT / f, STAGE)
     for f in ("LICENSE-onnxruntime.txt", "ThirdPartyNotices-onnxruntime.txt"):
         shutil.copy2(ASSETS / f, licenses)
+    # The font of the words in the dictation wave, built into kyrr.exe.
+    shutil.copy2(ROOT / "crates" / "kyrr-common" / "fonts" / "OFL.txt", licenses / "OFL-Inter.txt")
     subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "collect-licenses.py"), str(licenses / "crates")],
         check=True,

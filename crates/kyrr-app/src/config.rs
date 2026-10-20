@@ -18,6 +18,8 @@ pub struct Config {
     pub dictation_key: u32,
     /// Tap once to start and once to stop, instead of holding the key.
     pub dictation_toggle: bool,
+    /// The wave shows the words heard so far while the key is held.
+    pub dictation_live: bool,
     /// The large noise model was swapped for the small one once because the
     /// CPU lacks AVX2; never again, so the user's later choice holds.
     pub lean_suggested: bool,
@@ -49,6 +51,7 @@ impl Default for Config {
             setup_done: false,
             dictation_key: DICTATION_KEYS[1],
             dictation_toggle: false,
+            dictation_live: true,
             lean_suggested: false,
             update_check: true,
             update_checked: 0,

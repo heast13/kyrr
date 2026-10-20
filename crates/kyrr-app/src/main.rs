@@ -1429,6 +1429,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     let recording_flag = Arc::clone(&recording);
     let wave = Overlay::spawn(platform::open_wave, recorder::tail);
     let notify: dictation::Notify = Arc::new(move |event| {
+        if let Event::Heard(words) = event {
+            wave.set_words(words);
+            return;
+        }
         if let Event::State(s) = &event {
             recording_flag.store(*s == State::Recording, Ordering::Relaxed);
             wave.set(match s {
@@ -1456,6 +1460,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 }
                 Event::Progress(p) => state.set_download_progress(p),
                 Event::Typed(text) => state.set_last_text(text.into()),
+                Event::Heard(_) => {}
                 Event::Message(m) => state.set_dictation_message(m.unwrap_or_default().into()),
             }
         });
@@ -1464,6 +1469,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         config::models_dir(),
         language,
         config.dictation,
+        config.dictation_live,
         notify,
         platform::paste_text,
         platform::copy_to_clipboard,
@@ -1537,6 +1543,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_tray(platform::has_tray());
     state.set_can_minimize(platform::can_minimize());
     state.set_advanced(app.config.borrow().advanced_settings);
+    state.set_live_words(app.config.borrow().dictation_live);
     app.apply_key();
     show_voice(&state, &filter.voice);
     tray.set_dictation_enabled(app.config.borrow().dictation);
@@ -1733,6 +1740,17 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                     }
                 });
             });
+        }
+    });
+    state.on_live_words_toggled({
+        let app = Rc::clone(&app);
+        move |on| {
+            {
+                let mut config = app.config.borrow_mut();
+                config.dictation_live = on;
+                config.save();
+            }
+            let _ = app.worker.send(Command::Live(on));
         }
     });
     state.on_key_toggle_changed({
