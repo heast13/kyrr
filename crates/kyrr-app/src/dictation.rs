@@ -397,7 +397,13 @@ impl Worker {
             }
             Command::Microphone(guid) => self.microphone = guid,
             Command::Muted(on) => self.muted = on,
-            Command::Live(on) => self.live = on,
+            Command::Live(on) => {
+                self.live = on;
+                if !on && self.recording.is_some() {
+                    self.heard.clear();
+                    (self.notify)(Event::Heard(Vec::new()));
+                }
+            }
             Command::Download => self.start_download(),
             Command::CancelDownload => {
                 self.cancel_download();
