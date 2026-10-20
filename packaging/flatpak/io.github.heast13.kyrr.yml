@@ -180,6 +180,7 @@ modules:
       # `open_licenses`: ../share/doc/kyrr/THIRD_PARTY.md next to the program).
       - install -Dm644 -t ${FLATPAK_DEST}/share/doc/kyrr THIRD_PARTY.md NOTICE LICENSE-MIT LICENSE-APACHE
       - python3 scripts/collect-licenses.py --linux ${FLATPAK_DEST}/share/doc/kyrr/licenses/crates
+      - install -Dm644 crates/kyrr-common/fonts/OFL.txt ${FLATPAK_DEST}/share/doc/kyrr/licenses/OFL-Inter.txt
       - install -Dm644 -t ${FLATPAK_DEST}/share/licenses/${FLATPAK_ID}/kyrr LICENSE-MIT LICENSE-APACHE NOTICE
     sources:
       # Local builds: the repository this file is in. For Flathub, replace

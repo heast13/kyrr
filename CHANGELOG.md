@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Dictation: while you speak, the words kyrr hears so far run through the
+  wave as one line. The pill widens, each word flows in softly, the oldest
+  run out on the left, and words the model is still unsure about are a
+  little paler. What gets typed is unchanged: the whole recording,
+  recognised once the key is let go. Windows and Linux alike.
 - Linux: when kyrr cannot install an update itself, "Download page" opens the
   download page on the website, with the install steps, instead of the GitHub
   release page. Windows uses the same page for a failed download.

@@ -1429,6 +1429,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     let recording_flag = Arc::clone(&recording);
     let wave = Overlay::spawn(platform::open_wave, recorder::tail);
     let notify: dictation::Notify = Arc::new(move |event| {
+        if let Event::Heard(words) = event {
+            wave.set_words(words);
+            return;
+        }
         if let Event::State(s) = &event {
             recording_flag.store(*s == State::Recording, Ordering::Relaxed);
             wave.set(match s {
@@ -1456,6 +1460,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 }
                 Event::Progress(p) => state.set_download_progress(p),
                 Event::Typed(text) => state.set_last_text(text.into()),
+                Event::Heard(_) => {}
                 Event::Message(m) => state.set_dictation_message(m.unwrap_or_default().into()),
             }
         });

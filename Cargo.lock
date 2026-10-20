@@ -2909,6 +2909,9 @@ dependencies = [
 [[package]]
 name = "kyrr-common"
 version = "0.5.7"
+dependencies = [
+ "ab_glyph",
+]
 
 [[package]]
 name = "kyrr-denoise"
