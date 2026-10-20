@@ -27,7 +27,7 @@ use std::time::{Duration, Instant};
 
 use kyrr_common::wave::{Mode, Overlay};
 use kyrr_common::{Amount, FilterSettings, Look, VoiceSettings};
-use kyrr_dictate::Language;
+use kyrr_dictate::{Language, Speech};
 use slint::{ComponentHandle, LogicalSize, ModelRc, PhysicalPosition, SharedString, VecModel, Weak};
 
 use config::Config;
@@ -225,8 +225,13 @@ fn pipewire_note(step: PipewireStep, plan: Option<(bool, String)>, german: bool)
     }
 }
 
-fn megabytes(language: Language) -> String {
-    format!("{} MB", language.model().total_size() / 1_000_000)
+/// Where a language stands in the settings' choice (see `Speech::ALL`).
+fn speech_index(speech: Speech) -> i32 {
+    Speech::ALL.iter().position(|s| *s == speech).unwrap_or(0) as i32
+}
+
+fn megabytes(speech: Speech) -> String {
+    format!("{} MB", speech.model().total_size() / 1_000_000)
 }
 
 fn strength_index(limit_db: u32) -> i32 {
@@ -1280,6 +1285,8 @@ impl App {
         }
     }
 
+    /// The window's language. Dictation follows it, unless it listens for
+    /// Chinese, Japanese or Korean.
     fn set_language(&self, language: Language) {
         {
             let mut config = self.config.borrow_mut();
@@ -1288,13 +1295,40 @@ impl App {
         }
         let _ = slint::select_bundled_translation(language.code());
         let _ = self.worker.send(Command::Language(language));
-        if let Some(w) = self.window.upgrade() {
-            let state = w.global::<AppState>();
-            state.set_language_index(language as i32);
-            state.set_download_size(megabytes(language).into());
-        }
+        self.show_speech();
         self.apply_key();
         self.refresh_filter();
+    }
+
+    /// The language dictation listens for. German and English are also the
+    /// window's language, as they always were; Chinese, Japanese and Korean
+    /// leave the window as it is.
+    fn set_speech(&self, speech: Speech) {
+        {
+            let mut config = self.config.borrow_mut();
+            config.dictation_language = match speech {
+                Speech::German | Speech::English => String::new(),
+                other => other.code().into(),
+            };
+            config.save();
+        }
+        match speech {
+            Speech::German => self.set_language(Language::German),
+            Speech::English => self.set_language(Language::English),
+            Speech::Chinese | Speech::Japanese | Speech::Korean => self.show_speech(),
+        }
+    }
+
+    /// Tells the worker and the window which language is dictated.
+    fn show_speech(&self) {
+        let speech = self.config.borrow().speech();
+        let _ = self.worker.send(Command::Speech(speech));
+        if let Some(w) = self.window.upgrade() {
+            let state = w.global::<AppState>();
+            state.set_language_index(self.language() as i32);
+            state.set_speech_index(speech_index(speech));
+            state.set_download_size(megabytes(speech).into());
+        }
     }
 
     fn set_dictation(&self, on: bool) {
@@ -1413,6 +1447,7 @@ fn dictation_state(s: State) -> DictationState {
 fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<(), slint::PlatformError> {
     let config = Config::load();
     let language = config.language();
+    let speech = config.speech();
     // An installer downloaded for the last update is done with.
     let _ = std::fs::remove_dir_all(update::folder());
     let window = MainWindow::new()?;
@@ -1463,6 +1498,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     let worker = dictation::spawn(
         config::models_dir(),
         language,
+        speech,
         config.dictation,
         notify,
         platform::paste_text,
@@ -1527,7 +1563,8 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     let state = window.global::<AppState>();
     state.set_version(env!("CARGO_PKG_VERSION").into());
     state.set_language_index(language as i32);
-    state.set_download_size(megabytes(language).into());
+    state.set_speech_index(speech_index(speech));
+    state.set_download_size(megabytes(speech).into());
     state.set_dictation_enabled(app.config.borrow().dictation);
     state.set_strength_index(strength_index(filter.limit_db));
     state.set_model_index(filter.light_model as i32);
@@ -1886,6 +1923,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.on_language_changed({
         let app = Rc::clone(&app);
         move |i| app.set_language(if i == 1 { Language::English } else { Language::German })
+    });
+    state.on_speech_changed({
+        let app = Rc::clone(&app);
+        move |i| app.set_speech(Speech::ALL.get(i.max(0) as usize).copied().unwrap_or(Speech::English))
     });
     state.on_download_model({
         let worker = worker.clone();

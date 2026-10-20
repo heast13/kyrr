@@ -299,6 +299,9 @@ msgstr "Diktierfunktion DE: parakeet-primeline von primeLine AI (CC-BY-4.0), auf
 msgid "English dictation: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX by sherpa-onnx."
 msgstr "Diktierfunktion EN: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX von sherpa-onnx."
 
+msgid "Chinese, Japanese, Korean dictation: SenseVoice by FunAudioLLM / Alibaba (FunASR Model License); ONNX by sherpa-onnx."
+msgstr "Diktierfunktion ZH/JA/KO: SenseVoice von FunAudioLLM / Alibaba (FunASR Model License); ONNX von sherpa-onnx."
+
 msgid "Plus the work of many more not named here. Raising a beer to you all."
 msgstr "Dazu die Arbeit vieler weiterer, die hier nicht stehen. Ein Bier auf euch alle."
 
@@ -374,8 +377,8 @@ msgstr "Allgemein"
 msgid "Language"
 msgstr "Sprache"
 
-msgid "Also the language dictation listens for."
-msgstr "Gilt auch fürs Diktieren."
+msgid "Dictation uses it too, unless you choose another language there."
+msgstr "Gilt auch fürs Diktieren, außer du wählst dort eine andere Sprache."
 
 msgid "Start with Windows"
 msgstr "Mit Windows starten"

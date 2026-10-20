@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Dictation in Chinese, Japanese and Korean: pick 中文, 日本語 or 한국어 in the
+  language row (setup, or Settings, Dictation). It is one download of about
+  240 MB (SenseVoice-Small by FunAudioLLM / Alibaba, int8 by sherpa-onnx); the
+  window keeps its own language. Japanese and Chinese are typed without
+  spaces between words, and "换行", "改行" and "줄바꿈" make a line break.
 - Linux: when kyrr cannot install an update itself, "Download page" opens the
   download page on the website, with the install steps, instead of the GitHub
   release page. Windows uses the same page for a failed download.

@@ -1,12 +1,12 @@
-//! The dictation models, one per language, and where they live on disk.
+//! The dictation models and where they live on disk.
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
-/// Dictation language. Each language has its own model; the German one also
-/// handles English words and sentences well, the English one knows no German.
+/// Language of the window and of what kyrr says. It also picks the model
+/// for German and English dictation, see [`Speech`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Language {
     German,
@@ -29,11 +29,64 @@ impl Language {
         Language::ALL.into_iter().find(|l| l.code() == primary)
     }
 
+    /// What is dictated when the user chose nothing else.
+    pub fn speech(self) -> Speech {
+        match self {
+            Language::German => Speech::German,
+            Language::English => Speech::English,
+        }
+    }
+}
+
+/// The language that is dictated. German and English each have a model of
+/// their own (the German one also handles English words and sentences well,
+/// the English one knows no German); Chinese, Japanese and Korean share one.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Speech {
+    German,
+    English,
+    Chinese,
+    Japanese,
+    Korean,
+}
+
+impl Speech {
+    pub const ALL: [Speech; 5] = [
+        Speech::German,
+        Speech::English,
+        Speech::Chinese,
+        Speech::Japanese,
+        Speech::Korean,
+    ];
+
+    /// ISO 639-1 code, also used in settings and as the hint for the model.
+    pub fn code(self) -> &'static str {
+        match self {
+            Speech::German => "de",
+            Speech::English => "en",
+            Speech::Chinese => "zh",
+            Speech::Japanese => "ja",
+            Speech::Korean => "ko",
+        }
+    }
+
+    pub fn from_code(code: &str) -> Option<Speech> {
+        let primary = code.split(['-', '_']).next()?.to_ascii_lowercase();
+        Speech::ALL.into_iter().find(|s| s.code() == primary)
+    }
+
     pub fn model(self) -> &'static ModelSpec {
         match self {
-            Language::German => &GERMAN,
-            Language::English => &ENGLISH,
+            Speech::German => &GERMAN,
+            Speech::English => &ENGLISH,
+            Speech::Chinese | Speech::Japanese | Speech::Korean => &SENSE_VOICE,
         }
+    }
+
+    /// Chinese and Japanese are written without spaces between words, and a
+    /// sentence is followed by the next without one.
+    pub fn spaceless(self) -> bool {
+        matches!(self, Speech::Chinese | Speech::Japanese)
     }
 }
 
@@ -48,9 +101,19 @@ pub struct ModelFile {
     pub sha256: &'static str,
 }
 
-/// A sherpa-onnx transducer model.
+/// How sherpa-onnx runs a model.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ModelKind {
+    /// Parakeet: encoder, decoder, joiner and tokens.
+    Transducer,
+    /// SenseVoice: one model file and tokens.
+    SenseVoice,
+}
+
+/// A sherpa-onnx speech model.
 #[derive(Debug)]
 pub struct ModelSpec {
+    pub kind: ModelKind,
     /// Folder name below the models root.
     pub id: &'static str,
     /// Shown in the app's about page, as the model licenses require.
@@ -69,6 +132,14 @@ macro_rules! hf {
             "https://huggingface.co/heast13/kyrr-models/resolve/fcb7ff4db50300b95f9301fb5f8c62c56c4e69ea/",
             $path
         )
+    };
+}
+
+/// A file added to kyrr's model repository after the revision above. Not
+/// pinned: every download is checked against its SHA256 anyway.
+macro_rules! hf_latest {
+    ($path:literal) => {
+        concat!("https://huggingface.co/heast13/kyrr-models/resolve/main/", $path)
     };
 }
 
@@ -92,10 +163,21 @@ macro_rules! sherpa {
     };
 }
 
+/// The SenseVoice package where the sherpa-onnx project published it.
+macro_rules! sense_voice {
+    ($name:literal) => {
+        concat!(
+            "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/2365baeacb507f821a0c8120fcee3d484dba7a07/",
+            $name
+        )
+    };
+}
+
 /// primeline/parakeet-primeline, converted with `tools/export-primeline`.
 /// `de-primeline` had signed int8 weights, which ONNX Runtime gets wrong on
 /// x86 CPUs without VNNI (see the tool's README).
 static GERMAN: ModelSpec = ModelSpec {
+    kind: ModelKind::Transducer,
     id: "de-primeline-u8",
     attribution: "German: primeline/parakeet-primeline by primeLine AI (CC-BY-4.0), \
                   based on NVIDIA parakeet-tdt-0.6b-v3; converted to ONNX and quantized to int8.",
@@ -140,6 +222,7 @@ static GERMAN: ModelSpec = ModelSpec {
 /// nvidia/parakeet-unified-en-0.6b as packaged by sherpa-onnx (int8,
 /// non-streaming), mirrored unchanged in kyrr's repositories.
 static ENGLISH: ModelSpec = ModelSpec {
+    kind: ModelKind::Transducer,
     id: "en-unified",
     attribution: "English: NVIDIA parakeet-unified-en-0.6b, licensed by NVIDIA Corporation under the \
                   NVIDIA Open Model License; ONNX int8 conversion by the sherpa-onnx project.",
@@ -183,6 +266,40 @@ static ENGLISH: ModelSpec = ModelSpec {
             ],
             size: 8_952,
             sha256: "dc0b4584ab2e4ddbf888425c076c61b736e7356a015250db7d307e6f1a8188ff",
+        },
+    ],
+    replaces: &[],
+};
+
+/// FunAudioLLM SenseVoice-Small (Chinese, Japanese, Korean, English and
+/// Cantonese) as packaged by sherpa-onnx (int8), mirrored unchanged. Not the
+/// `2025-09-09` package: that one is a Cantonese fine-tune which writes
+/// Chinese characters for Japanese and Korean speech.
+static SENSE_VOICE: ModelSpec = ModelSpec {
+    kind: ModelKind::SenseVoice,
+    id: "zh-ja-ko-sensevoice",
+    attribution: "Chinese, Japanese, Korean: SenseVoice-Small by FunAudioLLM / Alibaba Group (FunASR Model \
+                  Open Source License v1.1); ONNX int8 conversion by the sherpa-onnx project.",
+    files: &[
+        ModelFile {
+            name: "model.int8.onnx",
+            urls: &[
+                github!("zh-ja-ko-sensevoice.model.int8.onnx"),
+                hf_latest!("zh-ja-ko-sensevoice/model.int8.onnx"),
+                sense_voice!("model.int8.onnx"),
+            ],
+            size: 239_233_841,
+            sha256: "c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51",
+        },
+        ModelFile {
+            name: "tokens.txt",
+            urls: &[
+                github!("zh-ja-ko-sensevoice.tokens.txt"),
+                hf_latest!("zh-ja-ko-sensevoice/tokens.txt"),
+                sense_voice!("tokens.txt"),
+            ],
+            size: 315_894,
+            sha256: "f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc",
         },
     ],
     replaces: &[],

@@ -75,6 +75,9 @@ export global AppState {
     // Dictation
     in-out property <bool> dictation-enabled: true;
     in-out property <int> language-index; // 0 German, 1 English
+    // The language dictation listens for: German, English, Chinese,
+    // Japanese, Korean.
+    in-out property <int> speech-index;
     in property <DictationState> dictation-state: DictationState.off;
     in property <float> download-progress;
     in property <string> download-size;
@@ -155,6 +158,7 @@ export global AppState {
     callback attach-microphone(int);
     callback dictation-toggled(bool);
     callback language-changed(int);
+    callback speech-changed(int);
     callback download-model();
     callback cancel-download();
     callback finish-setup();
@@ -709,6 +713,13 @@ component NoiseSettings inherits Card {
 // Settings: the dictation key and how it works.
 component DictationSettings inherits Card {
     Heading { text: @tr("Dictation"); }
+    Caption { text: @tr("Language"); }
+    Segmented {
+        options: ["Deutsch", "English", "中文", "日本語", "한국어"];
+        selected <=> AppState.speech-index;
+        changed(i) => { AppState.speech-changed(i); }
+    }
+    Separator { }
     Caption { text: @tr("Key"); }
     // Where the desktop owns the key, its own settings change it.
     if !AppState.key-fixed: Segmented {
@@ -748,6 +759,7 @@ component AboutSettings inherits Card {
     if root.credits: Hint { text: @tr("Noise removal: DPDFNet by Ceva (Apache-2.0), via Fovty's HushMic."); }
     if root.credits: Hint { text: @tr("German dictation: parakeet-primeline by primeLine AI (CC-BY-4.0), based on NVIDIA Parakeet."); }
     if root.credits: Hint { text: @tr("English dictation: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX by sherpa-onnx."); }
+    if root.credits: Hint { text: @tr("Chinese, Japanese, Korean dictation: SenseVoice by FunAudioLLM / Alibaba (FunASR Model License); ONNX by sherpa-onnx."); }
     if root.credits: Hint { text: @tr("Plus the work of many more not named here. Raising a beer to you all."); }
     // Up to two rows: three buttons side by side overflow the card in German and
     // with wider system fonts, and the window has a fixed width.
@@ -1106,7 +1118,7 @@ component GeneralSettings inherits Card {
             changed(i) => { AppState.language-changed(i); }
         }
     }
-    Hint { text: @tr("Also the language dictation listens for."); }
+    Hint { text: @tr("Dictation uses it too, unless you choose another language there."); }
     Separator { }
     HorizontalLayout {
         Caption { text: (AppState.linux ? @tr("Start when you sign in") : @tr("Start with Windows")); vertical-alignment: center; }
@@ -1226,9 +1238,9 @@ component SetupPage inherits VerticalLayout {
     }
     if step == 1: Caption { text: @tr("Language"); }
     if step == 1: Segmented {
-        options: ["Deutsch", "English"];
-        selected <=> AppState.language-index;
-        changed(i) => { AppState.language-changed(i); }
+        options: ["Deutsch", "English", "中文", "日本語", "한국어"];
+        selected <=> AppState.speech-index;
+        changed(i) => { AppState.speech-changed(i); }
     }
     if step == 1: DictationCard { in-setup: true; }
     if step == 1 && AppState.key-note != "" && !AppState.guide: Hint { text: AppState.key-note; }

@@ -240,6 +240,7 @@ of after a quarter of an hour without dictation:
 |---|---|---|
 | German | [primeline/parakeet-primeline](https://huggingface.co/primeline/parakeet-primeline), a German fine-tune of NVIDIA Parakeet; also handles English | 900 MB |
 | English | [NVIDIA parakeet-unified-en-0.6b](https://huggingface.co/nvidia/parakeet-unified-en-0.6b) | 663 MB |
+| Chinese, Japanese, Korean | [SenseVoice-Small](https://github.com/FunAudioLLM/SenseVoice) by FunAudioLLM / Alibaba ([FunASR Model Open Source License](https://github.com/modelscope/FunASR/blob/main/MODEL_LICENSE), int8 by sherpa-onnx); also knows English | 239 MB |
 
 ## Privacy
 
@@ -248,8 +249,9 @@ the internet for exactly these things:
 
 - **The speech model**, once, when you first use dictation: from kyrr's own
   mirrors ([Hugging Face](https://huggingface.co/heast13/kyrr-models), else
-  [GitHub](https://github.com/heast13/kyrr-assets); the English model last
-  from the sherpa-onnx project's Hugging Face page), every file checked
+  [GitHub](https://github.com/heast13/kyrr-assets); the English and the
+  Chinese/Japanese/Korean model last from the sherpa-onnx project's Hugging
+  Face page), every file checked
   against a SHA256 hash built into kyrr.
 - **The update check**: once a day, one request to the GitHub API for the
   newest version number of kyrr (`api.github.com/repos/heast13/kyrr/releases/latest`),
@@ -346,8 +348,10 @@ kyrr stands on the work of others. Thank you to
 - [primeLine AI](https://huggingface.co/primeline/parakeet-primeline) for
   the German speech model,
 - NVIDIA for Parakeet, the model family behind both languages,
+- [FunAudioLLM](https://github.com/FunAudioLLM/SenseVoice) and Alibaba for
+  SenseVoice, the Chinese, Japanese and Korean speech model,
 - csukuangfj and the [k2-fsa](https://github.com/k2-fsa/sherpa-onnx) team
-  for sherpa-onnx and the English model in ONNX,
+  for sherpa-onnx and the English and SenseVoice models in ONNX,
 - [Equalizer APO](https://sourceforge.net/projects/equalizerapo/), which
   showed how a filter can live inside Windows audio,
 - [Slint](https://slint.dev) for the UI toolkit.

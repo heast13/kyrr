@@ -10,8 +10,8 @@
   only with --windows or --linux. On Linux they hold ONNX Runtime 1.28.2,
   whose license and notices come with --linux. Build with SHERPA_ONNX_LIB_DIR pointing
   at assets/sherpa-onnx/lib (CI and package.py check it)
-- two short speech clips from the sherpa-onnx test assets for the dictation
-  tests; only with --test
+- short speech clips (German, English, Chinese, Japanese, Korean) from the
+  sherpa-onnx test assets for the dictation tests; only with --test
 
 Every file comes from kyrr's own mirror (the build-1 release of
 heast13/kyrr-assets) first and from its original home only when that
@@ -46,6 +46,9 @@ SHERPA = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models"
 TEST_AUDIO = [
     ("de.wav", "36d3c4845b9808a1656a2a2e92d884590e2db94389e6fe559643291ae0cd3710"),
     ("en.wav", "148b936b43ce7c546a866e64da059f0458aee2d65e617f16e9d94f06e8d99ed6"),
+    ("zh.wav", "7f383a320af7d23200a3cf7313a9bc938972acdb1bc180db4e970bfd648cb641"),
+    ("ja.wav", "780f95a86ba6cc33a4431fcafeacd213417dfa0a6613f93e4400c18f4dd467b0"),
+    ("ko.wav", "15d91c14f80895d567ba5dd2ebdd1e507569306c436875b3f908e213d689b0a4"),
 ]
 SHERPA_LIB = (
     "sherpa-onnx-v1.13.8-win-x64-static-MT-Release-no-tts-lib.tar.bz2",

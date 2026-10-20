@@ -12,7 +12,7 @@ use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
 use kyrr_dictate::download::{download, DownloadError};
-use kyrr_dictate::{Dictation, Language};
+use kyrr_dictate::{Dictation, Language, Speech};
 
 use crate::recorder::{Recording, MAX_SECONDS};
 
@@ -66,7 +66,10 @@ pub enum Event {
 
 pub enum Command {
     Enable(bool),
+    /// The language of the messages (the window's).
     Language(Language),
+    /// The language that is dictated.
+    Speech(Speech),
     Download,
     CancelDownload,
     /// After an error: download again, or load the model again.
@@ -90,8 +93,7 @@ pub type Typer = fn(&str) -> bool;
 /// Puts text on the clipboard. Returns false if that failed.
 pub type Clipboard = fn(&str) -> bool;
 
-/// What the worker says, in the dictation language (which is also the
-/// language of the window).
+/// What the worker says, in the language of the window.
 fn say(language: Language, what: &str) -> String {
     let german = language == Language::German;
     if what == "cut" {
@@ -139,6 +141,7 @@ fn say(language: Language, what: &str) -> String {
 struct Worker {
     root: PathBuf,
     language: Language,
+    speech: Speech,
     enabled: bool,
     model: Option<Dictation>,
     recording: Option<Recording>,
@@ -166,6 +169,7 @@ struct Worker {
 pub fn spawn(
     root: PathBuf,
     language: Language,
+    speech: Speech,
     enabled: bool,
     notify: Notify,
     typer: Typer,
@@ -175,6 +179,7 @@ pub fn spawn(
     let mut worker = Worker {
         root,
         language,
+        speech,
         enabled,
         model: None,
         recording: None,
@@ -239,12 +244,12 @@ impl Worker {
             self.set_state(State::Off);
             return;
         }
-        if self.model.as_ref().is_some_and(|m| m.language() == self.language) {
+        if self.model.as_ref().is_some_and(|m| m.speech() == self.speech) {
             self.set_state(State::Ready);
             return;
         }
         self.model = None;
-        let spec = self.language.model();
+        let spec = self.speech.model();
         if !spec.is_installed(&self.root) {
             if !self.upgrade_started && spec.replaces_installed(&self.root) {
                 self.upgrade_started = true;
@@ -266,7 +271,7 @@ impl Worker {
 
     fn load(&mut self) -> Result<(), ()> {
         let threads = std::thread::available_parallelism().map_or(4, |n| n.get().min(4));
-        let model = Dictation::load(&self.root, self.language, threads).map_err(|_| ())?;
+        let model = Dictation::load(&self.root, self.speech, threads).map_err(|_| ())?;
         self.model = Some(model);
         self.last_used = Instant::now();
         Ok(())
@@ -286,10 +291,16 @@ impl Worker {
                 self.enabled = on;
                 self.refresh();
             }
-            Command::Language(language) => {
-                if language != self.language {
-                    self.language = language;
-                    self.cancel_download();
+            Command::Language(language) => self.language = language,
+            Command::Speech(speech) => {
+                if speech != self.speech {
+                    // Chinese, Japanese and Korean share a model: no new
+                    // download for the next of them.
+                    let same_model = std::ptr::eq(speech.model(), self.speech.model());
+                    self.speech = speech;
+                    if !same_model {
+                        self.cancel_download();
+                    }
                     self.refresh();
                 }
             }
@@ -302,7 +313,7 @@ impl Worker {
             }
             Command::Retry => {
                 (self.notify)(Event::Message(None));
-                if self.language.model().is_installed(&self.root) {
+                if self.speech.model().is_installed(&self.root) {
                     self.refresh();
                 } else {
                     self.start_download();
@@ -321,7 +332,7 @@ impl Worker {
                 self.download_cancel = None;
                 match result {
                     Ok(()) => {
-                        self.language.model().remove_replaced(&self.root);
+                        self.speech.model().remove_replaced(&self.root);
                         self.refresh();
                     }
                     Err(DownloadError::Cancelled) => self.refresh(),
@@ -382,8 +393,9 @@ impl Worker {
         );
         let heard = !text.is_empty();
         if heard {
-            // A space to go on with, unless the text ends with a line break.
-            let typed = if text.ends_with('\n') {
+            // A space to go on with, unless the text ends with a line break
+            // or is written without spaces.
+            let typed = if text.ends_with('\n') || self.speech.spaceless() {
                 text.clone()
             } else {
                 format!("{text} ")
@@ -402,8 +414,8 @@ impl Worker {
         if rate > 0 && samples.len() >= rate as usize * MAX_SECONDS {
             self.tell("cut");
         }
-        // The language may have changed while recording: back to whatever
-        // the settings say, not blindly to Ready.
+        // The dictation language may have changed while recording: back to
+        // whatever the settings say, not blindly to Ready.
         self.refresh();
     }
 
@@ -423,7 +435,7 @@ impl Worker {
         let id = self.download_id;
         (self.notify)(Event::Message(None));
         self.set_state(State::Downloading);
-        let (root, spec) = (self.root.clone(), self.language.model());
+        let (root, spec) = (self.root.clone(), self.speech.model());
         let (tx, notify) = (self.tx.clone(), Arc::clone(&self.notify));
         std::thread::spawn(move || {
             let mut last = -1.0f32;
