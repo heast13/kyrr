@@ -255,6 +255,7 @@ struct Worker {
     state: State,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn spawn(
     root: PathBuf,
     language: Language,
