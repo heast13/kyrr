@@ -2,9 +2,9 @@
 //! website's animation): `cargo run --example wave_frames -- <out.rgba> [de|en]
 //! [dark|light] [scale] [text]`. The size goes to stderr. The website's loops
 //! are this at scale 2.4, on a transparent 1160x160 canvas, encoded to WebM
-//! with alpha (VP9), so the pill floats on the page without a frame. The
-//! sayings loop renders each saying in turn and concatenates the frames, which
-//! needs the same size for each. Encoding:
+//! with alpha (VP9), so the pill floats on the page without a frame. Each
+//! saying is one run; the site's loops join the runs of one language and theme
+//! into one file, which needs the same size for each. Encoding:
 //! `ffmpeg -f lavfi -i color=c=0x00000000:s=1160x160:r=25,format=rgba -f rawvideo -pix_fmt rgba
 //! -s WxH -r 25 -i out.rgba -filter_complex "[0][1]overlay=(W-w)/2:(H-h)/2:shortest=1,format=yuva420p" -an -c:v libvpx-vp9 -pix_fmt yuva420p -b:v 0 -crf 40 -auto-alt-ref 0 -row-mt 1 pill.webm`.
 
