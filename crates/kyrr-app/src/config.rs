@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
-    /// "de" or "en": user interface and dictation model.
+    /// "de" or "en": user interface and dictation model. "multi": dictation
+    /// with the model for many European languages, the interface in the
+    /// system's language.
     pub language: String,
     pub dictation: bool,
     /// First-run setup finished.
@@ -38,6 +40,9 @@ pub struct Config {
     /// what the new version brings, once.
     pub last_run_version: String,
 }
+
+/// The language setting for dictation in many languages.
+pub const MULTI: &str = "multi";
 
 /// Keys dictation can use, as Windows virtual-key codes: F8, F9, Pause and
 /// right Ctrl. The index is what the settings page shows.
@@ -93,8 +98,26 @@ impl Config {
         }
     }
 
+    /// The interface language.
     pub fn language(&self) -> Language {
+        if self.more_languages() {
+            return system_language();
+        }
         Language::from_code(&self.language).unwrap_or(Language::English)
+    }
+
+    /// Dictation with the model for many European languages.
+    pub fn more_languages(&self) -> bool {
+        self.language == MULTI
+    }
+
+    /// What the language choice shows: German, English, multilingual.
+    pub fn language_index(&self) -> i32 {
+        if self.more_languages() {
+            2
+        } else {
+            self.language() as i32
+        }
     }
 }
 

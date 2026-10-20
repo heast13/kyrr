@@ -8,6 +8,12 @@
   model agree on it, so nothing on the line jumps. What gets typed is
   unchanged: the whole recording, recognised once the key is let go. It
   can be switched off in the advanced settings. Windows and Linux alike.
+- Dictation in more languages: next to "Deutsch" and "English" (in the setup
+  and under Settings, General, Language) there is now "Multilingual". It adds
+  French, Spanish, Italian, Dutch, Polish, Portuguese and more; kyrr notices
+  the language by itself. One more download of about 900 MB (NVIDIA
+  parakeet-tdt-0.6b-v3, converted like the German model). The window then
+  uses the system's language.
 - Linux: when kyrr cannot install an update itself, "Download page" opens the
   download page on the website, with the install steps, instead of the GitHub
   release page. Windows uses the same page for a failed download.

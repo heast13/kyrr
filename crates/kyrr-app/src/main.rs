@@ -225,8 +225,13 @@ fn pipewire_note(step: PipewireStep, plan: Option<(bool, String)>, german: bool)
     }
 }
 
-fn megabytes(language: Language) -> String {
-    format!("{} MB", language.model().total_size() / 1_000_000)
+fn megabytes(config: &Config) -> String {
+    let spec = if config.more_languages() {
+        kyrr_dictate::european()
+    } else {
+        config.language().model()
+    };
+    format!("{} MB", spec.total_size() / 1_000_000)
 }
 
 fn strength_index(limit_db: u32) -> i32 {
@@ -1280,18 +1285,27 @@ impl App {
         }
     }
 
-    fn set_language(&self, language: Language) {
+    /// `index` is the language choice: German, English, multilingual.
+    fn set_language(&self, index: i32) {
         {
             let mut config = self.config.borrow_mut();
-            config.language = language.code().into();
+            config.language = match index {
+                0 => "de",
+                1 => "en",
+                _ => config::MULTI,
+            }
+            .into();
             config.save();
         }
+        let language = self.language();
         let _ = slint::select_bundled_translation(language.code());
-        let _ = self.worker.send(Command::Language(language));
+        let _ = self
+            .worker
+            .send(Command::Language(language, self.config.borrow().more_languages()));
         if let Some(w) = self.window.upgrade() {
             let state = w.global::<AppState>();
-            state.set_language_index(language as i32);
-            state.set_download_size(megabytes(language).into());
+            state.set_language_index(index);
+            state.set_download_size(megabytes(&self.config.borrow()).into());
         }
         self.apply_key();
         self.refresh_filter();
@@ -1468,6 +1482,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     let worker = dictation::spawn(
         config::models_dir(),
         language,
+        config.more_languages(),
         config.dictation,
         config.dictation_live,
         notify,
@@ -1532,8 +1547,8 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
 
     let state = window.global::<AppState>();
     state.set_version(env!("CARGO_PKG_VERSION").into());
-    state.set_language_index(language as i32);
-    state.set_download_size(megabytes(language).into());
+    state.set_language_index(app.config.borrow().language_index());
+    state.set_download_size(megabytes(&app.config.borrow()).into());
     state.set_dictation_enabled(app.config.borrow().dictation);
     state.set_strength_index(strength_index(filter.limit_db));
     state.set_model_index(filter.light_model as i32);
@@ -1903,7 +1918,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     });
     state.on_language_changed({
         let app = Rc::clone(&app);
-        move |i| app.set_language(if i == 1 { Language::English } else { Language::German })
+        move |i| app.set_language(i)
     });
     state.on_download_model({
         let worker = worker.clone();

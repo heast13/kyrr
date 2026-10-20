@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 
 /// Dictation language. Each language has its own model; the German one also
 /// handles English words and sentences well, the English one knows no German.
+/// The model for the other European languages is separate, see [`european`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Language {
     German,
@@ -66,7 +67,7 @@ pub struct ModelSpec {
 macro_rules! hf {
     ($path:literal) => {
         concat!(
-            "https://huggingface.co/heast13/kyrr-models/resolve/fcb7ff4db50300b95f9301fb5f8c62c56c4e69ea/",
+            "https://huggingface.co/heast13/kyrr-models/resolve/3d3197f018575f10e5fcca2c2a0374c244d6e5e0/",
             $path
         )
     };
@@ -136,6 +137,49 @@ static GERMAN: ModelSpec = ModelSpec {
     ],
     replaces: &["de-primeline"],
 };
+
+/// nvidia/parakeet-tdt-0.6b-v3 itself, converted like the German model. It
+/// is the base of `primeline/parakeet-primeline`, knows 25 European languages
+/// and picks the right one by itself.
+static EUROPEAN: ModelSpec = ModelSpec {
+    id: "eu-v3-u8",
+    attribution: "Other European languages: NVIDIA parakeet-tdt-0.6b-v3 (CC-BY-4.0); \
+                  converted to ONNX and quantized to int8.",
+    files: &[
+        ModelFile {
+            name: "encoder.int8.onnx",
+            urls: &[hf!("eu-v3-u8/encoder.int8.onnx"), github!("eu-v3-u8.encoder.int8.onnx")],
+            size: 881_596_698,
+            sha256: "098defd35fcbbcc5e4a5fa3e7832920cb7686f03c26103d24ae61ea176a62b46",
+        },
+        ModelFile {
+            name: "decoder.int8.onnx",
+            urls: &[hf!("eu-v3-u8/decoder.int8.onnx"), github!("eu-v3-u8.decoder.int8.onnx")],
+            size: 11_845_274,
+            sha256: "0222a86147299d4dee90edf95b6d13827edb42ad8b7c9cf0b2582f030937c0b5",
+        },
+        ModelFile {
+            name: "joiner.int8.onnx",
+            urls: &[hf!("eu-v3-u8/joiner.int8.onnx"), github!("eu-v3-u8.joiner.int8.onnx")],
+            size: 6_355_277,
+            sha256: "fcc04e8d98f879196bb76015e3d91067ffa8304fb33c6ed8c04a72f53c9c0452",
+        },
+        ModelFile {
+            name: "tokens.txt",
+            urls: &[hf!("eu-v3-u8/tokens.txt"), github!("eu-v3-u8.tokens.txt")],
+            size: 102_132,
+            sha256: "ba8e4007c65f4bb4358ffe2ecc13d9ccc7a10351151065242b5c3a943e685742",
+        },
+    ],
+    replaces: &[],
+};
+
+/// The model for French, Spanish, Italian, Dutch, Polish, Portuguese and the
+/// other European languages. It also knows German and English, which the
+/// two models made for them handle a little better on some test sets.
+pub fn european() -> &'static ModelSpec {
+    &EUROPEAN
+}
 
 /// nvidia/parakeet-unified-en-0.6b as packaged by sherpa-onnx (int8,
 /// non-streaming), mirrored unchanged in kyrr's repositories.

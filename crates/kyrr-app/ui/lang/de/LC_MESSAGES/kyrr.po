@@ -850,3 +850,11 @@ msgstr "✓ kyrr darf tippen."
 msgid "Allow typing"
 msgstr "Tippen erlauben"
 
+msgid "Dictation in more languages: NVIDIA parakeet-tdt-0.6b-v3 (CC-BY-4.0)."
+msgstr "Diktieren in weiteren Sprachen: NVIDIA parakeet-tdt-0.6b-v3 (CC-BY-4.0)."
+
+msgid "Multilingual"
+msgstr "Mehrsprachig"
+
+msgid "Multilingual: French, Spanish, Italian, Dutch, Polish, Portuguese and more. kyrr notices the language by itself. German and English can be a bit less precise, and it needs its own download."
+msgstr "Mehrsprachig: Französisch, Spanisch, Italienisch, Niederländisch, Polnisch, Portugiesisch und mehr. kyrr erkennt die Sprache selbst. Deutsch und Englisch können etwas weniger genau sein, und es braucht einen eigenen Download."

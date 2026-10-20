@@ -102,8 +102,12 @@ fn every_source_answers() {
         )
         .build()
         .new_agent();
-    for language in kyrr_dictate::Language::ALL {
-        for file in language.model().files {
+    let specs = kyrr_dictate::Language::ALL
+        .map(kyrr_dictate::Language::model)
+        .into_iter()
+        .chain([kyrr_dictate::european()]);
+    for spec in specs {
+        for file in spec.files {
             for url in file.urls {
                 let response = agent.head(*url).call().unwrap_or_else(|e| panic!("{url}: {e}"));
                 let size: u64 = response
