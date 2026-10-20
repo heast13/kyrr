@@ -4,12 +4,13 @@
 use std::sync::atomic::AtomicBool;
 
 use kyrr_dictate::download::{download, DownloadError};
-use kyrr_dictate::{ModelFile, ModelSpec};
+use kyrr_dictate::{ModelFile, ModelKind, ModelSpec};
 
 const TOKENS_URL: &str =
     "https://huggingface.co/heast13/kyrr-models/resolve/fcb7ff4db50300b95f9301fb5f8c62c56c4e69ea/en-unified/tokens.txt";
 
 static GOOD: ModelSpec = ModelSpec {
+    kind: ModelKind::Transducer,
     id: "good",
     attribution: "",
     files: &[ModelFile {
@@ -22,6 +23,7 @@ static GOOD: ModelSpec = ModelSpec {
 };
 
 static TAMPERED: ModelSpec = ModelSpec {
+    kind: ModelKind::Transducer,
     id: "tampered",
     attribution: "",
     files: &[ModelFile {
@@ -66,6 +68,7 @@ fn downloads_verifies_and_cancels() {
 /// A source that is gone (here: a path that does not exist) passes on to
 /// the next one.
 static FALLBACK: ModelSpec = ModelSpec {
+    kind: ModelKind::Transducer,
     id: "fallback",
     attribution: "",
     files: &[ModelFile {
@@ -102,8 +105,8 @@ fn every_source_answers() {
         )
         .build()
         .new_agent();
-    for language in kyrr_dictate::Language::ALL {
-        for file in language.model().files {
+    for speech in kyrr_dictate::Speech::ALL {
+        for file in speech.model().files {
             for url in file.urls {
                 let response = agent.head(*url).call().unwrap_or_else(|e| panic!("{url}: {e}"));
                 let size: u64 = response

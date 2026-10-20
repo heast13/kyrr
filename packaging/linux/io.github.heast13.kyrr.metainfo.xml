@@ -34,10 +34,10 @@
       <li>Pegelanzeige, Vorher/Nachher-Test und Mithören</li>
     </ul>
     <p>
-      The speech model (about 700 to 900 MB) is downloaded once on first use.
+      The speech model (about 240 to 900 MB) is downloaded once on first use.
     </p>
     <p xml:lang="de">
-      Das Sprachmodell (etwa 700 bis 900 MB) wird beim ersten Diktieren einmal heruntergeladen.
+      Das Sprachmodell (etwa 240 bis 900 MB) wird beim ersten Diktieren einmal heruntergeladen.
     </p>
   </description>
   <launchable type="desktop-id">io.github.heast13.kyrr.desktop</launchable>

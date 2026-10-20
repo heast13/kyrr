@@ -3,14 +3,18 @@
 
 use std::path::PathBuf;
 
-use kyrr_dictate::Language;
+use kyrr_dictate::{Language, Speech};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
-    /// "de" or "en": user interface and dictation model.
+    /// "de" or "en": the language of the window, and of dictation unless
+    /// `dictation_language` says otherwise.
     pub language: String,
+    /// "zh", "ja" or "ko" when dictation listens for one of them; empty
+    /// for the language of the window.
+    pub dictation_language: String,
     pub dictation: bool,
     /// First-run setup finished.
     pub setup_done: bool,
@@ -45,6 +49,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             language: system_language().code().into(),
+            dictation_language: String::new(),
             dictation: true,
             setup_done: false,
             dictation_key: DICTATION_KEYS[1],
@@ -92,6 +97,11 @@ impl Config {
 
     pub fn language(&self) -> Language {
         Language::from_code(&self.language).unwrap_or(Language::English)
+    }
+
+    /// The language dictation listens for.
+    pub fn speech(&self) -> Speech {
+        Speech::from_code(&self.dictation_language).unwrap_or_else(|| self.language().speech())
     }
 }
 

@@ -14,8 +14,10 @@ kyrr stands on the work of others. Thank you to
 - primeLine AI (https://huggingface.co/primeline/parakeet-primeline) for
   the German speech model,
 - NVIDIA for Parakeet, the model family behind both languages,
+- FunAudioLLM and Alibaba (https://github.com/FunAudioLLM/SenseVoice) for
+  SenseVoice, the Chinese, Japanese and Korean speech model,
 - csukuangfj and the k2-fsa team (https://github.com/k2-fsa/sherpa-onnx)
-  for sherpa-onnx and the English model in ONNX,
+  for sherpa-onnx and the English and SenseVoice models in ONNX,
 - Equalizer APO (https://sourceforge.net/projects/equalizerapo/), which
   showed how a filter can live inside Windows audio,
 - Slint (https://slint.dev) for the UI toolkit.

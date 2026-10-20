@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use kyrr_dictate::{Dictation, Language};
+use kyrr_dictate::{Dictation, Speech};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -25,17 +25,17 @@ fn read_mono(path: &PathBuf) -> (u32, Vec<f32>) {
     (spec.sample_rate, mono)
 }
 
-fn check(language: Language, clip: &str, expected: &str) {
+fn check(speech: Speech, clip: &str, expected: &str) {
     let models = root().join("models");
     let wav = root().join("assets/test-audio").join(clip);
-    if !language.model().is_installed(&models) || !wav.is_file() {
-        eprintln!("{} model or test audio missing, skipped", language.code());
+    if !speech.model().is_installed(&models) || !wav.is_file() {
+        eprintln!("{} model or test audio missing, skipped", speech.code());
         return;
     }
-    let dictation = Dictation::load(&models, language, 4).expect("model loads");
+    let dictation = Dictation::load(&models, speech, 4).expect("model loads");
     let (rate, samples) = read_mono(&wav);
     let text = dictation.transcribe(rate, &samples);
-    println!("{}: {text}", language.code());
+    println!("{}: {text}", speech.code());
     assert_eq!(text, expected);
     assert_eq!(
         dictation.transcribe(rate, &samples[..rate as usize / 10]),
@@ -46,20 +46,66 @@ fn check(language: Language, clip: &str, expected: &str) {
 
 #[test]
 fn german() {
-    check(
-        Language::German,
-        "de.wav",
-        "Alles hat ein Ende, nur die Wurst hat zwei.",
-    );
+    check(Speech::German, "de.wav", "Alles hat ein Ende, nur die Wurst hat zwei.");
 }
 
 #[test]
 fn english() {
     check(
-        Language::English,
+        Speech::English,
         "en.wav",
         "Ask not what your country can do for you, ask what you can do for your country.",
     );
+}
+
+/// The same sentence as in the English clip, spoken in Chinese, Japanese and
+/// Korean. The int8 model's output differs a little between CPUs with and
+/// without VNNI, so the clips are checked for their key phrases.
+fn check_contains(speech: Speech, clip: &str, phrases: &[&str], not: &[&str]) {
+    let models = root().join("models");
+    let wav = root().join("assets/test-audio").join(clip);
+    if !speech.model().is_installed(&models) || !wav.is_file() {
+        eprintln!("{} model or test audio missing, skipped", speech.code());
+        return;
+    }
+    let dictation = Dictation::load(&models, speech, 4).expect("model loads");
+    let (rate, samples) = read_mono(&wav);
+    let text = dictation.transcribe(rate, &samples);
+    println!("{}: {text}", speech.code());
+    for phrase in phrases {
+        assert!(text.contains(phrase), "{phrase} missing in {text}");
+    }
+    for phrase in not {
+        assert!(!text.contains(phrase), "{phrase} in {text}");
+    }
+    // Noise and silence are nothing, not a made-up character.
+    assert_eq!(dictation.transcribe(16_000, &vec![0.0; 16_000 * 3]), "");
+}
+
+#[test]
+fn chinese() {
+    check_contains(
+        Speech::Chinese,
+        "zh.wav",
+        &["不要问你的国家能为你做什么", "要问你能为你的国家做什么"],
+        &[" "],
+    );
+}
+
+#[test]
+fn japanese() {
+    // No gaps between words, as the model puts them.
+    check_contains(
+        Speech::Japanese,
+        "ja.wav",
+        &["のために何ができるか", "あなたが国のために"],
+        &[" "],
+    );
+}
+
+#[test]
+fn korean() {
+    check_contains(Speech::Korean, "ko.wav", &["조국", "물으십시오"], &[]);
 }
 
 /// Windows user names with umlauts or other scripts end up in the model
@@ -68,7 +114,7 @@ fn english() {
 fn model_path_with_umlauts() {
     let models = root().join("models");
     let wav = root().join("assets/test-audio/de.wav");
-    let spec = Language::German.model();
+    let spec = Speech::German.model();
     if !spec.is_installed(&models) || !wav.is_file() {
         eprintln!("de model or test audio missing, skipped");
         return;
@@ -83,7 +129,7 @@ fn model_path_with_umlauts() {
             std::fs::copy(entry.path(), &to).unwrap();
         }
     }
-    let loaded = Dictation::load(&odd, Language::German, 4);
+    let loaded = Dictation::load(&odd, Speech::German, 4);
     let _ = std::fs::remove_dir_all(&odd);
     let dictation = loaded.expect("model loads from a path with umlauts");
     let (rate, samples) = read_mono(&wav);
