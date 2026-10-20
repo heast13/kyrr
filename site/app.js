@@ -31,7 +31,7 @@
     box.appendChild(b);
   });
 
-  // The remark under the hero text swaps to another one every twelve seconds.
+  // The remark under the main heading swaps to another one every twelve seconds.
   // Not with reduced motion, and not while the tab is in the background.
   var quip = document.querySelector("[data-quips]");
   var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;

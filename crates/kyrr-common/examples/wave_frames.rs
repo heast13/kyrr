@@ -1,10 +1,12 @@
 //! Renders the dictation pill with words appearing as raw RGBA frames (for the
 //! website's animation): `cargo run --example wave_frames -- <out.rgba> [de|en]
-//! [dark|light] [scale]`. The size goes to stderr. The website's loops are
-//! this at scale 2.4, laid over the page's band colour (#eff6f5 light, #0d1e24
-//! dark) on a 1160x160 canvas and encoded to WebM (VP9) and MP4 (H.264):
-//! `ffmpeg -f lavfi -i color=c=0x<band>:s=1160x160:r=25 -f rawvideo -pix_fmt rgba
-//! -s WxH -r 25 -i out.rgba -filter_complex "[0][1]overlay=(W-w)/2:(H-h)/2:shortest=1,format=yuv420p" -an pill.mp4`.
+//! [dark|light] [scale] [text]`. The size goes to stderr. The website's loops
+//! are this at scale 2.4, on a transparent 1160x160 canvas, encoded to WebM
+//! with alpha (VP9), so the pill floats on the page without a frame. Each
+//! saying is one run; the site's loops join the runs of one language and theme
+//! into one file, which needs the same size for each. Encoding:
+//! `ffmpeg -f lavfi -i color=c=0x00000000:s=1160x160:r=25,format=rgba -f rawvideo -pix_fmt rgba
+//! -s WxH -r 25 -i out.rgba -filter_complex "[0][1]overlay=(W-w)/2:(H-h)/2:shortest=1,format=yuva420p" -an -c:v libvpx-vp9 -pix_fmt yuva420p -b:v 0 -crf 40 -auto-alt-ref 0 -row-mt 1 pill.webm`.
 
 use std::f32::consts::TAU;
 use std::io::Write;
@@ -20,11 +22,12 @@ fn main() {
     let dark = args.get(3).is_none_or(|t| t == "dark");
     let scale: f32 = args.get(4).and_then(|s| s.parse().ok()).unwrap_or(2.0);
 
-    let text = if de {
+    let default = if de {
         "Hallo Hanna, ich wollte dir nur kurz sagen, dass das Treffen morgen um zehn Uhr beginnt."
     } else {
         "Hi Anna, I just wanted to quickly say that the meeting starts tomorrow at ten o'clock."
     };
+    let text = args.get(5).map_or(default, String::as_str);
     let words: Vec<String> = text.split(' ').map(str::to_string).collect();
 
     let mut wave = Wave::default();
