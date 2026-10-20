@@ -83,6 +83,7 @@ export global AppState {
     in property <string> dictation-message;
     in-out property <int> key-index: 1; // F8, F9, Pause, right Ctrl
     in-out property <bool> key-toggle;  // tap to start and stop instead of holding
+    in-out property <bool> live-words;  // the wave shows the words while you talk
     in property <string> key-name: "F9";
     // What the user has to do so the key reaches kyrr (Linux); "" for nothing.
     in property <string> key-note;
@@ -172,6 +173,7 @@ export global AppState {
     callback move-to-default();
     callback key-changed(int);
     callback key-toggle-changed(bool);
+    callback live-words-toggled(bool);
     callback open-licenses();
     callback check-updates();
     callback open-update();
@@ -734,6 +736,18 @@ component DictationSettings inherits Card {
             : @tr("Hold while you talk, let go when you are done. Walkie-talkie style.");
     }
     Hint { text: @tr("Say “new line” or “new paragraph” for line breaks."); }
+    if AppState.advanced: HorizontalLayout {
+        Caption { text: @tr("Words while you talk"); vertical-alignment: center; }
+        Rectangle { }
+        Switch {
+            checked <=> AppState.live-words;
+            toggled => { AppState.live-words-toggled(self.checked); }
+        }
+    }
+    if AppState.advanced: Hint {
+        text: AppState.live-words ? @tr("The display at the bottom of the screen shows what kyrr hears as you speak.")
+            : @tr("Off. The display shows only the wave; the text comes when you are done.");
+    }
 }
 
 // Settings: who made what.

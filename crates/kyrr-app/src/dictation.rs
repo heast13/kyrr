@@ -141,6 +141,8 @@ pub enum Command {
     Microphone(Option<String>),
     /// Windows has the microphone muted (or not).
     Muted(bool),
+    /// Show the words heard so far while the key is held (or not).
+    Live(bool),
     KeyDown,
     KeyUp,
     Quit,
@@ -210,6 +212,7 @@ struct Worker {
     recording: Option<Recording>,
     microphone: Option<String>,
     muted: bool,
+    live: bool,
     download_cancel: Option<Arc<AtomicBool>>,
     /// Number of the current download, so a cancelled one finishing late
     /// does not end a newer one.
@@ -237,6 +240,7 @@ pub fn spawn(
     root: PathBuf,
     language: Language,
     enabled: bool,
+    live: bool,
     notify: Notify,
     typer: Typer,
     clipboard: Clipboard,
@@ -250,6 +254,7 @@ pub fn spawn(
         recording: None,
         microphone: None,
         muted: false,
+        live,
         download_cancel: None,
         download_id: 0,
         download_running: false,
@@ -347,9 +352,10 @@ impl Worker {
     }
 
     /// Time until the next look at the running recording; None while
-    /// nothing is recorded or the model is not there.
+    /// nothing is recorded, the model is not there, or the words are not
+    /// wanted.
     fn until_look(&self) -> Option<Duration> {
-        (self.recording.is_some() && self.model.is_some())
+        (self.live && self.recording.is_some() && self.model.is_some())
             .then(|| self.next_look.saturating_duration_since(Instant::now()))
     }
 
@@ -391,6 +397,7 @@ impl Worker {
             }
             Command::Microphone(guid) => self.microphone = guid,
             Command::Muted(on) => self.muted = on,
+            Command::Live(on) => self.live = on,
             Command::Download => self.start_download(),
             Command::CancelDownload => {
                 self.cancel_download();

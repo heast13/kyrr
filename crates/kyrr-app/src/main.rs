@@ -1469,6 +1469,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         config::models_dir(),
         language,
         config.dictation,
+        config.dictation_live,
         notify,
         platform::paste_text,
         platform::copy_to_clipboard,
@@ -1542,6 +1543,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_tray(platform::has_tray());
     state.set_can_minimize(platform::can_minimize());
     state.set_advanced(app.config.borrow().advanced_settings);
+    state.set_live_words(app.config.borrow().dictation_live);
     app.apply_key();
     show_voice(&state, &filter.voice);
     tray.set_dictation_enabled(app.config.borrow().dictation);
@@ -1738,6 +1740,17 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                     }
                 });
             });
+        }
+    });
+    state.on_live_words_toggled({
+        let app = Rc::clone(&app);
+        move |on| {
+            {
+                let mut config = app.config.borrow_mut();
+                config.dictation_live = on;
+                config.save();
+            }
+            let _ = app.worker.send(Command::Live(on));
         }
     });
     state.on_key_toggle_changed({
