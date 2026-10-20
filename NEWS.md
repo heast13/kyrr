@@ -16,13 +16,17 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
-## Unreleased
+## 0.5.8
 
+- Dictation in more languages: next to "Deutsch" and "English" there is now "Multilingual" (in the setup and under Settings, General, Language). It adds French, Spanish, Italian, Dutch, Polish, Portuguese and more; kyrr notices the language by itself. It needs one more download of about 900 MB. German and English keep their own models.
+- While you dictate, the wave shows the words kyrr has heard so far. What gets typed stays the same. Settings, Advanced, "Words while you talk" switches it off.
 - New to try (beta, off by default): far from the mic, kyrr can notice when the room echoes along, take some of that echo out and suggest moving a little closer. Close to the mic nothing changes. To switch it on: Settings, Advanced, "Distance compensation (beta)".
 - When kyrr cannot install an update itself, "Download page" opens the download page on the website, with the install steps, instead of the GitHub release page.
 
 ### Deutsch
 
+- Diktieren in weiteren Sprachen: neben "Deutsch" und "English" gibt es jetzt "Mehrsprachig" (im Einrichtungsdialog und unter Einstellungen, Allgemein, Sprache). Dazu gehören Französisch, Spanisch, Italienisch, Niederländisch, Polnisch, Portugiesisch und mehr; kyrr erkennt die Sprache selbst. Es braucht einen weiteren Download von etwa 900 MB. Deutsch und Englisch behalten ihre eigenen Modelle.
+- Beim Diktieren zeigt die Welle die Wörter, die kyrr bis jetzt gehört hat. Getippt wird weiterhin wie bisher. Einstellungen, Erweitert, "Wörter beim Sprechen" schaltet das ab.
 - Wenn kyrr ein Update nicht selbst installieren kann, öffnet "Download-Seite" die Anleitung auf der Website mit den Installationsschritten statt der GitHub-Release-Seite.
 - Neu zum Ausprobieren (Beta, standardmäßig aus): Weit weg vom Mikro merkt kyrr, wenn der Raum mithallt, nimmt etwas von dem Hall raus und schlägt vor, ein Stück näher zu rücken. Nah am Mikro ändert sich nichts. Einschalten: Einstellungen, Erweitert, "Abstandsausgleich (Beta)".
 

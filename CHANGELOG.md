@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.8 (2026-10-20)
 
 - Dictation: while you speak, the words kyrr hears so far run through the
   wave as one line. The pill widens, the words fade in one after the other
