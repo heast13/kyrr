@@ -24,13 +24,13 @@
     <ul>
       <li>Neural noise suppression (DPDFNet) on a virtual microphone that becomes the default</li>
       <li>Voice shaping: sound, compressor, softer S sounds, pop protection, automatic volume</li>
-      <li>Dictation in German and English: hold a key, speak, release</li>
+      <li>Dictation in German, English and more European languages: hold a key, speak, release</li>
       <li>Level check, a before/after test and listening to yourself</li>
     </ul>
     <ul xml:lang="de">
       <li>Neuronale Entfernung von Störgeräuschen (DPDFNet) auf einem virtuellen Mikrofon, das zum Standard wird</li>
       <li>Stimme: Klang, Kompressor, weichere S-Laute, Popschutz, automatische Lautstärke</li>
-      <li>Diktieren auf Deutsch und Englisch: Taste halten, sprechen, loslassen</li>
+      <li>Diktieren auf Deutsch, Englisch und weiteren europäischen Sprachen: Taste halten, sprechen, loslassen</li>
       <li>Pegelanzeige, Vorher/Nachher-Test und Mithören</li>
     </ul>
     <p>
@@ -71,6 +71,7 @@
     <keyword>speech to text</keyword>
   </keywords>
   <releases>
+    <release version="0.5.8" date="2026-10-20"/>
     <release version="0.5.7" date="2026-10-19"/>
     <release version="0.5.6" date="2026-10-17"/>
     <release version="0.5.5" date="2026-10-15"/>
