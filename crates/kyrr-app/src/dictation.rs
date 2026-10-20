@@ -46,14 +46,8 @@ fn merge(before: &[String], heard: Vec<String>, whole: bool) -> Vec<String> {
     if whole || before.is_empty() {
         return heard;
     }
-    let key = |w: &String| {
-        w.chars()
-            .filter(|c| c.is_alphanumeric())
-            .flat_map(char::to_lowercase)
-            .collect::<String>()
-    };
-    let old: Vec<String> = before.iter().map(key).collect();
-    let new: Vec<String> = heard.iter().map(key).collect();
+    let old: Vec<String> = before.iter().map(|w| key(w)).collect();
+    let new: Vec<String> = heard.iter().map(|w| key(w)).collect();
     // (length, start in before, start in heard) of the longest run.
     let mut best = (0, 0, 0);
     // The stretch is a few seconds: its run is among the last words.
@@ -82,6 +76,28 @@ fn merge(before: &[String], heard: Vec<String>, whole: bool) -> Vec<String> {
         out.push(older.cloned().unwrap_or(word));
     }
     out
+}
+
+/// A word apart from case and punctuation.
+fn key(word: &str) -> String {
+    word.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// Adds to `shown` the words two passes in a row agree on, from the start
+/// (case and punctuation aside), as far as they go. Shown words stay as
+/// they are, so the line on the screen only grows and nothing on it jumps;
+/// the last word or two show once the next pass has heard them alike.
+/// True when words were added.
+fn settle(shown: &mut Vec<String>, before: &[String], now: &[String]) -> bool {
+    let agreed = before.iter().zip(now).take_while(|(a, b)| key(a) == key(b)).count();
+    if agreed <= shown.len() {
+        return false;
+    }
+    shown.extend(now[shown.len()..agreed].iter().cloned());
+    true
 }
 
 /// The first words of a stretch, this many, are heard without enough
@@ -225,9 +241,10 @@ struct Worker {
     /// once is enough, a cancel or error leaves it to the user.
     upgrade_started: bool,
     last_used: Instant,
-    /// The words heard so far in the running recording, and when to look
-    /// again.
+    /// The words heard so far in the running recording, those of them on
+    /// the screen, and when to look again.
     heard: Vec<String>,
+    shown: Vec<String>,
     next_look: Instant,
     tx: mpsc::Sender<Command>,
     notify: Notify,
@@ -262,6 +279,7 @@ pub fn spawn(
         upgrade_started: false,
         last_used: Instant::now(),
         heard: Vec::new(),
+        shown: Vec::new(),
         next_look: Instant::now(),
         tx: tx.clone(),
         notify,
@@ -368,9 +386,11 @@ impl Worker {
         let started = Instant::now();
         let (rate, samples, whole) = rec.latest(PREVIEW_SECONDS);
         let text = catch_unwind(AssertUnwindSafe(|| model.transcribe(rate, &samples))).unwrap_or_default();
-        let heard = text.split_whitespace().map(str::to_owned).collect();
-        self.heard = merge(&self.heard, heard, whole);
-        (self.notify)(Event::Heard(self.heard.clone()));
+        let heard = merge(&self.heard, text.split_whitespace().map(str::to_owned).collect(), whole);
+        if settle(&mut self.shown, &self.heard, &heard) {
+            (self.notify)(Event::Heard(self.shown.clone()));
+        }
+        self.heard = heard;
         self.next_look = Instant::now() + PREVIEW_REST.max(started.elapsed());
     }
 
@@ -401,6 +421,7 @@ impl Worker {
                 self.live = on;
                 if !on && self.recording.is_some() {
                     self.heard.clear();
+                    self.shown.clear();
                     (self.notify)(Event::Heard(Vec::new()));
                 }
             }
@@ -454,6 +475,7 @@ impl Worker {
             Ok(rec) => {
                 self.recording = Some(rec);
                 self.heard.clear();
+                self.shown.clear();
                 self.next_look = Instant::now() + PREVIEW_FIRST;
                 (self.notify)(Event::Message(None));
                 self.set_state(State::Recording);
@@ -618,6 +640,26 @@ mod tests {
             merged("eins und zwei und dann drei", "dann und dann vier", false),
             "eins und zwei und dann vier"
         );
+    }
+
+    #[test]
+    fn only_words_two_passes_agree_on_show() {
+        let mut shown = Vec::new();
+        assert!(!settle(&mut shown, &[], &words("Hello Hama")));
+        assert!(settle(
+            &mut shown,
+            &words("Hallo Anna, ich"),
+            &words("Hallo Anna, ich wollte dir")
+        ));
+        assert_eq!(shown, words("Hallo Anna, ich"));
+        // A later change of mind about a shown word moves nothing.
+        assert!(settle(
+            &mut shown,
+            &words("Hallo Hanna ich wollte dir nur"),
+            &words("Hallo Hanna, ich wollte dir nur kurz")
+        ));
+        assert_eq!(shown, words("Hallo Anna, ich wollte dir nur"));
+        assert!(!settle(&mut shown, &words("eins"), &words("zwei")));
     }
 
     #[test]

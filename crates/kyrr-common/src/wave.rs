@@ -6,12 +6,10 @@
 //! dictations.
 //!
 //! While the key is held, the words the model hears so far run through the
-//! pill as one line: the pill widens, the bars move to its left end, each
-//! new word flows in from the left and the oldest run out on the left side.
-//! Words heard only once are a little paler until the next pass confirms
-//! them; a word the model changes its mind about fades out as its new
-//! version comes in. The text is only shown here: what gets typed is still
-//! the whole recording, recognised once the key is let go.
+//! pill as one line: the pill widens, the bars move to its left end, the
+//! new words fade in one after the other at an even pace and the oldest run
+//! out on the left side. The text is only shown here: what gets typed is
+//! still the whole recording, recognised once the key is let go.
 //!
 //! The drawing is done here, in plain Rust, so Windows and Linux show the
 //! same picture; each system only puts the pixels on the screen (a
@@ -65,20 +63,20 @@ const BARS_TEXT_GAP: f32 = 14.0;
 const TEXT_PAD: f32 = 22.0;
 /// Words fade out over this much of the line's left end once it scrolls.
 const EDGE_FADE: f32 = 22.0;
-/// A new word flows in from its left over this long; several new ones
-/// follow each other this far apart.
-const APPEAR: f32 = 0.4;
-const STAGGER: f32 = 0.09;
-/// The pill makes room for a word this long before it starts to flow in.
-const LEAD: f32 = 0.2;
-/// The soft edge of a word that flows in, logical pixels.
-const FEATHER: f32 = 14.0;
-/// New words come up from this far below their line.
-const RISE: f32 = 5.0;
+/// A new word fades in over this long, rising this far (logical pixels)
+/// into its line.
+const APPEAR: f32 = 0.5;
+const RISE: f32 = 2.0;
+/// The words of one pass come one after the other, spread over most of the
+/// time until the next pass is expected, so the line runs on evenly as if
+/// it were typed, not in bursts. Never closer or further apart than this.
+const PACE_SPREAD: f32 = 0.85;
+const PACE_MIN: f32 = 0.06;
+const PACE_MAX: f32 = 0.3;
+/// The pill makes room for a word this long before it starts to show.
+const LEAD: f32 = 0.35;
 /// A replaced word fades out over this long.
-const LEAVE: f32 = 0.2;
-/// How pale a word heard only once is (1 is as clear as the others).
-const UNSURE: f32 = 0.6;
+const LEAVE: f32 = 0.25;
 
 /// Straight (not premultiplied) colours, 0..1, with their opacity.
 struct Colors {
@@ -150,21 +148,17 @@ pub fn size(scale: f32) -> (u32, u32) {
     )
 }
 
-/// A word of the line, as the model heard it in its newest pass.
+/// A word of the line.
 #[derive(Clone, Debug)]
 struct Word {
     text: String,
     /// Logical pixels.
     width: f32,
-    /// When it starts to flow in (seconds, as `Wave::t`).
+    /// When it starts to fade in (seconds, as `Wave::t`).
     born: f32,
     /// Where it is drawn, logical pixels from the start of the line; eases
     /// to its place when a word before it changes length.
     x: f32,
-    /// Heard alike in two passes.
-    sure: bool,
-    /// 0 (heard once) to 1 (sure), eased.
-    clear: f32,
 }
 
 /// A word the model changed its mind about, fading out where it was.
@@ -172,7 +166,7 @@ struct Word {
 struct Leaving {
     text: String,
     x: f32,
-    /// How clear it was when it started to go.
+    /// How far it had faded in when it started to go.
     alpha: f32,
     since: f32,
 }
@@ -208,6 +202,12 @@ fn measure(text: &str) -> f32 {
 /// Moves `value` towards `target` at `rate` per second, smoothly.
 fn ease(value: &mut f32, target: f32, rate: f32, dt: f32) {
     *value += (target - *value) * (1.0 - (-rate * dt).exp());
+}
+
+/// 0..1 to 0..1, gently at both ends (smoothstep).
+fn fade_in(p: f32) -> f32 {
+    let p = p.clamp(0.0, 1.0);
+    p * p * (3.0 - 2.0 * p)
 }
 
 /// 0..1 to 0..1, quick at first and gently at the end.
@@ -255,6 +255,8 @@ pub struct Wave {
     pill: f32,
     /// How far the line has run out on the left, logical pixels, eased.
     scroll: f32,
+    /// When words were last set (as `t`), to pace the next ones.
+    last_words: Option<f32>,
 }
 
 impl Default for Wave {
@@ -271,6 +273,7 @@ impl Default for Wave {
             open: 0.0,
             pill: PILL,
             scroll: 0.0,
+            last_words: None,
         }
     }
 }
@@ -348,11 +351,7 @@ impl Wave {
             // A new dictation: its own words.
             self.words.clear();
             self.leaving.clear();
-        }
-        if mode == Mode::Writing {
-            for word in &mut self.words {
-                word.sure = true;
-            }
+            self.last_words = None;
         }
         if mode != Mode::Hidden {
             self.look = mode;
@@ -362,7 +361,7 @@ impl Wave {
 
     /// The words heard so far, oldest first. Words that stay keep their
     /// place (a changed comma or capital just shows); from the first one
-    /// that differs on, the old words fade out and the new ones flow in.
+    /// that differs on, the old words fade out and the new ones fade in.
     pub fn set_words(&mut self, words: &[String]) {
         let mut keep = 0;
         while keep < self.words.len().min(words.len()) && alike(&self.words[keep].text, &words[keep]) {
@@ -371,14 +370,13 @@ impl Wave {
                 word.text = words[keep].clone();
                 word.width = measure(&word.text);
             }
-            word.sure = true;
             keep += 1;
         }
         let t = self.t;
         for word in self.words.drain(keep..) {
             // One that had not started to show just goes.
             if word.born < t {
-                let alpha = ease_out((t - word.born) / APPEAR) * lerp(UNSURE, 1.0, word.clear);
+                let alpha = fade_in((t - word.born) / APPEAR);
                 self.leaving.push(Leaving {
                     text: word.text,
                     x: word.x,
@@ -387,7 +385,12 @@ impl Wave {
                 });
             }
         }
-        let mut born = self.words.last().map_or(t, |w| (w.born + STAGGER).max(t));
+        let new = words.len().saturating_sub(keep);
+        let since = self.last_words.map_or(1.0, |last| t - last);
+        let pace = (since * PACE_SPREAD / new.max(1) as f32).clamp(PACE_MIN, PACE_MAX);
+        self.last_words = Some(t);
+        // After the words still waiting to show.
+        let mut born = self.words.last().map_or(t, |w| (w.born + pace).max(t));
         let space = measure(" ");
         for text in &words[keep..] {
             let x = self.words.last().map_or(0.0, |w| w.x + w.width + space);
@@ -396,10 +399,8 @@ impl Wave {
                 text: text.clone(),
                 born,
                 x,
-                sure: false,
-                clear: 0.0,
             });
-            born += STAGGER;
+            born += pace;
         }
     }
 
@@ -460,12 +461,11 @@ impl Wave {
         let space = measure(" ");
         // The line as far as it shows soon: the pill grows and the line
         // runs on word by word, a little ahead of each, so it has room by
-        // the time it has flowed in.
+        // the time it has faded in.
         let mut place = 0.0;
         let mut end: f32 = 0.0;
         for word in &mut self.words {
             ease(&mut word.x, place, 10.0, dt);
-            ease(&mut word.clear, if word.sure { 1.0 } else { 0.0 }, 4.0, dt);
             if word.born <= t + LEAD {
                 end = place + word.width;
             }
@@ -479,8 +479,8 @@ impl Wave {
             (1.0, pill, (end - line_room(pill)).max(0.0))
         };
         ease(&mut self.open, open, 7.0, dt);
-        ease(&mut self.pill, pill, 9.0, dt);
-        ease(&mut self.scroll, scroll, 9.0, dt);
+        ease(&mut self.pill, pill, 6.0, dt);
+        ease(&mut self.scroll, scroll, 6.0, dt);
     }
 
     /// Draws the picture at `scale` into `pixels` (premultiplied ARGB) and
@@ -572,13 +572,9 @@ impl Wave {
             if alpha <= 0.0 || start > right + 1.0 || start + measure(text) < left - EDGE_FADE {
                 return;
             }
-            // How far it has flowed in: its soft front moves left to right.
-            let (front, rise) = match appear {
-                Some(p) => {
-                    let e = ease_out(p);
-                    (start - FEATHER + e * (measure(text) + 2.0 * FEATHER), (1.0 - e) * RISE)
-                }
-                None => (f32::INFINITY, 0.0),
+            let (alpha, rise) = match appear {
+                Some(p) => (alpha * fade_in(p), (1.0 - ease_out(p)) * RISE),
+                None => (alpha, 0.0),
             };
             let mut pen = start;
             let mut last = None;
@@ -605,9 +601,8 @@ impl Wave {
                     let edge_left = (lx - left + 1.0).clamp(0.0, 1.0)
                         * (1.0 - fade_left * (1.0 - ((lx - left) / EDGE_FADE).clamp(0.0, 1.0)));
                     let edge_right = ((right + 4.0 - lx) / 4.0).clamp(0.0, 1.0);
-                    let flowed = ((front - lx) / FEATHER).clamp(0.0, 1.0);
                     let cell = &mut ink[(py as u32 * width + px as u32) as usize];
-                    *cell += c * alpha * edge_left * edge_right * flowed;
+                    *cell += c * alpha * edge_left * edge_right;
                 });
             }
         };
@@ -619,12 +614,7 @@ impl Wave {
                 continue;
             }
             let p = (t - word.born) / APPEAR;
-            draw(
-                &word.text,
-                word.x,
-                lerp(UNSURE, 1.0, word.clear),
-                (p < 1.0).then_some(p),
-            );
+            draw(&word.text, word.x, 1.0, (p < 1.0).then_some(p));
         }
         Some(ink)
     }
@@ -947,12 +937,13 @@ mod tests {
         assert_eq!(wave.words[0].text, "Hallo,");
         assert_eq!(wave.words[0].born, born[0]);
         assert_eq!(wave.words[1].born, born[1]);
-        assert!(wave.words[0].sure && wave.words[1].sure && !wave.words[2].sure);
         assert!(wave.words[2].born > born[2]);
         assert_eq!(wave.leaving.len(), 1);
         assert_eq!(wave.leaving[0].text, "geht");
-        // The new ones follow each other.
-        assert!(wave.words[3].born > wave.words[2].born);
+        // The new ones follow each other, spread over the time since the
+        // words before came in (1 s), but at most 0.3 s apart.
+        let gap = wave.words[3].born - wave.words[2].born;
+        assert!((gap - 0.3).abs() < 0.01, "{gap}");
         run_for(&mut wave, 0.5);
         assert!(wave.leaving.is_empty());
     }
@@ -979,7 +970,6 @@ mod tests {
         let mut wave = shown(Mode::Listening, 0.5, &QUIET);
         wave.set_words(&words("eins zwei"));
         wave.set_mode(Mode::Writing);
-        assert!(wave.words.iter().all(|w| w.sure));
         wave.set_mode(Mode::Hidden);
         assert_eq!(wave.words.len(), 2);
         wave.set_mode(Mode::Listening);
