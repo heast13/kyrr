@@ -48,6 +48,40 @@ above), is why MatMul/Gemm are quantized per channel:
 | int8, every op, per tensor (sherpa-onnx default) | 7.76 % | 4.35 % |
 | int8, MatMul/Gemm per channel | 6.84 % | 4.17 % |
 
+## Other European languages
+
+The same tools build the model for French, Spanish, Italian, Dutch, Polish,
+Portuguese and the other languages of
+[nvidia/parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3)
+(CC-BY-4.0), unchanged apart from the conversion. Pass the name `parakeet-v3`
+to `export.py` (it only sets the metadata) and name the output `eu-v3-u8`:
+
+```bash
+curl -L -o v3.nemo https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3/resolve/main/parakeet-tdt-0.6b-v3.nemo
+venv/bin/python export.py "$PWD/v3.nemo" "$PWD/fp32-v3" parakeet-v3
+venv/bin/python quantize.py fp32-v3 eu-v3-u8
+```
+
+`wer.py` measures a model dir the way kyrr loads it (one model per call).
+Measured on 2026-10-20 with `eu-v3-u8`, `de-primeline-u8` and `en-unified`,
+sherpa-onnx 1.13.8, 4 threads, first 100 clips of Multilingual LibriSpeech
+(test) per language, 73 LibriSpeech clips for English; the clips are decoded
+from Opus and resampled with scipy, so the German and English numbers differ
+a little from the table above (`de-primeline-u8` reads 6.69 / 1.83 % here).
+
+| Model | de | en | fr | es | it | nl | pl | pt |
+|---|---|---|---|---|---|---|---|---|
+| `eu-v3-u8` | 6.01 % | 1.74 % | 5.10 % | 2.70 % | 11.36 % | 14.13 % | 4.22 % | 6.75 % |
+| `de-primeline-u8` | 6.69 % | 1.83 % | 6.61 % | 3.56 % | 11.45 % | not run | not run | not run |
+| `en-unified` | – | 1.08 % | – | – | – | – | – | – |
+
+About 50x real time on a Ryzen 7 9800X3D, 909 MB of memory once loaded, the
+same as `de-primeline-u8`. Cut to their first 3 s, 79 of 80 clips (10 per
+language) came out in the right language, none in a wrong script. German
+keeps its own model because on Tuda-De, a harder test set, primeline's own
+model card has the base model clearly behind (7.05 % vs 4.11 %), and English
+keeps `en-unified` (1.08 % vs 1.74 % above).
+
 ## Why uint8 weights
 
 ONNX Runtime runs `MatMulInteger` with signed int8 weights as U8S8. On x86

@@ -1,7 +1,8 @@
 # Exports primeline/parakeet-primeline (.nemo) to the sherpa-onnx layout in fp32.
 # Based on sherpa-onnx scripts/nemo/parakeet-tdt-0.6b-v3/export_onnx.py
 # (Copyright 2025 Xiaomi Corp., Apache-2.0).
-# Usage: export.py <primeline.nemo> <outdir>
+# Usage: export.py <model.nemo> <outdir> [name]
+# name: "primeline" (default) or "parakeet-v3", only for the metadata.
 import os, sys
 import onnx, torch
 import nemo.collections.asr as nemo_asr
@@ -19,6 +20,10 @@ def add_meta(src, dst, meta, external=None):
 @torch.no_grad()
 def main():
     nemo_path, out = sys.argv[1], sys.argv[2]
+    source = {
+        "primeline": ("NeMo / primeline", "https://huggingface.co/primeline/parakeet-primeline (fine-tuned parakeet-tdt-0.6b-v3)"),
+        "parakeet-v3": ("NeMo / NVIDIA", "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"),
+    }[sys.argv[3] if len(sys.argv) > 3 else "primeline"]
     os.makedirs(out, exist_ok=True); os.chdir(out)
     asr = nemo_asr.models.ASRModel.restore_from(restore_path=nemo_path, map_location="cpu")
     asr.eval()
@@ -33,9 +38,9 @@ def main():
         "vocab_size": asr.decoder.vocab_size, "normalize_type": "" if nt == "NA" else nt,
         "pred_rnn_layers": asr.decoder.pred_rnn_layers, "pred_hidden": asr.decoder.pred_hidden,
         "subsampling_factor": 8, "model_type": "EncDecRNNTBPEModel", "version": "2",
-        "model_author": "NeMo / primeline",
+        "model_author": source[0],
         # sherpa-onnx detects TDT models by "tdt" in the url.
-        "url": "https://huggingface.co/primeline/parakeet-primeline (fine-tuned parakeet-tdt-0.6b-v3)",
+        "url": source[1],
         "comment": "Only the transducer branch is exported", "feat_dim": asr.cfg.preprocessor.features,
     }
     print("meta", meta)

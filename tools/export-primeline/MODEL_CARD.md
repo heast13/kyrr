@@ -5,8 +5,15 @@ license_link: LICENSE.md
 language:
 - de
 - en
+- fr
+- es
+- it
+- nl
+- pl
+- pt
 base_model:
 - primeline/parakeet-primeline
+- nvidia/parakeet-tdt-0.6b-v3
 - nvidia/parakeet-unified-en-0.6b
 tags:
 - automatic-speech-recognition
@@ -47,6 +54,22 @@ Changes made for kyrr, with
 | `de-primeline-u8/decoder.int8.onnx` | 11,845,274 | `6b32c9339900086afd3d282eb40688ae19f3d106281e7731ee27ead1add8b29d` |
 | `de-primeline-u8/joiner.int8.onnx` | 6,355,277 | `c84fcf848108531a7309ef65308dc5dc610091ce0fbde134f76bb0f6c42ca530` |
 | `de-primeline-u8/tokens.txt` | 93,939 | `d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d` |
+
+## eu-v3-u8
+
+[nvidia/parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3)
+by NVIDIA, licensed under
+[CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/). It knows 25
+European languages and picks the right one by itself.
+
+Changes made for kyrr: the same as for `de-primeline-u8` above, nothing else.
+
+| File | Size | SHA256 |
+|---|---|---|
+| `eu-v3-u8/encoder.int8.onnx` | 881,596,698 | `098defd35fcbbcc5e4a5fa3e7832920cb7686f03c26103d24ae61ea176a62b46` |
+| `eu-v3-u8/decoder.int8.onnx` | 11,845,274 | `0222a86147299d4dee90edf95b6d13827edb42ad8b7c9cf0b2582f030937c0b5` |
+| `eu-v3-u8/joiner.int8.onnx` | 6,355,277 | `fcc04e8d98f879196bb76015e3d91067ffa8304fb33c6ed8c04a72f53c9c0452` |
+| `eu-v3-u8/tokens.txt` | 102,132 | `ba8e4007c65f4bb4358ffe2ecc13d9ccc7a10351151065242b5c3a943e685742` |
 
 ## en-unified
 

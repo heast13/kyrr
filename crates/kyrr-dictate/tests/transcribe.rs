@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use kyrr_dictate::{Dictation, Language};
+use kyrr_dictate::{european, Dictation, Language, ModelSpec};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -25,17 +25,17 @@ fn read_mono(path: &PathBuf) -> (u32, Vec<f32>) {
     (spec.sample_rate, mono)
 }
 
-fn check(language: Language, clip: &str, expected: &str) {
+fn check(spec: &'static ModelSpec, clip: &str, expected: &str) {
     let models = root().join("models");
     let wav = root().join("assets/test-audio").join(clip);
-    if !language.model().is_installed(&models) || !wav.is_file() {
-        eprintln!("{} model or test audio missing, skipped", language.code());
+    if !spec.is_installed(&models) || !wav.is_file() {
+        eprintln!("{} model or test audio missing, skipped", spec.id);
         return;
     }
-    let dictation = Dictation::load(&models, language, 4).expect("model loads");
+    let dictation = Dictation::load(&models, spec, 4).expect("model loads");
     let (rate, samples) = read_mono(&wav);
     let text = dictation.transcribe(rate, &samples);
-    println!("{}: {text}", language.code());
+    println!("{}: {text}", spec.id);
     assert_eq!(text, expected);
     assert_eq!(
         dictation.transcribe(rate, &samples[..rate as usize / 10]),
@@ -47,7 +47,7 @@ fn check(language: Language, clip: &str, expected: &str) {
 #[test]
 fn german() {
     check(
-        Language::German,
+        Language::German.model(),
         "de.wav",
         "Alles hat ein Ende, nur die Wurst hat zwei.",
     );
@@ -56,7 +56,18 @@ fn german() {
 #[test]
 fn english() {
     check(
-        Language::English,
+        Language::English.model(),
+        "en.wav",
+        "Ask not what your country can do for you, ask what you can do for your country.",
+    );
+}
+
+/// The model for many languages also knows the two sample clips.
+#[test]
+fn many_languages() {
+    check(european(), "de.wav", "Alles hat ein Ende, nur die Wurst hat zwei.");
+    check(
+        european(),
         "en.wav",
         "Ask not what your country can do for you, ask what you can do for your country.",
     );
@@ -83,7 +94,7 @@ fn model_path_with_umlauts() {
             std::fs::copy(entry.path(), &to).unwrap();
         }
     }
-    let loaded = Dictation::load(&odd, Language::German, 4);
+    let loaded = Dictation::load(&odd, spec, 4);
     let _ = std::fs::remove_dir_all(&odd);
     let dictation = loaded.expect("model loads from a path with umlauts");
     let (rate, samples) = read_mono(&wav);

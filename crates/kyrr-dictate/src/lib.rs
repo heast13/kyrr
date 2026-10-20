@@ -1,6 +1,7 @@
-//! kyrr-dictate: speech to text for German and English, fully local.
+//! kyrr-dictate: speech to text for German, English and other European
+//! languages, fully local.
 //!
-//! [`Dictation`] loads the model for one [`Language`] and turns a recording
+//! [`Dictation`] loads one [`ModelSpec`] and turns a recording
 //! (any sample rate, mono) into text. Models are downloaded on demand with
 //! [`download::download`] and pinned by SHA256.
 
@@ -13,7 +14,7 @@ use audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler};
 use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineTransducerModelConfig};
 
-pub use model::{Language, ModelFile, ModelSpec};
+pub use model::{european, Language, ModelFile, ModelSpec};
 
 /// Shortest recording worth decoding; shorter ones are accidental key taps.
 pub const MIN_SECONDS: f32 = 0.3;
@@ -37,15 +38,14 @@ const WINDOW: usize = MODEL_RATE as usize / 50;
 /// A loaded dictation model. Loading takes a few seconds and about 1 GB of
 /// memory, so the app keeps it only while dictation is in use.
 pub struct Dictation {
-    language: Language,
+    model: &'static str,
     recognizer: OfflineRecognizer,
 }
 
 impl Dictation {
-    /// Loads the model for `language` from below `root`. `threads` is the
-    /// number of CPU threads used for decoding.
-    pub fn load(root: &Path, language: Language, threads: usize) -> Result<Dictation, String> {
-        let spec = language.model();
+    /// Loads the model `spec` from below `root`. `threads` is the number of
+    /// CPU threads used for decoding.
+    pub fn load(root: &Path, spec: &'static ModelSpec, threads: usize) -> Result<Dictation, String> {
         if !spec.is_installed(root) {
             return Err(format!("model {} is not installed", spec.id));
         }
@@ -63,11 +63,15 @@ impl Dictation {
         config.model_config.num_threads = threads.clamp(1, 8) as i32;
         let recognizer =
             OfflineRecognizer::create(&config).ok_or_else(|| format!("model {} failed to load", spec.id))?;
-        Ok(Dictation { language, recognizer })
+        Ok(Dictation {
+            model: spec.id,
+            recognizer,
+        })
     }
 
-    pub fn language(&self) -> Language {
-        self.language
+    /// The folder name of the loaded model (see [`ModelSpec::id`]).
+    pub fn model(&self) -> &'static str {
+        self.model
     }
 
     /// Transcribes a mono recording. Returns an empty string for recordings
@@ -274,8 +278,8 @@ mod tests {
 
     #[test]
     fn specs_are_consistent() {
-        for lang in Language::ALL {
-            let spec = lang.model();
+        let specs = Language::ALL.map(Language::model).into_iter().chain([european()]);
+        for spec in specs {
             assert_eq!(spec.files.len(), 4);
             for f in spec.files {
                 assert_eq!(f.sha256.len(), 64);

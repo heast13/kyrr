@@ -12,7 +12,7 @@ use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
 use kyrr_dictate::download::{download, DownloadError};
-use kyrr_dictate::{Dictation, Language};
+use kyrr_dictate::{european, Dictation, Language, ModelSpec};
 
 use crate::recorder::{Recording, MAX_SECONDS};
 
@@ -148,7 +148,9 @@ pub enum Event {
 
 pub enum Command {
     Enable(bool),
-    Language(Language),
+    /// The window's language, and whether dictation uses the model for many
+    /// European languages instead of the one for that language.
+    Language(Language, bool),
     Download,
     CancelDownload,
     /// After an error: download again, or load the model again.
@@ -174,8 +176,7 @@ pub type Typer = fn(&str) -> bool;
 /// Puts text on the clipboard. Returns false if that failed.
 pub type Clipboard = fn(&str) -> bool;
 
-/// What the worker says, in the dictation language (which is also the
-/// language of the window).
+/// What the worker says, in the language of the window.
 fn say(language: Language, what: &str) -> String {
     let german = language == Language::German;
     if what == "cut" {
@@ -223,6 +224,7 @@ fn say(language: Language, what: &str) -> String {
 struct Worker {
     root: PathBuf,
     language: Language,
+    more_languages: bool,
     enabled: bool,
     model: Option<Dictation>,
     recording: Option<Recording>,
@@ -253,9 +255,11 @@ struct Worker {
     state: State,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn spawn(
     root: PathBuf,
     language: Language,
+    more_languages: bool,
     enabled: bool,
     live: bool,
     notify: Notify,
@@ -266,6 +270,7 @@ pub fn spawn(
     let mut worker = Worker {
         root,
         language,
+        more_languages,
         enabled,
         model: None,
         recording: None,
@@ -309,6 +314,15 @@ pub fn spawn(
 }
 
 impl Worker {
+    /// The speech model the settings ask for.
+    fn spec(&self) -> &'static ModelSpec {
+        if self.more_languages {
+            european()
+        } else {
+            self.language.model()
+        }
+    }
+
     fn set_state(&mut self, state: State) {
         self.state = state;
         (self.notify)(Event::State(state));
@@ -336,12 +350,12 @@ impl Worker {
             self.set_state(State::Off);
             return;
         }
-        if self.model.as_ref().is_some_and(|m| m.language() == self.language) {
+        let spec = self.spec();
+        if self.model.as_ref().is_some_and(|m| m.model() == spec.id) {
             self.set_state(State::Ready);
             return;
         }
         self.model = None;
-        let spec = self.language.model();
         if !spec.is_installed(&self.root) {
             if !self.upgrade_started && spec.replaces_installed(&self.root) {
                 self.upgrade_started = true;
@@ -363,7 +377,7 @@ impl Worker {
 
     fn load(&mut self) -> Result<(), ()> {
         let threads = std::thread::available_parallelism().map_or(4, |n| n.get().min(4));
-        let model = Dictation::load(&self.root, self.language, threads).map_err(|_| ())?;
+        let model = Dictation::load(&self.root, self.spec(), threads).map_err(|_| ())?;
         self.model = Some(model);
         self.last_used = Instant::now();
         Ok(())
@@ -408,9 +422,12 @@ impl Worker {
                 self.enabled = on;
                 self.refresh();
             }
-            Command::Language(language) => {
-                if language != self.language {
-                    self.language = language;
+            Command::Language(language, more) => {
+                let before = self.spec().id;
+                self.language = language;
+                self.more_languages = more;
+                // The window changes language, the model only if it follows it.
+                if self.spec().id != before {
                     self.cancel_download();
                     self.refresh();
                 }
@@ -432,7 +449,7 @@ impl Worker {
             }
             Command::Retry => {
                 (self.notify)(Event::Message(None));
-                if self.language.model().is_installed(&self.root) {
+                if self.spec().is_installed(&self.root) {
                     self.refresh();
                 } else {
                     self.start_download();
@@ -451,7 +468,7 @@ impl Worker {
                 self.download_cancel = None;
                 match result {
                     Ok(()) => {
-                        self.language.model().remove_replaced(&self.root);
+                        self.spec().remove_replaced(&self.root);
                         self.refresh();
                     }
                     Err(DownloadError::Cancelled) => self.refresh(),
@@ -556,7 +573,7 @@ impl Worker {
         let id = self.download_id;
         (self.notify)(Event::Message(None));
         self.set_state(State::Downloading);
-        let (root, spec) = (self.root.clone(), self.language.model());
+        let (root, spec) = (self.root.clone(), self.spec());
         let (tx, notify) = (self.tx.clone(), Arc::clone(&self.notify));
         std::thread::spawn(move || {
             let mut last = -1.0f32;

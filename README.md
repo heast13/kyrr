@@ -240,6 +240,7 @@ of after a quarter of an hour without dictation:
 |---|---|---|
 | German | [primeline/parakeet-primeline](https://huggingface.co/primeline/parakeet-primeline), a German fine-tune of NVIDIA Parakeet; also handles English | 900 MB |
 | English | [NVIDIA parakeet-unified-en-0.6b](https://huggingface.co/nvidia/parakeet-unified-en-0.6b) | 663 MB |
+| Multilingual (Language choice in the setup and in Settings) | [NVIDIA parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), 25 European languages, picks the language itself. Works in French, Spanish, Polish, Portuguese, Italian and Dutch (see the measurements in `tools/export-primeline`); German and English also work | 900 MB |
 
 ## Privacy
 
@@ -345,7 +346,7 @@ kyrr stands on the work of others. Thank you to
   its models openly,
 - [primeLine AI](https://huggingface.co/primeline/parakeet-primeline) for
   the German speech model,
-- NVIDIA for Parakeet, the model family behind both languages,
+- NVIDIA for Parakeet, the model family behind all dictation languages,
 - csukuangfj and the [k2-fsa](https://github.com/k2-fsa/sherpa-onnx) team
   for sherpa-onnx and the English model in ONNX,
 - [Equalizer APO](https://sourceforge.net/projects/equalizerapo/), which
