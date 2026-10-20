@@ -77,7 +77,7 @@ fn main() {
     state.set_level_before(0.72);
     state.set_level_after(0.55);
     state.set_download_size("880 MB".into());
-    state.set_phrase(4);
+    state.set_phrase(3);
     // Switched on early: a switch flipped right before a shot is caught
     // mid-animation.
     state.set_auto_level(true);
