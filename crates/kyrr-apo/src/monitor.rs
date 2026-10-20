@@ -97,11 +97,12 @@ impl Monitor {
         unsafe { self.base.add(HEADER_SIZE + which * PROBE_CAPACITY * 4) as *mut f32 }
     }
 
-    /// Publishes the peak of a block before and after kyrr, and what the
-    /// automatic volume adds.
-    pub fn levels(&self, before: f32, after: f32, gain_db: f32) {
+    /// Publishes the peak of a block before and after kyrr, what the
+    /// automatic volume adds and whether the microphone sounds far.
+    pub fn levels(&self, before: f32, after: f32, gain_db: f32, far: bool) {
         let h = self.header();
         h.level_gain.store(gain_db.to_bits(), Ordering::Relaxed);
+        h.far.store(far as u32, Ordering::Relaxed);
         h.heartbeat.fetch_add(1, Ordering::Relaxed);
         for (slot, peak) in [(&h.level_in, before), (&h.level_out, after)] {
             let old = f32::from_bits(slot.load(Ordering::Relaxed));

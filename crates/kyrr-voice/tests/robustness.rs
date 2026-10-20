@@ -16,6 +16,7 @@ fn all_on(look: Look) -> VoiceSettings {
         compressor: Amount::Strong,
         pops: true,
         auto_level: true,
+        distance: true,
     }
 }
 fn noise(n: usize, amp: f32, seed: &mut u32) -> Vec<f32> {

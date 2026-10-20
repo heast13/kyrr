@@ -25,6 +25,8 @@ pub struct Levels {
     pub after: f32,
     /// What the automatic volume adds right now, in dB.
     pub gain_db: f32,
+    /// The microphone sounds far from the voice.
+    pub far: bool,
 }
 
 /// A finished probe: the same take before and after kyrr, mono.
@@ -63,6 +65,7 @@ impl Monitor {
             before: f32::from_bits(h.level_in.load(Ordering::Relaxed)),
             after: f32::from_bits(h.level_out.load(Ordering::Relaxed)),
             gain_db: f32::from_bits(h.level_gain.load(Ordering::Relaxed)),
+            far: h.far.load(Ordering::Relaxed) == 1,
         }
     }
 

@@ -58,6 +58,8 @@ pub mod filter {
     pub const VOICE_POPS: &str = "VoicePops";
     /// 1 = bring the voice to a steady level, whatever the mic's gain.
     pub const VOICE_AUTO_LEVEL: &str = "VoiceAutoLevel";
+    /// 1 = take some of the room's echo out when the mic is far away.
+    pub const VOICE_DISTANCE: &str = "VoiceDistance";
 }
 
 /// Value names below [`REG_STATUS`].
@@ -126,12 +128,13 @@ impl FilterSettings {
                 compressor: amount(filter::VOICE_COMPRESSOR, d.voice.compressor),
                 pops: flag(filter::VOICE_POPS, d.voice.pops),
                 auto_level: flag(filter::VOICE_AUTO_LEVEL, d.voice.auto_level),
+                distance: flag(filter::VOICE_DISTANCE, d.voice.distance),
             },
         }
     }
 
     /// How many values [`FilterSettings::to_dwords`] stores.
-    pub const VALUES: usize = 13;
+    pub const VALUES: usize = 14;
 
     /// The DWORDs to store, by value name.
     pub fn to_dwords(&self) -> [(&'static str, u32); Self::VALUES] {
@@ -150,6 +153,7 @@ impl FilterSettings {
             (filter::VOICE_COMPRESSOR, v.compressor as u32),
             (filter::VOICE_POPS, v.pops as u32),
             (filter::VOICE_AUTO_LEVEL, v.auto_level as u32),
+            (filter::VOICE_DISTANCE, v.distance as u32),
         ]
     }
 }
@@ -181,6 +185,9 @@ pub struct VoiceSettings {
     pub pops: bool,
     /// Slowly brings the voice to one level, however loud the mic is set.
     pub auto_level: bool,
+    /// Far from the mic, takes some of the room's echo out and suggests
+    /// moving closer. Does nothing close up. Beta, off by default.
+    pub distance: bool,
 }
 
 impl Default for VoiceSettings {
@@ -196,6 +203,8 @@ impl Default for VoiceSettings {
             compressor: Amount::Medium,
             pops: false,
             auto_level: true,
+            // Beta: off until it was heard in real rooms.
+            distance: false,
         }
     }
 }
@@ -241,8 +250,9 @@ impl Amount {
 pub mod monitor {
     use std::sync::atomic::AtomicU32;
 
-    /// Name and magic change with the layout, so an app and a filter of
-    /// different versions do not read each other's buffers.
+    /// Name and magic change when fields move, so an app and a filter of
+    /// different versions do not misread each other's buffers; a field
+    /// appended at the end of the header keeps them.
     pub const NAME: &str = r"Global\kyrr-monitor-3";
     pub const MAGIC: u32 = u32::from_le_bytes(*b"kyr3");
     /// Length of the probe recording.
@@ -273,6 +283,11 @@ pub mod monitor {
         pub probe_frames: AtomicU32,
         /// What the automatic volume adds right now, dB as `f32` bits.
         pub level_gain: AtomicU32,
+        /// 1 while the microphone sounds far from the voice. Added at the
+        /// end, so the fields before keep their place: an app and a filter
+        /// of neighbouring versions still read each other, the older side
+        /// just sees 0 (near).
+        pub far: AtomicU32,
     }
 
     const _: () = assert!(std::mem::size_of::<Header>() <= HEADER_SIZE);
@@ -311,6 +326,7 @@ mod tests {
                 compressor: Amount::Medium,
                 pops: false,
                 auto_level: true,
+                distance: false,
             },
             ..FilterSettings::default()
         };

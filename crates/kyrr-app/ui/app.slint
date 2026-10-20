@@ -64,6 +64,7 @@ export global AppState {
     in-out property <float> air-db;
     in-out property <bool> low-cut: true;
     in-out property <bool> pops;
+    in-out property <bool> distance;
     in-out property <bool> auto-level;
     in property <float> level-gain; // what it adds right now, dB
     // The settings page shows everything, not just the basics.
@@ -148,6 +149,7 @@ export global AppState {
     callback band-changed(int, float); // 0 body, 1 presence, 2 air
     callback low-cut-toggled(bool);
     callback pops-toggled(bool);
+    callback distance-toggled(bool);
     callback auto-level-toggled(bool);
     callback advanced-toggled(bool);
     callback deesser-changed(int);
@@ -873,6 +875,7 @@ component AlertLine inherits Text {
         if (AppState.alert == 4) { return AppState.linux ? @tr("Your mic is muted.") : @tr("Your mic is muted in Windows."); }
         if (AppState.alert == 6) { return @tr("No microphone found. kyrr keeps looking."); }
         if (AppState.alert == 7) { return @tr("Microphone connected: {}", AppState.connected-name); }
+        if (AppState.alert == 8) { return @tr("Sounds like a gym. Move a bit closer?"); }
         return "";
     }
     text: root.note();
@@ -1005,6 +1008,18 @@ component VoiceSettings inherits Card {
     if root.shown && AppState.advanced: Hint {
         text: AppState.pops ? @tr("Takes the thump out of P and B when you are close to the mic.")
             : @tr("Off. P and B can thump.");
+    }
+    if root.shown && AppState.advanced: HorizontalLayout {
+        Caption { text: @tr("Distance compensation (beta)"); vertical-alignment: center; }
+        Rectangle { }
+        Switch {
+            checked <=> AppState.distance;
+            toggled => { AppState.distance-toggled(self.checked); }
+        }
+    }
+    if root.shown && AppState.advanced: Hint {
+        text: AppState.distance ? @tr("Far from the mic, it takes some of the room's echo out. Close up, it does nothing.")
+            : @tr("Off. Far from the mic, the room echoes along. Still a beta: tell us how it sounds.");
     }
     if root.shown && !AppState.voice-is-default: HorizontalLayout {
         Rectangle { }

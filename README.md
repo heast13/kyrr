@@ -214,6 +214,18 @@ moves it slowly (5 dB/s up, 10 dB/s down, at most +24/−12 dB) towards about
 adjust the volume themselves (call apps, say) can work against it, so use
 one of the two.
 
+*Distance compensation* (beta, off by default) helps when you sit far from the
+microphone and the room echoes on every word. It listens to the raw
+microphone: after a syllable a close voice falls 20 dB and more within
+40 ms, while far away no level falls faster than the room's echo dies down.
+After 5 to 15 seconds of speech that tells near from far. Only when far, it
+fades in over two seconds: the echo tail after each syllable goes down by up
+to 8 dB in four bands, a little bass comes back (+2.5 dB below 150 Hz),
+some box goes (−2.5 dB at 450 Hz) and a touch of presence is added (+1.5 dB
+at 3.5 kHz), all before the automatic volume. Close to the microphone the
+audio stays the same bit for bit. While it is on and the microphone sounds
+far, the main page also suggests moving a little closer.
+
 **Your microphone.** kyrr checks every few seconds which microphone the system
 uses. When it changes, the filter moves along: Windows asks for permission
 once and sound pauses for a moment; on Linux it simply moves. If that does not
@@ -222,7 +234,7 @@ you pick by hand stays until the system's default changes.
 
 **Check.** On Windows the filter shares a small block of memory with the app
 (`Global\kyrr-monitor-3`): the level before and after kyrr, what the
-automatic volume adds, and on request one ten-second take, unprocessed and
+automatic volume adds, whether the microphone sounds far, and on request one ten-second take, unprocessed and
 processed. The audio service writes it; users signed in at this computer can
 read it and ask for a take, which only records while an app already uses the
 microphone. The app plays the take, keeps it only in memory and clears it
