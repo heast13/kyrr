@@ -99,20 +99,55 @@
   select(hash >= 0 ? hash : Math.max(start, 0), false);
 })();
 
-// The dictation display loops by itself; a click or tap pauses and resumes it.
-// Visitors who asked for less motion get it standing still, with words shown.
+// The dictation display plays its sayings one after another in random order,
+// never the same one twice in a row. A click or tap pauses and resumes it.
+// Visitors who asked for less motion get one saying standing still, with words shown.
 (function () {
-  var videos = Array.prototype.slice.call(document.querySelectorAll(".pill-demo video"));
+  var pill = document.querySelector(".pill-demo video");
+  if (!pill) return;
+  var base = pill.getAttribute("data-base");
+  var lang = pill.getAttribute("data-lang");
+  var count = parseInt(pill.getAttribute("data-count"), 10);
   var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  videos.forEach(function (v) {
-    v.style.cursor = "pointer";
-    v.addEventListener("click", function () {
-      videos.forEach(function (o) { if (v.paused) o.play(); else o.pause(); });
-    });
-    if (!still) return;
-    v.pause();
-    function show() { v.currentTime = 4; }
-    if (v.readyState >= 2) show();
-    else v.addEventListener("loadeddata", show, { once: true });
+  var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
+  var order = [];
+  var last = -1;
+
+  function theme() {
+    var t = document.documentElement.getAttribute("data-theme");
+    if (t === "dark" || t === "light") return t;
+    return dark && dark.matches ? "dark" : "light";
+  }
+  function play(n) {
+    last = n;
+    pill.src = base + lang + "-" + theme() + "-" + (n + 1) + ".webm";
+    pill.play().catch(function () {});
+  }
+  function next() {
+    if (!order.length) {
+      for (var i = 0; i < count; i++) order.push(i);
+      for (var j = order.length - 1; j > 0; j--) {
+        var k = Math.floor(Math.random() * (j + 1));
+        var tmp = order[j]; order[j] = order[k]; order[k] = tmp;
+      }
+      // The new round does not open with the saying that just ended.
+      if (order[0] === last && count > 1) order.push(order.shift());
+    }
+    play(order.shift());
+  }
+
+  pill.style.cursor = "pointer";
+  pill.addEventListener("click", function () {
+    if (pill.paused) pill.play().catch(function () {});
+    else pill.pause();
   });
+  if (still) {
+    play(0);
+    pill.pause();
+    pill.addEventListener("loadeddata", function () { pill.currentTime = 4; }, { once: true });
+    return;
+  }
+  // A short pause between sayings, so the display does not feel busy.
+  pill.addEventListener("ended", function () { setTimeout(next, 4000); });
+  next();
 })();

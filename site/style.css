@@ -77,14 +77,9 @@ code { background: var(--code); padding: 0.1em 0.35em; border-radius: 4px; }
 .more { font-weight: 600; text-decoration: none; }
 .more:hover { text-decoration: underline; }
 
-/* the dictation display, as a short loop; dark or light as the visitor's system */
+/* the dictation display: one saying after another (app.js), with a transparent background */
 .pill-demo { margin: 0 auto 1.5rem; max-width: 580px; }
 .pill-demo video { display: block; width: 100%; height: auto; aspect-ratio: 1160 / 160; }
-.pill-demo .pill-dark { display: none; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .pill-demo .pill-light { display: none; }
-  :root:not([data-theme="light"]) .pill-demo .pill-dark { display: block; }
-}
 
 /* the little remark under the main heading, with the logo's wave next to it */
 .hero .lead { margin-bottom: 1rem; }
