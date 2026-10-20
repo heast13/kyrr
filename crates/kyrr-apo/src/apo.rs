@@ -571,7 +571,8 @@ impl KyrrApo {
 
             if let Some(m) = monitor {
                 let gain = st.voice.as_ref().map_or(0.0, |v| v.level_db() as f32);
-                m.levels(before, peak(buf), gain);
+                let far = st.voice.as_ref().is_some_and(|v| v.far());
+                m.levels(before, peak(buf), gain, far);
                 if let Some(p) = st.probe.as_mut() {
                     m.record(p, 1, buf, channels);
                     if !m.advance(p, frames) {

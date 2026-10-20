@@ -14,6 +14,14 @@
   the language by itself. One more download of about 900 MB (NVIDIA
   parakeet-tdt-0.6b-v3, converted like the German model). The window then
   uses the system's language.
+- Distance compensation: a slow detector on the raw microphone tells near
+  from far by how steeply the voice falls after a syllable (the room's echo
+  limits that fall). When far, a four-band expander takes the echo tail down
+  by up to 8 dB, with a little bass back, less box at 450 Hz and a touch of
+  presence, faded in over two seconds before the automatic volume. Close to
+  the mic the audio stays the same bit for bit. Beta, off by default: a
+  switch in the advanced settings; while it is on, the main page suggests
+  moving closer when the mic sounds far.
 - Linux: when kyrr cannot install an update itself, "Download page" opens the
   download page on the website, with the install steps, instead of the GitHub
   release page. Windows uses the same page for a failed download.

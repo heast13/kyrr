@@ -18,11 +18,13 @@ line saying nothing changes on Windows.
 
 ## Unreleased
 
+- New to try (beta, off by default): far from the mic, kyrr can notice when the room echoes along, take some of that echo out and suggest moving a little closer. Close to the mic nothing changes. To switch it on: Settings, Advanced, "Distance compensation".
 - When kyrr cannot install an update itself, "Download page" opens the download page on the website, with the install steps, instead of the GitHub release page.
 
 ### Deutsch
 
 - Wenn kyrr ein Update nicht selbst installieren kann, öffnet "Download-Seite" die Anleitung auf der Website mit den Installationsschritten statt der GitHub-Release-Seite.
+- Neu zum Ausprobieren (Beta, standardmäßig aus): Weit weg vom Mikro merkt kyrr, wenn der Raum mithallt, nimmt etwas von dem Hall raus und schlägt vor, ein Stück näher zu rücken. Nah am Mikro ändert sich nichts. Einschalten: Einstellungen, Erweitert, "Abstandsausgleich".
 
 ## 0.5.7
 

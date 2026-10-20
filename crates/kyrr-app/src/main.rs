@@ -261,6 +261,7 @@ fn show_voice(state: &AppState, v: &VoiceSettings) {
     state.set_air_db(v.air as f32 / 10.0);
     state.set_low_cut(v.low_cut);
     state.set_pops(v.pops);
+    state.set_distance(v.distance);
     state.set_auto_level(v.auto_level);
     state.set_deesser_index(v.deesser as i32);
     state.set_compressor_index(v.compressor as i32);
@@ -268,8 +269,8 @@ fn show_voice(state: &AppState, v: &VoiceSettings) {
 }
 
 /// Tallest the window gets, screen permitting; more content scrolls. Room
-/// for the whole two-column settings page in its advanced view (about 1200).
-const MAX_HEIGHT: f32 = 1250.0;
+/// for the whole two-column settings page in its advanced view (about 1260).
+const MAX_HEIGHT: f32 = 1310.0;
 /// Tallest when the screen is unknown: fits a 768-pixel-high laptop screen
 /// with the taskbar and title bar.
 const FALLBACK_HEIGHT: f32 = 660.0;
@@ -422,6 +423,8 @@ enum Alert {
     NoMic = 6,
     /// A microphone just showed up (the name is `AppState.connected-name`).
     Connected = 7,
+    /// The microphone sounds far away: the room echoes on every word.
+    MicFar = 8,
 }
 
 /// How long the "connected" note stays up.
@@ -438,6 +441,7 @@ fn alerts(
     auto_level: bool,
     mic_active: bool,
     gain_db: f32,
+    far: bool,
     listening: bool,
     muted: bool,
     no_mic: bool,
@@ -460,6 +464,9 @@ fn alerts(
         } else if gain_db <= GAIN_AT_MIN_DB {
             list.push(Alert::MicLoud);
         }
+    }
+    if far && mic_active {
+        list.push(Alert::MicFar);
     }
     if listening {
         list.push(Alert::Listening);
@@ -954,6 +961,7 @@ impl App {
             state.get_auto_level(),
             active,
             state.get_level_gain(),
+            levels.far,
             state.get_listening(),
             state.get_mic_muted(),
             self.microphones.borrow().is_empty() && self.mics_seen.get(),
@@ -1892,6 +1900,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         let app = Rc::clone(&app);
         move |on| app.set_voice(|v| v.pops = on)
     });
+    state.on_distance_toggled({
+        let app = Rc::clone(&app);
+        move |on| app.set_voice(|v| v.distance = on)
+    });
     state.on_auto_level_toggled({
         let app = Rc::clone(&app);
         move |on| app.set_voice(|v| v.auto_level = on)
@@ -2210,38 +2222,73 @@ mod tests {
 
     #[test]
     fn no_notes_when_all_is_well() {
-        assert!(alerts(true, true, 8.0, false, false, false, false).is_empty());
-        assert!(alerts(false, false, 0.0, false, false, false, false).is_empty());
+        assert!(alerts(true, true, 8.0, false, false, false, false, false).is_empty());
+        assert!(alerts(false, false, 0.0, false, false, false, false, false).is_empty());
     }
 
     #[test]
     fn gain_at_its_limit_says_so() {
-        assert_eq!(alerts(true, true, 24.0, false, false, false, false), [Alert::MicQuiet]);
-        assert_eq!(alerts(true, true, -12.0, false, false, false, false), [Alert::MicLoud]);
+        assert_eq!(
+            alerts(true, true, 24.0, false, false, false, false, false),
+            [Alert::MicQuiet]
+        );
+        assert_eq!(
+            alerts(true, true, -12.0, false, false, false, false, false),
+            [Alert::MicLoud]
+        );
         // Just short of the limits is still fine.
-        assert!(alerts(true, true, 23.0, false, false, false, false).is_empty());
-        assert!(alerts(true, true, -11.0, false, false, false, false).is_empty());
+        assert!(alerts(true, true, 23.0, false, false, false, false, false).is_empty());
+        assert!(alerts(true, true, -11.0, false, false, false, false, false).is_empty());
     }
 
     #[test]
     fn gain_only_counts_while_it_works() {
         // Automatic volume off, or no app on the microphone: the number is stale.
-        assert!(alerts(false, true, 24.0, false, false, false, false).is_empty());
-        assert!(alerts(true, false, -12.0, false, false, false, false).is_empty());
+        assert!(alerts(false, true, 24.0, false, false, false, false, false).is_empty());
+        assert!(alerts(true, false, -12.0, false, false, false, false, false).is_empty());
     }
 
     #[test]
     fn several_notes_come_in_turn() {
         assert_eq!(
-            alerts(true, true, 24.0, true, false, false, false),
+            alerts(true, true, 24.0, false, true, false, false, false),
             [Alert::MicQuiet, Alert::Listening]
         );
         // Muted outweighs everything else, even with no app on the microphone.
-        assert_eq!(alerts(true, true, 24.0, true, true, false, false), [Alert::Muted]);
-        assert_eq!(alerts(false, false, 0.0, false, true, false, false), [Alert::Muted]);
+        assert_eq!(
+            alerts(true, true, 24.0, false, true, true, false, false),
+            [Alert::Muted]
+        );
+        assert_eq!(
+            alerts(false, false, 0.0, false, false, true, false, false),
+            [Alert::Muted]
+        );
         // No microphone at all, and one that just came back.
-        assert_eq!(alerts(true, false, 0.0, true, false, true, false), [Alert::NoMic]);
-        assert_eq!(alerts(false, false, 0.0, false, false, false, true), [Alert::Connected]);
-        assert_eq!(alerts(false, false, 0.0, true, false, false, false), [Alert::Listening]);
+        assert_eq!(
+            alerts(true, false, 0.0, false, true, false, true, false),
+            [Alert::NoMic]
+        );
+        assert_eq!(
+            alerts(false, false, 0.0, false, false, false, false, true),
+            [Alert::Connected]
+        );
+        assert_eq!(
+            alerts(false, false, 0.0, false, true, false, false, false),
+            [Alert::Listening]
+        );
+    }
+
+    #[test]
+    fn far_mic_says_so_while_in_use() {
+        assert_eq!(
+            alerts(true, true, 8.0, true, false, false, false, false),
+            [Alert::MicFar]
+        );
+        assert_eq!(
+            alerts(false, true, 0.0, true, true, false, false, false),
+            [Alert::MicFar, Alert::Listening]
+        );
+        // No app on the microphone: an old verdict.
+        assert!(alerts(true, false, 8.0, true, false, false, false, false).is_empty());
     }
 }

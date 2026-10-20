@@ -3,7 +3,9 @@
 //! (three EQ bands), a de-esser, a compressor and a limiter. kyrr adds pop
 //! protection next to the low cut and an automatic level before the
 //! de-esser, so the de-esser and compressor always see a voice at the level
-//! their thresholds were made for.
+//! their thresholds were made for, and a distance compensation before that,
+//! which only acts when the microphone is far from the voice (see
+//! [`distance`]).
 //!
 //! [`Voice`] works on interleaved frames in place. After construction it
 //! never allocates and takes new settings between blocks, so it can run on
@@ -12,6 +14,8 @@
 //! channels together, so the stereo image stays put.
 
 use kyrr_common::{Amount, Look, VoiceSettings};
+
+mod distance;
 
 /// Band centres of the sound: body (peak), presence (peak), air (shelf).
 const BODY_HZ: f64 = 250.0;
@@ -257,6 +261,24 @@ impl Coeffs {
         )
     }
 
+    /// Low shelf with slope 1.
+    fn low_shelf(rate: f64, hz: f64, db: f64) -> Coeffs {
+        if db == 0.0 {
+            return Coeffs::IDENTITY;
+        }
+        let a = 10f64.powf(db / 40.0);
+        let (cos, sin) = Coeffs::angle(rate, hz);
+        let k = 2.0 * a.sqrt() * sin / 2.0 * std::f64::consts::SQRT_2;
+        Coeffs::normalized(
+            a * ((a + 1.0) - (a - 1.0) * cos + k),
+            2.0 * a * ((a - 1.0) - (a + 1.0) * cos),
+            a * ((a + 1.0) - (a - 1.0) * cos - k),
+            (a + 1.0) + (a - 1.0) * cos + k,
+            -2.0 * ((a - 1.0) + (a + 1.0) * cos),
+            (a + 1.0) + (a - 1.0) * cos - k,
+        )
+    }
+
     /// High shelf with slope 1.
     fn high_shelf(rate: f64, hz: f64, db: f64) -> Coeffs {
         if db == 0.0 {
@@ -499,6 +521,11 @@ pub struct Voice {
     pop_attack: f64,
     pop_release: f64,
     auto_level: bool,
+    /// Distance compensation switched on (it still acts only when far).
+    distance: bool,
+    /// Whether the room is listened to: the switch, also with the shaping
+    /// off, so the hint to move closer still works.
+    room_on: bool,
     comp: Option<CompressorSettings>,
     comp_rms: f64,
     comp_attack: f64,
@@ -520,6 +547,8 @@ pub struct Voice {
     pop_delay: usize,
     pop_lead: usize,
     level: Level,
+    room: distance::Detector,
+    compensation: distance::Compensation,
     comp_power: f64,
     comp_gain_db: f64,
     limit_gain: f64,
@@ -560,6 +589,8 @@ impl Voice {
             pop_attack: smoothing(rate, POP_ATTACK_MS),
             pop_release: smoothing(rate, POP_RELEASE_MS),
             auto_level: false,
+            distance: false,
+            room_on: false,
             comp: None,
             comp_rms: smoothing(rate, COMP_RMS_MS),
             comp_attack: 0.0,
@@ -577,6 +608,8 @@ impl Voice {
             pop_delay: 0,
             pop_lead: 0,
             level: Level::new(rate),
+            room: distance::Detector::new(rate),
+            compensation: distance::Compensation::new(rate, channels),
             comp_power: 0.0,
             comp_gain_db: 0.0,
             limit_gain: 1.0,
@@ -613,6 +646,12 @@ impl Voice {
             .map(|(db, ratio)| (db_to_gain(db), db, 1.0 - 1.0 / ratio));
         self.pop = shaping && s.pops;
         self.auto_level = s.auto_level;
+        self.distance = shaping && s.distance;
+        if s.distance && !self.room_on {
+            // Switched on again: the room may have changed meanwhile.
+            self.room = distance::Detector::new(self.rate);
+        }
+        self.room_on = s.distance;
         self.comp = compressor(s.compressor).filter(|_| shaping);
         if let Some(c) = self.comp {
             self.comp_attack = smoothing(rate, c.attack_ms);
@@ -631,6 +670,18 @@ impl Voice {
     /// a new call does not begin at the microphone's raw level.
     pub fn resume_level(&mut self, gain_db: f64) {
         self.level.resume(gain_db);
+    }
+
+    /// Whether the microphone sounds far from the voice: the room's echo
+    /// trails every word. Known after some seconds of speech.
+    pub fn far(&self) -> bool {
+        // Switched off, nothing listens any more: no old verdict.
+        self.enabled() && self.room_on && self.room.far()
+    }
+
+    /// How much of the distance compensation is in right now, 0 to 1.
+    pub fn distance_blend(&self) -> f64 {
+        self.compensation.blend()
     }
 
     /// Tells how many frames the noise filter between [`Voice::pre`] and
@@ -658,6 +709,8 @@ impl Voice {
         self.pop_written = 0;
         self.pop_read = 0;
         self.level.reset();
+        self.room.reset();
+        self.compensation.reset();
         self.comp_power = 0.0;
         self.comp_gain_db = 0.0;
         self.limit_gain = 1.0;
@@ -679,8 +732,10 @@ impl Voice {
             // switching it on has no start-up.
             let mut sub_peak = 0f64;
             let mut bass_peak = 0f64;
+            let mut mono = 0f64;
             for ((x, st), out) in frame.iter().zip(self.state.iter_mut()).zip(low_cut_buf.iter_mut()) {
                 let v = if x.is_finite() { *x as f64 } else { 0.0 };
+                mono += v;
                 let sub = st.pop_sub[0].run(&self.pop_sub, v);
                 sub_peak = sub_peak.max(st.pop_sub[1].run(&self.pop_sub, sub).abs());
                 let mut bass = v;
@@ -715,6 +770,12 @@ impl Voice {
             } else {
                 1.0
             };
+            // How far the microphone is, also measured on the raw microphone:
+            // the noise filter takes part of the room's echo away already.
+            if self.room_on {
+                self.room.feed(mono / n as f64);
+            }
+
             let len = self.pop_ring.len();
             self.pop_ring[(self.pop_written % len as u64) as usize] = wanted as f32;
             self.pop_written += 1;
@@ -745,8 +806,8 @@ impl Voice {
         self.pop_ring[(at % len) as usize] as f64
     }
 
-    /// Sound, pop protection, automatic level, de-esser, compressor and
-    /// limiter, after the noise filter.
+    /// Sound, pop protection, distance compensation, automatic level,
+    /// de-esser, compressor and limiter, after the noise filter.
     pub fn post(&mut self, buf: &mut [f32]) {
         if !self.enabled() {
             return;
@@ -783,6 +844,11 @@ impl Voice {
                 v = st.air.run(&self.air, v);
                 *out = v;
             }
+
+            // Far from the microphone: less echo before the automatic level
+            // lifts the voice and the room with it. Fades out when switched
+            // off; close to the microphone it leaves the audio alone.
+            self.compensation.run(y, self.distance && self.room.far());
 
             // Automatic level: measured before its own gain, so it learns
             // the voice as it comes in.

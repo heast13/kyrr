@@ -37,6 +37,7 @@ struct Shared {
     before: AtomicU32,
     after: AtomicU32,
     gain_db: AtomicU32,
+    far: AtomicBool,
     probe: Mutex<Probe>,
     probe_wanted: AtomicBool,
     /// Counts model loads; a load that finishes after a newer one started
@@ -107,6 +108,7 @@ impl Chain {
         shared
             .gain_db
             .store((self.voice.level_db() as f32).to_bits(), Ordering::Relaxed);
+        shared.far.store(self.voice.far(), Ordering::Relaxed);
         shared.heartbeat.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -173,6 +175,7 @@ impl Engine {
             before: AtomicU32::new(0),
             after: AtomicU32::new(0),
             gain_db: AtomicU32::new(0),
+            far: AtomicBool::new(false),
             probe: Mutex::new(Probe::default()),
             probe_wanted: AtomicBool::new(false),
             loads: AtomicU32::new(0),
@@ -288,6 +291,7 @@ impl Engine {
             before: f(&s.before),
             after: f(&s.after),
             gain_db: f(&s.gain_db),
+            far: s.far.load(Ordering::Relaxed),
         }
     }
 

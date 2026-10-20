@@ -41,6 +41,8 @@ pub struct Levels {
     pub after: f32,
     /// What the automatic volume adds right now, in dB.
     pub gain_db: f32,
+    /// The microphone sounds far from the voice (room echo on every word).
+    pub far: bool,
 }
 
 /// The same take before and after kyrr, mono.
@@ -358,6 +360,7 @@ mod imp {
                 before: l.before,
                 after: l.after,
                 gain_db: l.gain_db,
+                far: l.far,
             }
         }
 
