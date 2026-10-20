@@ -1511,8 +1511,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 let toggle = key_toggle.load(Ordering::Relaxed);
                 let cmd = match (key, toggle) {
                     (platform::KeyEvent::Pressed, false) => Command::KeyDown,
-                    (platform::KeyEvent::Released, false) => Command::KeyUp,
-                    (platform::KeyEvent::Pressed, true) if recording.load(Ordering::Relaxed) => Command::KeyUp,
+                    (platform::KeyEvent::Released, false) => Command::KeyUp(Instant::now()),
+                    (platform::KeyEvent::Pressed, true) if recording.load(Ordering::Relaxed) => {
+                        Command::KeyUp(Instant::now())
+                    }
                     (platform::KeyEvent::Pressed, true) => Command::KeyDown,
                     (platform::KeyEvent::Released, true) => continue,
                 };

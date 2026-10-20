@@ -67,12 +67,13 @@ const EDGE_FADE: f32 = 22.0;
 /// into its line.
 const APPEAR: f32 = 0.5;
 const RISE: f32 = 2.0;
-/// The words of one pass come one after the other, spread over most of the
+/// The words of one pass come one after the other, spread over half the
 /// time until the next pass is expected, so the line runs on evenly as if
-/// it were typed, not in bursts. Never closer or further apart than this.
-const PACE_SPREAD: f32 = 0.85;
+/// it were typed, not in bursts, without falling behind the voice. Never
+/// closer or further apart than this.
+const PACE_SPREAD: f32 = 0.5;
 const PACE_MIN: f32 = 0.06;
-const PACE_MAX: f32 = 0.3;
+const PACE_MAX: f32 = 0.25;
 /// The pill makes room for a word this long before it starts to show.
 const LEAD: f32 = 0.35;
 /// A replaced word fades out over this long.
@@ -940,10 +941,10 @@ mod tests {
         assert!(wave.words[2].born > born[2]);
         assert_eq!(wave.leaving.len(), 1);
         assert_eq!(wave.leaving[0].text, "geht");
-        // The new ones follow each other, spread over the time since the
-        // words before came in (1 s), but at most 0.3 s apart.
+        // The new ones follow each other, spread over half the time since
+        // the words before came in (1 s), but at most 0.25 s apart.
         let gap = wave.words[3].born - wave.words[2].born;
-        assert!((gap - 0.3).abs() < 0.01, "{gap}");
+        assert!((gap - 0.25).abs() < 0.01, "{gap}");
         run_for(&mut wave, 0.5);
         assert!(wave.leaving.is_empty());
     }

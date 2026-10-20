@@ -6,6 +6,7 @@
 //! [`download::download`] and pinned by SHA256.
 
 pub mod download;
+pub mod live;
 mod model;
 
 use std::path::Path;
@@ -14,6 +15,7 @@ use audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler};
 use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineTransducerModelConfig};
 
+pub use live::{Live, Word};
 pub use model::{european, Language, ModelFile, ModelSpec};
 
 /// Shortest recording worth decoding; shorter ones are accidental key taps.
@@ -34,6 +36,9 @@ const SEARCH_SECONDS: usize = 8;
 
 /// Length of the windows compared when looking for the quietest spot.
 const WINDOW: usize = MODEL_RATE as usize / 50;
+
+/// One step of the models' output: a word is placed this exactly.
+const STEP_SECONDS: f32 = 0.08;
 
 /// A loaded dictation model. Loading takes a few seconds and about 1 GB of
 /// memory, so the app keeps it only while dictation is in use.
@@ -92,6 +97,60 @@ impl Dictation {
         }
         tidy(&texts.join(" "))
     }
+
+    /// The words of a short recording (up to `PIECE_SECONDS`) and where
+    /// they were heard, for following a recording while it runs (see
+    /// [`Live`]). The words are as the model wrote them: a spoken line
+    /// break ("neue Zeile") stays words here.
+    pub fn words(&self, sample_rate: u32, samples: &[f32]) -> Vec<Word> {
+        if sample_rate == 0 || (samples.len() as f32) < MIN_SECONDS * sample_rate as f32 {
+            return Vec::new();
+        }
+        let Ok(audio) = resample(sample_rate, samples) else {
+            return Vec::new();
+        };
+        let stream = self.recognizer.create_stream();
+        stream.accept_waveform(MODEL_RATE as i32, &audio);
+        self.recognizer.decode(&stream);
+        stream.get_result().map_or_else(Vec::new, |r| {
+            words(&r.tokens, &r.timestamps.unwrap_or_default(), r.durations.as_deref())
+        })
+    }
+}
+
+/// Joins the model's tokens to words: a token starting with a space starts
+/// a word, the others (the rest of a word, punctuation) go with the one
+/// before. A word ends where its last token does; models without token
+/// durations give each token one step.
+fn words(tokens: &[String], starts: &[f32], durations: Option<&[f32]>) -> Vec<Word> {
+    let mut out: Vec<Word> = Vec::new();
+    for (i, token) in tokens.iter().enumerate() {
+        let Some(&start) = starts.get(i) else {
+            break;
+        };
+        let end = start
+            + durations
+                .and_then(|d| d.get(i))
+                .copied()
+                .unwrap_or(STEP_SECONDS)
+                .max(STEP_SECONDS);
+        let text = token.trim();
+        if text.is_empty() {
+            continue;
+        }
+        match out.last_mut() {
+            Some(word) if !token.starts_with(' ') => {
+                word.text.push_str(text);
+                word.end = word.end.max(end);
+            }
+            _ => out.push(Word {
+                text: text.to_string(),
+                start,
+                end,
+            }),
+        }
+    }
+    out
 }
 
 /// Cuts a 16 kHz recording into pieces of at most `PIECE_SECONDS`, each at
@@ -269,6 +328,20 @@ mod tests {
             assert_eq!(audio[at - 1], 0.0);
             assert_eq!(audio[at], 0.0);
         }
+    }
+
+    #[test]
+    fn tokens_join_to_words() {
+        let tokens: Vec<String> = [" Wir", " lan", "ge", ".", " K", "ann"].map(String::from).to_vec();
+        let starts = [0.0, 0.4, 0.56, 0.8, 1.0, 1.16];
+        let durations = [0.16, 0.16, 0.24, 0.08, 0.16, 0.0];
+        let timed = words(&tokens, &starts, Some(&durations));
+        let text: Vec<&str> = timed.iter().map(|w| w.text.as_str()).collect();
+        assert_eq!(text, ["Wir", "lange.", "Kann"]);
+        assert_eq!((timed[1].start, timed[1].end), (0.4, 0.88));
+        // No duration: one step.
+        assert!((timed[2].end - 1.24).abs() < 1e-6);
+        assert_eq!(words(&tokens, &starts, None)[0].end, STEP_SECONDS);
     }
 
     #[test]
