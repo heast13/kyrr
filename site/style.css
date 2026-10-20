@@ -77,6 +77,16 @@ code { background: var(--code); padding: 0.1em 0.35em; border-radius: 4px; }
 .more { font-weight: 600; text-decoration: none; }
 .more:hover { text-decoration: underline; }
 
+/* the dictation display, as a short loop; dark or light as the visitor's system */
+.pill-demo { margin: 0 auto 1.5rem; max-width: 580px; }
+.pill-demo video { display: block; width: 100%; height: auto; aspect-ratio: 1160 / 160; border-radius: 18px; box-shadow: 0 0 0 1px var(--border); }
+.pill-demo .pill-dark { display: none; }
+.pill-demo .small { margin: 0.5rem 0 0; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .pill-demo .pill-light { display: none; }
+  :root:not([data-theme="light"]) .pill-demo .pill-dark { display: block; }
+}
+
 /* the little remark under the hero text, with the logo's wave next to it */
 .hero .lead { margin-bottom: 1rem; }
 .quip { display: flex; justify-content: center; align-items: center; gap: 0.6rem; margin: 0 0 1.75rem; min-height: 1.5rem; font-size: 0.95rem; font-style: italic; color: var(--muted); }

@@ -48,7 +48,7 @@ What it does:
   <img src="docs/screenshots/main.png" width="380" alt="kyrr's window: noise filter, improve voice and dictation, each with one switch">
 </p>
 <p align="center">
-  <img src="docs/screenshots/settings.png" width="760" alt="Settings in two columns: filter strength and model, voice sound with its sliders, compressor, S sounds, low cut, pop protection, automatic volume, language, autostart, updates and microphone; dictation key, level check with before/after test and listening, about">
+  <img src="docs/screenshots/settings.png" width="760" alt="Settings in two columns: filter strength and model, voice sound with its sliders, compressor, S sounds, low cut, pop protection, distance compensation, language, autostart, updates and microphone; dictation key, words while you talk, level check with before/after test and listening, automatic volume, about">
 </p>
 
 Status: young and in active development.

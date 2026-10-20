@@ -98,3 +98,21 @@
   var hash = panels.findIndex(function (p) { return "#" + p.id === location.hash; });
   select(hash >= 0 ? hash : Math.max(start, 0), false);
 })();
+
+// The dictation display loops by itself; a click or tap pauses and resumes it.
+// Visitors who asked for less motion get it standing still, with words shown.
+(function () {
+  var videos = Array.prototype.slice.call(document.querySelectorAll(".pill-demo video"));
+  var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  videos.forEach(function (v) {
+    v.style.cursor = "pointer";
+    v.addEventListener("click", function () {
+      videos.forEach(function (o) { if (v.paused) o.play(); else o.pause(); });
+    });
+    if (!still) return;
+    v.pause();
+    function show() { v.currentTime = 4; }
+    if (v.readyState >= 2) show();
+    else v.addEventListener("loadeddata", show, { once: true });
+  });
+})();
