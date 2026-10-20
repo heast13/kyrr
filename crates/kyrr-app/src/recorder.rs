@@ -147,13 +147,14 @@ impl Recording {
         })
     }
 
-    /// The newest `seconds` of the recording so far: rate, samples, and
-    /// whether that is all of it.
-    pub fn latest(&self, seconds: f32) -> (u32, Vec<f32>, bool) {
+    /// The recording so far from `from` seconds on, with its rate and its
+    /// length in seconds; `from` is worked out from that length.
+    pub fn since(&self, from: impl FnOnce(f32) -> f32) -> (u32, Vec<f32>, f32) {
         let samples = self.samples.lock().unwrap_or_else(|e| e.into_inner());
-        let n = (seconds * self.rate as f32) as usize;
-        let from = samples.len().saturating_sub(n);
-        (self.rate, samples[from..].to_vec(), from == 0)
+        let rate = self.rate.max(1) as f32;
+        let length = samples.len() as f32 / rate;
+        let start = ((from(length) * rate) as usize).min(samples.len());
+        (self.rate, samples[start..].to_vec(), length)
     }
 
     /// Stops recording and returns the sample rate and mono samples.
