@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Dictation: a key press while the speech model still loads (a few seconds
+  after kyrr starts or was installed) starts the recording at once, and it
+  is recognised when the model is there. Before, the recording waited for
+  the model, so the first words were missing or cut and came out wrong.
 - Linux, AppImage: pasting the install commands again no longer needs kyrr
   closed first. The commands download to `kyrr.new` and move it over `kyrr`
   (a running AppImage cannot be written to), and `kyrr --replace` ends the

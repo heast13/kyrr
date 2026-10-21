@@ -136,6 +136,8 @@ pub enum Command {
     Quit,
     /// Internal: download number `.0` finished.
     Downloaded(u64, Result<(), DownloadError>),
+    /// Internal: load number `.0` is done, loaded or not.
+    Loaded(u64),
 }
 
 pub type Notify = Arc<dyn Fn(Event) + Send + Sync>;
@@ -257,6 +259,9 @@ struct Worker {
     more_languages: bool,
     enabled: bool,
     model: Option<Dictation>,
+    /// The model loading beside the worker, and the number of that load.
+    loader: Option<std::thread::JoinHandle<Result<Dictation, String>>>,
+    load_id: u64,
     recording: Option<Recording>,
     microphone: Option<String>,
     muted: bool,
@@ -318,6 +323,8 @@ pub fn spawn(
         more_languages,
         enabled,
         model: None,
+        loader: None,
+        load_id: 0,
         recording: None,
         microphone: None,
         muted: false,
@@ -440,16 +447,7 @@ impl Worker {
             return;
         }
         self.set_state(State::Loading);
-        match self.load() {
-            Ok(()) => {
-                (self.notify)(Event::Message(None));
-                self.set_state(State::Ready);
-            }
-            Err(()) => {
-                self.load_failed = true;
-                self.error("load");
-            }
-        }
+        self.start_load();
     }
 
     /// After a model that would not load: fetches the files that are
@@ -466,14 +464,63 @@ impl Worker {
         }
     }
 
-    fn load(&mut self) -> Result<(), ()> {
+    /// Loads the model beside the worker (a few seconds, more on a slow
+    /// disk), which keeps listening to the key: a dictation started
+    /// meanwhile records from the first word on and is recognised once the
+    /// model is there. `Loaded` says when the load is done.
+    fn start_load(&mut self) {
+        if self.loader.is_some() {
+            return;
+        }
         let threads = std::thread::available_parallelism().map_or(4, |n| n.get().min(4));
-        let model = Dictation::load(&self.root, self.spec(), threads)
-            .map_err(|e| eprintln!("kyrr: dictation: the speech model would not load: {e}"))?;
-        self.model = Some(model);
+        let (root, spec, tx) = (self.root.clone(), self.spec(), self.tx.clone());
+        self.load_id += 1;
+        let id = self.load_id;
+        self.loader = Some(std::thread::spawn(move || {
+            // Whatever happens in there, the worker hears back.
+            let model = catch_unwind(AssertUnwindSafe(|| Dictation::load(&root, spec, threads)))
+                .unwrap_or_else(|_| Err("loading crashed".into()));
+            let _ = tx.send(Command::Loaded(id));
+            model
+        }));
+    }
+
+    /// Takes the model from the loader, waiting for it if it is still busy
+    /// (a dictation ended before the model was there). False only when it
+    /// would not load; true also when nothing was loading, or the model was
+    /// let go because the settings changed meanwhile.
+    fn finish_load(&mut self) -> bool {
+        let Some(loader) = self.loader.take() else {
+            return true;
+        };
+        let model = loader
+            .join()
+            .unwrap_or_else(|_| Err("the loader crashed".into()))
+            .map_err(|e| eprintln!("kyrr: dictation: the speech model would not load: {e}"));
+        let Ok(model) = model else {
+            self.load_failed = true;
+            self.recording = None;
+            self.transcript = None;
+            self.error("load");
+            return false;
+        };
         self.load_failed = false;
         self.last_used = Instant::now();
-        Ok(())
+        // The settings changed while it loaded. A dictation in progress
+        // still uses it; the switch follows once it is typed.
+        let busy = self.recording.is_some() || self.state == State::Transcribing;
+        if !self.enabled || (model.model() != self.spec().id && !busy) {
+            drop(model);
+            self.refresh();
+            return true;
+        }
+        self.model = Some(model);
+        // A dictation that runs or waits for it keeps its state.
+        if self.state == State::Loading {
+            (self.notify)(Event::Message(None));
+            self.set_state(State::Ready);
+        }
+        true
     }
 
     /// Time until the next look at the running recording; None while
@@ -661,6 +708,12 @@ impl Worker {
             }
             Command::KeyDown(at, tap) => self.key_down(at, tap),
             Command::KeyUp(at) => self.key_up(at),
+            // An older load may have been taken already, by a dictation
+            // that ended before it was done.
+            Command::Loaded(id) if id == self.load_id => {
+                self.finish_load();
+            }
+            Command::Loaded(_) => {}
             Command::Quit => {}
         }
     }
@@ -668,7 +721,9 @@ impl Worker {
     fn key_down(&mut self, at: Instant, tap: bool) {
         // Still waiting for the key (its release got lost): first that.
         self.type_waiting();
-        if self.state != State::Ready || self.recording.is_some() || (tap && at.elapsed() > STALE_PRESS) {
+        // While the model loads, the recording starts all the same.
+        let ready = matches!(self.state, State::Ready | State::Loading);
+        if !ready || self.recording.is_some() || (tap && at.elapsed() > STALE_PRESS) {
             return;
         }
         match Recording::start(self.microphone.as_deref()) {
@@ -685,10 +740,8 @@ impl Worker {
                 self.set_state(State::Recording);
                 (self.notify)(Event::Ends(self.ends));
                 // Asleep after a long pause: load while the recording runs.
-                if self.model.is_none() && self.load().is_err() {
-                    self.recording = None;
-                    self.load_failed = true;
-                    self.error("load");
+                if self.model.is_none() {
+                    self.start_load();
                 }
             }
             Err(_) => self.tell("mic"),
@@ -706,6 +759,10 @@ impl Worker {
         let (rate, samples) = rec.finish();
         self.set_state(State::Transcribing);
         let started = Instant::now();
+        // Ended before the model was there: wait for it.
+        if !self.finish_load() {
+            return;
+        }
         let transcript = self.transcript.take();
         let ahead = transcript.as_ref().map_or(0, Transcript::pieces);
         let mut ran = false;
