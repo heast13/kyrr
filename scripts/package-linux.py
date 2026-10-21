@@ -61,10 +61,11 @@ RUNTIME = (
     "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64",
     "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d",
 )
+# Only the native engine's weights: the .onnx files would only be read by
+# ONNX Runtime, which the AppImage and the tarball do not have (sherpa-onnx
+# links it in statically). The Flatpak keeps them for its fallback.
 MODELS = [
-    "dpdfnet8_48khz_hr.onnx",
     "dpdfnet8_48khz_hr.weights.f32",
-    "dpdfnet2_48khz_hr.onnx",
     "dpdfnet2_48khz_hr.weights.f32",
 ]
 # libpipewire, libspa and libasound are never bundled (see above);

@@ -61,3 +61,15 @@ both: dpdfnet8 29 % → 20 % of one core, dpdfnet2 11.6 % → 9.1 %.
 - `build.rs`, `src/native.rs`, `src/lib.rs` (changes marked "kyrr:"): the
   two extra builds, `int8_kernel()`, `use_int8_kernel()` (tests), and the
   kernel in `Engine`'s text ("native int8 avx-vnni").
+
+## kyrr: models without their .onnx file
+
+`NativeModel::load_with` in `src/native.rs` recognises a model by the
+SHA-256 of its `.onnx` file. When that file is missing, it now takes the
+compiled-in model named like the file (`dpdfnet8_48khz_hr.onnx` →
+`dpdfnet8_48khz_hr`); the weights are still checked against their own
+SHA-256 before use. `Denoiser::from_file_with` (`src/denoiser.rs`) then
+returns the native engine's reason instead of trying ONNX Runtime on a
+file that is not there; the README notes it. kyrr's AppImage and tarball,
+which have no ONNX Runtime, ship only the `.weights.f32` files (about 25 MB
+less); the Flatpak keeps the `.onnx` files for its ONNX Runtime fallback.
