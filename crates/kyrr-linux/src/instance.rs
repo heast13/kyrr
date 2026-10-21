@@ -120,8 +120,8 @@ fn end_running(path: &std::path::Path) {
     };
     drop(stream);
     let pid = peer.pid;
-    let is_kyrr = std::fs::read_to_string(format!("/proc/{}/comm", pid.as_raw_nonzero()))
-        .is_ok_and(|name| name.trim() == "kyrr");
+    let is_kyrr =
+        std::fs::read_to_string(format!("/proc/{}/comm", pid.as_raw_nonzero())).is_ok_and(|name| name.trim() == "kyrr");
     if !is_kyrr || pid == rustix::process::getpid() {
         return;
     }
