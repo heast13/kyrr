@@ -52,8 +52,8 @@
   of the effect the words stand about 0.3 to 0.5 s later than with the old
   look, in return for no stop and go.
 - Live words: after a look that found nothing new, the next look starts
-  shortly before where that one ended (0.8 s here, 1.5 s since the entry
-  above), so a pause no longer makes the stretch grow up to 8 s. In a simulation of a computer 4x slower than the
+  shortly before where that one ended (see the first entry for the
+  current 1.5 s), so a pause no longer makes the stretch grow up to 8 s. In a simulation of a computer 4x slower than the
   test machine, the words after a 15 s pause showed about 1.5 s sooner;
   the share of CPU time spent on looks stayed about the same.
 - Flatpak on Hyprland, sway, niri and river: kyrr types and shows the
