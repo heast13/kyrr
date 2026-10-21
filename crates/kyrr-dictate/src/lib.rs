@@ -12,7 +12,7 @@ mod model;
 use std::path::Path;
 
 use audioadapter_buffers::direct::InterleavedSlice;
-use rubato::{Fft, FixedSync, Resampler};
+use rubato::{Fft, FixedSync, Indexing, Resampler};
 use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineTransducerModelConfig};
 
 pub use live::{Live, Word};
@@ -40,7 +40,33 @@ const WINDOW: usize = MODEL_RATE as usize / 50;
 /// One step of the models' output: a word is placed this exactly.
 const STEP_SECONDS: f32 = 0.08;
 
-/// A loaded dictation model. Loading takes a few seconds and about 1 GB of
+/// ONNX Runtime settings for the speech models, which sherpa-onnx reads
+/// from a file (see [`provider`]):
+/// - No memory arena. An arena keeps the working memory of the longest
+///   piece (about 600 MB for 30 s) until the model is let go; without it
+///   that memory goes back after each piece, for about 5 % more time.
+/// - Threads waiting for work sleep instead of spinning: a sixth less CPU
+///   time at the same speed, which leaves the noise filter and other apps
+///   their share.
+const ORT_CONFIG: &str = "EnableCpuMemArena=0\nSessionConfig.session.intra_op.allow_spinning=0\n";
+
+/// The sherpa-onnx provider: the CPU with the settings above, from a file
+/// in `root`. sherpa-onnx ends the program when that file cannot be read,
+/// so it is only named when it is there, as it should be, under a plain
+/// path; otherwise the defaults.
+fn provider(root: &Path) -> String {
+    let path = root.join("onnxruntime.config");
+    let ready = |p: &Path| std::fs::read_to_string(p).is_ok_and(|s| s == ORT_CONFIG);
+    let usable = path.to_str().filter(|p| p.trim() == *p && !p.contains('\n'));
+    match usable {
+        Some(name) if ready(&path) || (std::fs::write(&path, ORT_CONFIG).is_ok() && ready(&path)) => {
+            format!("cpu:{name}")
+        }
+        _ => "cpu".into(),
+    }
+}
+
+/// A loaded dictation model. Loading takes a few seconds and 1 to 1.3 GB of
 /// memory, so the app keeps it only while dictation is in use.
 pub struct Dictation {
     model: &'static str,
@@ -66,6 +92,7 @@ impl Dictation {
         config.model_config.tokens = path("tokens.txt");
         config.model_config.model_type = Some("nemo_transducer".into());
         config.model_config.num_threads = threads.clamp(1, 8) as i32;
+        config.model_config.provider = Some(provider(root));
         let recognizer =
             OfflineRecognizer::create(&config).ok_or_else(|| format!("model {} failed to load", spec.id))?;
         Ok(Dictation {
@@ -82,20 +109,49 @@ impl Dictation {
     /// Transcribes a mono recording. Returns an empty string for recordings
     /// that are too short or contain no speech.
     pub fn transcribe(&self, sample_rate: u32, samples: &[f32]) -> String {
-        if sample_rate == 0 || (samples.len() as f32) < MIN_SECONDS * sample_rate as f32 {
-            return String::new();
-        }
-        let Ok(audio) = resample(sample_rate, samples) else {
+        let mut transcript = Transcript::new(sample_rate);
+        transcript.push(samples);
+        self.finish(transcript)
+    }
+
+    /// Recognises the oldest piece of a running recording once it is
+    /// complete, so that at the end only the last piece is left (see
+    /// [`Transcript`]). True when it recognised one.
+    pub fn ahead(&self, transcript: &mut Transcript) -> bool {
+        let Some(piece) = transcript.complete_piece() else {
+            return false;
+        };
+        let text = self.recognize(&transcript.audio[..piece]);
+        transcript.texts.extend(text);
+        transcript.audio.drain(..piece);
+        transcript.ahead += 1;
+        true
+    }
+
+    /// The text of a whole recording: the pieces recognised ahead and the
+    /// rest. Empty for recordings that are too short or contain no speech.
+    pub fn finish(&self, mut transcript: Transcript) -> String {
+        let Some(resampler) = transcript.resampler.take() else {
             return String::new();
         };
-        let mut texts = Vec::new();
-        for piece in pieces(&audio) {
-            let stream = self.recognizer.create_stream();
-            stream.accept_waveform(MODEL_RATE as i32, piece);
-            self.recognizer.decode(&stream);
-            texts.extend(stream.get_result().map(|r| r.text));
+        if (transcript.taken as f32) < MIN_SECONDS * transcript.rate as f32 {
+            return String::new();
+        }
+        if let Some(resampler) = resampler {
+            resampler.finish(&mut transcript.audio);
+        }
+        let mut texts = transcript.texts;
+        for piece in pieces(&transcript.audio) {
+            texts.extend(self.recognize(piece));
         }
         tidy(&texts.join(" "))
+    }
+
+    fn recognize(&self, audio: &[f32]) -> Option<String> {
+        let stream = self.recognizer.create_stream();
+        stream.accept_waveform(MODEL_RATE as i32, audio);
+        self.recognizer.decode(&stream);
+        stream.get_result().map(|r| r.text)
     }
 
     /// The words of a short recording (up to `PIECE_SECONDS`) and where
@@ -153,30 +209,105 @@ fn words(tokens: &[String], starts: &[f32], durations: Option<&[f32]>) -> Vec<Wo
     out
 }
 
-/// Cuts a 16 kHz recording into pieces of at most `PIECE_SECONDS`, each at
-/// the quietest spot in the end of its stretch, so a word is rarely split.
-/// A recording that fits is one piece.
-fn pieces(audio: &[f32]) -> Vec<&[f32]> {
+/// A recording on its way to text. While a long dictation runs, every
+/// piece of it that is complete is recognised ([`Dictation::ahead`]), so
+/// after the key only the last piece is left ([`Dictation::finish`]). The
+/// pieces and their text are the same as for the whole recording at once.
+pub struct Transcript {
+    rate: u32,
+    /// Converts to the model's rate as the recording comes in; `Some(None)`
+    /// when the recording has that rate already, `None` when it cannot be
+    /// converted.
+    resampler: Option<Option<Stream>>,
+    /// Samples taken in, at the recording's rate.
+    taken: usize,
+    /// The recording at the model's rate, from the end of the last piece
+    /// recognised on.
+    audio: Vec<f32>,
+    texts: Vec<String>,
+    ahead: usize,
+}
+
+impl Transcript {
+    pub fn new(sample_rate: u32) -> Transcript {
+        let resampler = match sample_rate {
+            0 => None,
+            MODEL_RATE => Some(None),
+            rate => Stream::new(rate).ok().map(Some),
+        };
+        Transcript {
+            rate: sample_rate,
+            resampler,
+            taken: 0,
+            audio: Vec::new(),
+            texts: Vec::new(),
+            ahead: 0,
+        }
+    }
+
+    /// Pieces recognised ahead so far.
+    pub fn pieces(&self) -> usize {
+        self.ahead
+    }
+
+    /// Samples taken in so far: the recording goes on from here.
+    pub fn taken(&self) -> usize {
+        self.taken
+    }
+
+    /// Takes in the next samples of the recording.
+    pub fn push(&mut self, samples: &[f32]) {
+        self.taken += samples.len();
+        match &mut self.resampler {
+            Some(Some(resampler)) => resampler.push(samples, &mut self.audio),
+            Some(None) => self.audio.extend_from_slice(samples),
+            None => {}
+        }
+    }
+
+    /// The length of the oldest piece, once nothing that comes later can
+    /// change where it ends.
+    fn complete_piece(&self) -> Option<usize> {
+        let shortest = (MIN_SECONDS * MODEL_RATE as f32) as usize;
+        if self.audio.len() < PIECE_SECONDS * MODEL_RATE as usize + shortest {
+            return None;
+        }
+        cut(&self.audio)
+    }
+}
+
+/// Where the first piece of a 16 kHz recording ends: at the quietest spot
+/// in the end of its stretch, so a word is rarely split. None when the
+/// recording fits into one piece.
+fn cut(audio: &[f32]) -> Option<usize> {
     let limit = PIECE_SECONDS * MODEL_RATE as usize;
+    if audio.len() <= limit {
+        return None;
+    }
     let search = SEARCH_SECONDS * MODEL_RATE as usize;
-    let mut out = Vec::new();
-    let mut rest = audio;
     // A tail shorter than the shortest recording worth decoding stays with
     // the piece before it.
     let shortest = (MIN_SECONDS * MODEL_RATE as f32) as usize;
-    while rest.len() > limit {
-        let from = limit - search;
-        let quietest = rest[from..limit]
-            .as_chunks::<WINDOW>()
-            .0
-            .iter()
-            .enumerate()
-            .map(|(i, w)| (i, w.iter().map(|s| s * s).sum::<f32>()))
-            // The latest of equally quiet windows: digital silence is common.
-            .min_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0)))
-            .map_or(limit, |(i, _)| from + i * WINDOW + WINDOW / 2);
-        let quietest = quietest.min(rest.len().saturating_sub(shortest)).max(1);
-        let (piece, tail) = rest.split_at(quietest);
+    let from = limit - search;
+    let quietest = audio[from..limit]
+        .as_chunks::<WINDOW>()
+        .0
+        .iter()
+        .enumerate()
+        .map(|(i, w)| (i, w.iter().map(|s| s * s).sum::<f32>()))
+        // The latest of equally quiet windows: digital silence is common.
+        .min_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0)))
+        .map_or(limit, |(i, _)| from + i * WINDOW + WINDOW / 2);
+    Some(quietest.min(audio.len().saturating_sub(shortest)).max(1))
+}
+
+/// Cuts a 16 kHz recording into pieces of at most `PIECE_SECONDS` (see
+/// [`cut`]). A recording that fits is one piece.
+fn pieces(audio: &[f32]) -> Vec<&[f32]> {
+    let mut out = Vec::new();
+    let mut rest = audio;
+    while let Some(at) = cut(rest) {
+        let (piece, tail) = rest.split_at(at);
         out.push(piece);
         rest = tail;
     }
@@ -184,18 +315,105 @@ fn pieces(audio: &[f32]) -> Vec<&[f32]> {
     out
 }
 
-/// Converts a mono recording to 16 kHz.
+/// Converts a mono recording to 16 kHz as it comes in, with the same result
+/// as converting it all at once with rubato's `process_all`: whole chunks
+/// as they fill up, the last (partial) one when the recording ends.
+struct Stream {
+    resampler: Fft<f32>,
+    /// Input not converted yet. At least one sample stays here, so the last
+    /// chunk is a partial one, as in `process_all`.
+    pending: Vec<f32>,
+    out: Vec<f32>,
+    taken: usize,
+    /// Output samples still to drop (the resampler's delay), and kept so far.
+    skip: usize,
+    made: usize,
+}
+
+impl Stream {
+    fn new(rate: u32) -> Result<Stream, String> {
+        let resampler = Fft::<f32>::new(rate as usize, MODEL_RATE as usize, 1024, 1, FixedSync::Input)
+            .map_err(|e| e.to_string())?;
+        Ok(Stream {
+            pending: Vec::new(),
+            out: vec![0.0; resampler.output_frames_max()],
+            taken: 0,
+            skip: resampler.output_delay(),
+            made: 0,
+            resampler,
+        })
+    }
+
+    fn push(&mut self, samples: &[f32], to: &mut Vec<f32>) {
+        self.taken += samples.len();
+        self.pending.extend_from_slice(samples);
+        let mut used = 0;
+        while self.pending.len() - used > self.resampler.input_frames_next() {
+            match self.convert(used, None, to) {
+                0 => break,
+                n => used += n,
+            }
+        }
+        self.pending.drain(..used);
+    }
+
+    /// Converts the rest and the resampler's delay: `to` then holds as many
+    /// samples as `process_all` gives.
+    fn finish(mut self, to: &mut Vec<f32>) {
+        let expected = (self.resampler.resample_ratio() * self.taken as f64).ceil() as usize;
+        let rest = self.pending.len();
+        if rest > 0 {
+            self.convert(0, Some(rest), to);
+        }
+        while self.made < expected {
+            let before = (self.made, self.skip);
+            self.convert(0, Some(0), to);
+            if (self.made, self.skip) == before {
+                break;
+            }
+        }
+        let extra = self.made.saturating_sub(expected);
+        to.truncate(to.len().saturating_sub(extra));
+    }
+
+    /// Converts one chunk from `pending[at..]` (`partial`: only that many
+    /// samples, silence after them). Returns the samples used.
+    fn convert(&mut self, at: usize, partial: Option<usize>, to: &mut Vec<f32>) -> usize {
+        let indexing = Indexing {
+            input_offset: at,
+            output_offset: 0,
+            partial_len: partial,
+            active_channels_mask: None,
+        };
+        let frames = self.pending.len();
+        let capacity = self.out.len();
+        let (Ok(input), Ok(mut output)) = (
+            InterleavedSlice::new(&self.pending[..], 1, frames),
+            InterleavedSlice::new_mut(&mut self.out[..], 1, capacity),
+        ) else {
+            return 0;
+        };
+        let Ok((used, made)) = self.resampler.process_into_buffer(&input, &mut output, Some(&indexing)) else {
+            return 0;
+        };
+        let dropped = made.min(self.skip);
+        self.skip -= dropped;
+        to.extend_from_slice(&self.out[dropped..made]);
+        self.made += made - dropped;
+        used
+    }
+}
+
+/// Converts a whole mono recording to 16 kHz.
 fn resample(rate: u32, samples: &[f32]) -> Result<Vec<f32>, String> {
     if rate == MODEL_RATE {
         return Ok(samples.to_vec());
     }
-    let mut resampler =
-        Fft::<f32>::new(rate as usize, MODEL_RATE as usize, 1024, 1, FixedSync::Input).map_err(|e| e.to_string())?;
-    let input = InterleavedSlice::new(samples, 1, samples.len()).map_err(|e| e.to_string())?;
-    let output = resampler
-        .process_all(&input, samples.len(), None)
-        .map_err(|e| e.to_string())?;
-    Ok(output.take_data())
+    let mut stream = Stream::new(rate)?;
+    let mut out = Vec::new();
+    stream.push(samples, &mut out);
+    stream.finish(&mut out);
+    Ok(out)
 }
 
 /// Collapses whitespace runs and trims, so the text can be typed as is.
@@ -328,6 +546,58 @@ mod tests {
             assert_eq!(audio[at - 1], 0.0);
             assert_eq!(audio[at], 0.0);
         }
+    }
+
+    /// Not quite noise, not quite a tone: something to resample.
+    fn signal(n: usize) -> Vec<f32> {
+        (0..n)
+            .map(|i| ((i as f32 * 0.37).sin() + (i as f32 * 0.011).cos()) * 0.4)
+            .collect()
+    }
+
+    #[test]
+    fn converting_as_it_comes_in_is_converting_at_once() {
+        for rate in [44_100, 48_000, 22_050] {
+            for len in [1, 500, 1023, 1024, 1025, 5000, rate as usize * 3 + 17] {
+                let samples = signal(len);
+                let mut whole = Fft::<f32>::new(rate as usize, MODEL_RATE as usize, 1024, 1, FixedSync::Input).unwrap();
+                let input = InterleavedSlice::new(&samples[..], 1, len).unwrap();
+                let expected = whole.process_all(&input, len, None).unwrap().take_data();
+                for step in [1, 333, 1024, 4800, len] {
+                    let mut stream = Stream::new(rate).unwrap();
+                    let mut out = Vec::new();
+                    for part in samples.chunks(step) {
+                        stream.push(part, &mut out);
+                    }
+                    stream.finish(&mut out);
+                    assert_eq!(out, expected, "{rate} Hz, {len} samples in steps of {step}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn pieces_recognised_ahead_are_the_pieces_of_the_whole() {
+        let rate = MODEL_RATE as usize;
+        // Speech with short pauses here and there, 100 s.
+        let audio: Vec<f32> = signal(100 * rate)
+            .into_iter()
+            .enumerate()
+            .map(|(i, s)| if (i / 1000) % 37 == 0 { 0.0 } else { s })
+            .collect();
+        let whole: Vec<usize> = pieces(&audio).iter().map(|p| p.len()).collect();
+        let mut transcript = Transcript::new(MODEL_RATE);
+        let mut ahead = Vec::new();
+        for part in audio.chunks(rate / 3) {
+            transcript.push(part);
+            while let Some(n) = transcript.complete_piece() {
+                ahead.push(n);
+                transcript.audio.drain(..n);
+            }
+        }
+        assert_eq!(ahead.len(), whole.len() - 1);
+        let rest: Vec<usize> = pieces(&transcript.audio).iter().map(|p| p.len()).collect();
+        assert_eq!([ahead, rest].concat(), whole);
     }
 
     #[test]

@@ -76,11 +76,58 @@ impl Engine {
 
 impl std::fmt::Display for Engine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // kyrr: the INT8 kernels in use, unless they are the plain AVX2 ones.
+        if *self == Engine::NativeInt8 && !matches!(int8_kernel(), "avx2" | "none") {
+            return write!(f, "native int8 {}", int8_kernel());
+        }
         f.write_str(match self {
             Engine::Onnx => "onnx",
             Engine::NativeInt8 => "native int8",
             Engine::NativeFp32 => "native fp32",
         })
+    }
+}
+
+// kyrr: the builds of the INT8 kernels (runtime/int8.c, internal.h).
+#[cfg(target_arch = "x86_64")]
+extern "C" {
+    fn dpdf_int8_kernel() -> c_int;
+    fn dpdf_int8_use(kernel: c_int) -> c_int;
+}
+
+const INT8_KERNELS: [&str; 3] = ["avx2", "avx-vnni", "avx512-vnni"];
+
+/// The build of the INT8 kernels the native engine runs on this CPU:
+/// `avx2`, `avx-vnni` or `avx512-vnni`, all with the same results.
+pub fn int8_kernel() -> &'static str {
+    #[cfg(target_arch = "x86_64")]
+    {
+        // SAFETY: reads (and once detects) the CPU's capabilities.
+        let k = unsafe { dpdf_int8_kernel() };
+        INT8_KERNELS.get(k as usize).copied().unwrap_or("avx2")
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        "none"
+    }
+}
+
+/// For tests: run the INT8 kernels `name` (see [`int8_kernel`]) from now
+/// on, process-wide. False when the CPU lacks them.
+#[doc(hidden)]
+pub fn use_int8_kernel(name: &str) -> bool {
+    #[cfg(target_arch = "x86_64")]
+    {
+        let Some(k) = INT8_KERNELS.iter().position(|n| *n == name) else {
+            return false;
+        };
+        // SAFETY: only switches which kernels later calls take.
+        unsafe { dpdf_int8_use(k as c_int) != 0 }
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        let _ = name;
+        false
     }
 }
 

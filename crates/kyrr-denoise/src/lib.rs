@@ -15,9 +15,13 @@ use std::path::{Path, PathBuf};
 use audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler};
 
-pub use hushmic_denoiser::{Denoiser, Mode};
+/// For tests: switches the INT8 kernels process-wide.
 #[cfg(feature = "native")]
-pub use hushmic_denoiser::{Engine, Inference};
+#[doc(hidden)]
+pub use hushmic_denoiser::use_int8_kernel;
+#[cfg(feature = "native")]
+pub use hushmic_denoiser::{int8_kernel, Engine, Inference};
+pub use hushmic_denoiser::{Denoiser, Mode};
 use hushmic_denoiser::{StreamDenoiser, HOP, LATENCY_SAMPLES, SAMPLE_RATE};
 
 /// Rate the DPDFNet models run at.

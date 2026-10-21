@@ -125,6 +125,31 @@ mod native {
             };
             group(src(&["avx2.c", "int8.c"]), avx2);
             group(src(&["fp16.c"]), fp16);
+            // kyrr: int8.c again as the two VNNI builds of its kernels (see
+            // the file). cc names objects after their source file, so each
+            // build gets a source of its own that includes it.
+            let out = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+            let int8 = runtime.join("int8.c");
+            let (avxvnni, avx512vnni): (&[&str], &[&str]) = if msvc {
+                (&["/arch:AVX2"], &["/arch:AVX512"])
+            } else {
+                (
+                    &["-mavx2", "-mfma", "-mavxvnni"],
+                    &["-mavx2", "-mfma", "-mavx512f", "-mavx512vl", "-mavx512vnni"],
+                )
+            };
+            for (name, define, flags) in [
+                ("int8_avxvnni.c", "DPDF_BUILD_AVXVNNI", avxvnni),
+                ("int8_avx512vnni.c", "DPDF_BUILD_AVX512VNNI", avx512vnni),
+            ] {
+                let file = out.join(name);
+                let source = format!(
+                    "#define {define} 1\n#include \"{}\"\n",
+                    int8.display().to_string().replace('\\', "/")
+                );
+                std::fs::write(&file, source).unwrap_or_else(|e| panic!("{}: {e}", file.display()));
+                group(vec![file], flags);
+            }
         }
         cc::Build::new()
             .objects(&objects)

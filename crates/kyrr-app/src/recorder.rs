@@ -11,7 +11,7 @@ use kyrr_common::wave::TAIL;
 
 /// Longest dictation: then kyrr types what it heard. The recording is held in
 /// memory at the microphone's rate (about 170 MB at 48 kHz for this long)
-/// and recognized in pieces afterwards.
+/// and recognized in pieces, most of them while it runs.
 pub const MAX_SECONDS: usize = 15 * 60;
 
 /// The newest audio of the running recording, for the wave on the screen.
@@ -176,6 +176,17 @@ impl Recording {
         let length = samples.len() as f32 / rate;
         let start = ((from(length) * rate) as usize).min(samples.len());
         (self.rate, samples[start..].to_vec(), length)
+    }
+
+    /// The microphone's rate.
+    pub fn rate(&self) -> u32 {
+        self.rate
+    }
+
+    /// The recording from sample `from` on.
+    pub fn samples_from(&self, from: usize) -> Vec<f32> {
+        let samples = self.samples.lock().unwrap_or_else(|e| e.into_inner());
+        samples.get(from..).map_or_else(Vec::new, <[f32]>::to_vec)
     }
 
     /// Whether the microphone went away during the recording.
