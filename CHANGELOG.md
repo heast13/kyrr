@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Voice memos: F8 (F9 or Pause when dictation has F8; switchable, or
+  none) starts and ends a recording, also from the tray (and on Linux
+  with `kyrr --memo`). Opus mono at 24 kbit/s, up to 4 hours, into
+  `Documents/kyrr` as `YYYY-MM-DD HH-MM Title.opus`; the title comes from
+  the first sentence the dictation model hears, and the pen next to it
+  renames the file. The list (play, show in folder, delete with a question,
+  search) and "Write text": the whole memo as paragraphs of about 30 s,
+  cut at a pause, each with its start time, as a `.txt` beside it, shown in
+  a large view where a time plays from there. Dictation goes first: the
+  text waits while you dictate, and the two keys do nothing while the other
+  one records. The main page card switches the feature off; its gear
+  opens the memo settings (key, write text automatically, folder).
+  Flatpak: only `xdg-documents/kyrr` is opened. GNOME before 48 gets a second custom
+  shortcut; Hyprland, sway, river and niri a second line in kyrr's block.
 - Dictation, words in the pill: fewer wrong and missing words. A word shows
   once 1.2 s of the recording followed it (was 0.8 s), and after a pause
   the next look starts 1.5 s before where the last one ended (was 0.8 s), so

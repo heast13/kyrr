@@ -43,6 +43,29 @@ pub fn tail(out: &mut [f32]) -> u32 {
     t.rate
 }
 
+/// Starts the wave's tail anew for a recording at `rate`; 0 ends it.
+pub(crate) fn tail_start(rate: u32) {
+    if let Ok(mut t) = TAIL_OF_RECORDING.lock() {
+        *t = Tail {
+            ring: [0.0; TAIL],
+            next: 0,
+            rate,
+        };
+    }
+}
+
+/// Adds mono samples to the wave's tail, unless the wave is reading it.
+pub(crate) fn tail_push(samples: &[f32]) {
+    let Ok(mut t) = TAIL_OF_RECORDING.try_lock() else {
+        return;
+    };
+    for &sample in samples {
+        let at = t.next;
+        t.ring[at] = sample;
+        t.next = (at + 1) % TAIL;
+    }
+}
+
 pub struct Recording {
     _stream: cpal::Stream,
     samples: Arc<Mutex<Vec<f32>>>,
@@ -152,13 +175,7 @@ impl Recording {
             other => return Err(format!("unsupported sample format {other}")),
         }
         .map_err(|e| e.to_string())?;
-        if let Ok(mut t) = TAIL_OF_RECORDING.lock() {
-            *t = Tail {
-                ring: [0.0; TAIL],
-                next: 0,
-                rate,
-            };
-        }
+        tail_start(rate);
         stream.play().map_err(|e| e.to_string())?;
         Ok(Recording {
             _stream: stream,

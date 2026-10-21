@@ -7,6 +7,7 @@
 //!
 //! The shortcut is kyrr's own entry in the list of custom shortcuts; the
 //! others are left alone, and a key one of them already uses is not taken.
+//! The voice memo key is a second entry of kyrr's, running `kyrr --memo`.
 
 use std::process::Command;
 
@@ -14,6 +15,7 @@ const APP_ID: &str = "io.github.heast13.kyrr";
 const LIST: &str = "org.gnome.settings-daemon.plugins.media-keys";
 const ENTRY: &str = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding";
 const OURS: &str = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/kyrr/";
+const OURS_MEMO: &str = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/kyrr-memo/";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Outcome {
@@ -27,10 +29,31 @@ pub enum Outcome {
 
 /// Binds `key` (e.g. "F9") to `command` in GNOME's custom shortcuts.
 pub fn ensure(key: &str, command: &str) -> Outcome {
+    bind(OURS, "kyrr", key, command, |theirs| {
+        theirs.contains("--dictate") || (theirs.contains(APP_ID) && !theirs.contains("--memo"))
+    })
+}
+
+/// Binds the voice memo key to `command` (`kyrr --memo`), or takes kyrr's
+/// entry for it out (`None`).
+pub fn ensure_memo(key: Option<&str>, command: &str) -> Outcome {
+    match key {
+        Some(key) => bind(OURS_MEMO, "kyrr: voice memo", key, command, |theirs| {
+            theirs.contains("--memo")
+        }),
+        None => remove(OURS_MEMO),
+    }
+}
+
+/// kyrr's entry `ours` with `name`: `key` runs `command`. `kyrrs` tells a
+/// shortcut the user added by hand for kyrr by its command.
+fn bind(ours: &str, name: &str, key: &str, command: &str, kyrrs: impl Fn(&str) -> bool) -> Outcome {
     let Some(list) = get(LIST, "custom-keybindings").and_then(|v| parse_strv(&v)) else {
         return Outcome::Failed;
     };
-    for path in list.iter().filter(|p| p.as_str() != OURS) {
+    // kyrr's two entries never stand in each other's way: swapping the
+    // keys, each is rewritten in turn.
+    for path in list.iter().filter(|p| p.as_str() != OURS && p.as_str() != OURS_MEMO) {
         let entry = format!("{ENTRY}:{path}");
         let binding = get(&entry, "binding").and_then(|v| parse_str(&v)).unwrap_or_default();
         if !binding.eq_ignore_ascii_case(key) {
@@ -38,33 +61,48 @@ pub fn ensure(key: &str, command: &str) -> Outcome {
         }
         // One the user added by hand, as an earlier kyrr asked.
         let theirs = get(&entry, "command").and_then(|v| parse_str(&v)).unwrap_or_default();
-        if theirs.contains("--dictate") || theirs.contains(APP_ID) {
+        if kyrrs(&theirs) {
             return Outcome::Bound { written: false };
         }
         let name = get(&entry, "name").and_then(|v| parse_str(&v)).unwrap_or_default();
         return Outcome::Taken { name };
     }
-    let entry = format!("{ENTRY}:{OURS}");
+    let entry = format!("{ENTRY}:{ours}");
     let mut written = false;
     // The entry first, so GNOME never sees half of it.
-    for (name, value) in [("name", "kyrr"), ("command", command), ("binding", key)] {
-        if get(&entry, name).and_then(|v| parse_str(&v)).as_deref() == Some(value) {
+    for (field, value) in [("name", name), ("command", command), ("binding", key)] {
+        if get(&entry, field).and_then(|v| parse_str(&v)).as_deref() == Some(value) {
             continue;
         }
-        if !set(&entry, name, &quote(value)) {
+        if !set(&entry, field, &quote(value)) {
             return Outcome::Failed;
         }
         written = true;
     }
-    if !list.iter().any(|p| p == OURS) {
+    if !list.iter().any(|p| p == ours) {
         let mut list = list;
-        list.push(OURS.to_string());
+        list.push(ours.to_string());
         if !set(LIST, "custom-keybindings", &format_strv(&list)) {
             return Outcome::Failed;
         }
         written = true;
     }
     Outcome::Bound { written }
+}
+
+/// Takes kyrr's entry `ours` out of the list, if it is there.
+fn remove(ours: &str) -> Outcome {
+    let Some(list) = get(LIST, "custom-keybindings").and_then(|v| parse_strv(&v)) else {
+        return Outcome::Failed;
+    };
+    if !list.iter().any(|p| p == ours) {
+        return Outcome::Bound { written: false };
+    }
+    let rest: Vec<String> = list.into_iter().filter(|p| p != ours).collect();
+    if !set(LIST, "custom-keybindings", &format_strv(&rest)) {
+        return Outcome::Failed;
+    }
+    Outcome::Bound { written: true }
 }
 
 fn get(schema: &str, key: &str) -> Option<String> {

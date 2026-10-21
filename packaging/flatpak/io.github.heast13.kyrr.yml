@@ -40,6 +40,10 @@ finish-args:
   - --filesystem=xdg-config/sway
   - --filesystem=xdg-config/niri
   - --filesystem=xdg-config/river
+  # Voice memos: kyrr records into its own folder under Documents, lists,
+  # plays, renames and deletes them there and writes their text beside them
+  # (crates/kyrr-app/src/memo/library.rs). Only that folder, made if missing.
+  - --filesystem=xdg-documents/kyrr:create
 cleanup:
   - /include
   - /lib/libonnxruntime.so

@@ -3,7 +3,8 @@
 //! `kyrr.exe --setup <command>` runs an elevated setup step (see
 //! `kyrr_windows::run_setup_command`); `--background` starts without
 //! showing the window. On Linux `kyrr --dictate` starts or ends dictation
-//! in the running kyrr, for desktops where kyrr cannot catch a key itself.
+//! in the running kyrr, for desktops where kyrr cannot catch a key itself,
+//! and `kyrr --memo` a voice memo.
 
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
@@ -13,6 +14,8 @@ mod dictation;
 mod engine;
 mod follow;
 mod listen;
+mod memo;
+mod memos;
 mod platform;
 mod player;
 mod probe;
@@ -38,6 +41,22 @@ slint::include_modules!();
 
 /// Maximum attenuation for the strength choices gentle, medium, strong.
 const STRENGTHS: [u32; 3] = [24, 48, 100];
+/// The voice memo key kyrr takes now. Not before the setup is done on
+/// Windows, where the hook would take it from every program at once (on
+/// Linux the keys wait for the setup anyway).
+fn memo_key_now(config: &config::Config) -> u32 {
+    if cfg!(windows) && !config.setup_done {
+        return 0;
+    }
+    config.memo_key()
+}
+
+/// What the desktop's shortcut list calls the voice memo key (German,
+/// English).
+const MEMO_DESCRIPTION: (&str, &str) = (
+    "kyrr: Sprachaufzeichnung (Taste tippen)",
+    "kyrr: Voice memo (tap the key)",
+);
 
 fn main() {
     #[cfg(not(windows))]
@@ -62,7 +81,7 @@ fn main() {
     let background = args.iter().any(|a| {
         matches!(
             a.as_str(),
-            "--background" | "--dictate" | "--dictate-start" | "--dictate-stop"
+            "--background" | "--dictate" | "--dictate-start" | "--dictate-stop" | "--memo"
         )
     });
     if let Err(e) = run(background, show_requests) {
@@ -223,6 +242,17 @@ fn pipewire_note(step: PipewireStep, plan: Option<(bool, String)>, german: bool)
         PipewireStep::Failed if german => format!("Das hat nicht geklappt. Im Terminal geht's so:\n{command}"),
         PipewireStep::Failed => format!("That did not work. In a terminal it goes like this:\n{command}"),
     }
+}
+
+/// Whether the speech model dictation would use is on the computer: memos
+/// get their titles and texts from it.
+fn model_installed(config: &Config) -> bool {
+    let spec = if config.more_languages() {
+        kyrr_dictate::european()
+    } else {
+        config.language().model()
+    };
+    spec.is_installed(&config::models_dir())
 }
 
 fn megabytes(config: &Config) -> String {
@@ -396,6 +426,27 @@ fn grow(window: &Weak<MainWindow>) {
             resize(&w, wanted);
         }
     });
+}
+
+/// Room for a memo's text: the window grows as tall as the screen allows
+/// (up to a comfortable reading height) while it is open, and fits its
+/// content again after.
+const SHEET_HEIGHT: f32 = 760.0;
+
+fn fit_sheet(w: &MainWindow, open: bool) {
+    if !open {
+        fit(&w.as_weak());
+        return;
+    }
+    let win = w.window();
+    let cap = screen(w).map_or(FALLBACK_HEIGHT, |(_, top, _, bottom)| {
+        ((bottom - top) as f32 / win.scale_factor() - FRAME).clamp(MIN_HEIGHT, MAX_HEIGHT)
+    });
+    let height = win.size().to_logical(win.scale_factor()).height;
+    let wanted = SHEET_HEIGHT.min(cap);
+    if wanted > height + 0.5 {
+        resize(w, wanted);
+    }
 }
 
 /// How often the status line moves on to its next phrase, in 100 ms ticks.
@@ -758,6 +809,9 @@ impl App {
             self.set_effort(true);
         }
         let _ = self.worker.send(Command::Microphone(guid.clone()));
+        if let Some(m) = memos::memos() {
+            m.set_microphone(guid.clone());
+        }
         *self.attached.borrow_mut() = guid;
         if state.get_filter_state() != FilterState::Error || fs != FilterState::NotAttached {
             state.set_filter_state(fs);
@@ -1287,10 +1341,67 @@ impl App {
             state.set_key_toggle(toggle);
             state.set_key_name(name.as_str().into());
         }
-        self.refresh_key_note();
         if let Some(t) = tray() {
             t.set_key_name(name.into());
         }
+        // The memo key moves off dictation's; then the desktop gets both.
+        self.apply_memo_key();
+    }
+
+    /// The voice memo key: never dictation's (see `Config::memo_key`).
+    fn apply_memo_key(&self) {
+        let (key, chosen, taken) = {
+            let config = self.config.borrow();
+            let taken = config::MEMO_KEYS.iter().position(|&k| k == config.dictation_key);
+            let key = memo_key_now(&config);
+            let chosen = if config.memo_key == 0 { 0 } else { config.memo_key() };
+            (key, chosen, taken)
+        };
+        let description = match self.language() {
+            Language::German => MEMO_DESCRIPTION.0,
+            Language::English => MEMO_DESCRIPTION.1,
+        };
+        platform::set_memo_key(key, description);
+        let index = config::MEMO_KEYS.iter().position(|&k| k == chosen).unwrap_or(3);
+        let name = match key {
+            0x77 => "F8",
+            0x78 => "F9",
+            0x13 => "Pause",
+            _ => "",
+        };
+        if let Some(w) = self.window.upgrade() {
+            let state = w.global::<AppState>();
+            state.set_memo_key_index(index as i32);
+            state.set_memo_taken_index(taken.map_or(-1, |t| t as i32));
+            state.set_memo_key_name(name.into());
+        }
+        if let Some(t) = tray() {
+            t.set_memo_key_name(name.into());
+        }
+        self.refresh_key_note();
+    }
+
+    /// Voice memos on or off: the card stays, its key and tray entry go.
+    fn set_memos(&self, on: bool) {
+        {
+            let mut config = self.config.borrow_mut();
+            config.memos = on;
+            config.save();
+        }
+        if let Some(m) = memos::memos() {
+            m.set_enabled(on);
+        }
+        self.apply_memo_key();
+        // A key the desktop owns (the portal) is bound again with or
+        // without the memo's, so F8 is free again when off.
+        platform::bind_key_again();
+        if let Some(w) = self.window.upgrade() {
+            w.global::<AppState>().set_memos_enabled(on);
+        }
+        if let Some(t) = tray() {
+            t.set_memos_enabled(on);
+        }
+        fit(&self.window);
     }
 
     /// What the window says about the key. It changes after the start: the
@@ -1365,6 +1476,10 @@ impl App {
             let state = w.global::<AppState>();
             state.set_language_index(index);
             state.set_download_size(megabytes(&self.config.borrow()).into());
+        }
+        if let Some(m) = memos::memos() {
+            m.set_language(language);
+            m.set_can_write(model_installed(&self.config.borrow()));
         }
         self.apply_key();
         self.refresh_filter();
@@ -1515,7 +1630,11 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     let key_toggle = Arc::new(AtomicBool::new(false));
     let weak = window.as_weak();
     let recording_flag = Arc::clone(&recording);
+    // A voice memo records: dictation waits, and the wave is the memo's.
+    let memo_active = Arc::new(AtomicBool::new(false));
     let wave = Overlay::spawn(platform::open_wave, recorder::tail);
+    let memo_wave = wave.clone();
+    let memo_flag = Arc::clone(&memo_active);
     let notify: dictation::Notify = Arc::new(move |event| {
         match event {
             Event::Heard(words) => return wave.set_words(words),
@@ -1526,11 +1645,13 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         }
         if let Event::State(s) = &event {
             recording_flag.store(*s == State::Recording, Ordering::Relaxed);
-            wave.set(match s {
-                State::Recording => Mode::Listening,
-                State::Transcribing => Mode::Writing,
-                _ => Mode::Hidden,
-            });
+            if !memo_flag.load(Ordering::Relaxed) {
+                wave.set(match s {
+                    State::Recording => Mode::Listening,
+                    State::Transcribing => Mode::Writing,
+                    _ => Mode::Hidden,
+                });
+            }
         }
         let weak = weak.clone();
         let _ = slint::invoke_from_event_loop(move || {
@@ -1548,11 +1669,25 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                     t.set_recording(s == State::Recording);
                     t.set_dictation_ready(matches!(s, State::Ready | State::Recording | State::Transcribing));
                     platform::set_hotkey_active(matches!(s, State::Ready | State::Recording | State::Transcribing));
+                    // A download just finished, or the model went.
+                    if let Some(m) = memos::memos() {
+                        m.set_can_write(model_installed(&Config::load()));
+                    }
                 }
                 Event::Progress(p) => state.set_download_progress(p),
                 Event::Typed(text) => state.set_last_text(text.into()),
                 Event::Heard(_) | Event::Ends(_) | Event::Limit(_) | Event::Nothing(_) => {}
                 Event::Message(m) => state.set_dictation_message(m.unwrap_or_default().into()),
+                Event::Titled(path, title) => {
+                    if let Some(m) = memos::memos() {
+                        m.titled(path, title);
+                    }
+                }
+                Event::Text(path, text) => {
+                    if let Some(m) = memos::memos() {
+                        m.text(path, text);
+                    }
+                }
             }
         });
     });
@@ -1572,13 +1707,40 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         Language::German => "kyrr: Diktieren (Taste halten)",
         Language::English => "kyrr: Dictate (hold the key)",
     };
+    // Both keys before the start: the desktop's dialog asks for them at once.
+    platform::set_hotkey_key(config.dictation_key);
+    let memo_description = match language {
+        Language::German => MEMO_DESCRIPTION.0,
+        Language::English => MEMO_DESCRIPTION.1,
+    };
+    platform::set_memo_key(memo_key_now(&config), memo_description);
     if let Some(keys) = platform::start_hotkey(description, config.setup_done) {
         let worker = worker.clone();
         let (recording, key_toggle) = (Arc::clone(&recording), Arc::clone(&key_toggle));
+        let memo_active = Arc::clone(&memo_active);
         std::thread::spawn(move || {
+            // The dictation key is down and its press went to the worker,
+            // which may not be recording yet: its release goes too.
+            let mut held = false;
             while let Ok(key) = keys.recv() {
-                let toggle = key_toggle.load(Ordering::Relaxed);
+                if key == platform::KeyEvent::Memo {
+                    // Not in the middle of a dictation.
+                    if !held && !recording.load(Ordering::Relaxed) {
+                        let _ = slint::invoke_from_event_loop(|| {
+                            if let Some(m) = memos::memos() {
+                                m.toggle();
+                            }
+                        });
+                    }
+                    continue;
+                }
                 let down = matches!(key, platform::KeyEvent::Pressed);
+                // While a memo records, the dictation key does nothing.
+                if memo_active.load(Ordering::Relaxed) && (down || !held) {
+                    continue;
+                }
+                let toggle = key_toggle.load(Ordering::Relaxed);
+                held = down && !toggle;
                 if worker.send(Command::Held(down)).is_err() {
                     break;
                 }
@@ -1589,7 +1751,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                         Command::KeyUp(Instant::now())
                     }
                     (platform::KeyEvent::Pressed, true) => Command::KeyDown(Instant::now(), true),
-                    (platform::KeyEvent::Released, true) => continue,
+                    (platform::KeyEvent::Released, true) | (platform::KeyEvent::Memo, _) => continue,
                 };
                 if worker.send(cmd).is_err() {
                     break;
@@ -1627,6 +1789,17 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     });
     let tray = new_tray(&app)?;
     TRAY.set(Some(tray.clone_strong()));
+    let memos = memos::Memos::install(
+        &window,
+        worker.clone(),
+        memo_wave,
+        language,
+        memo_active,
+        Arc::clone(&recording),
+        app.config.borrow().memo_text_auto,
+    );
+    memos.set_can_write(model_installed(&app.config.borrow()));
+    memos.set_enabled(app.config.borrow().memos);
 
     let state = window.global::<AppState>();
     state.set_version(env!("CARGO_PKG_VERSION").into());
@@ -1643,6 +1816,9 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_live_words(app.config.borrow().dictation_live);
     app.show_effort();
     app.apply_key();
+    state.set_memos_enabled(app.config.borrow().memos);
+    state.set_memo_auto_text(app.config.borrow().memo_text_auto);
+    tray.set_memos_enabled(app.config.borrow().memos);
     show_voice(&state, &filter.voice);
     tray.set_dictation_enabled(app.config.borrow().dictation);
     app.refresh_microphones();
@@ -1813,6 +1989,48 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 config.save();
             }
             app.apply_key();
+        }
+    });
+    state.on_memos_toggled({
+        let app = Rc::clone(&app);
+        move |on| app.set_memos(on)
+    });
+    state.on_memo_key_changed({
+        let app = Rc::clone(&app);
+        move |i| {
+            {
+                let mut config = app.config.borrow_mut();
+                config.memo_key = config::MEMO_KEYS[(i.max(0) as usize).min(3)];
+                config.save();
+            }
+            app.apply_memo_key();
+            platform::bind_key_again();
+        }
+    });
+    state.on_memo_auto_text_toggled({
+        let app = Rc::clone(&app);
+        move |on| {
+            {
+                let mut config = app.config.borrow_mut();
+                config.memo_text_auto = on;
+                config.save();
+            }
+            if let Some(m) = memos::memos() {
+                m.set_auto_text(on);
+            }
+        }
+    });
+    state.on_memo_open_list({
+        let weak = window.as_weak();
+        move || {
+            let Some(w) = weak.upgrade() else { return };
+            if let Some(m) = memos::memos() {
+                m.refresh();
+            }
+            let state = w.global::<AppState>();
+            state.set_memo_sheet_open(false);
+            state.set_page(6);
+            state.invoke_page_changed();
         }
     });
     state.on_key_button_clicked({
@@ -2069,6 +2287,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 config.setup_done = true;
                 config.save();
             }
+            app.apply_memo_key();
             platform::enable_autostart();
             if let Some(w) = app.window.upgrade() {
                 w.global::<AppState>().set_autostart(platform::autostart_enabled());
@@ -2253,6 +2472,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         }
     });
     let result = slint::run_event_loop_until_quit();
+    // A memo being recorded ends properly, whichever way kyrr quits.
+    if let Some(m) = memos::memos() {
+        m.finish();
+    }
     TRAY.take();
     result
 }
@@ -2308,6 +2531,20 @@ fn new_tray(app: &Rc<App>) -> Result<Tray, slint::PlatformError> {
             app.set_dictation(on);
         }
     });
+    tray.on_toggle_memo(|| {
+        if let Some(m) = memos::memos() {
+            m.toggle();
+        }
+    });
+    tray.on_open_memos({
+        let weak = app.window.clone();
+        move || {
+            if let Some(w) = weak.upgrade() {
+                show(&w);
+                w.global::<AppState>().invoke_memo_open_list();
+            }
+        }
+    });
     Ok(tray)
 }
 
@@ -2323,6 +2560,9 @@ fn retry_tray(app: &Rc<App>) -> Result<(), slint::PlatformError> {
         new.set_dictation_enabled(old.get_dictation_enabled());
         new.set_dictation_ready(old.get_dictation_ready());
         new.set_key_name(old.get_key_name());
+        new.set_memos_enabled(old.get_memos_enabled());
+        new.set_memo_recording(old.get_memo_recording());
+        new.set_memo_key_name(old.get_memo_key_name());
         new.set_update_version(old.get_update_version());
         let _ = old.hide();
     }
@@ -2347,7 +2587,7 @@ mod tests {
             assert_eq!(list.matches("@tr(").count() as i32, PHRASES, "{list}");
             lists += 1;
         }
-        assert_eq!(lists, 9);
+        assert_eq!(lists, 10);
     }
 
     #[test]
