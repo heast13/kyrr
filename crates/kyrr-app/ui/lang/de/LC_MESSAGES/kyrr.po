@@ -894,3 +894,12 @@ msgstr "kyrr empfiehlt deshalb „Sparsam“, sonst wird’s eine holprige Fahrt
 
 msgid "You can switch any time in the settings."
 msgstr "Umschalten geht jederzeit in den Einstellungen."
+
+msgid "For most computers. The most thorough noise removal, and the words show while you talk."
+msgstr "Für die meisten Rechner. Die gründlichste Geräuschunterdrückung, und die Wörter erscheinen schon beim Sprechen."
+
+msgid "For older or weaker laptops, and if things stutter. Simpler noise removal, the words show once you are done talking, dictations up to 2 minutes."
+msgstr "Für ältere oder schwächere Laptops, und wenn’s ruckelt. Einfachere Geräuschunterdrückung, die Wörter erscheinen erst nach dem Sprechen, Diktate bis 2 Minuten."
+
+msgid "Typed just as well either way. You can switch any time in the settings."
+msgstr "Getippt wird bei beiden gleich gut. Umschalten geht jederzeit in den Einstellungen."
