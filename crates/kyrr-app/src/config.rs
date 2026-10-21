@@ -22,17 +22,10 @@ pub struct Config {
     pub dictation_toggle: bool,
     /// The wave shows the words heard so far while the key is held.
     pub dictation_live: bool,
-    /// The large noise model was swapped for the small one once because the
-    /// CPU lacks AVX2 (up to 0.5.8; now that is one more sign of a slow
-    /// computer, see `slow_computer`).
+    /// The lean setting was picked once because the CPU lacks AVX2 (up to
+    /// 0.5.8 only the small noise model); never again, so the user's later
+    /// choice holds.
     pub lean_suggested: bool,
-    /// How fast the computer is was timed once (on the dictation model).
-    pub speed_tested: bool,
-    /// It came out slow, or the processor lacks AVX2: kyrr suggests the
-    /// lean setting (small noise model, no words while speaking).
-    pub slow_computer: bool,
-    /// The user answered that suggestion; it does not come again.
-    pub speed_tip_answered: bool,
     /// Ask GitHub once a day whether there is a newer kyrr.
     pub update_check: bool,
     /// When kyrr last asked, in seconds since 1970.
@@ -66,9 +59,6 @@ impl Default for Config {
             dictation_toggle: false,
             dictation_live: true,
             lean_suggested: false,
-            speed_tested: false,
-            slow_computer: false,
-            speed_tip_answered: false,
             update_check: true,
             update_checked: 0,
             update_dismissed: String::new(),

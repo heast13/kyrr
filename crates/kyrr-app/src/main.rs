@@ -735,17 +735,16 @@ impl App {
         };
         let mic = guid.as_deref().map(name).unwrap_or_default();
         // On CPUs without AVX2 the filter runs ONNX Runtime, at several times
-        // the CPU: kyrr suggests the lean setting, once.
+        // the CPU: kyrr picks the lean setting, once.
         let old_cpu = fs == FilterState::Running && detail.starts_with("onnx");
         state.set_old_cpu(old_cpu);
-        if old_cpu && !self.config.borrow().slow_computer {
+        if old_cpu && !self.config.borrow().lean_suggested {
             {
                 let mut config = self.config.borrow_mut();
                 config.lean_suggested = true;
-                config.slow_computer = true;
                 config.save();
             }
-            self.offer_lean();
+            self.set_effort(true);
         }
         let _ = self.worker.send(Command::Microphone(guid.clone()));
         *self.attached.borrow_mut() = guid;
@@ -1028,30 +1027,6 @@ impl App {
             (false, true) => 1,
             _ => 2,
         });
-        // Lean chosen in the settings answers the suggestion too.
-        if lean && !live && state.get_speed_tip() {
-            state.set_speed_tip(false);
-            let mut config = self.config.borrow_mut();
-            config.speed_tip_answered = true;
-            config.save();
-        }
-    }
-
-    /// On a slow computer, suggests the lean setting once (unless it is on).
-    fn offer_lean(&self) {
-        let mut config = self.config.borrow_mut();
-        if !config.slow_computer || config.speed_tip_answered {
-            return;
-        }
-        if self.filter.borrow().light_model && !config.dictation_live {
-            config.speed_tip_answered = true;
-            config.save();
-            return;
-        }
-        drop(config);
-        if let Some(w) = self.window.upgrade() {
-            w.global::<AppState>().set_speed_tip(true);
-        }
     }
 
     fn set_model(&self, light: bool) {
@@ -1544,7 +1519,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 Event::Progress(p) => state.set_download_progress(p),
                 Event::Typed(text) => state.set_last_text(text.into()),
                 Event::Heard(_) | Event::Ends(_) | Event::Limit(_) => {}
-                Event::Slow(slow) => state.invoke_speed_measured(slow),
                 Event::Message(m) => state.set_dictation_message(m.unwrap_or_default().into()),
             }
         });
@@ -1555,7 +1529,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         config.more_languages(),
         config.dictation,
         config.dictation_live,
-        !config.speed_tested,
         notify,
         platform::paste_text,
         platform::copy_to_clipboard,
@@ -1637,7 +1610,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_advanced(app.config.borrow().advanced_settings);
     state.set_live_words(app.config.borrow().dictation_live);
     app.show_effort();
-    app.offer_lean();
     app.apply_key();
     show_voice(&state, &filter.voice);
     tray.set_dictation_enabled(app.config.borrow().dictation);
@@ -1852,36 +1824,14 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         let app = Rc::clone(&app);
         move |i| {
             if i < 2 {
+                // Picked by hand: the choice for an old processor is made.
+                {
+                    let mut config = app.config.borrow_mut();
+                    config.lean_suggested = true;
+                    config.save();
+                }
                 app.set_effort(i == 0);
             }
-        }
-    });
-    state.on_speed_tip_chosen({
-        let app = Rc::clone(&app);
-        move |lean| {
-            app.set_effort(lean);
-            {
-                let mut config = app.config.borrow_mut();
-                config.speed_tip_answered = true;
-                config.save();
-            }
-            if let Some(w) = app.window.upgrade() {
-                w.global::<AppState>().set_speed_tip(false);
-                fit(&app.window);
-            }
-        }
-    });
-    state.on_speed_measured({
-        let app = Rc::clone(&app);
-        move |slow| {
-            {
-                let mut config = app.config.borrow_mut();
-                config.speed_tested = true;
-                config.slow_computer |= slow;
-                config.save();
-            }
-            app.offer_lean();
-            fit(&app.window);
         }
     });
     state.on_key_toggle_changed({

@@ -25,8 +25,6 @@ export global AppState {
     // Lean and best quality set the noise model and the words while you
     // talk at once: 0 lean, 1 best quality, 2 a mix of the two.
     in-out property <int> effort-index: 1;
-    // A slow computer: kyrr suggests lean, once.
-    in property <bool> speed-tip;
     // Linux: the filter is kyrr's own microphone, there is no installer, and
     // the desktop may have no tray.
     in property <bool> linux;
@@ -182,10 +180,6 @@ export global AppState {
     callback key-toggle-changed(bool);
     callback live-words-toggled(bool);
     callback effort-changed(int);
-    // The answer to the suggestion: true for lean.
-    callback speed-tip-chosen(bool);
-    // The dictation model timed the computer: true when slow.
-    callback speed-measured(bool);
     callback open-licenses();
     callback check-updates();
     callback open-update();
@@ -793,43 +787,6 @@ component AboutSettings inherits Card {
     }
 }
 
-// On a slow computer, once: the suggestion to go lean, with both choices.
-component SpeedTip inherits Rectangle {
-    background: #2ea043.with-alpha(0.12);
-    border-color: #2ea043.with-alpha(0.45);
-    border-width: 1px;
-    border-radius: 10px;
-    VerticalLayout {
-        padding: 12px;
-        spacing: 8px;
-        Text {
-            text: @tr("Your computer seems to be on the leisurely side.");
-            font-size: 13px;
-            font-weight: 700;
-            wrap: word-wrap;
-        }
-        Text {
-            text: @tr("So kyrr suggests Lean, or it gets a bumpy ride. Lean means simpler noise removal, and the words show once you are done talking. Typed just as well.");
-            font-size: 12px;
-            wrap: word-wrap;
-        }
-        HorizontalLayout {
-            spacing: 8px;
-            Button {
-                text: @tr("Lean");
-                primary: true;
-                clicked => { AppState.speed-tip-chosen(true); }
-            }
-            Button {
-                text: @tr("Best quality");
-                clicked => { AppState.speed-tip-chosen(false); }
-            }
-            Rectangle { }
-        }
-        Hint { text: @tr("You can switch any time in the settings."); }
-    }
-}
-
 // One of the two effort choices in the setup: a card that lights up green
 // when picked.
 component EffortOption inherits Rectangle {
@@ -1218,8 +1175,8 @@ component ToolsSettings inherits Card {
 // Settings: the rest.
 component GeneralSettings inherits Card {
     pure function effort-hint(i: int) -> string {
-        if (i == 0) { return @tr("Simpler noise removal, and the words show once you are done talking. Typed just as well. For older laptops."); }
-        if (i == 1) { return @tr("The most thorough noise removal, and the words show while you talk. Needs a bit more power."); }
+        if (i == 0) { return @tr("Simpler noise removal, the words show once you are done talking, dictations up to 2 minutes. Typed just as well. For older laptops."); }
+        if (i == 1) { return @tr("The most thorough noise removal, the words show while you talk, dictations up to 15 minutes. Needs a bit more power."); }
         return @tr("Your own mix of noise removal and words while you talk.");
     }
     Heading { text: @tr("General"); }
@@ -1396,7 +1353,7 @@ component SetupPage inherits VerticalLayout {
     if step == 1: Caption { text: @tr("Effort"); }
     if step == 1: EffortOption {
         title: @tr("Best quality");
-        text: @tr("For most computers. The most thorough noise removal, and the words show while you talk.");
+        text: @tr("For most computers. The most thorough noise removal, the words show while you talk, dictations up to 15 minutes.");
         picked: AppState.effort-index == 1;
         clicked => { AppState.effort-index = 1; AppState.effort-changed(1); }
     }
@@ -1534,7 +1491,6 @@ export component MainWindow inherits Window {
             if main-page: NoiseCard { }
             if main-page: VoiceCard { }
             if main-page: DictationCard { }
-            if main-page && AppState.speed-tip: SpeedTip { }
             if main-page && !AppState.update-dismissed && (AppState.update-state == UpdateState.available
                 || AppState.update-state == UpdateState.downloading || AppState.update-state == UpdateState.installing
                 || AppState.update-state == UpdateState.download-failed): UpdateBanner { }

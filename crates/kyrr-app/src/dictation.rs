@@ -43,14 +43,6 @@ const SHORT_LIMIT: Duration = Duration::from_secs(2 * 60);
 /// this long.
 const WAIT_FOR_KEY: Duration = Duration::from_secs(3);
 
-/// Once, the first time the model loads, kyrr times a look at a stretch
-/// this long (about what a look hears while you speak). Quiet noise is
-/// heard quicker than speech: a laptop that took 0.6 s here showed each
-/// word about three seconds after it was said. A computer that needs
-/// longer than `LOOK_SLOW` gets the suggestion of the lean setting.
-const LOOK_TEST_SECONDS: usize = 4;
-const LOOK_SLOW: Duration = Duration::from_millis(400);
-
 /// A computer that needs longer than this for two looks in a row would
 /// show the words far too late: the wave goes on without them for this
 /// dictation.
@@ -87,35 +79,6 @@ fn describe(rate: u32, samples: &[f32]) -> String {
     )
 }
 
-/// Times a look at a stretch of quiet noise, twice (the first may be slowed
-/// by whatever else starts with kyrr), and says whether the faster one took
-/// too long for the words on the screen.
-fn too_slow(model: &Dictation) -> bool {
-    const RATE: u32 = 16_000;
-    let mut seed = 1u32;
-    let noise: Vec<f32> = (0..LOOK_TEST_SECONDS * RATE as usize)
-        .map(|_| {
-            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-            (seed >> 8) as f32 / (1u32 << 24) as f32 * 0.002 - 0.001
-        })
-        .collect();
-    let took = (0..2)
-        .map(|_| {
-            let started = Instant::now();
-            let _ = catch_unwind(AssertUnwindSafe(|| model.words(RATE, &noise)));
-            started.elapsed()
-        })
-        .min()
-        .unwrap_or_default();
-    let slow = took > LOOK_SLOW;
-    eprintln!(
-        "kyrr: dictation: a look at {LOOK_TEST_SECONDS} s takes {:.2} s: {}",
-        took.as_secs_f32(),
-        if slow { "a slow computer" } else { "fast enough" }
-    );
-    slow
-}
-
 pub enum Event {
     State(State),
     Progress(f32),
@@ -123,9 +86,6 @@ pub enum Event {
     Typed(String),
     /// The words heard so far while the key is held, oldest first.
     Heard(Vec<String>),
-    /// How fast the computer is, timed once: true when too slow for the
-    /// words while speaking.
-    Slow(bool),
     /// A dictation started that ends at this moment at the latest.
     Ends(Instant),
     /// The dictation reached its limit: this, in red in the pill.
@@ -225,8 +185,6 @@ struct Worker {
     microphone: Option<String>,
     muted: bool,
     live: bool,
-    /// Time a look once, when the model is there.
-    test_speed: bool,
     /// Dictations end after `SHORT_LIMIT`, not `MAX_SECONDS`.
     short: bool,
     /// When the running dictation reaches its limit, and that limit.
@@ -267,7 +225,6 @@ pub fn spawn(
     more_languages: bool,
     enabled: bool,
     live: bool,
-    test_speed: bool,
     notify: Notify,
     typer: Typer,
     clipboard: Clipboard,
@@ -283,7 +240,6 @@ pub fn spawn(
         microphone: None,
         muted: false,
         live,
-        test_speed,
         short: false,
         ends: Instant::now(),
         limit: SHORT_LIMIT,
@@ -397,9 +353,6 @@ impl Worker {
     fn load(&mut self) -> Result<(), ()> {
         let threads = std::thread::available_parallelism().map_or(4, |n| n.get().min(4));
         let model = Dictation::load(&self.root, self.spec(), threads).map_err(|_| ())?;
-        if std::mem::take(&mut self.test_speed) {
-            (self.notify)(Event::Slow(too_slow(&model)));
-        }
         self.model = Some(model);
         self.last_used = Instant::now();
         Ok(())

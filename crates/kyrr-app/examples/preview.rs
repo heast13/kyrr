@@ -106,11 +106,6 @@ fn main() {
     state.set_update_state(UpdateState::Idle);
     state.set_update_has_news(false);
 
-    // A slow computer: the suggestion to go lean.
-    state.set_speed_tip(true);
-    render(&window, &ui, &format!("{out}/main-speed-tip-{lang}.rgba"));
-    state.set_speed_tip(false);
-
     // Nothing uses the microphone: standing by, with the meter at rest.
     state.set_mic_active(false);
     state.set_level_before(0.0);
@@ -202,9 +197,9 @@ fn main() {
     state.set_dictation_state(DictationState::Downloading);
     state.set_download_progress(0.42);
     render(&window, &ui, &format!("{out}/setup2-{lang}.rgba"));
-    state.set_speed_tip(true);
-    render(&window, &ui, &format!("{out}/setup2-speed-tip-{lang}.rgba"));
-    state.set_speed_tip(false);
+    state.set_effort_index(0);
+    render(&window, &ui, &format!("{out}/setup2-lean-{lang}.rgba"));
+    state.set_effort_index(1);
 
     // The summary window of a new version.
     let news = NewsWindow::new().unwrap();

@@ -871,11 +871,11 @@ msgstr "Mehrsprachig"
 msgid "Multilingual: French, Spanish, Italian, Dutch, Polish, Portuguese and more. kyrr notices the language by itself. German and English can be a bit less precise, and it needs its own download."
 msgstr "Mehrsprachig: Französisch, Spanisch, Italienisch, Niederländisch, Polnisch, Portugiesisch und mehr. kyrr erkennt die Sprache selbst. Deutsch und Englisch können etwas weniger genau sein, und es braucht einen eigenen Download."
 
-msgid "Simpler noise removal, and the words show once you are done talking. Typed just as well. For older laptops."
-msgstr "Einfachere Geräuschunterdrückung, die Wörter erscheinen erst nach dem Sprechen. Getippt wird genauso gut. Für ältere Laptops."
+msgid "Simpler noise removal, the words show once you are done talking, dictations up to 2 minutes. Typed just as well. For older laptops."
+msgstr "Einfachere Geräuschunterdrückung, die Wörter erscheinen erst nach dem Sprechen, Diktate bis 2 Minuten. Getippt wird genauso gut. Für ältere Laptops."
 
-msgid "The most thorough noise removal, and the words show while you talk. Needs a bit more power."
-msgstr "Die gründlichste Geräuschunterdrückung, die Wörter erscheinen schon beim Sprechen. Braucht etwas mehr Leistung."
+msgid "The most thorough noise removal, the words show while you talk, dictations up to 15 minutes. Needs a bit more power."
+msgstr "Die gründlichste Geräuschunterdrückung, die Wörter erscheinen schon beim Sprechen, Diktate bis 15 Minuten. Braucht etwas mehr Leistung."
 
 msgid "Your own mix of noise removal and words while you talk."
 msgstr "Deine eigene Mischung aus Geräuschunterdrückung und Wörtern beim Sprechen."
@@ -886,17 +886,8 @@ msgstr "Rechenaufwand"
 msgid "Best quality"
 msgstr "Beste Qualität"
 
-msgid "Your computer seems to be on the leisurely side."
-msgstr "Dein Rechner scheint eher gemütlich zu sein."
-
-msgid "So kyrr suggests Lean, or it gets a bumpy ride. Lean means simpler noise removal, and the words show once you are done talking. Typed just as well."
-msgstr "kyrr empfiehlt deshalb „Sparsam“, sonst wird’s eine holprige Fahrt. Sparsam heißt: einfachere Geräuschunterdrückung, und die Wörter erscheinen erst, wenn du fertig gesprochen hast. Getippt wird genauso gut."
-
-msgid "You can switch any time in the settings."
-msgstr "Umschalten geht jederzeit in den Einstellungen."
-
-msgid "For most computers. The most thorough noise removal, and the words show while you talk."
-msgstr "Für die meisten Rechner. Die gründlichste Geräuschunterdrückung, und die Wörter erscheinen schon beim Sprechen."
+msgid "For most computers. The most thorough noise removal, the words show while you talk, dictations up to 15 minutes."
+msgstr "Für die meisten Rechner. Die gründlichste Geräuschunterdrückung, die Wörter erscheinen schon beim Sprechen, Diktate bis 15 Minuten."
 
 msgid "For older or weaker laptops, and if things stutter. Simpler noise removal, the words show once you are done talking, dictations up to 2 minutes."
 msgstr "Für ältere oder schwächere Laptops, und wenn’s ruckelt. Einfachere Geräuschunterdrückung, die Wörter erscheinen erst nach dem Sprechen, Diktate bis 2 Minuten."
