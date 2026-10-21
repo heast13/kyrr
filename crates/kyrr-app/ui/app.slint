@@ -393,13 +393,18 @@ component Segmented inherits FocusScope {
         }
     }
 
+    // The next option that way, over one that cannot be picked.
+    function step(by: int) {
+        root.choose(root.selected + by == root.unavailable ? root.selected + 2 * by : root.selected + by);
+    }
+
     key-pressed(event) => {
         if (event.text == Key.LeftArrow) {
-            root.choose(root.selected - 1);
+            root.step(-1);
             return accept;
         }
         if (event.text == Key.RightArrow) {
-            root.choose(root.selected + 1);
+            root.step(1);
             return accept;
         }
         return reject;
@@ -418,6 +423,7 @@ component Segmented inherits FocusScope {
             accessible-label: option;
             accessible-checkable: true;
             accessible-checked: i == root.selected;
+            accessible-enabled: root.enabled && i != root.unavailable;
             accessible-action-default => { root.choose(i); }
             Text {
                 text: option;

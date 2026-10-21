@@ -42,6 +42,8 @@ pub struct Writer {
     packets: u32,
     pages: u32,
     packet: Vec<u8>,
+    /// A write failed (a full disk): what is in the file stays as it is.
+    failed: bool,
 }
 
 impl Writer {
@@ -72,6 +74,7 @@ impl Writer {
             packets: 0,
             pages: 0,
             packet: vec![0; 1500],
+            failed: false,
         };
         // Both headers on pages of their own, as the format asks.
         let mut head = b"OpusHead".to_vec();
@@ -99,20 +102,33 @@ impl Writer {
 
     /// Adds mono samples at the file's rate.
     pub fn push(&mut self, samples: &[f32]) -> std::io::Result<()> {
+        if self.failed {
+            return Err(std::io::Error::other("an earlier write failed"));
+        }
         self.recorded += samples.len() as u64;
         self.pending.extend_from_slice(samples);
         let mut at = 0;
+        let mut result = Ok(());
         while self.pending.len() - at >= self.frame {
-            self.encode(at, false)?;
+            if let Err(e) = self.encode(at, false) {
+                self.failed = true;
+                result = Err(e);
+                break;
+            }
             at += self.frame;
         }
         self.pending.drain(..at);
-        Ok(())
+        result
     }
 
     /// Ends the stream: the rest, the encoder's delay, and the file on the
     /// disk.
     pub fn finish(mut self) -> std::io::Result<()> {
+        if self.failed {
+            // Whatever still fits; a reader stops where the file does.
+            let _ = self.out.inner_mut().flush();
+            return Err(std::io::Error::other("an earlier write failed"));
+        }
         // The encoder holds back its delay: silence pushes it out.
         self.pending.resize(self.pending.len() + self.lookahead, 0.0);
         let frames = self.pending.len().div_ceil(self.frame).max(1);

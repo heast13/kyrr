@@ -51,7 +51,9 @@ fn bind(ours: &str, name: &str, key: &str, command: &str, kyrrs: impl Fn(&str) -
     let Some(list) = get(LIST, "custom-keybindings").and_then(|v| parse_strv(&v)) else {
         return Outcome::Failed;
     };
-    for path in list.iter().filter(|p| p.as_str() != ours) {
+    // kyrr's two entries never stand in each other's way: swapping the
+    // keys, each is rewritten in turn.
+    for path in list.iter().filter(|p| p.as_str() != OURS && p.as_str() != OURS_MEMO) {
         let entry = format!("{ENTRY}:{path}");
         let binding = get(&entry, "binding").and_then(|v| parse_str(&v)).unwrap_or_default();
         if !binding.eq_ignore_ascii_case(key) {

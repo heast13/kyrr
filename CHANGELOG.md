@@ -3,8 +3,8 @@
 ## Unreleased
 
 - Voice memos: F8 (F9 or Pause when dictation has F8; switchable, or
-  none) starts and ends a recording, also from the tray and with
-  `kyrr --memo`. Opus mono at 24 kbit/s, up to 4 hours, into
+  none) starts and ends a recording, also from the tray (and on Linux
+  with `kyrr --memo`). Opus mono at 24 kbit/s, up to 4 hours, into
   `Documents/kyrr` as `YYYY-MM-DD HH-MM Title.opus`; the title comes from
   the first sentence the dictation model hears, and the pen next to it
   renames the file. The list (play, show in folder, delete with a question,

@@ -426,7 +426,9 @@ pub fn spawn(
                     Err(mpsc::RecvTimeoutError::Timeout) => worker.unload_when_idle(),
                 }
                 // A job waits while a dictation runs or is being typed.
-                worker.pause.store(worker.recording.is_some(), Ordering::Relaxed);
+                let busy =
+                    worker.recording.is_some() || worker.state == State::Transcribing || worker.waiting.is_some();
+                worker.pause.store(busy, Ordering::Relaxed);
                 worker.next_job();
             }
             if let Some((_, cancel)) = &worker.job {
@@ -851,7 +853,7 @@ impl Worker {
                 match job {
                     Job::Title(path, rate, samples) => {
                         // A dictation that started meanwhile goes first.
-                        while pause.load(Ordering::Relaxed) {
+                        while pause.load(Ordering::Relaxed) && !cancel.load(Ordering::Relaxed) {
                             std::thread::sleep(Duration::from_millis(100));
                         }
                         let title =

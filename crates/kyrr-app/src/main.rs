@@ -41,6 +41,12 @@ slint::include_modules!();
 
 /// Maximum attenuation for the strength choices gentle, medium, strong.
 const STRENGTHS: [u32; 3] = [24, 48, 100];
+/// What the desktop's shortcut list calls the voice memo key (German,
+/// English).
+const MEMO_DESCRIPTION: (&str, &str) = (
+    "kyrr: Sprachaufzeichnung (Taste tippen)",
+    "kyrr: Voice memo (tap the key)",
+);
 
 fn main() {
     #[cfg(not(windows))]
@@ -1342,8 +1348,8 @@ impl App {
             (key, chosen, taken)
         };
         let description = match self.language() {
-            Language::German => "kyrr: Sprachaufzeichnung (Taste tippen)",
-            Language::English => "kyrr: Voice memo (tap the key)",
+            Language::German => MEMO_DESCRIPTION.0,
+            Language::English => MEMO_DESCRIPTION.1,
         };
         platform::set_memo_key(key, description);
         let index = config::MEMO_KEYS.iter().position(|&k| k == chosen).unwrap_or(3);
@@ -1377,10 +1383,8 @@ impl App {
         }
         self.apply_memo_key();
         // A key the desktop owns (the portal) is bound again with or
-        // without the memo's.
-        if on {
-            platform::bind_key_again();
-        }
+        // without the memo's, so F8 is free again when off.
+        platform::bind_key_again();
         if let Some(w) = self.window.upgrade() {
             w.global::<AppState>().set_memos_enabled(on);
         }
@@ -1693,6 +1697,13 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         Language::German => "kyrr: Diktieren (Taste halten)",
         Language::English => "kyrr: Dictate (hold the key)",
     };
+    // Both keys before the start: the desktop's dialog asks for them at once.
+    platform::set_hotkey_key(config.dictation_key);
+    let memo_description = match language {
+        Language::German => MEMO_DESCRIPTION.0,
+        Language::English => MEMO_DESCRIPTION.1,
+    };
+    platform::set_memo_key(config.memo_key(), memo_description);
     if let Some(keys) = platform::start_hotkey(description, config.setup_done) {
         let worker = worker.clone();
         let (recording, key_toggle) = (Arc::clone(&recording), Arc::clone(&key_toggle));

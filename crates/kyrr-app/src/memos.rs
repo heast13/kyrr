@@ -13,7 +13,7 @@ use std::time::Duration;
 use chrono::{Local, NaiveDateTime};
 use kyrr_common::wave::{Mode, Overlay};
 use kyrr_dictate::Language;
-use slint::{ComponentHandle, ModelRc, SharedString, VecModel, Weak};
+use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel, Weak};
 
 use crate::dictation::{Command, Job, Text};
 use crate::memo::library::{self, Memo, Paragraph};
@@ -45,6 +45,8 @@ pub struct Memos {
     /// The folder as last read, and the part of it the list shows.
     all: RefCell<Vec<Memo>>,
     shown: RefCell<Vec<PathBuf>>,
+    /// The rows of the list in the window, one for each shown memo.
+    rows: Rc<VecModel<MemoItem>>,
     recording: RefCell<Option<Recording>>,
     player: RefCell<Option<Player>>,
     /// Memos whose title is still being found (they keep their first name
@@ -90,6 +92,7 @@ impl Memos {
             auto_text: Cell::new(auto_text),
             all: RefCell::new(Vec::new()),
             shown: RefCell::new(Vec::new()),
+            rows: Rc::new(VecModel::default()),
             recording: RefCell::new(None),
             player: RefCell::new(None),
             titling: RefCell::new(Vec::new()),
@@ -99,6 +102,9 @@ impl Memos {
             copied: slint::Timer::default(),
         });
         MEMOS.set(Some(Rc::clone(&memos)));
+        window
+            .global::<AppState>()
+            .set_memo_items(ModelRc::from(Rc::clone(&memos.rows) as Rc<dyn Model<Data = MemoItem>>));
         window.set_memo_folder(memos.folder_name().into());
         memos.wire(window);
         memos.refresh();
@@ -279,9 +285,27 @@ impl Memos {
         };
         state.set_memo_playing(index_of(&playing));
         state.set_memo_sheet_index(index_of(&self.sheet.borrow()));
-        *self.shown.borrow_mut() = shown.iter().map(|m| m.path.clone()).collect();
+        // A name being typed and a delete being asked stay with their memo
+        // when rows come and go (a new memo on top, a search).
+        let editing = self.path(state.get_memo_editing());
+        let confirm = self.path(state.get_memo_confirm());
+        let paths: Vec<PathBuf> = shown.iter().map(|m| m.path.clone()).collect();
+        let same_rows = *self.shown.borrow() == paths;
+        *self.shown.borrow_mut() = paths;
+        state.set_memo_editing(index_of(&editing));
+        state.set_memo_confirm(index_of(&confirm));
         state.set_memo_count(all.len() as i32);
-        state.set_memo_items(ModelRc::new(VecModel::from(items)));
+        // The same rows: changed in place, so a row being edited keeps what
+        // was typed into it.
+        if same_rows && self.rows.row_count() == items.len() {
+            for (i, item) in items.into_iter().enumerate() {
+                if self.rows.row_data(i).as_ref() != Some(&item) {
+                    self.rows.set_row_data(i, item);
+                }
+            }
+        } else {
+            self.rows.set_vec(items);
+        }
     }
 
     /// "Heute, 18:05 · 3:12": when and how long.
@@ -364,8 +388,8 @@ impl Memos {
                     )
                 } else {
                     self.say(
-                        "Konnte die Aufnahme nicht anlegen. Ist die Festplatte voll?",
-                        "Could not create the recording. Is the disk full?",
+                        "Konnte die Aufnahme nicht anlegen. Ist die Festplatte voll, oder darf kyrr nicht in den Ordner Dokumente schreiben?",
+                        "Could not create the recording. Is the disk full, or may kyrr not write to the Documents folder?",
                     )
                 };
                 self.tell(&message);
@@ -578,8 +602,11 @@ impl Memos {
     /// The title the dictation model heard at the start of a memo.
     pub fn titled(&self, path: PathBuf, title: Option<String>) {
         self.titling.borrow_mut().retain(|p| *p != path);
+        // Never the memo being recorded: the first one's name can come free
+        // again (deleted in the file manager) and be the new one's.
+        let recording = self.recording.borrow().as_ref().is_some_and(|r| r.path() == path);
         let path = match title {
-            Some(title) if path.exists() => match library::rename(&path, &title) {
+            Some(title) if path.exists() && !recording => match library::rename(&path, &title) {
                 Ok(to) => {
                     self.moved(&path, &to);
                     to
@@ -588,7 +615,7 @@ impl Memos {
             },
             _ => path,
         };
-        if self.auto_text.get() && path.exists() {
+        if self.auto_text.get() && path.exists() && !recording {
             let _ = self.worker.send(Command::Job(Job::Text(path)));
         }
         self.refresh();

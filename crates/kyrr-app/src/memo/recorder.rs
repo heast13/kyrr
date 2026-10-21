@@ -205,10 +205,10 @@ impl Recording {
 
     /// Stops and closes the file.
     pub fn finish(mut self) -> Finished {
-        self.stop.store(true, Ordering::Relaxed);
         // The microphone first: what it still delivers goes into the file.
         self.stream.take();
         recorder::tail_start(0);
+        self.stop.store(true, Ordering::Relaxed);
         let path = self.path.clone();
         self.writer.take().and_then(|w| w.join().ok()).unwrap_or(Finished {
             path,

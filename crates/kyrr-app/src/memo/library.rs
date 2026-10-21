@@ -143,6 +143,13 @@ fn parse(stem: &str) -> Option<(NaiveDateTime, String)> {
 /// A free name in `dir` for a memo recorded at `when` with `title`; a
 /// second one in the same minute with the same title gets " (2)".
 pub fn free_path(dir: &Path, when: NaiveDateTime, title: &str) -> PathBuf {
+    free_path_for(dir, when, title, None)
+}
+
+/// [`free_path`], where the name of the memo `own` counts as free: renamed
+/// to what it already is in another case or number, it stays.
+fn free_path_for(dir: &Path, when: NaiveDateTime, title: &str, own: Option<&Path>) -> PathBuf {
+    let own = own.map(|p| p.to_string_lossy().to_lowercase());
     let title = title::clean(title);
     let base = format!("{} {title}", when.format(STAMP));
     let base = base.trim_end();
@@ -151,7 +158,10 @@ pub fn free_path(dir: &Path, when: NaiveDateTime, title: &str) -> PathBuf {
             1 => dir.join(format!("{base}.opus")),
             n => dir.join(format!("{base} ({n}).opus")),
         })
-        .find(|p| !p.exists() && !text_path(p).exists())
+        .find(|p| {
+            own.as_deref() == Some(p.to_string_lossy().to_lowercase().as_str())
+                || (!p.exists() && !text_path(p).exists())
+        })
         .expect("a free name")
 }
 
@@ -176,7 +186,10 @@ pub fn rename(path: &Path, title: &str) -> io::Result<PathBuf> {
     if title::clean(title).is_empty() {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "empty title"));
     }
-    let to = free_path(dir, when, title);
+    let to = free_path_for(dir, when, title, Some(path));
+    if to == path {
+        return Ok(to);
+    }
     std::fs::rename(path, &to)?;
     let text = text_path(path);
     if text.exists() {
@@ -261,8 +274,8 @@ fn paragraphs(text: &str) -> Vec<Paragraph> {
 fn parse_clock(time: &str) -> Option<u32> {
     let parts: Vec<u32> = time.split(':').map(|p| p.parse().ok()).collect::<Option<_>>()?;
     match parts[..] {
-        [m, s] if s < 60 => Some(m * 60 + s),
-        [h, m, s] if m < 60 && s < 60 => Some(h * 3600 + m * 60 + s),
+        [m, s] if s < 60 => m.checked_mul(60)?.checked_add(s),
+        [h, m, s] if m < 60 && s < 60 => h.checked_mul(3600)?.checked_add(m * 60 + s),
         _ => None,
     }
 }
@@ -362,6 +375,11 @@ mod tests {
         assert_eq!(read_text(&renamed).unwrap()[0].text, "Milch");
         assert_eq!(rename(&renamed, "Wochenmarkt").unwrap(), renamed);
         assert!(rename(&renamed, " / ").is_err());
+        // A second one with that title, renamed to it again: no "(3)".
+        let other = free_path(&dir, when, "Wochenmarkt");
+        std::fs::write(&other, b"x").unwrap();
+        assert_eq!(rename(&other, "Wochenmarkt").unwrap(), other);
+        delete(&other).unwrap();
 
         delete(&renamed).unwrap();
         assert!(!renamed.exists() && !text_path(&renamed).exists());

@@ -1369,7 +1369,7 @@ msgid "Tap {}, talk, tap again. kyrr saves and names the recording by itself."
 msgstr "Tippe {}, sprich, tippe nochmal. kyrr speichert und benennt die Aufnahme selbst."
 
 msgid "Stop"
-msgstr "Beenden"
+msgstr "Stopp"
 
 msgid "Recordings ({})"
 msgstr "Aufzeichnungen ({})"

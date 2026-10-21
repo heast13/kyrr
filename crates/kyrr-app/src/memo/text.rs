@@ -48,14 +48,15 @@ pub fn write(
     let mut read = 0usize;
     let mut working = Duration::ZERO;
     let mut ended = false;
-    while !ended {
-        while pause.load(Ordering::Relaxed) {
-            if cancel.load(Ordering::Relaxed) {
-                return Ok(Done::Cancelled);
-            }
+    // Waits while a dictation runs or is typed; false once cancelled.
+    let go_on = || {
+        while pause.load(Ordering::Relaxed) && !cancel.load(Ordering::Relaxed) {
             std::thread::sleep(Duration::from_millis(100));
         }
-        if cancel.load(Ordering::Relaxed) {
+        !cancel.load(Ordering::Relaxed)
+    };
+    while !ended {
+        if !go_on() {
             return Ok(Done::Cancelled);
         }
         let started = Instant::now();
@@ -69,18 +70,26 @@ pub fn write(
         read += samples.len();
         paragraphs.push(&samples);
         let mut heard = false;
-        while let Some(paragraph) = model.paragraph(&mut paragraphs) {
+        let mut busy = started.elapsed();
+        loop {
+            if !go_on() {
+                return Ok(Done::Cancelled);
+            }
+            let started = Instant::now();
+            let paragraph = model.paragraph(&mut paragraphs);
+            busy += started.elapsed();
+            let Some(paragraph) = paragraph else { break };
             found.push(paragraph);
             heard = true;
         }
-        working += started.elapsed();
+        working += busy;
         if heard {
             let done = ((read as f64 / GRANULE_RATE as f64 - BEHIND_SECONDS) / total).clamp(0.0, 0.99);
             let left = (done > 0.05).then(|| working.mul_f64((1.0 - done) / done));
             progress(done as f32, left);
         }
     }
-    if cancel.load(Ordering::Relaxed) {
+    if !go_on() {
         return Ok(Done::Cancelled);
     }
     found.extend(model.last_paragraphs(paragraphs));
@@ -95,7 +104,12 @@ pub fn write(
     if !path.exists() {
         return Ok(Done::Cancelled);
     }
-    library::write_text(path, &paragraphs).map_err(|e| e.to_string())?;
+    let written = library::write_text(path, &paragraphs).map_err(|e| e.to_string())?;
+    // Deleted or renamed while it was written: no text without its memo.
+    if !path.exists() {
+        let _ = std::fs::remove_file(written);
+        return Ok(Done::Cancelled);
+    }
     progress(1.0, None);
     Ok(Done::Written)
 }
