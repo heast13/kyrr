@@ -809,7 +809,7 @@ component SpeedTip inherits Rectangle {
             wrap: word-wrap;
         }
         Text {
-            text: @tr("So kyrr suggests Lean, or it gets a bumpy ride. Lean means lighter noise removal, and the words show once you are done talking. Typed just as well.");
+            text: @tr("So kyrr suggests Lean, or it gets a bumpy ride. Lean means simpler noise removal, and the words show once you are done talking. Typed just as well.");
             font-size: 12px;
             wrap: word-wrap;
         }
@@ -1174,7 +1174,7 @@ component ToolsSettings inherits Card {
 // Settings: the rest.
 component GeneralSettings inherits Card {
     pure function effort-hint(i: int) -> string {
-        if (i == 0) { return @tr("Lighter noise removal, and the words show once you are done talking. Typed just as well. For older laptops."); }
+        if (i == 0) { return @tr("Simpler noise removal, and the words show once you are done talking. Typed just as well. For older laptops."); }
         if (i == 1) { return @tr("The most thorough noise removal, and the words show while you talk. Needs a bit more power."); }
         return @tr("Your own mix of noise removal and words while you talk.");
     }
