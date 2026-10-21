@@ -258,6 +258,9 @@ of after a quarter of an hour without dictation:
 | English | [NVIDIA parakeet-unified-en-0.6b](https://huggingface.co/nvidia/parakeet-unified-en-0.6b) | 663 MB |
 | Multilingual (Language choice in the setup and in Settings) | [NVIDIA parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), 25 European languages, picks the language itself. Works in French, Spanish, Polish, Portuguese, Italian and Dutch (see the measurements in `tools/export-primeline`); German and English also work | 900 MB |
 
+On Windows dictation does nothing while a window running as administrator is
+in front: Windows keeps normal programs from seeing the keyboard there.
+
 ## Privacy
 
 Audio and text never leave your computer. No telemetry. kyrr connects to
