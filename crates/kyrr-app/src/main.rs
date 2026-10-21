@@ -1016,6 +1016,9 @@ impl App {
     fn show_effort(&self) {
         let lean = self.filter.borrow().light_model;
         let live = self.config.borrow().dictation_live;
+        // Lean dictations are short: a slow computer takes long to write
+        // a long one.
+        let _ = self.worker.send(Command::Short(lean && !live));
         let Some(w) = self.window.upgrade() else {
             return;
         };
@@ -1507,9 +1510,11 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     let recording_flag = Arc::clone(&recording);
     let wave = Overlay::spawn(platform::open_wave, recorder::tail);
     let notify: dictation::Notify = Arc::new(move |event| {
-        if let Event::Heard(words) = event {
-            wave.set_words(words);
-            return;
+        match event {
+            Event::Heard(words) => return wave.set_words(words),
+            Event::Ends(at) => return wave.set_end(at),
+            Event::Limit(text) => return wave.set_limit(text),
+            _ => {}
         }
         if let Event::State(s) = &event {
             recording_flag.store(*s == State::Recording, Ordering::Relaxed);
@@ -1538,7 +1543,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 }
                 Event::Progress(p) => state.set_download_progress(p),
                 Event::Typed(text) => state.set_last_text(text.into()),
-                Event::Heard(_) => {}
+                Event::Heard(_) | Event::Ends(_) | Event::Limit(_) => {}
                 Event::Slow(slow) => state.invoke_speed_measured(slow),
                 Event::Message(m) => state.set_dictation_message(m.unwrap_or_default().into()),
             }
@@ -1567,6 +1572,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         std::thread::spawn(move || {
             while let Ok(key) = keys.recv() {
                 let toggle = key_toggle.load(Ordering::Relaxed);
+                let down = matches!(key, platform::KeyEvent::Pressed);
+                if worker.send(Command::Held(down)).is_err() {
+                    break;
+                }
                 let cmd = match (key, toggle) {
                     (platform::KeyEvent::Pressed, false) => Command::KeyDown,
                     (platform::KeyEvent::Released, false) => Command::KeyUp(Instant::now()),
