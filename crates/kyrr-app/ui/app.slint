@@ -192,6 +192,12 @@ export global AppState {
     callback skip-setup();
 }
 
+// Colours for notes: darker on the light theme, so small text keeps its contrast.
+global Tone {
+    out property <color> bad: Palette.color-scheme == ColorScheme.dark ? #ff6369 : #c62a2f;
+    out property <color> good: Palette.color-scheme == ColorScheme.dark ? #3fb950 : #1a7f37;
+}
+
 // The tray has its own properties: globals are per component instance, so
 // the app wires tray and window separately.
 export component Tray inherits SystemTrayIcon {
@@ -794,10 +800,26 @@ component EffortOption inherits Rectangle {
     in property <string> text;
     in property <bool> picked;
     callback clicked();
+    forward-focus: key;
     border-radius: 10px;
-    border-width: 1px;
-    border-color: root.picked ? #2ea043 : Palette.border;
+    border-width: key.has-focus ? 2px : 1px;
+    border-color: key.has-focus ? Palette.foreground : root.picked ? #2ea043 : Palette.border;
     background: root.picked ? #2ea043.with-alpha(0.12) : (touch.has-hover ? Palette.alternate-background : transparent);
+    accessible-role: radio-button;
+    accessible-label: root.title + ". " + root.text;
+    accessible-checkable: true;
+    accessible-checked: root.picked;
+    accessible-action-default => { root.clicked(); }
+    // Tab reaches it, Space or Enter picks it, like the other choices.
+    key := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
     touch := TouchArea {
         mouse-cursor: pointer;
         clicked => { root.clicked(); }
@@ -876,9 +898,22 @@ component UpdateBanner inherits Rectangle {
         if !root.busy: Rectangle {
             width: 24px;
             horizontal-stretch: 0;
+            forward-focus: close-key;
+            border-width: close-key.has-focus ? 2px : 0px;
+            border-color: Palette.foreground;
+            border-radius: 4px;
             accessible-role: button;
             accessible-label: @tr("Not now");
             accessible-action-default => { AppState.dismiss-update(); }
+            close-key := FocusScope {
+                key-pressed(event) => {
+                    if (event.text == " " || event.text == Key.Return) {
+                        AppState.dismiss-update();
+                        return accept;
+                    }
+                    return reject;
+                }
+            }
             Text {
                 // × (not ✕): every font has it.
                 text: "×";
@@ -899,10 +934,25 @@ component UpdateBanner inherits Rectangle {
 component AlertButton inherits Rectangle {
     in property <string> text;
     callback clicked();
+    forward-focus: key;
     min-height: 32px;
     min-width: label.preferred-width + 24px;
     border-radius: 4px;
+    border-width: key.has-focus ? 2px : 0px;
+    border-color: Palette.foreground;
     background: touch.pressed ? #b4282c : touch.has-hover ? #cf3338 : #e5484d;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-action-default => { root.clicked(); }
+    key := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
     label := Text {
         text: root.text;
         color: white;
@@ -928,7 +978,7 @@ component AlertLine inherits Text {
     }
     text: root.note();
     // The red notes are problems; a microphone coming back is good news.
-    color: AppState.alert == 7 ? #3fb950 : #e5484d;
+    color: AppState.alert == 7 ? Tone.good : Tone.bad;
     font-size: 11px;
     min-height: 16px;
     vertical-alignment: center;
@@ -1100,8 +1150,7 @@ component LevelSettings inherits Card {
             : root.gain == 0 ? @tr("Right now unchanged: your mic is just right.")
             : @tr("Right now: {} dB", root.signed);
         color: !AppState.mic-active || root.gain == 0 ? Palette.foreground.with-alpha(0.65)
-            : root.gain > 0 ? (Palette.color-scheme == ColorScheme.dark ? #3fb950 : #1a7f37)
-            : (Palette.color-scheme == ColorScheme.dark ? #e5484d : #c62a2f);
+            : root.gain > 0 ? Tone.good : Tone.bad;
     }
 }
 
@@ -1129,28 +1178,28 @@ component ToolsSettings inherits Card {
     }
     if root.filter: Hint { text: @tr("Moves while an app uses the mic."); }
     if root.filter: HorizontalLayout {
-        spacing: 6px;
         Button {
             text: @tr("Test: before / after");
             enabled: root.attached && !root.busy && !AppState.listening;
             clicked => { AppState.probe-record(); }
         }
         Rectangle { }
-        if AppState.has-probe: Button {
+    }
+    if AppState.has-probe: HorizontalLayout {
+        spacing: 6px;
+        Button {
             text: @tr("Before");
             enabled: !root.busy;
             clicked => { AppState.probe-play(false); }
         }
-        if AppState.has-probe: Button {
+        Button {
             text: @tr("After");
             enabled: !root.busy;
             clicked => { AppState.probe-play(true); }
         }
-    }
-    if AppState.has-probe: HorizontalLayout {
         Rectangle { }
         Button {
-            text: @tr("Delete recording");
+            text: @tr("Delete");
             enabled: !root.busy;
             clicked => { AppState.probe-reset(); }
         }
@@ -1169,7 +1218,7 @@ component ToolsSettings inherits Card {
         Rectangle { }
     }
     Hint { text: @tr("Your mic live in your headphones, the way your apps hear it. On speakers it squeals."); }
-    if AppState.probe-error != "": Caption { text: AppState.probe-error; color: #e5484d; }
+    if AppState.probe-error != "": Caption { text: AppState.probe-error; color: Tone.bad; }
 }
 
 // Settings: the rest.
@@ -1305,7 +1354,7 @@ component SetupPage inherits VerticalLayout {
         enabled: AppState.filter-state != FilterState.setting-up && AppState.microphones.length > 0;
         clicked => { AppState.attach-microphone(AppState.mic-index); }
     }
-    if step == 0 && AppState.filter-state == FilterState.error: Caption { text: AppState.error-text; color: #e5484d; }
+    if step == 0 && AppState.filter-state == FilterState.error: Caption { text: AppState.error-text; color: Tone.bad; }
     if step == 0: Button {
         text: @tr("Not now, just dictation");
         enabled: AppState.filter-state != FilterState.setting-up;
@@ -1499,11 +1548,23 @@ export component MainWindow inherits Window {
                 AlertLine { }
                 if AppState.alert == 4: Text {
                     text: @tr("Switch it on");
-                    color: #e5484d;
+                    color: Tone.bad;
                     font-size: 11px;
                     font-weight: 700;
                     horizontal-stretch: 0;
                     vertical-alignment: center;
+                    forward-focus: unmute-key;
+                    accessible-role: button;
+                    accessible-action-default => { AppState.unmute(); }
+                    unmute-key := FocusScope {
+                        key-pressed(event) => {
+                            if (event.text == " " || event.text == Key.Return) {
+                                AppState.unmute();
+                                return accept;
+                            }
+                            return reject;
+                        }
+                    }
                     TouchArea { clicked => { AppState.unmute(); } mouse-cursor: pointer; }
                 }
             }

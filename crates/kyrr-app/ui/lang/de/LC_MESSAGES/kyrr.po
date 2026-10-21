@@ -365,8 +365,8 @@ msgstr "Aktualisieren"
 msgid "Not now"
 msgstr "Jetzt nicht"
 
-msgid "Delete recording"
-msgstr "Aufnahme löschen"
+msgid "Delete"
+msgstr "Löschen"
 
 msgid "Listen to yourself"
 msgstr "Mithören"
