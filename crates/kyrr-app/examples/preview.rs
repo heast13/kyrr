@@ -197,8 +197,10 @@ fn main() {
     state.set_dictation_state(DictationState::Downloading);
     state.set_download_progress(0.42);
     render(&window, &ui, &format!("{out}/setup2-{lang}.rgba"));
+    ui.set_setup_step(2);
+    render(&window, &ui, &format!("{out}/setup3-{lang}.rgba"));
     state.set_effort_index(0);
-    render(&window, &ui, &format!("{out}/setup2-lean-{lang}.rgba"));
+    render(&window, &ui, &format!("{out}/setup3-lean-{lang}.rgba"));
     state.set_effort_index(1);
 
     // The summary window of a new version.
