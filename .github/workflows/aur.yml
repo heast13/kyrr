@@ -1,0 +1,81 @@
+name: aur
+
+# The AUR package kyrr-bin (packaging/aur). On a pull request it is built on
+# Arch with makepkg, checked with namcap and installed once. For every
+# published release it is pointed at the new tarball and pushed to the AUR,
+# once the secret AUR_SSH_PRIVATE_KEY exists: the private half of an SSH key
+# whose public half is in the heast13 account on aur.archlinux.org. The
+# first version goes to the AUR by hand (packaging/aur/README.md).
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/aur.yml"
+      - "packaging/aur/**"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to push to the AUR, e.g. v0.6.0
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  kyrr-bin:
+    runs-on: ubuntu-24.04
+    container: archlinux:latest
+    env:
+      TAG: ${{ inputs.tag || github.event.release.tag_name }}
+      HAS_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY != '' }}
+    steps:
+      - name: Tools
+        run: |
+          pacman -Syu --noconfirm --needed base-devel git namcap openssh
+          # makepkg does not run as root.
+          useradd -m builder
+      - uses: actions/checkout@v7
+      - name: Point the package at the release
+        if: env.TAG != ''
+        shell: bash
+        run: |
+          [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::not a release tag: $TAG"; exit 1; }
+          chown -R builder .
+          su builder -c 'bash packaging/aur/update.sh "${TAG#v}"'
+      - name: Build, check and install
+        working-directory: packaging/aur/kyrr-bin
+        run: |
+          chown -R builder .
+          su builder -c 'makepkg --printsrcinfo' | diff -u .SRCINFO - \
+            || { echo "::error::.SRCINFO does not match the PKGBUILD"; exit 1; }
+          pacman -S --noconfirm --needed $(su builder -c 'source PKGBUILD; echo "${depends[@]}"')
+          su builder -c 'makepkg --noconfirm'
+          namcap PKGBUILD
+          namcap kyrr-bin-*.pkg.tar.zst
+          pacman -U --noconfirm kyrr-bin-*.pkg.tar.zst
+          if ldd /usr/bin/kyrr | grep "not found"; then exit 1; fi
+          pacman -Ql kyrr-bin | grep -E "bin/kyrr$|share/kyrr/|applications/|metainfo/|licenses/"
+      - name: Names on the AUR
+        run: curl -fsS "https://aur.archlinux.org/rpc/v5/info?arg%5B%5D=kyrr-bin&arg%5B%5D=kyrr" | head -c 2000; echo
+      - name: Push to the AUR
+        if: env.TAG != '' && env.HAS_KEY == 'true'
+        env:
+          KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          install -dm700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/aur && chmod 600 ~/.ssh/aur
+          ssh-keyscan -t ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes"
+          git clone ssh://aur@aur.archlinux.org/kyrr-bin.git "$RUNNER_TEMP/aur"
+          cp packaging/aur/kyrr-bin/PKGBUILD packaging/aur/kyrr-bin/.SRCINFO "$RUNNER_TEMP/aur/"
+          cd "$RUNNER_TEMP/aur"
+          git config user.name heast13
+          git config user.email "339633532+heast13@users.noreply.github.com"
+          git add PKGBUILD .SRCINFO
+          git diff --cached --quiet && { echo "AUR already has $TAG"; exit 0; }
+          git commit -m "kyrr-bin ${TAG#v}"
+          git push origin HEAD:master
+      - name: No key yet
+        if: env.TAG != '' && env.HAS_KEY != 'true'
+        run: echo "::notice::No AUR_SSH_PRIVATE_KEY secret, so kyrr-bin was not pushed to the AUR."
