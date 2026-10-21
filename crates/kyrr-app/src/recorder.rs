@@ -2,6 +2,7 @@
 //! stream is only open during a recording, so Windows shows the microphone
 //! as in use only then.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -46,6 +47,9 @@ pub struct Recording {
     _stream: cpal::Stream,
     samples: Arc<Mutex<Vec<f32>>>,
     rate: u32,
+    /// The stream reported an error: the microphone was unplugged, or the
+    /// audio service went away.
+    lost: Arc<AtomicBool>,
 }
 
 fn mono<T: SizedSample>(data: &[T], channels: usize, convert: fn(T) -> f32, out: &Mutex<Vec<f32>>, max: usize) {
@@ -112,7 +116,20 @@ impl Recording {
         }
         let samples = Arc::new(Mutex::new(buffer));
         let sink = Arc::clone(&samples);
-        let err = |e| eprintln!("kyrr: recording error: {e}");
+        let lost = Arc::new(AtomicBool::new(false));
+        let err = {
+            let lost = Arc::clone(&lost);
+            move |e: cpal::Error| {
+                eprintln!("kyrr: recording error: {e}");
+                // Not an overrun or a reroute, which the stream gets over.
+                if matches!(
+                    e.kind(),
+                    cpal::ErrorKind::DeviceNotAvailable | cpal::ErrorKind::HostUnavailable
+                ) {
+                    lost.store(true, Ordering::Relaxed);
+                }
+            }
+        };
         let stream = match supported.sample_format() {
             SampleFormat::F32 => device.build_input_stream(
                 config,
@@ -147,6 +164,7 @@ impl Recording {
             _stream: stream,
             samples,
             rate,
+            lost,
         })
     }
 
@@ -158,6 +176,11 @@ impl Recording {
         let length = samples.len() as f32 / rate;
         let start = ((from(length) * rate) as usize).min(samples.len());
         (self.rate, samples[start..].to_vec(), length)
+    }
+
+    /// Whether the microphone went away during the recording.
+    pub fn lost(&self) -> bool {
+        self.lost.load(Ordering::Relaxed)
     }
 
     /// Stops recording and returns the sample rate and mono samples.

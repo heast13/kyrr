@@ -1550,12 +1550,12 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                     break;
                 }
                 let cmd = match (key, toggle) {
-                    (platform::KeyEvent::Pressed, false) => Command::KeyDown,
+                    (platform::KeyEvent::Pressed, false) => Command::KeyDown(Instant::now(), false),
                     (platform::KeyEvent::Released, false) => Command::KeyUp(Instant::now()),
                     (platform::KeyEvent::Pressed, true) if recording.load(Ordering::Relaxed) => {
                         Command::KeyUp(Instant::now())
                     }
-                    (platform::KeyEvent::Pressed, true) => Command::KeyDown,
+                    (platform::KeyEvent::Pressed, true) => Command::KeyDown(Instant::now(), true),
                     (platform::KeyEvent::Released, true) => continue,
                 };
                 if worker.send(cmd).is_err() {
