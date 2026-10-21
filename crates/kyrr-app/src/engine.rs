@@ -218,6 +218,11 @@ impl Engine {
         self.mic.microphones()
     }
 
+    /// PipeWire went away under the filter: it needs a new start.
+    pub fn gone(&self) -> bool {
+        self.mic.gone()
+    }
+
     pub fn status(&self) -> Status {
         self.mic.status()
     }

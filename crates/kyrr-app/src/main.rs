@@ -2094,6 +2094,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     poll.start(slint::TimerMode::Repeated, Duration::from_secs(2), {
         let app = Rc::clone(&app);
         move || {
+            platform::revive_filter();
             // The microphones first: the filter's state is read against them.
             app.refresh_microphones();
             app.refresh_filter();
