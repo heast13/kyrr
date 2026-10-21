@@ -190,6 +190,7 @@ export global AppState {
     callback update-auto-toggled(bool);
     callback dismiss-update();
     callback skip-setup();
+    callback next-setup();
 }
 
 // Colours for notes: darker on the light theme, so small text keeps its contrast.
@@ -1108,7 +1109,7 @@ component VoiceSettings inherits Card {
             : @tr("Off. P and B can thump.");
     }
     if root.shown && AppState.advanced: HorizontalLayout {
-        Caption { text: @tr("Distance compensation (beta)"); vertical-alignment: center; }
+        Caption { text: @tr("Distance compensation"); vertical-alignment: center; }
         Rectangle { }
         Switch {
             checked <=> AppState.distance;
@@ -1117,7 +1118,7 @@ component VoiceSettings inherits Card {
     }
     if root.shown && AppState.advanced: Hint {
         text: AppState.distance ? @tr("Far from the mic, it takes some of the room's echo out. Close up, it does nothing.")
-            : @tr("Off. Far from the mic, the room echoes along. Still a beta: tell us how it sounds.");
+            : @tr("Off. Far from the mic, the room echoes along.");
     }
     if root.shown && !AppState.voice-is-default: HorizontalLayout {
         Rectangle { }
@@ -1331,7 +1332,7 @@ component SetupPage inherits VerticalLayout {
     spacing: 12px;
     // Every element carries its own `if`: Slint measures wrapped text
     // wrongly inside a nested layout that is itself conditional.
-    if step == 0: Hint { text: @tr("Step 1 of 2"); }
+    if step == 0: Hint { text: @tr("Step 1 of 3"); }
     if step == 0: Heading { text: @tr("Welcome to kyrr"); font-size: 20px; }
     if step == 0: Caption {
         text: root.no-pipewire ? @tr("kyrr removes background noise from your microphone, for every app. For that it needs PipeWire, the sound system of modern Linux desktops, which is missing here.")
@@ -1361,8 +1362,8 @@ component SetupPage inherits VerticalLayout {
         clicked => { AppState.skip-setup(); }
     }
 
-    if step == 1: Hint { text: @tr("Step 2 of 2"); }
-    if step == 1: Heading { text: @tr("Talk instead of typing"); font-size: 20px; }
+    if step == 1: Hint { text: @tr("Step 2 of 3"); }
+    if step == 1: Heading { text: @tr("Language and dictation model"); font-size: 20px; }
     if step == 1: Caption {
         text: AppState.key-note == "" || AppState.guide ? @tr("Hold {} and speak. When you let go, kyrr types what you said, in any app. It runs on your computer, nothing is sent anywhere.", AppState.key-name)
             : @tr("Start dictation with a key and speak. When you end it, kyrr types what you said, in any app. It runs on your computer, nothing is sent anywhere.");
@@ -1373,20 +1374,6 @@ component SetupPage inherits VerticalLayout {
         selected <=> AppState.language-index;
         changed(i) => { AppState.language-changed(i); }
     }
-    if step == 1: Caption { text: @tr("Effort"); }
-    if step == 1: EffortOption {
-        title: @tr("Best quality");
-        text: @tr("For most computers. The most thorough noise removal, the words show while you talk, dictations up to 15 minutes.");
-        picked: AppState.effort-index == 1;
-        clicked => { AppState.effort-index = 1; AppState.effort-changed(1); }
-    }
-    if step == 1: EffortOption {
-        title: @tr("Lean");
-        text: @tr("For older or weaker laptops, and if things stutter. Simpler noise removal, the words show once you are done talking, dictations up to 2 minutes.");
-        picked: AppState.effort-index == 0;
-        clicked => { AppState.effort-index = 0; AppState.effort-changed(0); }
-    }
-    if step == 1: Hint { text: @tr("Typed just as well either way. You can switch any time in the settings."); }
     if step == 1: DictationCard { in-setup: true; }
     if step == 1 && AppState.key-note != "" && !AppState.guide: Hint { text: AppState.key-note; }
     // The desktop's questions, one at a time, each said before it comes.
@@ -1413,11 +1400,33 @@ component SetupPage inherits VerticalLayout {
         primary: true;
         clicked => { AppState.allow-typing(); }
     }
-    if step == 1: Hint { text: (AppState.linux ? @tr("kyrr starts when you sign in and lives in the tray, if your desktop has one. Both can be changed in the settings.") : @tr("kyrr starts with Windows and lives in the tray, bottom right (maybe behind the little arrow). Both can be changed in the settings.")); }
     if step == 1: Button {
-        text: @tr("Done");
+        text: @tr("Next");
         primary: AppState.dictation-state != DictationState.no-model
             && (!AppState.guide || (AppState.key-state == 2 && AppState.typing-state == 2));
+        clicked => { AppState.next-setup(); }
+    }
+
+    if step == 2: Hint { text: @tr("Step 3 of 3"); }
+    if step == 2: Heading { text: @tr("Performance setting"); font-size: 20px; }
+    if step == 2: Caption { text: @tr("How much may kyrr ask of your computer?"); }
+    if step == 2: EffortOption {
+        title: @tr("Best quality");
+        text: @tr("For most computers. The most thorough noise removal, the words show while you talk, dictations up to 15 minutes.");
+        picked: AppState.effort-index == 1;
+        clicked => { AppState.effort-index = 1; AppState.effort-changed(1); }
+    }
+    if step == 2: EffortOption {
+        title: @tr("Lean");
+        text: @tr("For older or weaker laptops, and if things stutter. Simpler noise removal, the words show once you are done talking, dictations up to 2 minutes.");
+        picked: AppState.effort-index == 0;
+        clicked => { AppState.effort-index = 0; AppState.effort-changed(0); }
+    }
+    if step == 2: Hint { text: @tr("Typed just as well either way. You can switch any time in the settings."); }
+    if step == 2: Hint { text: (AppState.linux ? @tr("kyrr starts when you sign in and lives in the tray, if your desktop has one. Both can be changed in the settings.") : @tr("kyrr starts with Windows and lives in the tray, bottom right (maybe behind the little arrow). Both can be changed in the settings.")); }
+    if step == 2: Button {
+        text: @tr("Done");
+        primary: true;
         clicked => { AppState.finish-setup(); }
     }
 }
