@@ -12,8 +12,7 @@
   compensation, words while you talk, update settings). One column
   everywhere, Windows and Linux alike. Simple or Advanced is no longer
   remembered between visits.
-
-- "Feedback" under Settings, About (and on the website and in the
+- "Feedback" under Global settings, About (and on the website and in the
   README): opens an e-mail to the maintainer with the kyrr version, the
   system (Windows, or distribution, desktop and install type on Linux) and
   the language filled in. kyrr sends nothing itself; no log is attached.
