@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Dictation wave: the words are written by an invisible pen that glides
+  along the line at an even pace (the average of how fast words came in
+  lately, plus a share of what waits), instead of every word fading in on
+  its own as soon as a pass delivered it. Each letter fades in over 0.8 s
+  after the pen passed it, rising a little; the pill widens and the line
+  scrolls with the pen, not in steps per batch of words. In a recording
+  of the effect the words stand about 0.3 to 0.5 s later than with the old
+  look, in return for no stop and go.
+- Live words: after a look that found nothing new, the next look starts
+  0.8 s before where that one ended, so a pause no longer makes the
+  stretch grow up to 8 s. In a simulation of a computer 4x slower than the
+  test machine, the words after a 15 s pause showed about 1.5 s sooner;
+  the share of CPU time spent on looks stayed about the same.
 - Flatpak on Hyprland, sway, niri and river: kyrr types and shows the
   dictation wave there too. The block kyrr writes into the compositor's
   config (dictation key, start at sign-in) now also links the compositor's
