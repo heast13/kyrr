@@ -60,9 +60,11 @@ jobs:
         # explained in the submission); any other finding fails.
         working-directory: ${{ runner.temp }}/flathub
         run: |
-          lint() { flatpak run --command=flatpak-builder-lint org.flatpak.Builder --permission-review "$@"; }
-          lint manifest io.github.heast13.kyrr.yml
-          lint repo repo
+          # Flathub's image: the linter as Flathub runs it, newer than the one
+          # in org.flatpak.Builder.
+          lint() { docker run --rm -v "$PWD":/mnt ghcr.io/flathub/flatpak-builder-lint:latest --permission-review "$@"; }
+          lint manifest /mnt/io.github.heast13.kyrr.yml
+          lint repo /mnt/repo
       - name: Every library the program needs is in the Flatpak
         run: |
           flatpak run --command=ldd io.github.heast13.kyrr /app/bin/kyrr > "$RUNNER_TEMP/ldd.txt"

@@ -47,9 +47,14 @@ writes, which take kyrr from GitHub:
 python3 packaging/flatpak/flathub.py "$(git rev-parse HEAD)" /tmp/kyrr-flathub   # a pushed commit
 cd /tmp/kyrr-flathub
 flatpak run --command=flathub-build org.flatpak.Builder --install io.github.heast13.kyrr.yml
-flatpak run --command=flatpak-builder-lint org.flatpak.Builder --permission-review manifest io.github.heast13.kyrr.yml
-flatpak run --command=flatpak-builder-lint org.flatpak.Builder --permission-review repo repo
+lint() { docker run --rm -v "$PWD":/mnt ghcr.io/flathub/flatpak-builder-lint:latest --permission-review "$@"; }
+lint manifest /mnt/io.github.heast13.kyrr.yml
+lint repo /mnt/repo
 ```
+
+The linter runs from Flathub's own image, which follows the linter's main
+branch as Flathub's checks do; the one inside `org.flatpak.Builder` can be
+a release behind and lack `--permission-review`.
 
 `.github/workflows/flatpak.yml` does exactly this for every pull request that
 touches the packaging, and offers the result as the bundle `kyrr-flatpak`
