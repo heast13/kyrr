@@ -162,6 +162,9 @@ fn memos(window: &MinimalSoftwareWindow, ui: &MainWindow, out: &str, lang: &str)
     state.set_memo_sheet_open(true);
     render_at(window, ui, 700.0, &format!("{out}/memos-text-{lang}.rgba"));
     state.set_memo_sheet_open(false);
+    // Let the text slide away before the next pictures.
+    std::thread::sleep(std::time::Duration::from_millis(450));
+    slint::platform::update_timers_and_animations();
     state.set_memo_items(ModelRc::new(VecModel::from(Vec::<MemoItem>::new())));
     state.set_memo_count(0);
     render(window, ui, &format!("{out}/memos-empty-{lang}.rgba"));
@@ -294,6 +297,9 @@ fn main() {
         state.set_look_index(2);
     }
     state.set_advanced(false);
+    state.set_page(5);
+    ui.set_memo_folder(if lang == "de" { "Dokumente" } else { "Documents" }.into());
+    render(&window, &ui, &format!("{out}/recordings-settings-{lang}.rgba"));
     state.set_page(2);
     // Listening to yourself: the button turns red.
     state.set_listening(true);
