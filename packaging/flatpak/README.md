@@ -166,8 +166,8 @@ the runtime is the current Freedesktop branch.
 The steps, once the points above are settled:
 
 1. Tag a release that has the commits of this folder; its `<release>` is the
-   newest one in the metainfo and the screenshot URLs name that tag
-   (`flathub.py` checks both).
+   newest one in the metainfo and the screenshot URLs name that tag or a
+   commit (`flathub.py` checks both; a branch is refused).
 2. `python3 packaging/flatpak/flathub.py 0.X.Y /tmp/kyrr-flathub` writes the
    three files Flathub gets (as a reference for the by-hand manifest, see
    point 1): the manifest with the `type: dir` source swapped for the
