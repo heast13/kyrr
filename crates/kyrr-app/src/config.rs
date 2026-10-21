@@ -22,8 +22,9 @@ pub struct Config {
     pub dictation_toggle: bool,
     /// The wave shows the words heard so far while the key is held.
     pub dictation_live: bool,
-    /// The large noise model was swapped for the small one once because the
-    /// CPU lacks AVX2; never again, so the user's later choice holds.
+    /// The lean setting was picked once because the CPU lacks AVX2 (up to
+    /// 0.5.8 only the small noise model); never again, so the user's later
+    /// choice holds.
     pub lean_suggested: bool,
     /// Ask GitHub once a day whether there is a newer kyrr.
     pub update_check: bool,

@@ -22,6 +22,9 @@ export global AppState {
     in property <bool> model-switching;
     // The filter fell back to ONNX Runtime: the CPU lacks AVX2, Lean suits it.
     in property <bool> old-cpu;
+    // Lean and best quality set the noise model and the words while you
+    // talk at once: 0 lean, 1 best quality, 2 a mix of the two.
+    in-out property <int> effort-index: 1;
     // Linux: the filter is kyrr's own microphone, there is no installer, and
     // the desktop may have no tray.
     in property <bool> linux;
@@ -176,6 +179,7 @@ export global AppState {
     callback key-changed(int);
     callback key-toggle-changed(bool);
     callback live-words-toggled(bool);
+    callback effort-changed(int);
     callback open-licenses();
     callback check-updates();
     callback open-update();
@@ -783,6 +787,50 @@ component AboutSettings inherits Card {
     }
 }
 
+// One of the two effort choices in the setup: a card that lights up green
+// when picked.
+component EffortOption inherits Rectangle {
+    in property <string> title;
+    in property <string> text;
+    in property <bool> picked;
+    callback clicked();
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: root.picked ? #2ea043 : Palette.border;
+    background: root.picked ? #2ea043.with-alpha(0.12) : (touch.has-hover ? Palette.alternate-background : transparent);
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+    HorizontalLayout {
+        padding: 12px;
+        spacing: 10px;
+        VerticalLayout {
+            alignment: start;
+            padding-top: 2px;
+            Rectangle {
+                width: 14px;
+                height: 14px;
+                border-radius: 7px;
+                border-width: 1.5px;
+                border-color: root.picked ? #2ea043 : Palette.foreground.with-alpha(0.4);
+                Rectangle {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 4px;
+                    background: #2ea043;
+                    visible: root.picked;
+                }
+            }
+        }
+        VerticalLayout {
+            spacing: 3px;
+            Text { text: root.title; font-size: 13px; font-weight: 700; }
+            Text { text: root.text; font-size: 12px; wrap: word-wrap; color: Palette.foreground.with-alpha(0.75); }
+        }
+    }
+}
+
 // The main view's quiet note that a new version is out, with the one click
 // that installs it. Closing it hides it until the next version.
 component UpdateBanner inherits Rectangle {
@@ -1126,7 +1174,20 @@ component ToolsSettings inherits Card {
 
 // Settings: the rest.
 component GeneralSettings inherits Card {
+    pure function effort-hint(i: int) -> string {
+        if (i == 0) { return @tr("Simpler noise removal, the words show once you are done talking, dictations up to 2 minutes. Typed just as well. For older laptops."); }
+        if (i == 1) { return @tr("The most thorough noise removal, the words show while you talk, dictations up to 15 minutes. Needs a bit more power."); }
+        return @tr("Your own mix of noise removal and words while you talk.");
+    }
     Heading { text: @tr("General"); }
+    Caption { text: @tr("Effort"); }
+    Segmented {
+        options: AppState.effort-index == 2 ? [@tr("Lean"), @tr("Best quality"), @tr("Custom")] : [@tr("Lean"), @tr("Best quality")];
+        selected <=> AppState.effort-index;
+        changed(i) => { AppState.effort-changed(i); }
+    }
+    Hint { text: root.effort-hint(AppState.effort-index); }
+    Separator { }
     HorizontalLayout {
         spacing: 8px;
         Caption { text: @tr("Language"); vertical-alignment: center; }
@@ -1289,6 +1350,20 @@ component SetupPage inherits VerticalLayout {
         primary: true;
         clicked => { AppState.allow-typing(); }
     }
+    if step == 1: Caption { text: @tr("Effort"); }
+    if step == 1: EffortOption {
+        title: @tr("Best quality");
+        text: @tr("For most computers. The most thorough noise removal, the words show while you talk, dictations up to 15 minutes.");
+        picked: AppState.effort-index == 1;
+        clicked => { AppState.effort-index = 1; AppState.effort-changed(1); }
+    }
+    if step == 1: EffortOption {
+        title: @tr("Lean");
+        text: @tr("For older or weaker laptops, and if things stutter. Simpler noise removal, the words show once you are done talking, dictations up to 2 minutes.");
+        picked: AppState.effort-index == 0;
+        clicked => { AppState.effort-index = 0; AppState.effort-changed(0); }
+    }
+    if step == 1: Hint { text: @tr("Typed just as well either way. You can switch any time in the settings."); }
     if step == 1: Hint { text: (AppState.linux ? @tr("kyrr starts when you sign in and lives in the tray, if your desktop has one. Both can be changed in the settings.") : @tr("kyrr starts with Windows and lives in the tray, bottom right (maybe behind the little arrow). Both can be changed in the settings.")); }
     if step == 1: Button {
         text: @tr("Done");

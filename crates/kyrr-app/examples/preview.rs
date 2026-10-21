@@ -160,6 +160,9 @@ fn main() {
     state.set_presence_db(-2.0);
     state.set_deesser_index(2);
     render(&window, &ui, &format!("{out}/settings-advanced-{lang}.rgba"));
+    state.set_effort_index(2);
+    render(&window, &ui, &format!("{out}/settings-advanced-custom-{lang}.rgba"));
+    state.set_effort_index(1);
     state.set_advanced(false);
 
     // Settings with voice off and the defaults.
@@ -194,6 +197,9 @@ fn main() {
     state.set_dictation_state(DictationState::Downloading);
     state.set_download_progress(0.42);
     render(&window, &ui, &format!("{out}/setup2-{lang}.rgba"));
+    state.set_effort_index(0);
+    render(&window, &ui, &format!("{out}/setup2-lean-{lang}.rgba"));
+    state.set_effort_index(1);
 
     // The summary window of a new version.
     let news = NewsWindow::new().unwrap();

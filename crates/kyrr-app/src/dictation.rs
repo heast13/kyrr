@@ -32,6 +32,17 @@ const IDLE_UNLOAD: Duration = Duration::from_secs(15 * 60);
 const LOOK_FIRST: Duration = Duration::from_millis(700);
 const LOOK_REST: Duration = Duration::from_millis(400);
 
+/// The longest dictation with the lean setting: on the slow computers it is
+/// meant for, recognising takes about a quarter of the time spoken, so the
+/// wait stays around half a minute. Otherwise `MAX_SECONDS`. At the limit
+/// kyrr types what it heard, as if the key had been let go.
+const SHORT_LIMIT: Duration = Duration::from_secs(2 * 60);
+
+/// Text heard while the key is still held (at the limit) waits for it to
+/// be let go, as a held Ctrl would turn the typing into shortcuts; at most
+/// this long.
+const WAIT_FOR_KEY: Duration = Duration::from_secs(3);
+
 /// A computer that needs longer than this for two looks in a row would
 /// show the words far too late: the wave goes on without them for this
 /// dictation.
@@ -75,6 +86,10 @@ pub enum Event {
     Typed(String),
     /// The words heard so far while the key is held, oldest first.
     Heard(Vec<String>),
+    /// A dictation started that ends at this moment at the latest.
+    Ends(Instant),
+    /// The dictation reached its limit: this, in red in the pill.
+    Limit(String),
     /// Something to tell the user; `None` clears an earlier message.
     Message(Option<String>),
 }
@@ -94,7 +109,11 @@ pub enum Command {
     Muted(bool),
     /// Show the words heard so far while the key is held (or not).
     Live(bool),
+    /// Dictations end after `SHORT_LIMIT` (the lean setting), or not.
+    Short(bool),
     KeyDown,
+    /// The dictation key went down (true) or up, whatever it starts or ends.
+    Held(bool),
     /// The key went up at this moment.
     KeyUp(Instant),
     Quit,
@@ -113,15 +132,16 @@ pub type Clipboard = fn(&str) -> bool;
 /// What the worker says, in the language of the window.
 fn say(language: Language, what: &str) -> String {
     let german = language == Language::German;
-    if what == "cut" {
-        let minutes = MAX_SECONDS / 60;
+    if let Some(minutes) = what.strip_prefix("limit ") {
         return if german {
-            format!("Nach {minutes} Minuten ist Schluss: Der Rest kam nicht mit.")
+            format!("Nach {minutes} Minuten fügt kyrr ein, was bis dahin kam. Für mehr die Taste nochmal drücken.")
         } else {
-            format!("{minutes} minutes is the limit: the rest was not written.")
+            format!("After {minutes} minutes kyrr types what it has so far. Press the key again to go on.")
         };
     }
     match (what, german) {
+        ("limit", true) => "Maximale Diktatlänge",
+        ("limit", false) => "Longest dictation reached",
         ("offline", true) => "Kein Internet oder der Server antwortet nicht. Nochmal versuchen?",
         ("offline", false) => "No internet, or the server does not answer. Try again?",
         ("server", true) => "Der Server hat das Sprachmodell gerade nicht. Später nochmal versuchen.",
@@ -165,6 +185,15 @@ struct Worker {
     microphone: Option<String>,
     muted: bool,
     live: bool,
+    /// Dictations end after `SHORT_LIMIT`, not `MAX_SECONDS`.
+    short: bool,
+    /// When the running dictation reaches its limit, and that limit.
+    ends: Instant,
+    limit: Duration,
+    /// The dictation key is down.
+    held: bool,
+    /// Text to type once the key is up, and since when.
+    waiting: Option<(String, Instant)>,
     download_cancel: Option<Arc<AtomicBool>>,
     /// Number of the current download, so a cancelled one finishing late
     /// does not end a newer one.
@@ -211,6 +240,11 @@ pub fn spawn(
         microphone: None,
         muted: false,
         live,
+        short: false,
+        ends: Instant::now(),
+        limit: SHORT_LIMIT,
+        held: false,
+        waiting: None,
         download_cancel: None,
         download_id: 0,
         download_running: false,
@@ -231,11 +265,18 @@ pub fn spawn(
         .spawn(move || {
             worker.refresh();
             loop {
-                let wait = worker.until_look().unwrap_or(Duration::from_secs(60));
+                let wait = [worker.until_end(), worker.until_look(), worker.until_typed()]
+                    .into_iter()
+                    .flatten()
+                    .min()
+                    .unwrap_or(Duration::from_secs(60));
+                let due = |d: Option<Duration>| d.is_some_and(|d| d.is_zero());
                 match rx.recv_timeout(wait) {
                     Ok(Command::Quit) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     Ok(cmd) => worker.handle(cmd),
-                    Err(mpsc::RecvTimeoutError::Timeout) if worker.until_look().is_some() => worker.look(),
+                    Err(mpsc::RecvTimeoutError::Timeout) if due(worker.until_end()) => worker.end_at_limit(),
+                    Err(mpsc::RecvTimeoutError::Timeout) if due(worker.until_typed()) => worker.type_waiting(),
+                    Err(mpsc::RecvTimeoutError::Timeout) if due(worker.until_look()) => worker.look(),
                     Err(mpsc::RecvTimeoutError::Timeout) => worker.unload_when_idle(),
                 }
             }
@@ -327,6 +368,36 @@ impl Worker {
         Some(next.saturating_duration_since(Instant::now()))
     }
 
+    /// Time until the running dictation reaches its limit; None while
+    /// nothing is recorded.
+    fn until_end(&self) -> Option<Duration> {
+        self.recording
+            .as_ref()
+            .map(|_| self.ends.saturating_duration_since(Instant::now()))
+    }
+
+    /// The longest dictation with the current settings.
+    fn limit(&self) -> Duration {
+        if self.short {
+            SHORT_LIMIT
+        } else {
+            Duration::from_secs(MAX_SECONDS as u64)
+        }
+    }
+
+    /// Time until text that waits for the key is typed anyway.
+    fn until_typed(&self) -> Option<Duration> {
+        let (_, since) = self.waiting.as_ref()?;
+        Some((*since + WAIT_FOR_KEY).saturating_duration_since(Instant::now()))
+    }
+
+    /// At the limit: types what was heard, as if the key had been let go.
+    fn end_at_limit(&mut self) {
+        self.tell(&format!("limit {}", self.limit.as_secs() / 60));
+        (self.notify)(Event::Limit(say(self.language, "limit")));
+        self.key_up(Instant::now());
+    }
+
     /// Recognises the newest stretch of the running recording and shows
     /// the words that are sure by now.
     fn look(&mut self) {
@@ -383,6 +454,13 @@ impl Worker {
                 }
             }
             Command::Microphone(guid) => self.microphone = guid,
+            Command::Short(on) => self.short = on,
+            Command::Held(down) => {
+                self.held = down;
+                if !down {
+                    self.type_waiting();
+                }
+            }
             Command::Muted(on) => self.muted = on,
             Command::Live(on) => {
                 self.live = on;
@@ -434,6 +512,8 @@ impl Worker {
     }
 
     fn key_down(&mut self) {
+        // Still waiting for the key (its release got lost): first that.
+        self.type_waiting();
         if self.state != State::Ready || self.recording.is_some() {
             return;
         }
@@ -442,9 +522,12 @@ impl Worker {
                 self.recording = Some(rec);
                 self.words = Live::default();
                 self.next_look = Some(Instant::now() + LOOK_FIRST);
+                self.limit = self.limit();
+                self.ends = Instant::now() + self.limit;
                 self.looks.clear();
                 (self.notify)(Event::Message(None));
                 self.set_state(State::Recording);
+                (self.notify)(Event::Ends(self.ends));
                 // Asleep after a long pause: load while the recording runs.
                 if self.model.is_none() && self.load().is_err() {
                     self.recording = None;
@@ -491,30 +574,40 @@ impl Worker {
             );
         }
         let heard = !text.is_empty();
-        if heard {
-            // A space to go on with, unless the text ends with a line break.
-            let typed = if text.ends_with('\n') {
-                text.clone()
-            } else {
-                format!("{text} ")
-            };
-            if (self.typer)(&typed) {
-                (self.notify)(Event::Typed(text));
-            } else if (self.clipboard)(&text) {
-                self.tell("clipboard");
-            } else {
-                self.tell("blocked");
-            }
+        if heard && self.held {
+            self.waiting = Some((text, Instant::now()));
+        } else if heard {
+            self.type_text(text);
         }
         if !heard && self.muted {
             self.tell("muted");
         }
-        if rate > 0 && samples.len() >= rate as usize * MAX_SECONDS {
-            self.tell("cut");
-        }
         // The language may have changed while recording: back to whatever
         // the settings say, not blindly to Ready.
         self.refresh();
+    }
+
+    /// Types the text that waited for the key, if any.
+    fn type_waiting(&mut self) {
+        if let Some((text, _)) = self.waiting.take() {
+            self.type_text(text);
+        }
+    }
+
+    fn type_text(&mut self, text: String) {
+        // A space to go on with, unless the text ends with a line break.
+        let typed = if text.ends_with('\n') {
+            text.clone()
+        } else {
+            format!("{text} ")
+        };
+        if (self.typer)(&typed) {
+            (self.notify)(Event::Typed(text));
+        } else if (self.clipboard)(&text) {
+            self.tell("clipboard");
+        } else {
+            self.tell("blocked");
+        }
     }
 
     fn start_download(&mut self) {

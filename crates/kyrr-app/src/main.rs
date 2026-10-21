@@ -735,7 +735,7 @@ impl App {
         };
         let mic = guid.as_deref().map(name).unwrap_or_default();
         // On CPUs without AVX2 the filter runs ONNX Runtime, at several times
-        // the CPU: switch to the small model once, then leave it to the user.
+        // the CPU: kyrr picks the lean setting, once.
         let old_cpu = fs == FilterState::Running && detail.starts_with("onnx");
         state.set_old_cpu(old_cpu);
         if old_cpu && !self.config.borrow().lean_suggested {
@@ -744,11 +744,7 @@ impl App {
                 config.lean_suggested = true;
                 config.save();
             }
-            if !self.filter.borrow().light_model {
-                state.set_model_index(1);
-                self.write_filter(|f| f.light_model = true);
-                self.model_changed.set(Some(Instant::now()));
-            }
+            self.set_effort(true);
         }
         let _ = self.worker.send(Command::Microphone(guid.clone()));
         *self.attached.borrow_mut() = guid;
@@ -993,6 +989,44 @@ impl App {
         if !switching {
             self.model_changed.set(None);
         }
+    }
+
+    /// Lean (small noise model, no words while speaking) or the best
+    /// quality, both at once.
+    fn set_effort(&self, lean: bool) {
+        if self.filter.borrow().light_model != lean {
+            self.set_model(lean);
+        }
+        {
+            let mut config = self.config.borrow_mut();
+            config.dictation_live = !lean;
+            config.save();
+        }
+        let _ = self.worker.send(Command::Live(!lean));
+        if let Some(w) = self.window.upgrade() {
+            let state = w.global::<AppState>();
+            state.set_model_index(lean as i32);
+            state.set_live_words(!lean);
+        }
+        self.show_effort();
+    }
+
+    /// The effort setting from the two it stands for: lean, best, or a mix.
+    fn show_effort(&self) {
+        let lean = self.filter.borrow().light_model;
+        let live = self.config.borrow().dictation_live;
+        // Lean dictations are short: a slow computer takes long to write
+        // a long one.
+        let _ = self.worker.send(Command::Short(lean && !live));
+        let Some(w) = self.window.upgrade() else {
+            return;
+        };
+        let state = w.global::<AppState>();
+        state.set_effort_index(match (lean, live) {
+            (true, false) => 0,
+            (false, true) => 1,
+            _ => 2,
+        });
     }
 
     fn set_model(&self, light: bool) {
@@ -1451,9 +1485,11 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     let recording_flag = Arc::clone(&recording);
     let wave = Overlay::spawn(platform::open_wave, recorder::tail);
     let notify: dictation::Notify = Arc::new(move |event| {
-        if let Event::Heard(words) = event {
-            wave.set_words(words);
-            return;
+        match event {
+            Event::Heard(words) => return wave.set_words(words),
+            Event::Ends(at) => return wave.set_end(at),
+            Event::Limit(text) => return wave.set_limit(text),
+            _ => {}
         }
         if let Event::State(s) = &event {
             recording_flag.store(*s == State::Recording, Ordering::Relaxed);
@@ -1482,7 +1518,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 }
                 Event::Progress(p) => state.set_download_progress(p),
                 Event::Typed(text) => state.set_last_text(text.into()),
-                Event::Heard(_) => {}
+                Event::Heard(_) | Event::Ends(_) | Event::Limit(_) => {}
                 Event::Message(m) => state.set_dictation_message(m.unwrap_or_default().into()),
             }
         });
@@ -1509,6 +1545,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         std::thread::spawn(move || {
             while let Ok(key) = keys.recv() {
                 let toggle = key_toggle.load(Ordering::Relaxed);
+                let down = matches!(key, platform::KeyEvent::Pressed);
+                if worker.send(Command::Held(down)).is_err() {
+                    break;
+                }
                 let cmd = match (key, toggle) {
                     (platform::KeyEvent::Pressed, false) => Command::KeyDown,
                     (platform::KeyEvent::Released, false) => Command::KeyUp(Instant::now()),
@@ -1569,6 +1609,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_can_minimize(platform::can_minimize());
     state.set_advanced(app.config.borrow().advanced_settings);
     state.set_live_words(app.config.borrow().dictation_live);
+    app.show_effort();
     app.apply_key();
     show_voice(&state, &filter.voice);
     tray.set_dictation_enabled(app.config.borrow().dictation);
@@ -1776,6 +1817,21 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 config.save();
             }
             let _ = app.worker.send(Command::Live(on));
+            app.show_effort();
+        }
+    });
+    state.on_effort_changed({
+        let app = Rc::clone(&app);
+        move |i| {
+            if i < 2 {
+                // Picked by hand: the choice for an old processor is made.
+                {
+                    let mut config = app.config.borrow_mut();
+                    config.lean_suggested = true;
+                    config.save();
+                }
+                app.set_effort(i == 0);
+            }
         }
     });
     state.on_key_toggle_changed({
@@ -1809,7 +1865,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     });
     state.on_model_changed({
         let app = Rc::clone(&app);
-        move |i| app.set_model(i == 1)
+        move |i| {
+            app.set_model(i == 1);
+            app.show_effort();
+        }
     });
     state.on_probe_record({
         let app = Rc::clone(&app);

@@ -8,8 +8,9 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, SizedSample};
 use kyrr_common::wave::TAIL;
 
-/// Longest recording kept. It is held in memory at the microphone's rate (about
-/// 170 MB at 48 kHz for this long) and recognized in pieces afterwards.
+/// Longest dictation: then kyrr types what it heard. The recording is held in
+/// memory at the microphone's rate (about 170 MB at 48 kHz for this long)
+/// and recognized in pieces afterwards.
 pub const MAX_SECONDS: usize = 15 * 60;
 
 /// The newest audio of the running recording, for the wave on the screen.
@@ -98,7 +99,9 @@ impl Recording {
         let config = supported.config();
         let channels = config.channels.max(1) as usize;
         let rate = config.sample_rate;
-        let max = rate as usize * MAX_SECONDS;
+        // A minute more than the longest dictation, as a busy worker may
+        // end it a little late. Memory not written to is not used.
+        let max = rate as usize * (MAX_SECONDS + 60);
         // Reserved at once: the audio callback must not wait for a copy of a
         // long recording when a vector would otherwise grow. Memory that
         // is not written to is not used yet. If the system refuses that

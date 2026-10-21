@@ -11,6 +11,9 @@
 //! out on the left side. The text is only shown here: what gets typed is
 //! still the whole recording, recognised once the key is let go.
 //!
+//! Towards the end of the longest dictation the bars turn yellow, then
+//! red; at the end kyrr types what it has and the pill says so in red.
+//!
 //! The drawing is done here, in plain Rust, so Windows and Linux show the
 //! same picture; each system only puts the pixels on the screen (a
 //! [`Surface`]). The surface is opened for each dictation and closed after
@@ -79,12 +82,23 @@ const LEAD: f32 = 0.35;
 /// A replaced word fades out over this long.
 const LEAVE: f32 = 0.25;
 
+/// The bars slowly turn yellow from this many seconds before the
+/// dictation's limit, and then red; each over its own stretch of seconds,
+/// so the colour glides rather than switches.
+const WARN_YELLOW: f32 = 30.0;
+const WARN_YELLOW_FADE: f32 = 10.0;
+const WARN_RED: f32 = 10.0;
+const WARN_RED_FADE: f32 = 7.0;
+
 /// Straight (not premultiplied) colours, 0..1, with their opacity.
 struct Colors {
     background: [f32; 4],
     edge: [f32; 4],
     bar: [f32; 4],
     text: [f32; 4],
+    /// The bars shortly before the limit, and at it (with the words).
+    yellow: [f32; 4],
+    red: [f32; 4],
 }
 
 /// The window's own greys and greens, for a dark and a light system.
@@ -93,12 +107,16 @@ const DARK: Colors = Colors {
     edge: [1.0, 1.0, 1.0, 0.10],
     bar: [0.369, 0.918, 0.831, 1.0],
     text: [0.93, 0.94, 0.95, 1.0],
+    yellow: [0.98, 0.80, 0.30, 1.0],
+    red: [1.0, 0.42, 0.40, 1.0],
 };
 const LIGHT: Colors = Colors {
     background: [0.965, 0.968, 0.975, 0.88],
     edge: [0.0, 0.0, 0.0, 0.12],
     bar: [0.078, 0.722, 0.651, 1.0],
     text: [0.11, 0.12, 0.13, 1.0],
+    yellow: [0.86, 0.60, 0.0, 1.0],
+    red: [0.85, 0.16, 0.16, 1.0],
 };
 
 /// The voice is heard in the newest 32 ms of the microphone.
@@ -258,6 +276,12 @@ pub struct Wave {
     scroll: f32,
     /// When words were last set (as `t`), to pace the next ones.
     last_words: Option<f32>,
+    /// When the running dictation reaches its limit.
+    end: Option<Instant>,
+    /// The limit was reached: the line is the note about it, in red.
+    limit: bool,
+    /// How yellow and how red the bars are, 0..1 each, eased.
+    warn: [f32; 2],
 }
 
 impl Default for Wave {
@@ -275,6 +299,9 @@ impl Default for Wave {
             pill: PILL,
             scroll: 0.0,
             last_words: None,
+            end: None,
+            limit: false,
+            warn: [0.0; 2],
         }
     }
 }
@@ -353,6 +380,9 @@ impl Wave {
             self.words.clear();
             self.leaving.clear();
             self.last_words = None;
+            self.end = None;
+            self.limit = false;
+            self.warn = [0.0; 2];
         }
         if mode != Mode::Hidden {
             self.look = mode;
@@ -405,6 +435,17 @@ impl Wave {
         }
     }
 
+    /// The running dictation ends at `at` at the latest.
+    pub fn set_end(&mut self, at: Instant) {
+        self.end = Some(at);
+    }
+
+    /// The dictation reached its limit: `note` in red instead of the words.
+    pub fn set_limit(&mut self, note: String) {
+        self.limit = true;
+        self.set_words(&[note]);
+    }
+
     /// Something to show: on, or still fading out.
     pub fn visible(&self) -> bool {
         self.mode != Mode::Hidden || self.alpha > 0.0
@@ -455,6 +496,17 @@ impl Wave {
             *bar += (target.min(1.0) - *bar) * (rate * dt).min(1.0);
         }
         self.step_words(dt);
+        // Yellow, then red towards the limit while recording; red from
+        // the limit on. Back to green once the key is let go in time.
+        let left = match self.end {
+            _ if self.limit => 0.0,
+            Some(end) if self.mode == Mode::Listening => end.saturating_duration_since(Instant::now()).as_secs_f32(),
+            _ => f32::MAX,
+        };
+        let fades = [(WARN_YELLOW, WARN_YELLOW_FADE), (WARN_RED, WARN_RED_FADE)];
+        for (warn, (from, fade)) in self.warn.iter_mut().zip(fades) {
+            ease(warn, fade_in((from - left) / fade), 2.0, dt);
+        }
     }
 
     fn step_words(&mut self, dt: f32) {
@@ -493,6 +545,8 @@ impl Wave {
         pixels.resize((width * height) as usize, 0);
         let (w, h) = (WIDTH as f32, HEIGHT as f32);
         let colors = if self.dark { &DARK } else { &LIGHT };
+        let bar_color = mix(mix(colors.bar, colors.yellow, self.warn[0]), colors.red, self.warn[1]);
+        let text_color = if self.limit { colors.red } else { colors.text };
         let open = self.open.clamp(0.0, 1.0);
         let pill = self.pill.clamp(PILL, w);
         let pill_left = (w - pill) / 2.0;
@@ -540,12 +594,12 @@ impl Wave {
                     }
                     let r = bar_width / 2.0;
                     let bar = coverage(rounded_box(x - bx, cy, r, half, r), scale);
-                    over(&mut color, colors.bar, bar);
+                    over(&mut color, bar_color, bar);
                 }
                 if let Some(text) = &text {
                     let ink = text[(py * width + px) as usize];
                     if ink > 0.0 {
-                        over(&mut color, colors.text, ink.min(1.0) * open * inside);
+                        over(&mut color, text_color, ink.min(1.0) * open * inside);
                     }
                 }
                 pixels[(py * width + px) as usize] = pack(color, self.alpha);
@@ -636,6 +690,12 @@ fn coverage(distance: f32, scale: f32) -> f32 {
     (0.5 - distance * scale).clamp(0.0, 1.0)
 }
 
+/// From colour `a` to `b` by `t`, 0..1.
+fn mix(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
+    let t = t.clamp(0.0, 1.0);
+    std::array::from_fn(|i| lerp(a[i], b[i], t))
+}
+
 /// Paints `src` (straight colour) with `amount` coverage over `dst`
 /// (premultiplied).
 fn over(dst: &mut [f32; 4], src: [f32; 4], amount: f32) {
@@ -655,6 +715,8 @@ fn pack(color: [f32; 4], alpha: f32) -> u32 {
 enum Message {
     Mode(Mode),
     Words(Vec<String>),
+    End(Instant),
+    Limit(String),
 }
 
 impl Wave {
@@ -662,6 +724,8 @@ impl Wave {
         match message {
             Message::Mode(mode) => self.set_mode(mode),
             Message::Words(words) => self.set_words(&words),
+            Message::End(at) => self.set_end(at),
+            Message::Limit(note) => self.set_limit(note),
         }
     }
 }
@@ -694,6 +758,16 @@ impl Overlay {
     /// The words heard so far in this dictation, oldest first.
     pub fn set_words(&self, words: Vec<String>) {
         let _ = self.tx.send(Message::Words(words));
+    }
+
+    /// The running dictation ends at `at` at the latest.
+    pub fn set_end(&self, at: Instant) {
+        let _ = self.tx.send(Message::End(at));
+    }
+
+    /// The dictation reached its limit: `note` shows in red.
+    pub fn set_limit(&self, note: String) {
+        let _ = self.tx.send(Message::Limit(note));
     }
 }
 
@@ -977,6 +1051,52 @@ mod tests {
         assert!(wave.words.is_empty());
         run_for(&mut wave, 1.0);
         assert!(wave.open < 0.01 && (wave.pill - PILL).abs() < 0.5);
+    }
+
+    #[test]
+    fn the_bars_turn_yellow_then_red_towards_the_limit() {
+        let mut wave = shown(Mode::Listening, 0.5, &QUIET);
+        wave.set_end(Instant::now() + Duration::from_secs(60));
+        run_for(&mut wave, 1.0);
+        assert!(wave.warn[0] < 0.01 && wave.warn[1] < 0.01);
+        // Halfway into yellow: a blend, no jump.
+        wave.set_end(Instant::now() + Duration::from_secs(25));
+        run_for(&mut wave, 3.0);
+        assert!(wave.warn[0] > 0.3 && wave.warn[0] < 0.7, "{}", wave.warn[0]);
+        wave.set_end(Instant::now() + Duration::from_secs(15));
+        run_for(&mut wave, 4.0);
+        assert!(wave.warn[0] > 0.99 && wave.warn[1] < 0.01);
+        wave.set_end(Instant::now());
+        run_for(&mut wave, 4.0);
+        assert!(wave.warn[1] > 0.99);
+        // Let go in time: green again while writing.
+        wave.set_mode(Mode::Writing);
+        run_for(&mut wave, 4.0);
+        assert!(wave.warn[0] < 0.01 && wave.warn[1] < 0.01);
+    }
+
+    #[test]
+    fn at_the_limit_the_pill_says_so_in_red() {
+        let mut wave = shown(Mode::Listening, 0.5, &QUIET);
+        wave.set_words(&words("eins zwei drei"));
+        run_for(&mut wave, 1.0);
+        wave.set_limit("Maximale Diktatlänge".into());
+        wave.set_mode(Mode::Writing);
+        run_for(&mut wave, 4.0);
+        assert_eq!(wave.words.len(), 1);
+        assert!(wave.warn[1] > 0.99);
+        let mut pixels = Vec::new();
+        let (w, h) = wave.paint(1.0, &mut pixels);
+        // Red ink: more red than green somewhere in the line.
+        let reddish = pixels
+            .iter()
+            .filter(|&&p| (p >> 16 & 0xff) > (p >> 8 & 0xff) + 80)
+            .count();
+        assert!(reddish > 100, "{reddish} of {} red pixels", w * h);
+        // The next dictation starts green and without the note.
+        wave.set_mode(Mode::Hidden);
+        wave.set_mode(Mode::Listening);
+        assert!(!wave.limit && wave.words.is_empty() && wave.warn == [0.0; 2]);
     }
 
     #[test]
