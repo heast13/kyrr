@@ -323,8 +323,8 @@ unsafe impl Send for NativeModel {}
 unsafe impl Sync for NativeModel {}
 
 impl NativeModel {
-    /// Load the native build of the model in `onnx` with the engine
-    /// `inference` asks for (never `Onnx`). Returns the model and its
+    /// Load the native build of the model in `onnx` (which may be missing,
+    /// kyrr) with the engine `inference` asks for (never `Onnx`). Returns the model and its
     /// initial state, or why it cannot run natively.
     pub(crate) fn load(
         onnx: &Path,
@@ -345,11 +345,20 @@ impl NativeModel {
             Inference::NativeFp32 => (PRESET_FP32, Engine::NativeFp32),
             Inference::Onnx => return Err("ONNX requested".into()),
         };
-        let sha = file_sha256(onnx).map_err(|e| format!("{}: {e}", onnx.display()))?;
-        let registered = REGISTRY
-            .iter()
-            .find(|r| r.onnx_sha256 == sha)
-            .ok_or("no native build of this model file")?;
+        let registered = match file_sha256(onnx) {
+            Ok(sha) => REGISTRY.iter().find(|r| r.onnx_sha256 == sha),
+            // kyrr: packages without ONNX Runtime ship only the weights; the
+            // model is then the one named like the file, and the weights'
+            // own checksum below pins it just as well.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                let stem = onnx.file_stem().and_then(|s| s.to_str());
+                REGISTRY
+                    .iter()
+                    .find(|r| Api::get(r).is_ok_and(|api| Some(api.name) == stem))
+            }
+            Err(e) => return Err(format!("{}: {e}", onnx.display())),
+        }
+        .ok_or("no native build of this model file")?;
         let api = Api::get(registered)?;
         let ok = match supported {
             Some(probe) => probe(preset),
@@ -489,6 +498,23 @@ mod tests {
         let onnx = dir.join("dpdfnet8_48khz_hr.onnx");
         std::fs::write(&onnx, b"not the exported graph").unwrap();
         let e = NativeModel::load(&onnx, Inference::Auto).err().unwrap();
+        assert_eq!(e, "no native build of this model file");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn without_its_onnx_file_a_model_is_known_by_its_name() {
+        let dir = std::env::temp_dir().join(format!("hushmic-native-name-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // Found by name, then refused for its (missing) weights, not for
+        // being unknown.
+        let e = NativeModel::load(&dir.join("dpdfnet2_48khz_hr.onnx"), Inference::NativeFp32)
+            .err()
+            .unwrap();
+        assert!(e.starts_with("native weights not installed"), "{e}");
+        let e = NativeModel::load(&dir.join("dpdfnet9_48khz_hr.onnx"), Inference::Auto)
+            .err()
+            .unwrap();
         assert_eq!(e, "no native build of this model file");
         std::fs::remove_dir_all(&dir).unwrap();
     }

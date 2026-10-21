@@ -187,3 +187,36 @@ fn every_engine_and_model() {
     }
     let _ = std::fs::remove_dir_all(&only_onnx);
 }
+
+/// The native engine runs from the packed weights alone (the Linux packages
+/// leave out the .onnx files), with the same output.
+#[test]
+fn native_needs_only_the_weights() {
+    let Some(dir) = assets() else {
+        eprintln!("assets missing, skipped");
+        return;
+    };
+    if !kyrr_denoise::native_possible(&dir.join(Model::Light.file_name())) {
+        eprintln!("no native engine on this CPU, skipped");
+        return;
+    }
+    let only_weights = std::env::temp_dir().join(format!("kyrr-weights-test-{}", std::process::id()));
+    std::fs::create_dir_all(&only_weights).unwrap();
+    for model in [Model::Light, Model::Quality] {
+        std::fs::copy(dir.join(model.weights_name()), only_weights.join(model.weights_name())).unwrap();
+        assert!(!only_weights.join(model.file_name()).exists());
+        let mut seed = 5;
+        let input = noise(48_000, 0.05, &mut seed);
+        let run = |from: &std::path::Path| {
+            let denoiser = load(from, model, None).expect("model loads");
+            let mut f = VoiceFilter::new(denoiser, 48_000, 1, 480).unwrap();
+            let mut output = vec![0.0; input.len()];
+            for (i, o) in input.chunks(480).zip(output.chunks_mut(480)) {
+                f.process(i, o);
+            }
+            output
+        };
+        assert_eq!(run(&only_weights), run(&dir), "{model:?}");
+    }
+    std::fs::remove_dir_all(&only_weights).unwrap();
+}

@@ -51,6 +51,14 @@ impl Model {
         }
     }
 
+    /// The native engine's packed weights, next to the `.onnx` file.
+    pub fn weights_name(self) -> &'static str {
+        match self {
+            Model::Quality => "dpdfnet8_48khz_hr.weights.f32",
+            Model::Light => "dpdfnet2_48khz_hr.weights.f32",
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Model::Quality => "quality",
@@ -62,7 +70,8 @@ impl Model {
 /// Loads `model` from `dir` on a thread with a large stack. The native INT8
 /// engine runs when the CPU has AVX2/FMA and the `.weights.f32` file is
 /// present; otherwise ONNX Runtime from `ort_library` (initialized once per
-/// process, later paths are ignored).
+/// process, later paths are ignored). Only ONNX Runtime needs the `.onnx`
+/// file itself; the Linux packages ship just the weights.
 pub fn load(dir: &Path, model: Model, ort_library: Option<&Path>) -> Result<Denoiser, String> {
     let path = dir.join(model.file_name());
     let ort = ort_library.map(PathBuf::from);
