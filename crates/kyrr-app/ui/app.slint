@@ -183,6 +183,7 @@ export global AppState {
     callback open-licenses();
     callback check-updates();
     callback open-update();
+    callback report-problem();
     callback show-news();
     // What the running version brought (from the NEWS built into the app).
     callback show-current-news();
@@ -779,12 +780,14 @@ component AboutSettings inherits Card {
     if root.credits: Hint { text: @tr("Plus the work of many more not named here. Raising a beer to you all."); }
     // Up to two rows: three buttons side by side overflow the card in German and
     // with wider system fonts, and the window has a fixed width.
-    if !AppState.advanced: HorizontalLayout {
+    HorizontalLayout {
+        spacing: 8px;
         Rectangle { }
-        Button {
+        if !AppState.advanced: Button {
             text: root.unfolded ? @tr("Less") : @tr("Credits");
             clicked => { root.unfolded = !root.unfolded; }
         }
+        Button { text: @tr("Report a problem"); clicked => { AppState.report-problem(); } }
     }
     HorizontalLayout {
         spacing: 8px;

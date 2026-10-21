@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- "Report a problem" under Settings, About (and on the website and in the
+  README): opens an e-mail to the maintainer with the kyrr version, the
+  system (Windows, or distribution, desktop and install type on Linux) and
+  the language filled in. kyrr sends nothing itself; no log is attached.
+
 - Distance compensation is out of beta and on by default, for existing
   users too. The 0.5.8 switch (`VoiceDistance`) is no longer read; the
   setting is now `VoiceDistanceOff`, so an off set in 0.5.8 does not carry
