@@ -318,10 +318,29 @@ pub fn download(installer: &Installer, progress: &mut dyn FnMut(f32)) -> Result<
     let dir = folder();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let dest = dir.join(name);
-    let response = agent.get(&installer.url).call().map_err(|e| e.to_string())?;
+    // Written next to it and moved into place once checked, so a broken
+    // download never leaves a file that looks like an installer.
+    let part = dir.join(format!("{name}.part"));
+    let result = fetch_checked(&agent, &installer.url, &part, &expected, progress)
+        .and_then(|()| std::fs::rename(&part, &dest).map_err(|e| e.to_string()));
+    if result.is_err() {
+        let _ = std::fs::remove_file(&part);
+    }
+    result.map(|()| dest)
+}
+
+/// Downloads `url` into `dest`; an error if its SHA256 is not `expected`.
+fn fetch_checked(
+    agent: &ureq::Agent,
+    url: &str,
+    dest: &std::path::Path,
+    expected: &str,
+    progress: &mut dyn FnMut(f32),
+) -> Result<(), String> {
+    let response = agent.get(url).call().map_err(|e| e.to_string())?;
     let total = response.body().content_length().unwrap_or(0);
     let mut reader = response.into_body().into_reader();
-    let mut out = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
+    let mut out = std::fs::File::create(dest).map_err(|e| e.to_string())?;
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; 256 * 1024];
     let mut done = 0u64;
@@ -337,13 +356,12 @@ pub fn download(installer: &Installer, progress: &mut dyn FnMut(f32)) -> Result<
             progress((done as f64 / total as f64).min(1.0) as f32);
         }
     }
-    drop(out);
+    out.sync_all().map_err(|e| e.to_string())?;
     let got: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
     if got != expected {
-        let _ = std::fs::remove_file(&dest);
         return Err("the download is damaged (checksum mismatch)".into());
     }
-    Ok(dest)
+    Ok(())
 }
 
 #[cfg(test)]
