@@ -21,35 +21,35 @@ line saying nothing changes on Windows.
 - Voice memos: tap F8, talk, tap F8 again. kyrr saves the recording in Documents, folder kyrr, and names it after its first words. The list under "Recordings" plays, renames and deletes them; "Write text" turns a recording into text with the time each part starts. Switch it off on the main page; the key can be changed in the settings.
 - Settings are tidier: every switch on the main page has its own gear for its settings, "Global settings" holds the rest, and each page opens in "Simple".
 - The setup has three steps now: microphone, language and dictation model, performance setting.
-- New setting "Effort": Lean or Best quality. A slow computer gets a suggestion for Lean once. Lean dictations last up to 2 minutes, the others 15; towards the limit the wave turns yellow, then red, and kyrr types what it heard.
+- New setting "Effort": Lean or Best quality. A slow computer gets a suggestion for Lean once. Lean dictations last up to 2 minutes, the others 15; towards the limit the wave turns yellow, then red.
 - The wave writes the words smoothly, letter by letter, with fewer wrong words, and shows them sooner on slower computers.
 - Distance compensation is no longer a beta and is on by default (gear of the voice card, Advanced).
 - The first words after starting kyrr or installing it are no longer lost.
 - Long dictations are typed much sooner after you let go and use less memory.
 - An interrupted download of a speech model carries on where it stopped.
-- More variety in the status line, and when nothing was heard.
+- More variety in the status line.
 - Global settings, About: "Feedback" opens an e-mail to the developer, ready to write.
 - More controls work with the keyboard and with screen readers.
 - (Linux) To update, paste the install commands again: kyrr no longer has to be closed first.
-- (Linux) kyrr recovers when the sound system restarts, the AppImage is a third smaller, and the window no longer depends on the graphics driver.
+- (Linux) kyrr recovers when the sound system restarts, and the AppImage is a third smaller.
 - (Linux) Each release also comes as a Flatpak file, which works on Hyprland, Sway and niri too.
 
 ### Deutsch
 
 - Sprachaufzeichnungen: F8 antippen, sprechen, nochmal F8. kyrr speichert die Aufnahme unter Dokumente im Ordner kyrr und benennt sie nach den ersten Worten. Die Liste unter „Aufzeichnungen“ spielt ab, benennt um und löscht; „Text schreiben“ macht aus einer Aufnahme Text mit der Zeit, an der jeder Abschnitt beginnt. Auf der Hauptseite abschaltbar, die Taste lässt sich in den Einstellungen ändern.
-- Die Einstellungen sind aufgeräumter: Jeder Schalter auf der Hauptseite hat sein eigenes Zahnrad für seine Einstellungen, "Globale Einstellungen" enthält den Rest, und jede Seite öffnet sich in "Einfach".
+- Die Einstellungen sind aufgeräumter: Jeder Schalter auf der Hauptseite hat ein Zahnrad für seine Einstellungen, der Rest steht unter "Globale Einstellungen".
 - Die Einrichtung hat jetzt drei Schritte: Mikrofon, Sprache und Diktiermodell, Leistungseinstellung.
-- Neue Einstellung "Rechenaufwand": Sparsam oder Beste Qualität. Ein langsamer Rechner bekommt einmal den Vorschlag Sparsam. Sparsame Diktate dauern bis zu 2 Minuten, die anderen 15; zum Limit hin wird die Welle gelb, dann rot, und kyrr tippt, was es gehört hat.
-- Die Welle schreibt die Wörter weich, Buchstabe für Buchstabe, mit weniger falschen Wörtern, und zeigt sie auf langsameren Rechnern früher.
+- Neue Einstellung "Rechenaufwand": Sparsam oder Beste Qualität. Ein langsamer Rechner bekommt einmal den Vorschlag Sparsam. Sparsame Diktate dauern bis zu 2 Minuten, die anderen 15; zum Limit hin wird die Welle gelb, dann rot.
+- Die Welle schreibt die Wörter weich, Buchstabe für Buchstabe, mit weniger Fehlern, auf langsamen Rechnern früher.
 - Der Abstandsausgleich ist keine Beta mehr und standardmäßig an (Zahnrad der Stimme-Karte, Erweitert).
 - Die ersten Wörter nach dem Start von kyrr oder nach der Installation gehen nicht mehr verloren.
 - Lange Diktate werden nach dem Loslassen deutlich früher getippt und brauchen weniger Speicher.
 - Ein unterbrochener Download eines Sprachmodells macht dort weiter, wo er abgebrochen ist.
-- Mehr Abwechslung in der Statuszeile und wenn nichts zu hören war.
+- Mehr Abwechslung in der Statuszeile.
 - Globale Einstellungen, Über kyrr: "Feedback" öffnet eine E-Mail an den Entwickler, fertig zum Schreiben.
-- Mehr Bedienelemente funktionieren mit der Tastatur und mit Screenreadern.
+- Mehr Bedienelemente gehen per Tastatur und Screenreader.
 - (Linux) Für ein Update die Installationsbefehle einfach nochmal einfügen: kyrr muss nicht mehr vorher geschlossen werden.
-- (Linux) kyrr erholt sich, wenn das Soundsystem neu startet, das AppImage ist ein Drittel kleiner, und das Fenster hängt nicht mehr vom Grafiktreiber ab.
+- (Linux) kyrr erholt sich vom Neustart des Soundsystems, das AppImage ist ein Drittel kleiner.
 - (Linux) Jede Version gibt es auch als Flatpak-Datei, die auch unter Hyprland, Sway und niri läuft.
 
 ## 0.5.8
