@@ -9,21 +9,32 @@ body:
     validations:
       required: true
   - type: input
-    id: windows
+    id: system
     attributes:
-      label: Windows version
-      placeholder: Windows 11 25H2
+      label: Your system
+      description: >
+        Windows: the version (Windows 11 25H2, say). Linux: the distribution,
+        the desktop (GNOME, KDE, Hyprland, ...) and whether it runs X11 or Wayland.
+      placeholder: Windows 11 25H2, or Fedora 43, GNOME 49, Wayland
     validations:
       required: true
   - type: input
+    id: version
+    attributes:
+      label: kyrr version
+      description: At the bottom of the Settings page.
+      placeholder: "0.5.8"
+  - type: input
     id: microphone
     attributes:
-      label: Microphone (and whether another audio tool like Equalizer APO is installed)
+      label: Microphone (and whether another audio tool, like Equalizer APO on Windows, is installed)
   - type: textarea
     id: details
     attributes:
       label: Details from kyrr
       description: >
-        The status line in kyrr's main window. If the filter is involved, the log
+        The status line in kyrr's main window. On Windows, if the filter is
+        involved, the log
         C:\Windows\ServiceProfiles\LocalService\AppData\Local\Temp\kyrr-apo.log
-        (needs admin rights to open) helps a lot. It contains events only, no audio.
+        (needs admin rights to open) helps a lot. On Linux, the lines kyrr prints
+        when you start it from a terminal. Both contain events only, no audio.
