@@ -886,8 +886,8 @@ msgstr "Rechenaufwand"
 msgid "Best quality"
 msgstr "Beste Qualität"
 
-msgid "Your computer is on the leisurely side."
-msgstr "Dein Rechner ist eher gemütlich."
+msgid "Your computer seems to be on the leisurely side."
+msgstr "Dein Rechner scheint eher gemütlich zu sein."
 
 msgid "So kyrr suggests Lean, or it gets a bumpy ride. Lean means lighter noise removal, and the words show once you are done talking. Typed just as well."
 msgstr "kyrr empfiehlt deshalb „Sparsam“, sonst wird’s eine holprige Fahrt. Sparsam heißt: leichtere Geräuschunterdrückung, und die Wörter erscheinen erst, wenn du fertig gesprochen hast. Getippt wird genauso gut."
