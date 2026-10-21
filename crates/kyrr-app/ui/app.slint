@@ -132,7 +132,8 @@ export global AppState {
     in property <string> error-text;
     in property <string> version;
 
-    // 0 is the main view, 1 the settings page.
+    // 0 is the main view, 1 the global settings, then the settings of each
+    // card: 2 noise, 3 voice, 4 dictation.
     in-out property <int> page;
     // Counts up every few seconds; the status line picks its next phrase
     // from it, so one state does not repeat the same sentence.
@@ -173,6 +174,12 @@ export global AppState {
     // Switches Windows' mute off the microphone.
     callback unmute();
     callback page-changed();
+    // A card's gear: its own settings page, in the simple view.
+    public function open-page(p: int) {
+        root.advanced = false;
+        root.page = p;
+        root.page-changed();
+    }
     callback dictation-retry();
     callback repair();
     callback move-to-default();
@@ -674,13 +681,56 @@ component StatusLine inherits HorizontalLayout {
 
 // A main function's name and its switch. The one-line state below it is a
 // direct child of the card (see the note in MainWindow).
+// The small gear that opens a card's own settings.
+component GearButton inherits Rectangle {
+    in property <string> label;
+    callback clicked();
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: touch.has-hover || key.has-focus ? Palette.foreground.with-alpha(0.12) : transparent;
+    forward-focus: key;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-action-default => { root.clicked(); }
+    Image {
+        source: @image-url("icons/gear.png");
+        colorize: Palette.foreground.with-alpha(0.75);
+        width: 18px;
+        height: 18px;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+    key := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+        mouse-cursor: pointer;
+    }
+}
+
 component RowHead inherits HorizontalLayout {
     in property <string> title;
     in property <bool> enabled: true;
     in-out property <bool> checked;
+    // The gear's name; no name, no gear.
+    in property <string> gear-label;
     callback toggled(bool);
+    callback gear();
+    spacing: 6px;
     Heading { text: root.title; vertical-alignment: center; }
     Rectangle { }
+    if root.gear-label != "": VerticalLayout {
+        alignment: center;
+        GearButton { label: root.gear-label; clicked => { root.gear(); } }
+    }
     Switch {
         checked <=> root.checked;
         enabled: root.enabled;
@@ -693,6 +743,8 @@ component NoiseCard inherits Card {
     property <bool> attached: AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking;
     RowHead {
         title: @tr("Remove background noise");
+        gear-label: @tr("Settings: {}", @tr("Remove background noise"));
+        gear => { AppState.open-page(2); }
         enabled: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed
             && AppState.filter-state != FilterState.unsupported;
         checked <=> AppState.filter-enabled;
@@ -739,6 +791,8 @@ component VoiceCard inherits Card {
         && AppState.filter-state != FilterState.unsupported;
     RowHead {
         title: @tr("Improve voice");
+        gear-label: @tr("Settings: {}", @tr("Improve voice"));
+        gear => { AppState.open-page(3); }
         enabled: root.available;
         checked <=> AppState.voice-enabled;
         toggled(on) => { AppState.voice-toggled(on); }
@@ -756,6 +810,8 @@ component DictationCard inherits Card {
     in property <bool> in-setup;
     RowHead {
         title: @tr("Dictation");
+        gear-label: root.in-setup ? "" : @tr("Settings: {}", @tr("Dictation"));
+        gear => { AppState.open-page(4); }
         checked <=> AppState.dictation-enabled;
         toggled(on) => { AppState.dictation-toggled(on); }
     }
@@ -765,7 +821,7 @@ component DictationCard inherits Card {
             : AppState.dictation-state == DictationState.downloading ? @tr("Downloading the speech model… {}%", round(AppState.download-progress * 100))
             : AppState.dictation-state == DictationState.loading ? @tr("Loading the speech model…")
             : AppState.dictation-state == DictationState.ready && AppState.key-unbound && !root.in-setup ? @tr("{} is not set up yet: kyrr needs your desktop's OK for it.", AppState.key-name)
-            : AppState.dictation-state == DictationState.ready && AppState.key-note != "" && !(root.in-setup && AppState.guide) ? @tr("Dictate with your key, the text lands at your cursor. Setting up the key: see Settings.")
+            : AppState.dictation-state == DictationState.ready && AppState.key-note != "" && !(root.in-setup && AppState.guide) ? @tr("Dictate with your key, the text lands at your cursor. Setting up the key: see the gear.")
             : AppState.dictation-state == DictationState.ready ? (AppState.key-toggle ? @tr("Tap {}, talk, tap again. The text lands at your cursor.", AppState.key-name) : @tr("Hold {}, talk, let go. The text lands at your cursor.", AppState.key-name))
             : AppState.dictation-state == DictationState.recording ? @tr("Listening…")
             : AppState.dictation-state == DictationState.transcribing ? @tr("Writing…")
@@ -835,7 +891,6 @@ component NoiseSettings inherits Card {
     }
     property <bool> attached: AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking;
 
-    Heading { text: @tr("Background noise"); }
     if !root.attached: Hint {
         text: AppState.filter-state == FilterState.unsupported ? (AppState.linux ? @tr("Needs PipeWire, which is not running.") : @tr("Not on ARM processors yet, sorry.")) : @tr("Set up a microphone first.");
     }
@@ -858,7 +913,6 @@ component NoiseSettings inherits Card {
 
 // Settings: the dictation key and how it works.
 component DictationSettings inherits Card {
-    Heading { text: @tr("Dictation"); }
     Caption { text: @tr("Key"); }
     // Where the desktop owns the key, its own settings change it.
     if !AppState.key-fixed: Segmented {
@@ -1176,7 +1230,6 @@ component VoiceSettings inherits Card {
     property <bool> shown: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed
         && AppState.filter-state != FilterState.unsupported && AppState.voice-enabled;
 
-    Heading { text: @tr("Voice"); }
     if !root.shown: Hint {
         text: AppState.filter-state == FilterState.unsupported ? (AppState.linux ? @tr("Needs PipeWire, which is not running.") : @tr("Not on ARM processors yet, sorry."))
             : @tr("Voice is off, so there is nothing to turn. Switch it on in the main view.");
@@ -1366,7 +1419,6 @@ component GeneralSettings inherits Card {
         if (i == 1) { return @tr("The most thorough noise removal, the words show while you talk, dictations up to 15 minutes. Needs a bit more power."); }
         return @tr("Your own mix of noise removal and words while you talk.");
     }
-    Heading { text: @tr("General"); }
     Caption { text: @tr("Effort"); }
     Segmented {
         options: AppState.effort-index == 2 ? [@tr("Lean"), @tr("Best quality"), @tr("Custom")] : [@tr("Lean"), @tr("Best quality")];
@@ -1622,8 +1674,8 @@ export component MainWindow inherits Window {
     // The window came up (from the tray, at start); the app starts the meter.
     callback shown();
     changed content-height => { root.content-height-changed(); }
-    // One column, 380 px; the settings in two side by side.
-    out property <length> page-width: settings-page ? 760px : 380px;
+    // One column, 380 px, on every page.
+    out property <length> page-width: 380px;
     title: "kyrr";
     icon: @image-url("icons/kyrr-256.png");
     preferred-width: page-width;
@@ -1654,7 +1706,14 @@ export component MainWindow inherits Window {
     }
 
     property <bool> main-page: !setup-mode && AppState.page == 0;
-    property <bool> settings-page: !setup-mode && AppState.page == 1;
+    property <bool> settings-page: !setup-mode && AppState.page > 0;
+    // The simple view and the advanced one: global settings and the pages
+    // of cards that have something more to show.
+    property <bool> has-advanced: AppState.page >= 1 && AppState.page <= 4;
+    property <string> page-title: AppState.page == 2 ? @tr("Remove background noise")
+        : AppState.page == 3 ? @tr("Improve voice")
+        : AppState.page == 4 ? @tr("Dictation")
+        : @tr("Global settings");
 
     scroll := ScrollView {
         content-width: self.visible-width;
@@ -1674,11 +1733,10 @@ export component MainWindow inherits Window {
                 Heading { text: "kyrr"; font-size: 20px; vertical-alignment: center; }
                 Rectangle { }
                 Button {
-                    text: @tr("Settings");
+                    text: @tr("Global settings");
                     horizontal-stretch: 0;
                     clicked => {
-                        AppState.page = 1;
-                        AppState.page-changed();
+                        AppState.open-page(1);
                     }
                 }
             }
@@ -1716,7 +1774,7 @@ export component MainWindow inherits Window {
             }
             if main-page: HideRow { }
 
-            // Settings page: the deeper options.
+            // Settings pages: global, then one for each card's gear.
             if settings-page: HorizontalLayout {
                 spacing: 10px;
                 Button {
@@ -1727,55 +1785,33 @@ export component MainWindow inherits Window {
                         AppState.page-changed();
                     }
                 }
-                Heading { text: @tr("Settings"); font-size: 20px; vertical-alignment: center; }
+                Heading { text: root.page-title; font-size: 20px; vertical-alignment: center; }
                 Rectangle { }
-                // The basics by default; the rest for those who want it.
-                VerticalLayout {
-                    alignment: center;
-                    Segmented {
-                        width: 240px;
-                        options: [@tr("Simple"), @tr("Advanced")];
-                        selected: AppState.advanced ? 1 : 0;
-                        changed(i) => {
-                            AppState.advanced = i == 1;
-                            AppState.advanced-toggled(i == 1);
-                        }
-                    }
+            }
+            // The basics by default; the rest for those who want it.
+            if settings-page && root.has-advanced: Segmented {
+                options: [@tr("Simple"), @tr("Advanced")];
+                selected: AppState.advanced ? 1 : 0;
+                changed(i) => {
+                    AppState.advanced = i == 1;
+                    AppState.advanced-toggled(i == 1);
                 }
             }
-            // Two columns of about equal length. Fixed column widths, so
-            // wrapped text is measured at its real width.
-            if settings-page: HorizontalLayout {
-                spacing: 36px;
-                VerticalLayout {
-                    width: 344px;
-                    spacing: 12px;
-                    alignment: start;
-                    NoiseSettings { }
-                    VoiceSettings { }
-                    // Simple: here, with the voice. Advanced: the voice card
-                    // is tall, so it moves over to the shorter right column.
-                    if !AppState.advanced: LevelSettings { }
-                    GeneralSettings { }
-                }
-                VerticalLayout {
-                    width: 344px;
-                    spacing: 12px;
-                    alignment: start;
-                    DictationSettings { }
-                    ToolsSettings { }
-                    if AppState.advanced: LevelSettings { }
-                    AboutSettings { }
-                }
-            }
-            if settings-page: Caption {
+            if settings-page && AppState.page == 1: GeneralSettings { }
+            if settings-page && AppState.page == 1: AboutSettings { }
+            if settings-page && AppState.page == 2: NoiseSettings { }
+            if settings-page && AppState.page == 2: ToolsSettings { }
+            if settings-page && AppState.page == 3: VoiceSettings { }
+            if settings-page && AppState.page == 3: LevelSettings { }
+            if settings-page && AppState.page == 4: DictationSettings { }
+            if settings-page && AppState.page == 1: Caption {
                 // English in every language, on purpose.
                 text: "Proudly presented by heast13 and Claude “Silent but deadly” Opus. No microphones were harmed.";
                 horizontal-alignment: center;
                 font-size: 12px;
                 font-italic: true;
             }
-            if settings-page: Caption {
+            if settings-page && AppState.page == 1: Caption {
                 text: "kyrr " + AppState.version + (AppState.linux ? " Beta" : "");
                 horizontal-alignment: center;
                 font-size: 12px;

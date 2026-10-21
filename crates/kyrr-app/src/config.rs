@@ -32,8 +32,6 @@ pub struct Config {
     pub update_checked: u64,
     /// The version whose note the user closed; it stays away until the next.
     pub update_dismissed: String,
-    /// The settings page shows everything, not just the basics.
-    pub advanced_settings: bool,
     /// The microphone Windows used by default when the user picked another
     /// one on purpose; kyrr leaves that pick until the default changes.
     pub pinned_default: String,
@@ -62,7 +60,6 @@ impl Default for Config {
             update_check: true,
             update_checked: 0,
             update_dismissed: String::new(),
-            advanced_settings: false,
             pinned_default: String::new(),
             last_run_version: String::new(),
         }

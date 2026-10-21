@@ -35,7 +35,7 @@ What it does:
   Polish, Portuguese and others), transcribed on your PC. Say "new line" or
   "neue Zeile" for a line break. While you dictate, a small wave at the
   bottom of the screen shows that kyrr is listening, with the words heard so
-  far (switchable in the advanced settings), and then that it is writing.
+  far (switchable under the dictation gear, Advanced), and then that it is writing.
 - **Check.** A live level of what the microphone hears and what apps get,
   a ten-second test (record once, then play the take before and after kyrr)
   and listening to yourself live on headphones.
@@ -45,10 +45,10 @@ What it does:
   found, or one that just arrived.
 
 <p align="center">
-  <img src="docs/screenshots/main.png" width="380" alt="kyrr's window: noise filter, improve voice and dictation, each with one switch">
+  <img src="docs/screenshots/main.png" width="380" alt="kyrr's window: noise filter, improve voice and dictation, each with one switch and a gear for its settings">
 </p>
 <p align="center">
-  <img src="docs/screenshots/settings.png" width="760" alt="Settings in two columns: filter strength and model, voice sound with its sliders, compressor, S sounds, low cut, pop protection, distance compensation, language, autostart, updates and microphone; dictation key, words while you talk, level check with before/after test and listening, automatic volume, about">
+  <img src="docs/screenshots/settings.png" width="900" alt="The settings pages that the gears open: noise (filter strength, level check with before/after test and listening), voice in its advanced view (sound with sliders, compressor, S sounds, low cut, pop protection, distance compensation, automatic volume) and dictation (key and how it works)">
 </p>
 
 Status: young and in active development.
@@ -119,7 +119,7 @@ curl -fL -o ~/.local/bin/kyrr.new https://github.com/heast13/kyrr/releases/lates
 Either way kyrr adds itself to your app menu on its first start.
 
 **Start at sign-in** switches on by itself when the first-start setup is
-done. Switch it off or on again in Settings, "Start when you sign in".
+done. Switch it off or on again in Global settings, "Start when you sign in".
 
 **Updates** are not installed by themselves: kyrr says when there is a new
 version; paste the install commands again: a running kyrr closes, the file is
@@ -218,7 +218,7 @@ moves it slowly (5 dB/s up, 10 dB/s down, at most +24/−12 dB) towards about
 adjust the volume themselves (call apps, say) can work against it, so use
 one of the two.
 
-*Distance compensation* (on by default, switch it off under advanced settings)
+*Distance compensation* (on by default, switch it off under the voice gear, Advanced)
 helps when you sit far from the microphone and the room echoes on every word. It listens to the raw
 microphone: after a syllable a close voice falls 20 dB and more within
 40 ms, while far away no level falls faster than the room's echo dies down.
@@ -256,7 +256,7 @@ of after a quarter of an hour without dictation:
 |---|---|---|
 | German | [primeline/parakeet-primeline](https://huggingface.co/primeline/parakeet-primeline), a German fine-tune of NVIDIA Parakeet; also handles English | 900 MB |
 | English | [NVIDIA parakeet-unified-en-0.6b](https://huggingface.co/nvidia/parakeet-unified-en-0.6b) | 663 MB |
-| Multilingual (Language choice in the setup and in Settings) | [NVIDIA parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), 25 European languages, picks the language itself. Works in French, Spanish, Polish, Portuguese, Italian and Dutch (see the measurements in `tools/export-primeline`); German and English also work | 900 MB |
+| Multilingual (Language choice in the setup and in Global settings) | [NVIDIA parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), 25 European languages, picks the language itself. Works in French, Spanish, Polish, Portuguese, Italian and Dutch (see the measurements in `tools/export-primeline`); German and English also work | 900 MB |
 
 On Windows dictation does nothing while a window running as administrator is
 in front: Windows keeps normal programs from seeing the keyboard there.
@@ -276,7 +276,7 @@ the internet for exactly these things:
   whose answer also carries the short "What's new" text of that version.
   It sends nothing about you beyond what any web request carries: your IP
   address and "kyrr/<version>" as the program's name. It can be switched
-  off under Settings, General ("Check for updates automatically"); then
+  off under Global settings, Advanced ("Check for updates automatically"); then
   kyrr only asks when you click "Check for updates".
 - **An update**, only when you click "Update": the installer of the new
   version from this repository's releases, checked against its SHA256 file.
@@ -340,7 +340,7 @@ The cores (`kyrr-denoise`, `kyrr-voice`, `kyrr-dictate`) build and test on Linux
 
 ## Feedback
 
-In kyrr, Settings, About, "Feedback" opens an e-mail to
+In kyrr, Global settings, About, "Feedback" opens an e-mail to
 stueckig.habicht_2o@icloud.com with the kyrr version and your system filled
 in. kyrr sends nothing by itself. Issues on GitHub work too.
 
@@ -353,7 +353,7 @@ kyrr is licensed under either of
 
 at your option. Third-party components and models keep their own licenses,
 see [THIRD_PARTY.md](THIRD_PARTY.md); the app shows the model credits under
-Settings, About. kyrr's window is made with [Slint](https://slint.dev) under
+Global settings, About. kyrr's window is made with [Slint](https://slint.dev) under
 its royalty-free license, which asks for the badge at the top of this page.
 Security issues: see [SECURITY.md](SECURITY.md).
 
