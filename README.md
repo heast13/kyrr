@@ -36,6 +36,11 @@ What it does:
   "neue Zeile" for a line break. While you dictate, a small wave at the
   bottom of the screen shows that kyrr is listening, with the words heard so
   far (switchable under the dictation gear, Advanced), and then that it is writing.
+- **Voice memos.** Tap F8, talk, tap F8 again: kyrr saves the recording
+  as a small Opus file in Documents/kyrr and names it after its first
+  words. Play, rename, show in the folder or delete them in the list; one
+  click writes the whole text of a memo, with the minute each part starts,
+  on your PC. Can be switched off on the main page.
 - **Check.** A live level of what the microphone hears and what apps get,
   a ten-second test (record once, then play the take before and after kyrr)
   and listening to yourself live on headphones.
@@ -261,6 +266,27 @@ of after a quarter of an hour without dictation:
 On Windows dictation does nothing while a window running as administrator is
 in front: Windows keeps normal programs from seeing the keyboard there.
 
+**Voice memos.** The memo key (F8; F9 or Pause if dictation has F8, or none)
+starts and ends a recording, as does the tray menu. kyrr records the
+microphone as dictation hears it (with the noise filter when it is on) as Opus (mono,
+24 kbit/s, about 11 MB an hour) for up to four hours, into `Documents/kyrr`
+(the folder Windows or your desktop calls Documents, wherever it is). The
+file is called `2026-10-21 14-05 Title.opus`: when the recording ends, the
+dictation model listens to its first seconds and the first real sentence
+becomes the title. "Write text" transcribes the whole memo in pieces of
+half a minute, cut at a pause, and saves the text beside it as
+`… Title.txt`, one paragraph per piece with its start time (`[1:30] …`).
+Clicking a time plays the memo from there. Dictation comes first: while you
+dictate, the text waits. The memo key does nothing while you dictate, and
+the dictation key nothing while a memo records.
+
+In the Flatpak kyrr may only use that one folder
+(`--filesystem=xdg-documents/kyrr:create`). On GNOME before 48 kyrr adds a
+second custom shortcut for the memo key, running `kyrr --memo`; on GNOME 48,
+KDE and other desktops with the shortcut portal both keys are asked for in
+one dialog; on Hyprland, sway, river and niri the key goes into kyrr's lines
+in the compositor's config.
+
 ## Privacy
 
 Audio and text never leave your computer. No telemetry. kyrr connects to
@@ -282,6 +308,9 @@ the internet for exactly these things:
   version from this repository's releases, checked against its SHA256 file.
   Where kyrr cannot install it itself (Linux, or a failed download), it
   opens the download page on the website instead.
+
+Voice memos and their texts stay in your Documents folder; kyrr sends
+none of them anywhere. Record other people only when they agree to it.
 
 Nothing is installed without your click. (Building kyrr also downloads its
 assets and libraries, from kyrr's mirror on GitHub first.)
