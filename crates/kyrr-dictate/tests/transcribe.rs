@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use kyrr_dictate::{european, Dictation, Language, ModelSpec};
+use kyrr_dictate::{european, Dictation, Language, ModelSpec, Transcript};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -102,4 +102,29 @@ fn model_path_with_umlauts() {
         dictation.transcribe(rate, &samples),
         "Alles hat ein Ende, nur die Wurst hat zwei."
     );
+}
+
+/// A long dictation recognised piece by piece while it runs gives the same
+/// text as recognising it all at the end.
+#[test]
+fn ahead_while_recording() {
+    let models = root().join("models");
+    let wav = root().join("assets/test-audio/de.wav");
+    let spec = Language::German.model();
+    if !spec.is_installed(&models) || !wav.is_file() {
+        eprintln!("de model or test audio missing, skipped");
+        return;
+    }
+    let dictation = Dictation::load(&models, spec, 4).expect("model loads");
+    let (rate, clip) = read_mono(&wav);
+    // About 70 s: two pieces are complete before the end.
+    let rounds = (70 * rate as usize).div_ceil(clip.len());
+    let samples: Vec<f32> = clip.iter().copied().cycle().take(rounds * clip.len()).collect();
+    let mut transcript = Transcript::new(rate);
+    for part in samples.chunks(rate as usize * 3) {
+        transcript.push(part);
+        while dictation.ahead(&mut transcript) {}
+    }
+    assert_eq!(transcript.pieces(), 2);
+    assert_eq!(dictation.finish(transcript), dictation.transcribe(rate, &samples));
 }

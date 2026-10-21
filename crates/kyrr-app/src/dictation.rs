@@ -12,7 +12,7 @@ use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
 use kyrr_dictate::download::{download, DownloadError};
-use kyrr_dictate::{european, Dictation, Language, Live, ModelSpec};
+use kyrr_dictate::{european, Dictation, Language, Live, ModelSpec, Transcript};
 
 use crate::recorder::{Recording, MAX_SECONDS};
 
@@ -32,9 +32,14 @@ const IDLE_UNLOAD: Duration = Duration::from_secs(15 * 60);
 const LOOK_FIRST: Duration = Duration::from_millis(700);
 const LOOK_REST: Duration = Duration::from_millis(400);
 
+/// While the key is held, the recording is taken in this often, and every
+/// piece of it that is complete is recognised then, so a long dictation is
+/// typed soon after the key goes up (see [`Transcript`]).
+const AHEAD_EVERY: Duration = Duration::from_secs(3);
+
 /// The longest dictation with the lean setting: on the slow computers it is
-/// meant for, recognising takes about a quarter of the time spoken, so the
-/// wait stays around half a minute. Otherwise `MAX_SECONDS`. At the limit
+/// meant for, recognising takes about a quarter of the time spoken, which
+/// keeps such a computer busy for half a minute. Otherwise `MAX_SECONDS`. At the limit
 /// kyrr types what it heard, as if the key had been let go.
 const SHORT_LIMIT: Duration = Duration::from_secs(2 * 60);
 
@@ -211,6 +216,9 @@ struct Worker {
     words: Live,
     next_look: Option<Instant>,
     looks: Vec<Duration>,
+    /// The running recording's text so far, and when to take in more.
+    transcript: Option<Transcript>,
+    next_ahead: Instant,
     tx: mpsc::Sender<Command>,
     notify: Notify,
     typer: Typer,
@@ -254,6 +262,8 @@ pub fn spawn(
         words: Live::default(),
         next_look: None,
         looks: Vec::new(),
+        transcript: None,
+        next_ahead: Instant::now(),
         tx: tx.clone(),
         notify,
         typer,
@@ -265,11 +275,16 @@ pub fn spawn(
         .spawn(move || {
             worker.refresh();
             loop {
-                let wait = [worker.until_end(), worker.until_look(), worker.until_typed()]
-                    .into_iter()
-                    .flatten()
-                    .min()
-                    .unwrap_or(Duration::from_secs(60));
+                let wait = [
+                    worker.until_end(),
+                    worker.until_look(),
+                    worker.until_typed(),
+                    worker.until_ahead(),
+                ]
+                .into_iter()
+                .flatten()
+                .min()
+                .unwrap_or(Duration::from_secs(60));
                 let due = |d: Option<Duration>| d.is_some_and(|d| d.is_zero());
                 match rx.recv_timeout(wait) {
                     Ok(Command::Quit) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
@@ -277,6 +292,7 @@ pub fn spawn(
                     Err(mpsc::RecvTimeoutError::Timeout) if due(worker.until_end()) => worker.end_at_limit(),
                     Err(mpsc::RecvTimeoutError::Timeout) if due(worker.until_typed()) => worker.type_waiting(),
                     Err(mpsc::RecvTimeoutError::Timeout) if due(worker.until_look()) => worker.look(),
+                    Err(mpsc::RecvTimeoutError::Timeout) if due(worker.until_ahead()) => worker.work_ahead(),
                     Err(mpsc::RecvTimeoutError::Timeout) => worker.unload_when_idle(),
                 }
             }
@@ -366,6 +382,40 @@ impl Worker {
             .next_look
             .filter(|_| self.live && self.recording.is_some() && self.model.is_some())?;
         Some(next.saturating_duration_since(Instant::now()))
+    }
+
+    /// Time until the recording is taken in again; None while nothing is
+    /// recorded or the model is not there.
+    fn until_ahead(&self) -> Option<Duration> {
+        if self.transcript.is_none() || self.recording.is_none() || self.model.is_none() {
+            return None;
+        }
+        Some(self.next_ahead.saturating_duration_since(Instant::now()))
+    }
+
+    /// Takes in what was recorded since the last time and recognises a
+    /// piece that is complete. One piece at a time: a look at the words or
+    /// the key going up may be waiting.
+    fn work_ahead(&mut self) {
+        let (Some(rec), Some(model), Some(transcript)) = (&self.recording, &self.model, self.transcript.as_mut())
+        else {
+            return;
+        };
+        let new = rec.samples_from(transcript.taken());
+        let done = catch_unwind(AssertUnwindSafe(|| {
+            transcript.push(&new);
+            model.ahead(transcript)
+        }));
+        self.next_ahead = match done {
+            // Maybe one more is complete (the model was still loading).
+            Ok(true) => Instant::now(),
+            Ok(false) => Instant::now() + AHEAD_EVERY,
+            // The whole recording is recognised at the end instead.
+            Err(_) => {
+                self.transcript = None;
+                Instant::now()
+            }
+        };
     }
 
     /// Time until the running dictation reaches its limit; None while
@@ -519,9 +569,11 @@ impl Worker {
         }
         match Recording::start(self.microphone.as_deref()) {
             Ok(rec) => {
+                self.transcript = Some(Transcript::new(rec.rate()));
                 self.recording = Some(rec);
                 self.words = Live::default();
                 self.next_look = Some(Instant::now() + LOOK_FIRST);
+                self.next_ahead = Instant::now() + AHEAD_EVERY;
                 self.limit = self.limit();
                 self.ends = Instant::now() + self.limit;
                 self.looks.clear();
@@ -548,8 +600,16 @@ impl Worker {
         let (rate, samples) = rec.finish();
         self.set_state(State::Transcribing);
         let started = Instant::now();
+        let transcript = self.transcript.take();
+        let ahead = transcript.as_ref().map_or(0, Transcript::pieces);
         let text = match &self.model {
-            Some(model) => match catch_unwind(AssertUnwindSafe(|| model.transcribe(rate, &samples))) {
+            Some(model) => match catch_unwind(AssertUnwindSafe(|| match transcript {
+                Some(mut transcript) => {
+                    transcript.push(samples.get(transcript.taken()..).unwrap_or_default());
+                    model.finish(transcript)
+                }
+                None => model.transcribe(rate, &samples),
+            })) {
                 Ok(text) => text,
                 Err(_) => {
                     self.tell("crash");
@@ -560,7 +620,7 @@ impl Worker {
         };
         self.last_used = Instant::now();
         eprintln!(
-            "kyrr: dictation: {}, recognized in {:.1} s",
+            "kyrr: dictation: {}, recognized in {:.1} s after the key, {ahead} pieces while recording",
             describe(rate, &samples),
             started.elapsed().as_secs_f32()
         );

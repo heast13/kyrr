@@ -160,6 +160,17 @@ impl Recording {
         (self.rate, samples[start..].to_vec(), length)
     }
 
+    /// The microphone's rate.
+    pub fn rate(&self) -> u32 {
+        self.rate
+    }
+
+    /// The recording from sample `from` on.
+    pub fn samples_from(&self, from: usize) -> Vec<f32> {
+        let samples = self.samples.lock().unwrap_or_else(|e| e.into_inner());
+        samples.get(from..).map_or_else(Vec::new, <[f32]>::to_vec)
+    }
+
     /// Stops recording and returns the sample rate and mono samples.
     pub fn finish(self) -> (u32, Vec<f32>) {
         let rate = self.rate;
