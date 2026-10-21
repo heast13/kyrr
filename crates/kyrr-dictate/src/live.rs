@@ -9,12 +9,13 @@
 //!   knows what came before, and ends now. Words up to the last one shown
 //!   are left out (they are on the screen already), so the stretch stays
 //!   short however long the recording gets.
-//! - A word is sure once most of a second followed it (the model hears a
+//! - A word is sure once a second and a bit followed it (the model hears a
 //!   word better once it knows what comes after), or once two looks in a
 //!   row heard it alike and the speaker has moved on from it.
 //!
 //! - After a look that found nothing new, the next one starts shortly before
-//!   where that one ended: a pause does not make the stretch grow, so the
+//!   where that one ended, early enough to catch speech that had begun but
+//!   was not recognised yet: a pause does not make the stretch grow, so the
 //!   first words after it are not slowed down by listening to silence again.
 //!
 //! Shown words stay as they are, so the line on the screen only grows. What
@@ -37,7 +38,7 @@ const BEFORE: f32 = 1.5;
 const LONGEST: f32 = 8.0;
 
 /// A word with this much of the recording after it is sure.
-const AFTER: f32 = 0.8;
+const AFTER: f32 = 1.2;
 
 /// A word two looks agree on is sure with this much after it.
 const AFTER_AGREED: f32 = 0.3;
@@ -50,7 +51,7 @@ const EDGE: f32 = 0.3;
 
 /// After a look that found nothing new, the next one starts this long
 /// before the end of that one (enough for a word that had just begun).
-const QUIET_BEFORE: f32 = 0.8;
+const QUIET_BEFORE: f32 = 1.5;
 
 /// The words shown so far in a running recording.
 #[derive(Default)]
@@ -147,20 +148,20 @@ mod tests {
     }
 
     #[test]
-    fn words_with_most_of_a_second_after_them_show() {
+    fn words_with_a_second_and_a_bit_after_them_show() {
         let mut live = Live::default();
-        // "lange" ends at 1.1 s, "über" at 1.5 s.
+        // "haben" ends at 0.7 s, "lange" at 1.1 s.
         assert!(live.heard(0.0, 2.2, timed("Wir haben lange über die Ar", 0.0)));
-        assert_eq!(shown(&live), "Wir haben lange");
+        assert_eq!(shown(&live), "Wir haben");
     }
 
     #[test]
     fn the_last_words_show_once_two_looks_agree() {
         let mut live = Live::default();
-        live.heard(0.0, 1.8, timed("Wir haben lange über", 0.0));
+        live.heard(0.0, 2.2, timed("Wir haben lange über", 0.0));
         assert_eq!(shown(&live), "Wir haben");
-        // "über" heard alike, and the speaker is past it.
-        live.heard(0.0, 2.1, timed("Wir haben lange über die", 0.0));
+        // "über" (to 1.5 s) heard alike, and the speaker is past it.
+        live.heard(0.0, 2.5, timed("Wir haben lange über die", 0.0));
         assert_eq!(shown(&live), "Wir haben lange über");
     }
 
@@ -177,11 +178,11 @@ mod tests {
     #[test]
     fn a_changed_mind_waits_for_more() {
         let mut live = Live::default();
-        live.heard(0.0, 1.4, timed("Hallo Hanna wie", 0.0));
+        live.heard(0.0, 1.6, timed("Hallo Hanna wie", 0.0));
         assert_eq!(shown(&live), "Hallo");
-        live.heard(0.0, 1.45, timed("Hallo Anna, wie", 0.0));
+        live.heard(0.0, 1.65, timed("Hallo Anna, wie", 0.0));
         assert_eq!(shown(&live), "Hallo");
-        live.heard(0.0, 1.55, timed("Hallo Anna, wie geht", 0.0));
+        live.heard(0.0, 1.95, timed("Hallo Anna, wie geht", 0.0));
         assert_eq!(shown(&live), "Hallo Anna, wie");
     }
 
@@ -194,9 +195,9 @@ mod tests {
             4.2,
             timed("eins zwei drei vier fünf sechs sieben acht neun zehn", 0.0),
         );
-        // "acht" (2.8 .. 3.1 s) is the last one 0.8 s before the end.
-        assert_eq!(shown(&live), "eins zwei drei vier fünf sechs sieben acht");
-        assert!((live.from(4.9) - 1.6).abs() < 1e-5);
+        // "sieben" (2.4 .. 2.7 s) is the last one with at least 1.2 s after it.
+        assert_eq!(shown(&live), "eins zwei drei vier fünf sechs sieben");
+        assert!((live.from(4.9) - 1.2).abs() < 1e-5);
         // A long recording: never more than the longest stretch.
         assert_eq!(live.from(20.0), 12.0);
     }
@@ -205,13 +206,13 @@ mod tests {
     fn words_shown_already_are_left_out() {
         let mut live = Live::default();
         live.heard(0.0, 2.6, timed("eins zwei drei vier fünf", 0.0));
-        assert_eq!(shown(&live), "eins zwei drei vier");
+        assert_eq!(shown(&live), "eins zwei drei");
         // Heard again a little later and longer this time: still shown.
         let mut words = timed("eins zwei drei vier fünf sechs sieben", 0.0);
         words[3].start = 1.3;
         words[3].end = 1.8;
         live.heard(0.0, 3.4, words);
-        assert_eq!(shown(&live), "eins zwei drei vier fünf sechs");
+        assert_eq!(shown(&live), "eins zwei drei vier fünf");
         // Nothing new: nothing added.
         assert!(!live.heard(1.0, 3.7, Vec::new()));
     }
@@ -219,15 +220,15 @@ mod tests {
     #[test]
     fn a_pause_does_not_make_the_stretch_grow() {
         let mut live = Live::default();
-        live.heard(0.0, 2.6, timed("eins zwei drei vier", 0.0));
+        live.heard(0.0, 2.9, timed("eins zwei drei vier", 0.0));
         // Nothing but the words shown already: the speaker is quiet.
         let from = live.from(4.0);
         live.heard(from, 4.0, Vec::new());
-        assert!((live.from(4.0) - 3.2).abs() < 1e-5);
+        assert!((live.from(4.0) - 2.5).abs() < 1e-5);
         // Silence goes on: the stretch is as short as the time since.
-        assert!((live.from(9.0) - 3.2).abs() < 1e-5);
+        assert!((live.from(9.0) - 2.5).abs() < 1e-5);
         // Speech again: the words are new and sure after a moment.
-        live.heard(3.2, 9.0, timed("sechs sieben", 1.5));
+        live.heard(2.5, 9.0, timed("sechs sieben", 1.5));
         assert_eq!(shown(&live), "eins zwei drei vier sechs sieben");
     }
 
