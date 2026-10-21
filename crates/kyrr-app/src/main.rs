@@ -41,6 +41,16 @@ slint::include_modules!();
 
 /// Maximum attenuation for the strength choices gentle, medium, strong.
 const STRENGTHS: [u32; 3] = [24, 48, 100];
+/// The voice memo key kyrr takes now. Not before the setup is done on
+/// Windows, where the hook would take it from every program at once (on
+/// Linux the keys wait for the setup anyway).
+fn memo_key_now(config: &config::Config) -> u32 {
+    if cfg!(windows) && !config.setup_done {
+        return 0;
+    }
+    config.memo_key()
+}
+
 /// What the desktop's shortcut list calls the voice memo key (German,
 /// English).
 const MEMO_DESCRIPTION: (&str, &str) = (
@@ -1343,8 +1353,8 @@ impl App {
         let (key, chosen, taken) = {
             let config = self.config.borrow();
             let taken = config::MEMO_KEYS.iter().position(|&k| k == config.dictation_key);
-            let key = config.memo_key();
-            let chosen = if config.memo_key == 0 { 0 } else { key };
+            let key = memo_key_now(&config);
+            let chosen = if config.memo_key == 0 { 0 } else { config.memo_key() };
             (key, chosen, taken)
         };
         let description = match self.language() {
@@ -1703,7 +1713,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         Language::German => MEMO_DESCRIPTION.0,
         Language::English => MEMO_DESCRIPTION.1,
     };
-    platform::set_memo_key(config.memo_key(), memo_description);
+    platform::set_memo_key(memo_key_now(&config), memo_description);
     if let Some(keys) = platform::start_hotkey(description, config.setup_done) {
         let worker = worker.clone();
         let (recording, key_toggle) = (Arc::clone(&recording), Arc::clone(&key_toggle));
@@ -2277,6 +2287,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 config.setup_done = true;
                 config.save();
             }
+            app.apply_memo_key();
             platform::enable_autostart();
             if let Some(w) = app.window.upgrade() {
                 w.global::<AppState>().set_autostart(platform::autostart_enabled());
