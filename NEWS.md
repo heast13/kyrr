@@ -16,6 +16,38 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
+## 0.6.0
+
+- The setup has three steps now: microphone, then language and dictation model, then the performance setting.
+- New setting "Effort": Lean or Best quality. On a slow computer kyrr suggests Lean once (a small noise model, the words once you stop talking). Lean dictations last up to 2 minutes, the others 15. Towards the limit the wave turns yellow, then red, and kyrr types what it heard instead of dropping it.
+- The wave writes the words smoothly, letter by letter, and shows them sooner on slower computers.
+- Distance compensation is no longer a beta and is on by default. Settings, Advanced switches it off.
+- The first words after starting kyrr or installing it are no longer lost.
+- Long dictations are typed much sooner after you let go, and use less memory.
+- An interrupted download of a speech model carries on where it stopped.
+- More variety in the status line, and when nothing was heard.
+- Settings, About: "Feedback" opens an e-mail to the developer, ready to write.
+- More controls work with the keyboard and with screen readers.
+- (Linux) To update, paste the install commands again: kyrr no longer has to be closed first.
+- (Linux) kyrr recovers when the sound system restarts, the AppImage is a third smaller, and the window no longer depends on the graphics driver.
+- (Linux) Each release also comes as a Flatpak file, which works on Hyprland, Sway and niri too.
+
+### Deutsch
+
+- Die Einrichtung hat jetzt drei Schritte: Mikrofon, dann Sprache und Diktiermodell, dann die Leistungseinstellung.
+- Neue Einstellung "Rechenaufwand": Sparsam oder Beste Qualität. Auf einem langsamen Rechner schlägt kyrr einmal Sparsam vor (kleines Geräuschmodell, die Wörter erst, wenn du fertig bist). Sparsame Diktate dauern bis zu 2 Minuten, die anderen 15. Zum Limit hin wird die Welle gelb, dann rot, und kyrr tippt, was es gehört hat, statt es zu verwerfen.
+- Die Welle schreibt die Wörter weich, Buchstabe für Buchstabe, und zeigt sie auf langsameren Rechnern früher.
+- Der Abstandsausgleich ist keine Beta mehr und standardmäßig an. Einstellungen, Erweitert schaltet ihn aus.
+- Die ersten Wörter nach dem Start von kyrr oder nach der Installation gehen nicht mehr verloren.
+- Lange Diktate werden nach dem Loslassen deutlich früher getippt und brauchen weniger Speicher.
+- Ein unterbrochener Download eines Sprachmodells macht dort weiter, wo er abgebrochen ist.
+- Mehr Abwechslung in der Statuszeile und wenn nichts zu hören war.
+- Einstellungen, Über kyrr: "Feedback" öffnet eine E-Mail an den Entwickler, fertig zum Schreiben.
+- Mehr Bedienelemente funktionieren mit der Tastatur und mit Screenreadern.
+- (Linux) Für ein Update die Installationsbefehle einfach nochmal einfügen: kyrr muss nicht mehr vorher geschlossen werden.
+- (Linux) kyrr erholt sich, wenn das Soundsystem neu startet, das AppImage ist ein Drittel kleiner, und das Fenster hängt nicht mehr vom Grafiktreiber ab.
+- (Linux) Jede Version gibt es auch als Flatpak-Datei, die auch unter Hyprland, Sway und niri läuft.
+
 ## 0.5.8
 
 - Dictation in more languages: next to "Deutsch" and "English" there is now "Multilingual" (in the setup and under Settings, General, Language). It adds French, Spanish, Italian, Dutch, Polish, Portuguese and more; kyrr notices the language by itself. It needs one more download of about 900 MB. German and English keep their own models.

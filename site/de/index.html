@@ -158,6 +158,12 @@ curl -fL -o ~/.local/bin/kyrr.new https://github.com/heast13/kyrr/releases/lates
         <p class="small">Ohne Terminal: <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">AppImage herunterladen</a>, im Dateimanager als Programm ausführen erlauben (Rechtsklick, Eigenschaften) und doppelklicken. Beim ersten Start legt kyrr einen Eintrag im App-Menü an. Unter GNOME ab 48 und KDE fragt der Desktop einmal nach der Diktier-Taste und einmal, ob kyrr tippen darf; kyrr erklärt beide Schritte. <a href="https://github.com/heast13/kyrr#install">Hinweise zu anderen Desktops (Englisch)</a></p>
         <div class="more-info">
           <details>
+            <summary>Flatpak statt AppImage</summary>
+            <p>Jede Version gibt es auch als Flatpak-Datei. <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.flatpak">Herunterladen</a>, dann in ein Terminal einfügen (dafür muss die Quelle Flathub eingerichtet sein, wegen der Laufzeitumgebung; <a href="https://flathub.org/setup">so geht’s</a>):</p>
+            <div class="codebox"><pre tabindex="0"><code>flatpak install --user ./kyrr-x86_64.flatpak</code></pre></div>
+            <p class="small">Ein Update geht genauso mit der neuen Datei. Entfernen: <code>flatpak uninstall --delete-data io.github.heast13.kyrr</code></p>
+          </details>
+          <details>
             <summary>Beim Anmelden starten</summary>
             <p>kyrr startet automatisch beim Anmelden, sobald die Einrichtung beim ersten Start fertig ist. Ändern: Einstellungen in kyrr, „Beim Anmelden starten“.</p>
           </details>
