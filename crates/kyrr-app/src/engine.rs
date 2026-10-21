@@ -164,8 +164,13 @@ pub struct Engine {
 
 impl Engine {
     /// Starts "kyrr" on `microphone` (a PipeWire node name, `None` for the
-    /// default) with `settings`.
-    pub fn start(microphone: Option<String>, settings: &FilterSettings) -> Result<Engine, String> {
+    /// default) with `settings`; `remembered` is the system's default from
+    /// before (see `VirtualMic::start`).
+    pub fn start(
+        microphone: Option<String>,
+        remembered: Option<String>,
+        settings: &FilterSettings,
+    ) -> Result<Engine, String> {
         let shared = Arc::new(Shared {
             settings: std::array::from_fn(|_| AtomicU32::new(0)),
             incoming: Mutex::new(None),
@@ -205,7 +210,11 @@ impl Engine {
             before: 0.0,
             after: 0.0,
         };
-        let mic = VirtualMic::start(microphone, Box::new(move |buf: &mut [f32]| chain.process(buf)))?;
+        let mic = VirtualMic::start(
+            microphone,
+            remembered,
+            Box::new(move |buf: &mut [f32]| chain.process(buf)),
+        )?;
         Ok(Engine {
             mic,
             shared,
@@ -216,6 +225,11 @@ impl Engine {
 
     pub fn microphones(&self) -> Vec<Microphone> {
         self.mic.microphones()
+    }
+
+    /// The system's default microphone from before "kyrr", to remember.
+    pub fn previous_default(&self) -> Option<String> {
+        self.mic.previous_default()
     }
 
     /// PipeWire went away under the filter: it needs a new start.

@@ -305,12 +305,29 @@ struct Biquad {
     z2: f64,
 }
 
+/// State below this (about -400 dB) is silence: it is set to zero, so a
+/// muted microphone does not leave the state decaying through denormal
+/// numbers, which cost the processor many times the usual work.
+const SILENT_STATE: f64 = 1e-20;
+
+/// `x`, or exact zero once it has decayed below [`SILENT_STATE`].
+#[inline]
+fn settle(x: f64) -> f64 {
+    if x.abs() < SILENT_STATE {
+        0.0
+    } else {
+        x
+    }
+}
+
 impl Biquad {
     #[inline]
     fn run(&mut self, c: &Coeffs, x: f64) -> f64 {
         let y = c.b0 * x + self.z1;
         self.z1 = c.b1 * x - c.a1 * y + self.z2;
         self.z2 = c.b2 * x - c.a2 * y;
+        self.z1 = settle(self.z1);
+        self.z2 = settle(self.z2);
         y
     }
 }
@@ -636,14 +653,31 @@ impl Voice {
         let shaping = s.enabled;
         let shape = shape(s);
         let rate = self.rate;
-        self.low_cut = (shaping && s.low_cut).then(|| Coeffs::high_pass(rate, shape.low_cut_hz, BUTTERWORTH_Q));
+        let low_cut = (shaping && s.low_cut).then(|| Coeffs::high_pass(rate, shape.low_cut_hz, BUTTERWORTH_Q));
+        if low_cut.is_some() && self.low_cut.is_none() {
+            // Same as the de-esser below: no click from a stale state.
+            for c in &mut self.state {
+                c.low_cut = Biquad::default();
+            }
+        }
+        self.low_cut = low_cut;
         let band = |c: Coeffs| if shaping { c } else { Coeffs::IDENTITY };
         self.body = band(Coeffs::peak(rate, BODY_HZ, BODY_Q, shape.body_db));
         self.presence = band(Coeffs::peak(rate, PRESENCE_HZ, PRESENCE_Q, shape.presence_db));
         self.air = band(Coeffs::high_shelf(rate, AIR_HZ, shape.air_db));
-        self.deess = deesser(s.deesser)
+        let deess = deesser(s.deesser)
             .filter(|_| shaping)
             .map(|(db, ratio)| (db_to_gain(db), db, 1.0 - 1.0 / ratio));
+        if deess.is_some() && self.deess.is_none() {
+            // Its filters only run while it is on: start from silence, not
+            // from what they held when it was switched off.
+            self.deess_env = 0.0;
+            for c in &mut self.state {
+                c.deess_low = Default::default();
+                c.deess_key = Biquad::default();
+            }
+        }
+        self.deess = deess;
         self.pop = shaping && s.pops;
         self.auto_level = s.auto_level;
         self.distance = shaping && s.distance;
@@ -652,7 +686,12 @@ impl Voice {
             self.room = distance::Detector::new(self.rate);
         }
         self.room_on = s.distance;
-        self.comp = compressor(s.compressor).filter(|_| shaping);
+        let comp = compressor(s.compressor).filter(|_| shaping);
+        if comp.is_some() && self.comp.is_none() {
+            self.comp_power = 0.0;
+            self.comp_gain_db = 0.0;
+        }
+        self.comp = comp;
         if let Some(c) = self.comp {
             self.comp_attack = smoothing(rate, c.attack_ms);
             self.comp_release = smoothing(rate, c.release_ms);
@@ -753,8 +792,8 @@ impl Voice {
                 let a = if peak > env { attack } else { release };
                 a * env + (1.0 - a) * peak
             };
-            self.pop_sub_env = follow(self.pop_sub_env, sub_peak, self.pop_sub_release);
-            self.pop_bass_env = follow(self.pop_bass_env, bass_peak, self.pop_bass_release);
+            self.pop_sub_env = settle(follow(self.pop_sub_env, sub_peak, self.pop_sub_release));
+            self.pop_bass_env = settle(follow(self.pop_bass_env, bass_peak, self.pop_bass_release));
             // Steady rumble (a fan, traffic) is not a pop: the sub band has
             // to jump `POP_RUMBLE_MARGIN` above its own steady level too.
             let a = if self.pop_sub_env > self.pop_rumble {
@@ -762,7 +801,7 @@ impl Voice {
             } else {
                 self.pop_rumble_fall
             };
-            self.pop_rumble = a * self.pop_rumble + (1.0 - a) * self.pop_sub_env;
+            self.pop_rumble = settle(a * self.pop_rumble + (1.0 - a) * self.pop_sub_env);
             let reference = self.pop_bass_env.max(self.pop_rumble * self.pop_rumble_margin);
             let wanted = if self.pop_sub_env > self.pop_floor && self.pop_sub_env > reference {
                 let over_db = 20.0 * (self.pop_sub_env / reference.max(1e-12)).log10();
@@ -885,7 +924,7 @@ impl Voice {
                 } else {
                     self.deess_release
                 };
-                self.deess_env = a * self.deess_env + (1.0 - a) * key_peak;
+                self.deess_env = settle(a * self.deess_env + (1.0 - a) * key_peak);
                 let gain = if self.deess_env > threshold {
                     let over = 20.0 * self.deess_env.log10() - threshold_db;
                     db_to_gain(-over * slope)
@@ -903,7 +942,7 @@ impl Voice {
             let mut gain = 1.0;
             if let Some(c) = self.comp {
                 let power = y.iter().map(|v| v * v).sum::<f64>() / n as f64;
-                self.comp_power = self.comp_rms * self.comp_power + (1.0 - self.comp_rms) * power;
+                self.comp_power = settle(self.comp_rms * self.comp_power + (1.0 - self.comp_rms) * power);
                 let level = 10.0 * (self.comp_power + 1e-20).log10();
                 let over = level - c.threshold_db;
                 let slope = 1.0 / c.ratio - 1.0;
@@ -919,7 +958,7 @@ impl Voice {
                 } else {
                     self.comp_release
                 };
-                self.comp_gain_db = a * self.comp_gain_db + (1.0 - a) * target;
+                self.comp_gain_db = settle(a * self.comp_gain_db + (1.0 - a) * target);
                 gain = db_to_gain(self.comp_gain_db + c.makeup_db);
             }
 
@@ -995,6 +1034,80 @@ mod tests {
         }
         let half = dry.len() / 2;
         rms_db(&wet[half..]) - rms_db(&dry[half..])
+    }
+
+    /// Both poles of `c` lie inside the unit circle: the filter cannot ring
+    /// up or blow up, whatever goes in.
+    fn stable(c: &Coeffs) -> bool {
+        // z^2 + a1 z + a2: stable when |a2| < 1 and |a1| < 1 + a2.
+        c.a2.abs() < 1.0 && c.a1.abs() < 1.0 + c.a2 && [c.b0, c.b1, c.b2, c.a1, c.a2].iter().all(|v| v.is_finite())
+    }
+
+    #[test]
+    fn every_filter_is_stable_at_every_rate() {
+        let range = kyrr_common::CUSTOM_RANGE as f64 / 10.0;
+        for rate in [
+            8_000.0, 11_025.0, 16_000.0, 22_050.0, 44_100.0, 48_000.0, 96_000.0, 192_000.0, 384_000.0,
+        ] {
+            for hz in [
+                20.0, 80.0, 100.0, 250.0, 1_000.0, 3_000.0, 6_000.0, 8_000.0, 12_000.0, 20_000.0, 40_000.0,
+            ] {
+                for q in [BUTTERWORTH_Q, BODY_Q, PRESENCE_Q, 0.3, 4.0] {
+                    assert!(stable(&Coeffs::high_pass(rate, hz, q)), "high pass {rate} {hz} {q}");
+                    assert!(stable(&Coeffs::low_pass(rate, hz, q)), "low pass {rate} {hz} {q}");
+                }
+                for db in [-range, -3.0, -0.1, 0.1, 3.0, range, 12.0] {
+                    assert!(stable(&Coeffs::peak(rate, hz, BODY_Q, db)), "peak {rate} {hz} {db}");
+                    assert!(stable(&Coeffs::low_shelf(rate, hz, db)), "low shelf {rate} {hz} {db}");
+                    assert!(stable(&Coeffs::high_shelf(rate, hz, db)), "high shelf {rate} {hz} {db}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn silence_after_sound_settles_to_exact_zero() {
+        let mut voice = Voice::new(RATE, 1);
+        voice.set(&VoiceSettings {
+            deesser: Amount::Strong,
+            compressor: Amount::Strong,
+            pops: true,
+            ..VoiceSettings::default()
+        });
+        let mut loud = sine(90.0, 0.8, 0.5, 1);
+        for block in loud.chunks_mut(480) {
+            voice.pre(block);
+            voice.post(block);
+        }
+        // A muted microphone: exact zeros for a few seconds.
+        let mut silence = vec![0.0f32; RATE as usize * 4];
+        for block in silence.chunks_mut(480) {
+            voice.pre(block);
+            voice.post(block);
+        }
+        let tail = &silence[silence.len() - RATE as usize..];
+        assert!(tail.iter().all(|x| *x == 0.0 || !x.is_subnormal()));
+        let state = voice.state.iter().flat_map(|c| {
+            [c.low_cut, c.body, c.presence, c.air, c.deess_key]
+                .into_iter()
+                .chain(c.deess_low)
+                .chain(c.pop_sub)
+                .chain(c.pop_bass)
+                .chain(c.pop_high)
+        });
+        for b in state {
+            assert!(b.z1 == 0.0 || b.z1.abs() >= SILENT_STATE, "{b:?}");
+            assert!(!b.z1.is_subnormal() && !b.z2.is_subnormal(), "{b:?}");
+        }
+        let envelopes = [
+            voice.deess_env,
+            voice.comp_power,
+            voice.comp_gain_db,
+            voice.pop_sub_env,
+            voice.pop_bass_env,
+            voice.pop_rumble,
+        ];
+        assert!(envelopes.iter().all(|e| !e.is_subnormal()), "{envelopes:?}");
     }
 
     #[test]
