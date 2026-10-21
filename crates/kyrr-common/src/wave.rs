@@ -6,9 +6,9 @@
 //! dictations.
 //!
 //! While the key is held, the words the model hears so far run through the
-//! pill as one line: the pill widens, the bars move to its left end, the
-//! new words fade in one after the other at an even pace and the oldest run
-//! out on the left side. The text is only shown here: what gets typed is
+//! pill as one line: the pill widens, the bars move to its left end, an
+//! invisible pen writes the new words along the line at an even pace, each
+//! letter fading in slowly after it, and the oldest run out on the left side. The text is only shown here: what gets typed is
 //! still the whole recording, recognised once the key is let go.
 //!
 //! Towards the end of the longest dictation the bars turn yellow, then
@@ -66,19 +66,25 @@ const BARS_TEXT_GAP: f32 = 14.0;
 const TEXT_PAD: f32 = 22.0;
 /// Words fade out over this much of the line's left end once it scrolls.
 const EDGE_FADE: f32 = 22.0;
-/// A new word fades in over this long, rising this far (logical pixels)
-/// into its line.
-const APPEAR: f32 = 0.5;
-const RISE: f32 = 2.0;
-/// The words of one pass come one after the other, spread over half the
-/// time until the next pass is expected, so the line runs on evenly as if
-/// it were typed, not in bursts, without falling behind the voice. Never
-/// closer or further apart than this.
-const PACE_SPREAD: f32 = 0.5;
-const PACE_MIN: f32 = 0.06;
-const PACE_MAX: f32 = 0.25;
-/// The pill makes room for a word this long before it starts to show.
-const LEAD: f32 = 0.35;
+/// The words are written by an invisible pen that glides along the line at
+/// an even speed, however the words come in (a few at a time, every now and
+/// then). A letter fades in over this long (seconds) from the moment the pen
+/// reaches it, rising a little (`RISE`, logical pixels).
+const FADE_TIME: f32 = 0.8;
+const RISE: f32 = 3.0;
+/// The pen goes at the pace the words have been coming in lately (averaged
+/// over `PEN_AVERAGE` seconds, a little faster to work off a backlog) plus a
+/// share of what is waiting (`PEN_CATCH_UP` seconds to work it off), never
+/// slower than `PEN_MIN` or faster than `PEN_MAX` (pixels per second). It
+/// changes its speed gently (`PEN_EASE` per second), so a burst of words
+/// does not make it dash and then stand still.
+const PEN_AVERAGE: f32 = 3.0;
+const PEN_CATCH_UP: f32 = 1.0;
+const PEN_MIN: f32 = 110.0;
+const PEN_MAX: f32 = 400.0;
+const PEN_EASE: f32 = 4.0;
+/// The pill makes room for the line this far ahead of the pen.
+const PEN_AHEAD: f32 = 24.0;
 /// A replaced word fades out over this long.
 const LEAVE: f32 = 0.25;
 /// How long a note stays after the dictation ended, seconds.
@@ -175,8 +181,6 @@ struct Word {
     text: String,
     /// Logical pixels.
     width: f32,
-    /// When it starts to fade in (seconds, as `Wave::t`).
-    born: f32,
     /// Where it is drawn, logical pixels from the start of the line; eases
     /// to its place when a word before it changes length.
     x: f32,
@@ -276,8 +280,14 @@ pub struct Wave {
     pill: f32,
     /// How far the line has run out on the left, logical pixels, eased.
     scroll: f32,
-    /// When words were last set (as `t`), to pace the next ones.
-    last_words: Option<f32>,
+    /// How far the pen has written along the line, logical pixels, and how
+    /// fast it goes.
+    pen: f32,
+    pen_speed: f32,
+    /// Pixels of line per second that came in lately.
+    pen_pace: f32,
+    /// Where the pen was when, newest last: how long ago it passed a letter.
+    trail: Vec<(f32, f32)>,
     /// When the running dictation reaches its limit.
     end: Option<Instant>,
     /// The limit was reached: the line is the note about it, in red.
@@ -302,7 +312,10 @@ impl Default for Wave {
             open: 0.0,
             pill: PILL,
             scroll: 0.0,
-            last_words: None,
+            pen: 0.0,
+            pen_speed: 0.0,
+            pen_pace: 0.0,
+            trail: Vec::new(),
             end: None,
             limit: false,
             warn: [0.0; 2],
@@ -384,7 +397,10 @@ impl Wave {
             // A new dictation: its own words.
             self.words.clear();
             self.leaving.clear();
-            self.last_words = None;
+            self.pen = 0.0;
+            self.pen_speed = 0.0;
+            self.pen_pace = 0.0;
+            self.trail.clear();
             self.end = None;
             self.limit = false;
             self.warn = [0.0; 2];
@@ -398,7 +414,8 @@ impl Wave {
 
     /// The words heard so far, oldest first. Words that stay keep their
     /// place (a changed comma or capital just shows); from the first one
-    /// that differs on, the old words fade out and the new ones fade in.
+    /// that differs on, the old words fade out and the new ones are written
+    /// in by the pen.
     pub fn set_words(&mut self, words: &[String]) {
         let mut keep = 0;
         while keep < self.words.len().min(words.len()) && alike(&self.words[keep].text, &words[keep]) {
@@ -410,35 +427,30 @@ impl Wave {
             keep += 1;
         }
         let t = self.t;
-        for word in self.words.drain(keep..) {
-            // One that had not started to show just goes.
-            if word.born < t {
-                let alpha = fade_in((t - word.born) / APPEAR);
+        let gone: Vec<Word> = self.words.drain(keep..).collect();
+        for word in gone {
+            // One the pen had not reached just goes.
+            if word.x < self.pen {
                 self.leaving.push(Leaving {
                     text: word.text,
                     x: word.x,
-                    alpha,
+                    alpha: fade_in(self.age_at(word.x) / FADE_TIME),
                     since: t,
                 });
             }
         }
-        let new = words.len().saturating_sub(keep);
-        let since = self.last_words.map_or(1.0, |last| t - last);
-        let pace = (since * PACE_SPREAD / new.max(1) as f32).clamp(PACE_MIN, PACE_MAX);
-        self.last_words = Some(t);
-        // After the words still waiting to show.
-        let mut born = self.words.last().map_or(t, |w| (w.born + pace).max(t));
         let space = measure(" ");
+        let before = self.words.last().map_or(0.0, |w| w.x + w.width);
         for text in &words[keep..] {
             let x = self.words.last().map_or(0.0, |w| w.x + w.width + space);
             self.words.push(Word {
                 width: measure(text),
                 text: text.clone(),
-                born,
                 x,
             });
-            born += pace;
         }
+        let after = self.words.last().map_or(0.0, |w| w.x + w.width);
+        self.pen_pace += (after - before).max(0.0) / PEN_AVERAGE;
     }
 
     /// The running dictation ends at `at` at the latest.
@@ -457,7 +469,10 @@ impl Wave {
     pub fn set_note(&mut self, note: String) {
         self.words.clear();
         self.leaving.clear();
-        self.last_words = None;
+        self.pen = 0.0;
+        self.pen_speed = 0.0;
+        self.pen_pace = 0.0;
+        self.trail.clear();
         self.set_words(&[note]);
         self.look = Mode::Listening;
         self.limit = false;
@@ -534,18 +549,55 @@ impl Wave {
     fn step_words(&mut self, dt: f32) {
         let t = self.t;
         let space = measure(" ");
-        // The line as far as it shows soon: the pill grows and the line
-        // runs on word by word, a little ahead of each, so it has room by
-        // the time it has faded in.
         let mut place = 0.0;
-        let mut end: f32 = 0.0;
+        let mut written: f32 = 0.0;
         for word in &mut self.words {
             ease(&mut word.x, place, 10.0, dt);
-            if word.born <= t + LEAD {
-                end = place + word.width;
-            }
             place += word.width + space;
         }
+        if let Some(last) = self.words.last() {
+            written = last.x + last.width;
+        }
+        // The pen glides on to the end of the line, slowing down as it
+        // arrives.
+        let goal = written;
+        let waiting = goal - self.pen;
+        self.pen_pace *= (-dt / PEN_AVERAGE).exp();
+        let wanted = if waiting > 0.5 {
+            (self.pen_pace * 1.1 + waiting / PEN_CATCH_UP).clamp(PEN_MIN, PEN_MAX)
+        } else {
+            0.0
+        };
+        // Starting from rest needs no gentleness: the letters fade in anyway.
+        if self.pen_speed < 1.0 && wanted > 0.0 {
+            self.pen_speed = PEN_MIN;
+        }
+        ease(&mut self.pen_speed, wanted, PEN_EASE, dt);
+        self.pen = if waiting > 0.5 {
+            (self.pen + self.pen_speed * dt).min(goal)
+        } else {
+            goal
+        };
+        // The line got shorter (words dropped): the pen goes back with it,
+        // and what it passed beyond is forgotten.
+        let pen = self.pen;
+        self.trail.retain(|&(p, _)| p <= pen);
+        let t_now = self.t;
+        if self.pen > self.trail.last().map_or(0.0, |&(p, _)| p) + 0.05 {
+            if self.trail.is_empty() {
+                self.trail.push((0.0, t_now - dt));
+            }
+            self.trail.push((self.pen, t_now));
+        }
+        // Only what can still be fading in matters.
+        let keep = self
+            .trail
+            .partition_point(|&(_, at)| at < t_now - FADE_TIME - 0.5)
+            .saturating_sub(1);
+        self.trail.drain(..keep);
+        // The line as far as the pen soon is: the pill grows and the line
+        // runs on with it.
+        let end = written.min(self.pen + PEN_AHEAD);
         self.leaving.retain(|w| t - w.since < LEAVE);
         let (open, pill, scroll) = if self.words.is_empty() {
             (0.0, PILL, 0.0)
@@ -554,8 +606,22 @@ impl Wave {
             (1.0, pill, (end - line_room(pill)).max(0.0))
         };
         ease(&mut self.open, open, 7.0, dt);
-        ease(&mut self.pill, pill, 6.0, dt);
+        ease(&mut self.pill, pill, 7.0, dt);
         ease(&mut self.scroll, scroll, 6.0, dt);
+    }
+
+    /// How long ago the pen passed `x` (logical pixels along the line);
+    /// negative where it has not been yet.
+    fn age_at(&self, x: f32) -> f32 {
+        if x > self.pen {
+            return -1.0;
+        }
+        let i = self.trail.partition_point(|&(p, _)| p < x);
+        match (i.checked_sub(1).map(|j| self.trail[j]), self.trail.get(i)) {
+            (Some((p0, t0)), Some(&(p1, t1))) if p1 > p0 => self.t - (t0 + (t1 - t0) * (x - p0) / (p1 - p0)),
+            (_, Some(_)) => FADE_TIME,
+            (_, None) => self.trail.last().map_or(FADE_TIME, |&(_, at)| self.t - at),
+        }
     }
 
     /// Draws the picture at `scale` into `pixels` (premultiplied ARGB) and
@@ -644,15 +710,11 @@ impl Wave {
         // The line fades out on the left once it runs out there.
         let fade_left = (self.scroll / EDGE_FADE).clamp(0.0, 1.0);
         let t = self.t;
-        let mut draw = |text: &str, x: f32, alpha: f32, appear: Option<f32>| {
+        let mut draw = |text: &str, x: f32, alpha: f32, written: bool| {
             let start = left + x - self.scroll;
             if alpha <= 0.0 || start > right + 1.0 || start + measure(text) < left - EDGE_FADE {
                 return;
             }
-            let (alpha, rise) = match appear {
-                Some(p) => (alpha * fade_in(p), (1.0 - ease_out(p)) * RISE),
-                None => (alpha, 0.0),
-            };
             let mut pen = start;
             let mut last = None;
             for c in text.chars() {
@@ -661,6 +723,12 @@ impl Wave {
                     pen += font.kern(last, id);
                 }
                 last = Some(id);
+                // Letters rise into their place after the pen passed them.
+                let rise = if written {
+                    (1.0 - ease_out(self.age_at(pen - left + self.scroll) / FADE_TIME)) * RISE
+                } else {
+                    0.0
+                };
                 let glyph = id.with_scale_and_position(size, point(pen * scale, (baseline + rise) * scale));
                 pen += font.h_advance(id);
                 let Some(outline) = FONT.outline_glyph(glyph) else {
@@ -678,20 +746,22 @@ impl Wave {
                     let edge_left = (lx - left + 1.0).clamp(0.0, 1.0)
                         * (1.0 - fade_left * (1.0 - ((lx - left) / EDGE_FADE).clamp(0.0, 1.0)));
                     let edge_right = ((right + 4.0 - lx) / 4.0).clamp(0.0, 1.0);
+                    // Ink fades in after the pen has passed.
+                    let ink_by_pen = if written {
+                        fade_in(self.age_at(lx - left + self.scroll) / FADE_TIME)
+                    } else {
+                        1.0
+                    };
                     let cell = &mut ink[(py as u32 * width + px as u32) as usize];
-                    *cell += c * alpha * edge_left * edge_right;
+                    *cell += c * alpha * edge_left * edge_right * ink_by_pen;
                 });
             }
         };
         for word in &self.leaving {
-            draw(&word.text, word.x, word.alpha * (1.0 - (t - word.since) / LEAVE), None);
+            draw(&word.text, word.x, word.alpha * (1.0 - (t - word.since) / LEAVE), false);
         }
         for word in &self.words {
-            if word.born > t {
-                continue;
-            }
-            let p = (t - word.born) / APPEAR;
-            draw(&word.text, word.x, 1.0, (p < 1.0).then_some(p));
+            draw(&word.text, word.x, 1.0, true);
         }
         Some(ink)
     }
@@ -1018,7 +1088,7 @@ mod tests {
         run_for(&mut wave, 1.5);
         assert!(wave.open > 0.99);
         assert!(wave.pill > PILL + 60.0 && wave.pill < WIDTH as f32);
-        assert_eq!(wave.scroll, 0.0);
+        assert!(wave.scroll < 0.01, "{}", wave.scroll);
         let mut after = Vec::new();
         let (w, h) = wave.paint(1.0, &mut after);
         // Ink right of the bars, where the pill was clear before.
@@ -1034,20 +1104,16 @@ mod tests {
     fn words_that_stay_keep_their_place() {
         let mut wave = shown(Mode::Listening, 0.5, &QUIET);
         wave.set_words(&words("hallo wie geht"));
-        run_for(&mut wave, 1.0);
-        let born: Vec<f32> = wave.words.iter().map(|w| w.born).collect();
+        run_for(&mut wave, 3.0);
+        let x: Vec<f32> = wave.words.iter().map(|w| w.x).collect();
         // A comma and a capital later, and one word heard anew.
         wave.set_words(&words("Hallo, wie gut es"));
         assert_eq!(wave.words[0].text, "Hallo,");
-        assert_eq!(wave.words[0].born, born[0]);
-        assert_eq!(wave.words[1].born, born[1]);
-        assert!(wave.words[2].born > born[2]);
+        assert_eq!(wave.words[0].x, x[0]);
+        assert_eq!(wave.words[1].x, x[1]);
+        assert_eq!(wave.words.len(), 4);
         assert_eq!(wave.leaving.len(), 1);
         assert_eq!(wave.leaving[0].text, "geht");
-        // The new ones follow each other, spread over half the time since
-        // the words before came in (1 s), but at most 0.25 s apart.
-        let gap = wave.words[3].born - wave.words[2].born;
-        assert!((gap - 0.25).abs() < 0.01, "{gap}");
         run_for(&mut wave, 0.5);
         assert!(wave.leaving.is_empty());
     }
@@ -1067,6 +1133,24 @@ mod tests {
             let a = p >> 24;
             assert!((p >> 16 & 0xff) <= a && (p >> 8 & 0xff) <= a && (p & 0xff) <= a);
         }
+    }
+
+    #[test]
+    fn words_written_again_after_the_line_was_emptied_fade_in_again() {
+        let mut wave = shown(Mode::Listening, 0.5, &QUIET);
+        wave.set_words(&words("eins zwei drei vier fünf"));
+        run_for(&mut wave, 4.0);
+        let far = wave.pen;
+        wave.set_words(&[]);
+        run_for(&mut wave, 0.2);
+        assert_eq!(wave.pen, 0.0);
+        wave.set_words(&words("eins zwei drei vier fünf"));
+        run_for(&mut wave, 0.2);
+        // The pen has only just started again: letters further on are not
+        // there yet, and the ones it passed are young.
+        assert!(wave.pen < far / 2.0);
+        assert!(wave.age_at(far / 2.0) < 0.0);
+        assert!(wave.age_at(wave.pen * 0.5) < FADE_TIME);
     }
 
     #[test]

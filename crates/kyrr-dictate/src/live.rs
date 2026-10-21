@@ -13,6 +13,10 @@
 //!   word better once it knows what comes after), or once two looks in a
 //!   row heard it alike and the speaker has moved on from it.
 //!
+//! - After a look that found nothing new, the next one starts shortly before
+//!   where that one ended: a pause does not make the stretch grow, so the
+//!   first words after it are not slowed down by listening to silence again.
+//!
 //! Shown words stay as they are, so the line on the screen only grows. What
 //! gets typed is the whole recording, recognised once more at the end.
 
@@ -44,6 +48,10 @@ const SAME_PLACE: f32 = 0.3;
 /// A word that starts this close to the start of a stretch may be cut.
 const EDGE: f32 = 0.3;
 
+/// After a look that found nothing new, the next one starts this long
+/// before the end of that one (enough for a word that had just begun).
+const QUIET_BEFORE: f32 = 0.8;
+
 /// The words shown so far in a running recording.
 #[derive(Default)]
 pub struct Live {
@@ -52,6 +60,8 @@ pub struct Live {
     last: (f32, f32),
     /// The words of the last look that are not shown yet.
     unsure: Vec<Word>,
+    /// Where the last look that found nothing new ended.
+    quiet: f32,
 }
 
 impl Live {
@@ -63,7 +73,10 @@ impl Live {
     /// Where to start the next look, seconds into a recording `length`
     /// seconds long so far.
     pub fn from(&self, length: f32) -> f32 {
-        (self.last.1 - BEFORE).max(length - LONGEST).max(0.0)
+        (self.last.1 - BEFORE)
+            .max(self.quiet - QUIET_BEFORE)
+            .max(length - LONGEST)
+            .max(0.0)
     }
 
     /// Takes the words heard in the recording from `from` to `to` (seconds;
@@ -98,6 +111,9 @@ impl Live {
             added += 1;
         }
         self.unsure = new[added..].to_vec();
+        if new.is_empty() {
+            self.quiet = to;
+        }
         added > 0
     }
 }
@@ -198,6 +214,21 @@ mod tests {
         assert_eq!(shown(&live), "eins zwei drei vier fünf sechs");
         // Nothing new: nothing added.
         assert!(!live.heard(1.0, 3.7, Vec::new()));
+    }
+
+    #[test]
+    fn a_pause_does_not_make_the_stretch_grow() {
+        let mut live = Live::default();
+        live.heard(0.0, 2.6, timed("eins zwei drei vier", 0.0));
+        // Nothing but the words shown already: the speaker is quiet.
+        let from = live.from(4.0);
+        live.heard(from, 4.0, Vec::new());
+        assert!((live.from(4.0) - 3.2).abs() < 1e-5);
+        // Silence goes on: the stretch is as short as the time since.
+        assert!((live.from(9.0) - 3.2).abs() < 1e-5);
+        // Speech again: the words are new and sure after a moment.
+        live.heard(3.2, 9.0, timed("sechs sieben", 1.5));
+        assert_eq!(shown(&live), "eins zwei drei vier sechs sieben");
     }
 
     #[test]
