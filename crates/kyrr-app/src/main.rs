@@ -1759,7 +1759,11 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         let app = Rc::clone(&app);
         move || {
             let system = platform::system_info();
-            platform::open_url(&update::feedback_mailto(app.language(), env!("CARGO_PKG_VERSION"), &system));
+            platform::open_url(&update::feedback_mailto(
+                app.language(),
+                env!("CARGO_PKG_VERSION"),
+                &system,
+            ));
         }
     });
     state.on_open_update({

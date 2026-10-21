@@ -25,7 +25,11 @@ pub fn feedback_mailto(language: Language, version: &str, system: &str) -> Strin
         Language::English => ("kyrr: Feedback", "Your feedback:", "English"),
     };
     let body = format!("{ask}\n\n\n\n---\nkyrr {version}\n{system}\n{language_name}");
-    format!("mailto:{FEEDBACK_ADDRESS}?subject={}&body={}", percent_encode(subject), percent_encode(&body))
+    format!(
+        "mailto:{FEEDBACK_ADDRESS}?subject={}&body={}",
+        percent_encode(subject),
+        percent_encode(&body)
+    )
 }
 
 fn percent_encode(text: &str) -> String {
