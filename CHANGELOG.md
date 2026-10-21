@@ -119,8 +119,7 @@
 - Windows: the README and the website say that dictation does not work while
   a window running as administrator is in front (Windows hides the keyboard
   from normal programs there).
-- Release: the Flatpak bundle (`kyrr-x86_64.flatpak`, plus `.sha256`) is
-  attached to the release; release notes start with the plain summary from
+- Release: release notes start with the plain summary from
   NEWS.md and fold the technical section away.
 
 ## 0.5.8 (2026-10-20)

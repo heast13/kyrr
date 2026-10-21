@@ -32,7 +32,6 @@ line saying nothing changes on Windows.
 - More controls work with the keyboard and with screen readers.
 - (Linux) To update, paste the install commands again: kyrr no longer has to be closed first.
 - (Linux) kyrr recovers when the sound system restarts, and the AppImage is a third smaller.
-- (Linux) Each release also comes as a Flatpak file, which works on Hyprland, Sway and niri too.
 
 ### Deutsch
 
@@ -50,7 +49,6 @@ line saying nothing changes on Windows.
 - Mehr Bedienelemente gehen per Tastatur und Screenreader.
 - (Linux) Für ein Update die Installationsbefehle einfach nochmal einfügen: kyrr muss nicht mehr vorher geschlossen werden.
 - (Linux) kyrr erholt sich vom Neustart des Soundsystems, das AppImage ist ein Drittel kleiner.
-- (Linux) Jede Version gibt es auch als Flatpak-Datei, die auch unter Hyprland, Sway und niri läuft.
 
 ## 0.5.8
 

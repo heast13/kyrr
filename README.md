@@ -118,13 +118,6 @@ curl -fL -o ~/.local/bin/kyrr.new https://github.com/heast13/kyrr/releases/lates
 
 Either way kyrr adds itself to your app menu on its first start.
 
-**Flatpak instead.** Each release also has a Flatpak file,
-`kyrr-x86_64.flatpak` (with a `.sha256`). It needs the [Flathub
-source](https://flathub.org/setup) for the runtime:
-`flatpak install --user ./kyrr-x86_64.flatpak`. To remove it:
-`flatpak uninstall --delete-data io.github.heast13.kyrr`. Details and the
-sandbox's permissions: `packaging/flatpak/README.md`.
-
 **Start at sign-in** switches on by itself when the first-start setup is
 done. Switch it off or on again in Global settings, "Start when you sign in".
 
