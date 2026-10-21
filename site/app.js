@@ -219,11 +219,6 @@
     requestAnimationFrame(tick);
   }
 
-  screen.addEventListener("click", function () {
-    userPaused = !userPaused;
-    sync();
-  });
-
   if (still) {
     // One saying, complete: words in the display, the sentence in the document.
     var n = pick();
@@ -237,12 +232,27 @@
     return;
   }
 
-  video.addEventListener("ended", function () {
+  // Click, tap or Enter/Space pauses and resumes.
+  function toggle() {
+    userPaused = !userPaused;
+    sync();
+  }
+  screen.classList.add("play");
+  screen.tabIndex = 0;
+  screen.addEventListener("click", toggle);
+  screen.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+  });
+
+  // A clip that cannot play is skipped, so the demo never stands still on a failure.
+  function done() {
     key.classList.remove("down");
     if (!inserted) { inserted = true; reveal(); }
     gap = 0;
     phase = "gap";
-  });
+  }
+  video.addEventListener("ended", done);
+  video.addEventListener("error", function () { if (phase === "video") done(); });
   if (window.IntersectionObserver) {
     new IntersectionObserver(function (e) {
       visible = e[e.length - 1].isIntersecting;
