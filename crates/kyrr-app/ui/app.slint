@@ -229,15 +229,15 @@ export component Tray inherits SystemTrayIcon {
             activated => { root.open(); }
         }
         MenuItem {
-            title: root.filter-enabled ? @tr("Noise removal: on") : @tr("Noise removal: off");
+            title: root.filter-enabled ? @tr("Remove background noise: on") : @tr("Remove background noise: off");
             activated => { root.toggle-filter(); }
         }
         MenuItem {
-            title: root.voice-enabled ? @tr("Voice: on") : @tr("Voice: off");
+            title: root.voice-enabled ? @tr("Improve voice: on") : @tr("Improve voice: off");
             activated => { root.toggle-voice(); }
         }
         MenuItem {
-            title: root.dictation-enabled ? @tr("Turn dictation off") : @tr("Turn dictation on");
+            title: root.dictation-enabled ? @tr("Dictation: on") : @tr("Dictation: off");
             activated => { root.toggle-dictation(); }
         }
         if root.update-version != "": MenuItem {
@@ -261,7 +261,7 @@ component Caption inherits Text {
 component Hint inherits Text {
     // 0.7 keeps small text readable (contrast), still quieter than captions.
     color: Palette.foreground.with-alpha(0.7);
-    font-size: 11px;
+    font-size: 12px;
     wrap: word-wrap;
 }
 
@@ -979,7 +979,7 @@ component AlertLine inherits Text {
     text: root.note();
     // The red notes are problems; a microphone coming back is good news.
     color: AppState.alert == 7 ? Tone.good : Tone.bad;
-    font-size: 11px;
+    font-size: 12px;
     min-height: 16px;
     vertical-alignment: center;
     overflow: elide;
@@ -1373,6 +1373,20 @@ component SetupPage inherits VerticalLayout {
         selected <=> AppState.language-index;
         changed(i) => { AppState.language-changed(i); }
     }
+    if step == 1: Caption { text: @tr("Effort"); }
+    if step == 1: EffortOption {
+        title: @tr("Best quality");
+        text: @tr("For most computers. The most thorough noise removal, the words show while you talk, dictations up to 15 minutes.");
+        picked: AppState.effort-index == 1;
+        clicked => { AppState.effort-index = 1; AppState.effort-changed(1); }
+    }
+    if step == 1: EffortOption {
+        title: @tr("Lean");
+        text: @tr("For older or weaker laptops, and if things stutter. Simpler noise removal, the words show once you are done talking, dictations up to 2 minutes.");
+        picked: AppState.effort-index == 0;
+        clicked => { AppState.effort-index = 0; AppState.effort-changed(0); }
+    }
+    if step == 1: Hint { text: @tr("Typed just as well either way. You can switch any time in the settings."); }
     if step == 1: DictationCard { in-setup: true; }
     if step == 1 && AppState.key-note != "" && !AppState.guide: Hint { text: AppState.key-note; }
     // The desktop's questions, one at a time, each said before it comes.
@@ -1399,20 +1413,6 @@ component SetupPage inherits VerticalLayout {
         primary: true;
         clicked => { AppState.allow-typing(); }
     }
-    if step == 1: Caption { text: @tr("Effort"); }
-    if step == 1: EffortOption {
-        title: @tr("Best quality");
-        text: @tr("For most computers. The most thorough noise removal, the words show while you talk, dictations up to 15 minutes.");
-        picked: AppState.effort-index == 1;
-        clicked => { AppState.effort-index = 1; AppState.effort-changed(1); }
-    }
-    if step == 1: EffortOption {
-        title: @tr("Lean");
-        text: @tr("For older or weaker laptops, and if things stutter. Simpler noise removal, the words show once you are done talking, dictations up to 2 minutes.");
-        picked: AppState.effort-index == 0;
-        clicked => { AppState.effort-index = 0; AppState.effort-changed(0); }
-    }
-    if step == 1: Hint { text: @tr("Typed just as well either way. You can switch any time in the settings."); }
     if step == 1: Hint { text: (AppState.linux ? @tr("kyrr starts when you sign in and lives in the tray, if your desktop has one. Both can be changed in the settings.") : @tr("kyrr starts with Windows and lives in the tray, bottom right (maybe behind the little arrow). Both can be changed in the settings.")); }
     if step == 1: Button {
         text: @tr("Done");
@@ -1549,7 +1549,7 @@ export component MainWindow inherits Window {
                 if AppState.alert == 4: Text {
                     text: @tr("Switch it on");
                     color: Tone.bad;
-                    font-size: 11px;
+                    font-size: 12px;
                     font-weight: 700;
                     horizontal-stretch: 0;
                     vertical-alignment: center;
@@ -1626,13 +1626,13 @@ export component MainWindow inherits Window {
                 // English in every language, on purpose.
                 text: "Proudly presented by heast13 and Claude “Silent but deadly” Opus. No microphones were harmed.";
                 horizontal-alignment: center;
-                font-size: 11px;
+                font-size: 12px;
                 font-italic: true;
             }
             if settings-page: Caption {
                 text: "kyrr " + AppState.version + (AppState.linux ? " Beta" : "");
                 horizontal-alignment: center;
-                font-size: 11px;
+                font-size: 12px;
             }
         }
     }

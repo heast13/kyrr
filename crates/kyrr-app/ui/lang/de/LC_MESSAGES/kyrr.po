@@ -8,23 +8,23 @@ msgstr ""
 msgid "Open kyrr"
 msgstr "kyrr öffnen"
 
-msgid "Noise removal: on"
+msgid "Remove background noise: on"
 msgstr "Störgeräusche entfernen: an"
 
-msgid "Noise removal: off"
+msgid "Remove background noise: off"
 msgstr "Störgeräusche entfernen: aus"
 
-msgid "Voice: on"
-msgstr "Stimme: an"
+msgid "Improve voice: on"
+msgstr "Stimme verbessern: an"
 
-msgid "Voice: off"
-msgstr "Stimme: aus"
+msgid "Improve voice: off"
+msgstr "Stimme verbessern: aus"
 
-msgid "Turn dictation off"
-msgstr "Diktieren ausschalten"
+msgid "Dictation: on"
+msgstr "Diktieren: an"
 
-msgid "Turn dictation on"
-msgstr "Diktieren einschalten"
+msgid "Dictation: off"
+msgstr "Diktieren: aus"
 
 msgid "Quit"
 msgstr "Beenden"

@@ -47,6 +47,9 @@ const WAIT_FOR_KEY: Duration = Duration::from_secs(3);
 /// show the words far too late: the wave goes on without them for this
 /// dictation.
 const LOOK_TOO_SLOW: Duration = Duration::from_millis(2500);
+/// Seconds of recording (the tail after the key's release included) from
+/// which an empty result is worth a word in the pill.
+const NOTHING_MIN: f32 = 0.8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum State {
@@ -90,6 +93,8 @@ pub enum Event {
     Ends(Instant),
     /// The dictation reached its limit: this, in red in the pill.
     Limit(String),
+    /// A real dictation that came out empty: this, for a moment in the pill.
+    Nothing(String),
     /// Something to tell the user; `None` clears an earlier message.
     Message(Option<String>),
 }
@@ -129,6 +134,56 @@ pub type Typer = fn(&str) -> bool;
 /// Puts text on the clipboard. Returns false if that failed.
 pub type Clipboard = fn(&str) -> bool;
 
+/// A short grumble for an empty dictation, never the same one twice in a
+/// row: kyrr was woken for nothing.
+fn nothing(german: bool) -> String {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    const DE: [&str; 14] = [
+        "Dafür geweckt?",
+        "Nix. Danke auch.",
+        "Ich hatte Pause.",
+        "Ernsthaft? Stille.",
+        "Luft diktiert. Bravo.",
+        "Rede oder schweig.",
+        "Hirn aus?",
+        "Ich schlief.",
+        "Wecken kostet extra.",
+        "Hallo? Jemand da?",
+        "Grillenzirpen",
+        "Nada",
+        "Hä?",
+        "Räusper",
+    ];
+    const EN: [&str; 14] = [
+        "Woke for this?",
+        "Nothing. Thanks.",
+        "I was off.",
+        "Seriously? Silence.",
+        "Dictated air. Bravo.",
+        "Talk or leave.",
+        "Brain off?",
+        "I slept.",
+        "Waking costs extra.",
+        "Hello? Anyone?",
+        "Crickets",
+        "Nada",
+        "Huh?",
+        "Ahem",
+    ];
+    static LAST: AtomicUsize = AtomicUsize::new(usize::MAX);
+    let words = if german { &DE } else { &EN };
+    let clock = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.subsec_micros() as usize);
+    let mut pick = clock % words.len();
+    // Not the same word twice in a row.
+    if pick == LAST.load(Ordering::Relaxed) {
+        pick = (pick + 1) % words.len();
+    }
+    LAST.store(pick, Ordering::Relaxed);
+    words[pick].to_string()
+}
+
 /// What the worker says, in the language of the window.
 fn say(language: Language, what: &str) -> String {
     let german = language == Language::German;
@@ -140,6 +195,7 @@ fn say(language: Language, what: &str) -> String {
         };
     }
     match (what, german) {
+        ("nothing", german) => return nothing(german),
         ("limit", true) => "Maximale Diktatlänge",
         ("limit", false) => "Longest dictation reached",
         ("offline", true) => "Kein Internet oder der Server antwortet nicht. Nochmal versuchen?",
@@ -548,9 +604,13 @@ impl Worker {
         let (rate, samples) = rec.finish();
         self.set_state(State::Transcribing);
         let started = Instant::now();
+        let mut ran = false;
         let text = match &self.model {
             Some(model) => match catch_unwind(AssertUnwindSafe(|| model.transcribe(rate, &samples))) {
-                Ok(text) => text,
+                Ok(text) => {
+                    ran = true;
+                    text
+                }
                 Err(_) => {
                     self.tell("crash");
                     String::new()
@@ -581,6 +641,10 @@ impl Worker {
         }
         if !heard && self.muted {
             self.tell("muted");
+        } else if !heard && ran && rate > 0 && samples.len() as f32 / rate as f32 >= NOTHING_MIN {
+            // A tap by accident is no dictation; a spoken one that came out
+            // empty gets a word, or the pill would vanish without a trace.
+            (self.notify)(Event::Nothing(say(self.language, "nothing")));
         }
         // The language may have changed while recording: back to whatever
         // the settings say, not blindly to Ready.
@@ -653,6 +717,23 @@ impl Worker {
             cancel.store(true, Ordering::Relaxed);
             self.download_id += 1;
             self.download_again = false;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_empty_dictation_never_gets_the_same_grumble_twice_in_a_row() {
+        for german in [true, false] {
+            let mut last = String::new();
+            for _ in 0..200 {
+                let word = nothing(german);
+                assert!(!word.is_empty() && word.split(' ').count() <= 3 && word != last);
+                last = word;
+            }
         }
     }
 }
