@@ -153,7 +153,9 @@ mod tests {
             panic!("the first start runs");
         };
         assert!(matches!(claim_at(path.clone(), &[]), Instance::Other));
-        show_requests.recv_timeout(Duration::from_secs(2)).expect("asked to show");
+        show_requests
+            .recv_timeout(Duration::from_secs(2))
+            .expect("asked to show");
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
         std::fs::remove_dir_all(dir).unwrap();
