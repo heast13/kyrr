@@ -151,13 +151,20 @@ pub fn uninstall() -> Result<(), String> {
             errors.push(e);
         }
     };
+    let mut detached = true;
     for guid in attached() {
-        step(detach(&guid));
+        let result = detach(&guid);
+        detached &= result.is_ok();
+        step(result);
     }
     step(delete_tree(HKEY_LOCAL_MACHINE, &apo_key()));
     step(delete_tree(HKEY_LOCAL_MACHINE, &com_key()));
     step(restore_protected_audio());
-    step(delete_tree(HKEY_LOCAL_MACHINE, REG_ROOT));
+    // A microphone that could not be let go still needs its record of the
+    // driver's own effect, so another try can put it back.
+    if detached {
+        step(delete_tree(HKEY_LOCAL_MACHINE, REG_ROOT));
+    }
     if errors.is_empty() {
         Ok(())
     } else {
@@ -298,6 +305,15 @@ pub fn attach(guid: &str) -> Result<(), String> {
         record.set_dword(SLOT, slot)?;
     }
     let slot = record.get_dword(SLOT).unwrap_or(5);
+    // A driver update put its new effect where kyrr was (the repair): that
+    // one runs inside kyrr from now on and comes back on uninstall, not the
+    // one from before the update.
+    if let Some(now) = fx
+        .get_string(&fx_value(slot))
+        .filter(|v| !v.is_empty() && !v.eq_ignore_ascii_case(&ours))
+    {
+        record.set_string(endpoint::CHILD_SFX, &now)?;
+    }
     fx.set_string(&fx_value(slot), &ours)?;
     if !fx.has_value(SFX_MODES) {
         record.set_dword(ADDED_MODES, 1)?;

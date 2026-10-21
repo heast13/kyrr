@@ -36,7 +36,12 @@ impl IClassFactory_Impl for ClassFactory_Impl {
         }
         unsafe { *ppvobject = std::ptr::null_mut() };
         let outer = punkouter.as_ref().map_or(std::ptr::null_mut(), |o| o.as_raw());
-        let hr = unsafe { object::create(outer, &*riid, ppvobject) };
+        // A panic must not unwind into the audio engine, which would end
+        // it and every app's sound with it.
+        let hr = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+            object::create(outer, &*riid, ppvobject)
+        }))
+        .unwrap_or(windows::Win32::Foundation::E_FAIL);
         log(&format!(
             "created for {:?}, aggregated: {}, result {hr}",
             unsafe { *riid },
