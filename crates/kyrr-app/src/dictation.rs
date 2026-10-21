@@ -134,6 +134,56 @@ pub type Typer = fn(&str) -> bool;
 /// Puts text on the clipboard. Returns false if that failed.
 pub type Clipboard = fn(&str) -> bool;
 
+/// A short grumble for an empty dictation, never the same one twice in a
+/// row: kyrr was woken for nothing.
+fn nothing(german: bool) -> String {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    const DE: [&str; 14] = [
+        "Dafür geweckt?",
+        "Nix. Danke auch.",
+        "Ich hatte Pause.",
+        "Ernsthaft? Stille.",
+        "Luft diktiert. Bravo.",
+        "Rede oder schweig.",
+        "Hirn aus?",
+        "Ich schlief.",
+        "Wecken kostet extra.",
+        "Hallo? Jemand da?",
+        "Grillenzirpen",
+        "Nada",
+        "Hä?",
+        "Räusper",
+    ];
+    const EN: [&str; 14] = [
+        "Woke for this?",
+        "Nothing. Thanks.",
+        "I was off.",
+        "Seriously? Silence.",
+        "Dictated air. Bravo.",
+        "Talk or leave.",
+        "Brain off?",
+        "I slept.",
+        "Waking costs extra.",
+        "Hello? Anyone?",
+        "Crickets",
+        "Nada",
+        "Huh?",
+        "Ahem",
+    ];
+    static LAST: AtomicUsize = AtomicUsize::new(usize::MAX);
+    let words = if german { &DE } else { &EN };
+    let clock = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.subsec_micros() as usize);
+    let mut pick = clock % words.len();
+    // Not the same word twice in a row.
+    if pick == LAST.load(Ordering::Relaxed) {
+        pick = (pick + 1) % words.len();
+    }
+    LAST.store(pick, Ordering::Relaxed);
+    words[pick].to_string()
+}
+
 /// What the worker says, in the language of the window.
 fn say(language: Language, what: &str) -> String {
     let german = language == Language::German;
@@ -145,8 +195,7 @@ fn say(language: Language, what: &str) -> String {
         };
     }
     match (what, german) {
-        ("nothing", true) => "Nichts gehört",
-        ("nothing", false) => "Nothing heard",
+        ("nothing", german) => return nothing(german),
         ("limit", true) => "Maximale Diktatlänge",
         ("limit", false) => "Longest dictation reached",
         ("offline", true) => "Kein Internet oder der Server antwortet nicht. Nochmal versuchen?",
@@ -668,6 +717,23 @@ impl Worker {
             cancel.store(true, Ordering::Relaxed);
             self.download_id += 1;
             self.download_again = false;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_empty_dictation_never_gets_the_same_grumble_twice_in_a_row() {
+        for german in [true, false] {
+            let mut last = String::new();
+            for _ in 0..200 {
+                let word = nothing(german);
+                assert!(!word.is_empty() && word.split(' ').count() <= 3 && word != last);
+                last = word;
+            }
         }
     }
 }
