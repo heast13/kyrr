@@ -99,55 +99,168 @@
   select(hash >= 0 ? hash : Math.max(start, 0), false);
 })();
 
-// The dictation display plays its sayings one after another in random order,
-// never the same one twice in a row. A click or tap pauses and resumes it.
-// Visitors who asked for less motion get one saying standing still, with words shown.
+// The dictation demo: hold the key, the display shows the words as they are heard, and
+// after the key is let go the sentence is written into the notes window. One saying after
+// another in random order, never the same one twice in a row. A click or tap pauses and
+// resumes it; it also waits while scrolled out of view. Visitors who asked for less motion
+// get one saying standing still: the words in the display and the sentence in the document.
 (function () {
-  var pill = document.querySelector(".pill-demo video");
-  if (!pill) return;
-  var base = pill.getAttribute("data-base");
-  var lang = pill.getAttribute("data-lang");
-  var count = parseInt(pill.getAttribute("data-count"), 10);
+  var screen = document.querySelector("[data-demo]");
+  if (!screen) return;
+  var video = screen.querySelector("video");
+  var doc = screen.querySelector(".doc");
+  var caret = doc.querySelector(".caret");
+  var key = document.querySelector(".demo kbd");
+  var base = screen.getAttribute("data-base");
+  var lang = screen.getAttribute("data-lang");
+  var said = screen.getAttribute("data-sayings").split("|");
   var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
+  // The display shows its words until 1.8 s before the end of a clip, then writes for a
+  // second; the sentence lands in the document when the display goes away.
+  var HOLD_END = 1.8, WRITE_END = 0.8, GAP = 4;
   var order = [];
   var last = -1;
+  var phase = "idle";
+  var gap = 0;
+  var inserted = false;
+  var userPaused = false;
+  var visible = true;
+  var spans = [];
 
   function theme() {
     var t = document.documentElement.getAttribute("data-theme");
     if (t === "dark" || t === "light") return t;
     return dark && dark.matches ? "dark" : "light";
   }
-  function play(n) {
-    last = n;
-    pill.src = base + lang + "-" + theme() + "-" + (n + 1) + ".webm";
-    pill.play().catch(function () {});
-  }
-  function next() {
+  function pick() {
     if (!order.length) {
-      for (var i = 0; i < count; i++) order.push(i);
+      for (var i = 0; i < said.length; i++) order.push(i);
       for (var j = order.length - 1; j > 0; j--) {
         var k = Math.floor(Math.random() * (j + 1));
         var tmp = order[j]; order[j] = order[k]; order[k] = tmp;
       }
       // The new round does not open with the saying that just ended.
-      if (order[0] === last && count > 1) order.push(order.shift());
+      if (order[0] === last && said.length > 1) order.push(order.shift());
     }
-    play(order.shift());
+    last = order.shift();
+    return last;
+  }
+  // The caret sits behind the last word shown, or in front of the first one.
+  function place(at, after) {
+    var r = at.getBoundingClientRect();
+    var d = doc.getBoundingClientRect();
+    caret.style.left = (after ? r.right : r.left) - d.left + "px";
+    caret.style.top = r.top - d.top + (r.height - caret.offsetHeight) / 2 + "px";
+  }
+  function line(text, shown) {
+    var p = document.createElement("p");
+    spans = text.split(" ").map(function (w, i) {
+      var s = document.createElement("span");
+      s.className = shown ? "word" : "word hide";
+      s.textContent = (i ? " " : "") + w;
+      p.appendChild(s);
+      return s;
+    });
+    doc.insertBefore(p, caret);
+    return p;
+  }
+  // A new empty line in the document; when the window is full it is cleared first.
+  function open(text, ready) {
+    var p = line(text, false);
+    if (doc.scrollHeight <= doc.clientHeight + 1) { place(spans[0], false); return ready(); }
+    doc.classList.add("fade");
+    setTimeout(function () {
+      while (doc.firstChild !== caret) doc.removeChild(doc.firstChild);
+      line(text, false);
+      place(spans[0], false);
+      doc.classList.remove("fade");
+      ready();
+    }, 450);
+  }
+  function reveal() {
+    var mine = spans;
+    caret.classList.add("typing");
+    mine.forEach(function (s, i) {
+      setTimeout(function () {
+        s.classList.remove("hide");
+        place(s, true);
+        if (i === mine.length - 1) caret.classList.remove("typing");
+      }, i * 35);
+    });
+  }
+  function sync() {
+    if (phase !== "video") return;
+    if (userPaused || !visible) video.pause();
+    else video.play().catch(function () {});
+  }
+  function begin() {
+    var n = pick();
+    phase = "idle";
+    open(said[n], function () {
+      inserted = false;
+      phase = "video";
+      video.src = base + lang + "-" + theme() + "-" + (n + 1) + ".webm";
+      sync();
+    });
+  }
+  var before = 0;
+  function tick(now) {
+    var dt = Math.min(now - before, 100) / 1000;
+    before = now;
+    if (phase === "video" && video.duration && !video.paused) {
+      var t = video.currentTime, d = video.duration;
+      key.classList.toggle("down", t > 0.1 && t < d - HOLD_END);
+      if (!inserted && t >= d - WRITE_END) { inserted = true; reveal(); }
+    } else if (phase === "gap" && !userPaused && visible) {
+      gap += dt;
+      if (gap >= GAP) begin();
+    }
+    requestAnimationFrame(tick);
   }
 
-  pill.style.cursor = "pointer";
-  pill.addEventListener("click", function () {
-    if (pill.paused) pill.play().catch(function () {});
-    else pill.pause();
-  });
   if (still) {
-    play(0);
-    pill.pause();
-    pill.addEventListener("loadeddata", function () { pill.currentTime = 4; }, { once: true });
+    // One saying, complete: words in the display, the sentence in the document.
+    var n = pick();
+    while (doc.firstChild !== caret) doc.removeChild(doc.firstChild);
+    line(said[n], true);
+    place(spans[spans.length - 1], true);
+    caret.classList.add("typing");
+    key.classList.add("down");
+    video.src = base + lang + "-" + theme() + "-" + (n + 1) + ".webm";
+    video.addEventListener("loadeddata", function () { video.currentTime = 4; video.pause(); }, { once: true });
     return;
   }
-  // A short pause between sayings, so the display does not feel busy.
-  pill.addEventListener("ended", function () { setTimeout(next, 4000); });
-  next();
+
+  // Click, tap or Enter/Space pauses and resumes.
+  function toggle() {
+    userPaused = !userPaused;
+    sync();
+  }
+  screen.classList.add("play");
+  screen.tabIndex = 0;
+  screen.addEventListener("click", toggle);
+  screen.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+  });
+
+  // A clip that cannot play is skipped, so the demo never stands still on a failure.
+  function done() {
+    key.classList.remove("down");
+    if (!inserted) { inserted = true; reveal(); }
+    gap = 0;
+    phase = "gap";
+  }
+  video.addEventListener("ended", done);
+  video.addEventListener("error", function () { if (phase === "video") done(); });
+  if (window.IntersectionObserver) {
+    new IntersectionObserver(function (e) {
+      visible = e[e.length - 1].isIntersecting;
+      sync();
+    }).observe(screen);
+  }
+  // Without script the document shows the first saying as plain text; here it starts empty.
+  while (doc.firstChild !== caret) doc.removeChild(doc.firstChild);
+  begin();
+  requestAnimationFrame(tick);
 })();

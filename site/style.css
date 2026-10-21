@@ -77,9 +77,42 @@ code { background: var(--code); padding: 0.1em 0.35em; border-radius: 4px; }
 .more { font-weight: 600; text-decoration: none; }
 .more:hover { text-decoration: underline; }
 
-/* the dictation display: one saying after another (app.js), with a transparent background */
-.pill-demo { margin: 0 auto 1.5rem; max-width: 580px; }
-.pill-demo video { display: block; width: 100%; height: auto; aspect-ratio: 1160 / 160; }
+/* the dictation demo (app.js): a notes window, the dictation display below it, the text lands in the document */
+.demo { margin: 3rem auto 0; max-width: 560px; }
+.screen {
+  position: relative; container-type: inline-size; aspect-ratio: 16 / 10; overflow: hidden; text-align: left;
+  border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow);
+  background: linear-gradient(155deg, var(--band), color-mix(in srgb, var(--accent) 14%, var(--band)));
+}
+.win {
+  position: absolute; left: 7%; right: 7%; top: 8%; bottom: 27%; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.35);
+}
+.bar { display: flex; align-items: center; gap: 1.2cqw; height: max(22px, 6.2cqw); padding: 0 2.2cqw; border-bottom: 1px solid var(--border); font-size: max(10px, 2.3cqw); color: var(--muted); }
+.bar i { width: max(6px, 1.6cqw); height: max(6px, 1.6cqw); border-radius: 50%; background: var(--border); }
+.bar span { margin-left: 1cqw; }
+.doc { position: relative; flex: 1; padding: 2.4cqw 3cqw; overflow: hidden; font-size: max(11px, 2.7cqw); line-height: 1.45; transition: opacity 0.4s ease-in-out; }
+.doc.fade { opacity: 0; }
+.doc p { margin: 0; }
+.doc p + p { margin-top: 0.5em; }
+.word { transition: opacity 0.2s ease-out; }
+.word.hide { opacity: 0; }
+.caret { position: absolute; left: 3cqw; top: 2.4cqw; width: 2px; height: 1.2em; background: var(--accent); animation: blink 1.1s steps(1) infinite; }
+.caret.typing { animation: none; }
+.caret { display: none; }
+.js .caret { display: block; }
+.screen.play { cursor: pointer; }
+.screen.play:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+@keyframes blink { 50% { opacity: 0; } }
+.screen video { display: none; position: absolute; left: 7%; bottom: 2%; width: 86%; height: auto; aspect-ratio: 1160 / 160; pointer-events: none; }
+.js .screen video { display: block; }
+.keys { margin: 1rem 0 0; font-size: 0.95rem; color: var(--muted); }
+kbd {
+  display: inline-block; min-width: 2.2em; padding: 0.05em 0.5em; border: 1px solid var(--border); border-bottom-width: 3px; border-radius: 6px;
+  background: var(--card); color: var(--text); font: 600 0.85em/1.4 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; text-align: center;
+  transition: transform 0.1s, border-bottom-width 0.1s, background-color 0.1s;
+}
+kbd.down { transform: translateY(2px); border-bottom-width: 1px; background: var(--code); }
 
 /* the little remark under the main heading, with the logo's wave next to it */
 .hero .lead { margin-bottom: 1rem; }
@@ -171,4 +204,6 @@ footer .links a { margin: 0 0.6rem; white-space: nowrap; }
   html { scroll-behavior: auto; }
   .wave i { animation: none; transform: scaleY(0.6); }
   .quip { transition: none; }
+  .caret { animation: none; }
+  .doc, .word, kbd { transition: none; }
 }
