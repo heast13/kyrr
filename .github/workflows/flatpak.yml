@@ -4,8 +4,10 @@ name: flatpak
 # that flathub.py writes, with this commit from GitHub as the source, built
 # by Flathub's own builder and checked with its linter. Hands it out as a
 # .flatpak bundle to try. Slow: sherpa-onnx is built into it. Runs when the
-# packaging changes, and by hand.
+# packaging changes, by hand, and for tags from release.yml, whose draft
+# release carries the bundle.
 on:
+  workflow_call:
   pull_request:
     paths:
       - ".github/workflows/flatpak.yml"
@@ -71,7 +73,9 @@ jobs:
           if grep "not found" "$RUNNER_TEMP/ldd.txt"; then exit 1; fi
       - name: Bundle
         run: |
-          flatpak build-bundle "$RUNNER_TEMP/flathub/repo" "$RUNNER_TEMP/kyrr.flatpak" io.github.heast13.kyrr
+          # --runtime-repo: installing the file fetches the runtime from Flathub.
+          flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+            "$RUNNER_TEMP/flathub/repo" "$RUNNER_TEMP/kyrr.flatpak" io.github.heast13.kyrr
           (cd "$RUNNER_TEMP" && sha256sum kyrr.flatpak > kyrr.flatpak.sha256)
       - uses: actions/upload-artifact@v7
         with:

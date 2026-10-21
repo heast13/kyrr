@@ -125,22 +125,65 @@ ONNX Runtime version in `cmake/onnxruntime-linux-x86_64.cmake`.
 
 ## For the Flathub submission
 
-1. Tag a release that has the commits of this folder and add it to the
-   `<releases>` of `packaging/linux/io.github.heast13.kyrr.metainfo.xml`
-   (Flathub shows the newest one; it must match what ships).
+Checked against Flathub's requirements (docs.flathub.org, 2026-10-21): the
+technical side is green (build and linter in the CI run on `main`, metainfo, app ID), the policy side
+is not. Open points, in the order they matter:
+
+1. **Generative AI policy.** Flathub manifests must not contain
+   AI-generated or AI-assisted content, AI-generated code and packaging
+   must be disclosed with the affected parts and approximate extent, and
+   AI tools must not open the submission pull request or write its
+   description, commit messages or replies. The manifest, `flathub.py` and
+   this folder were written with Claude, as was most of kyrr. The
+   submission itself is therefore a by-hand job: the person submitting
+   writes the manifest and the pull request, discloses honestly, and
+   reviewers may still reject on the extent.
+2. **Development history.** "Applications that have only existed for a very
+   short period of time will generally not be accepted"; they want a
+   sustained history, tagged releases, real-world use and committed
+   maintenance. kyrr's first release was 2026-10-10.
+3. **The compositor socket link** (see "Typing on tiling compositors")
+   hands the app the unfiltered Wayland socket, which is a bypass of the
+   security context. Flathub does not accept "disabling or bypassing
+   security mechanisms", and does not grant permission exceptions that are
+   only needed on one narrow environment (the four `xdg-config/*` folders
+   exist only for Hyprland, sway, niri and river). A Flathub build without
+   the link and without those four folders works on GNOME and KDE through
+   portals; on tiling compositors typing and the dictation key then need
+   the AppImage or AUR package.
+4. ONNX Runtime is a prebuilt binary (README, "Open points for review").
+5. Screenshots must be taken on Linux, of the window with its shadow, at
+   most 1000x700 (2000x1400 on HiDPI), in the current state of the UI.
+   Nothing to fix in the files until they exist.
+
+What is in place: the app ID `io.github.heast13.kyrr` follows the rules
+(GitHub prefix, four components, repository `heast13/kyrr` reachable,
+verification through the GitHub login of the repository owner), the
+metainfo matches the licenses in the source and passes the linter, the
+manifest builds from a git tag and commit with offline cargo sources, and
+the runtime is the current Freedesktop branch.
+
+The steps, once the points above are settled:
+
+1. Tag a release that has the commits of this folder; its `<release>` is the
+   newest one in the metainfo and the screenshot URLs name that tag or a
+   commit (`flathub.py` checks both; a branch is refused).
 2. `python3 packaging/flatpak/flathub.py 0.X.Y /tmp/kyrr-flathub` writes the
-   three files Flathub gets: the manifest with the `type: dir` source swapped
-   for the release's `tag` and `commit`, and that tag's `cargo-sources.json`
-   and `flathub.json`.
+   three files Flathub gets (as a reference for the by-hand manifest, see
+   point 1): the manifest with the `type: dir` source swapped for the
+   release's `tag` and `commit`, and that tag's `cargo-sources.json` and
+   `flathub.json`.
 3. Build and lint them with `flathub-build` and `flatpak-builder-lint` as
    under "Building locally".
-4. The pull request against `flathub/flathub` (base branch `new-pr`) contains
-   only these three files, side by side at the top level. Its description
-   explains the permissions that need review (see "Permissions").
-5. After the app is accepted, the ID `io.github.heast13.kyrr` can be
-   verified on Flathub through the GitHub account `heast13`. Later releases
-   go to the app's own repository `flathub/io.github.heast13.kyrr` the same
-   way: `flathub.py`, then a pull request with the three files.
+4. The pull request against `flathub/flathub` (base branch `new-pr`) is made
+   by the maintainer with the repository's template filled in, a video of
+   the Flatpak on Linux, and only these three files, side by side at the
+   top level. Its description explains the permissions that need review
+   (see "Permissions").
+5. After the app is accepted, the ID is verified on Flathub through the
+   GitHub account `heast13`. Later releases go to the app's own repository
+   `flathub/io.github.heast13.kyrr` the same way (`flathub.py`, then a pull
+   request with the three files).
 
 ## Permissions
 

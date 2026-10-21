@@ -2,7 +2,8 @@ name: release
 
 # Builds the Windows installer and the Linux AppImage and tarball on every
 # push to main (as artifacts) and for tags v* as one draft release, which the
-# last job creates once both are built.
+# last job creates once all are built; for tags that includes the Flatpak
+# bundle (flatpak.yml, the way Flathub builds it).
 #
 # Tags are code signed through SignPath (free for open source, certificate by
 # SignPath Foundation) once the repository variable SIGNPATH_ORGANIZATION_ID
@@ -158,9 +159,14 @@ jobs:
             dist/kyrr-*.tar.gz
             dist/kyrr-*.tar.gz.sha256
 
+  flatpak:
+    # Also by hand, to try the wiring without a tag.
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/flatpak.yml
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [installer, linux]
+    needs: [installer, linux, flatpak]
     runs-on: ubuntu-24.04
     permissions:
       # Only to create the draft release.
@@ -180,6 +186,10 @@ jobs:
         with:
           name: kyrr-linux
           path: dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: kyrr-flatpak
+          path: dist/flatpak
       - name: Draft release
         run: |
           version=${TAG#v}
@@ -189,8 +199,15 @@ jobs:
           # and .../kyrr-x86_64.AppImage always fetch the newest one.
           cp "dist/kyrr-setup-$version.exe" dist/kyrr-setup.exe
           cp "dist/kyrr-$version-x86_64.AppImage" dist/kyrr-x86_64.AppImage
+          # The Flatpak bundle, named like the AppImage; its checksum file is
+          # made again for the new name.
+          cp dist/flatpak/kyrr.flatpak "dist/kyrr-$version-x86_64.flatpak"
+          (cd dist && sha256sum "kyrr-$version-x86_64.flatpak" > "kyrr-$version-x86_64.flatpak.sha256")
+          cp dist/flatpak/kyrr.flatpak dist/kyrr-x86_64.flatpak
           gh release create "$TAG" --draft --title "kyrr $TAG" --notes-file dist/notes.md \
             "dist/kyrr-setup-$version.exe" "dist/kyrr-setup-$version.exe.sha256" dist/kyrr-setup.exe \
             "dist/kyrr-$version-x86_64.AppImage" "dist/kyrr-$version-x86_64.AppImage.sha256" \
             dist/kyrr-x86_64.AppImage \
+            "dist/kyrr-$version-x86_64.flatpak" "dist/kyrr-$version-x86_64.flatpak.sha256" \
+            dist/kyrr-x86_64.flatpak \
             "dist/kyrr-$version-linux-x86_64.tar.gz" "dist/kyrr-$version-linux-x86_64.tar.gz.sha256"
