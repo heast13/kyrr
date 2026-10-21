@@ -1886,6 +1886,16 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             }
         }
     });
+    state.on_next_setup({
+        let weak = window.as_weak();
+        move || {
+            if let Some(w) = weak.upgrade() {
+                w.set_setup_step(2);
+                w.invoke_reset_scroll();
+                fit(&weak);
+            }
+        }
+    });
     state.on_page_changed({
         let weak = window.as_weak();
         move || {
