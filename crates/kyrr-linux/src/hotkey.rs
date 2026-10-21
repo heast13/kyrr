@@ -234,7 +234,14 @@ fn start_portal(description: String, ask_now: bool) -> Result<(), String> {
         .name("kyrr-hotkey".into())
         .spawn(move || future::block_on(portal(ready_tx, description, ask_now)))
         .map_err(|e| e.to_string())?;
-    ready_rx.recv().map_err(|e| e.to_string())?
+    // A portal that hangs (a broken backend: each call waits 25 s for D-Bus
+    // to give up) must not keep the window from opening. Should it answer
+    // later after all, its key presses still arrive.
+    match ready_rx.recv_timeout(std::time::Duration::from_secs(5)) {
+        Ok(result) => result,
+        Err(mpsc::RecvTimeoutError::Timeout) => Err("the shortcut portal does not answer".into()),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 async fn portal(ready: mpsc::Sender<Result<(), String>>, description: String, ask_now: bool) {
@@ -307,6 +314,9 @@ async fn portal(ready: mpsc::Sender<Result<(), String>>, description: String, as
         }
     };
     future::or(binding, events).await;
+    // Only when the portal's connection is gone (it restarted): the key
+    // does nothing until kyrr starts again. Said in the log at least.
+    eprintln!("kyrr: shortcut portal: the connection ended");
 }
 
 /// Asks the desktop to bind the key to kyrr; GNOME and KDE show a dialog.

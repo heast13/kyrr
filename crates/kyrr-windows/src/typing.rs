@@ -30,6 +30,11 @@ const RESTORE_AFTER: Duration = Duration::from_millis(500);
 /// the input (for example into a window running as administrator); the text
 /// is then left on the clipboard.
 pub fn paste_text(text: &str) -> bool {
+    // Windows drops keys sent to such a window without saying so; the text
+    // would be gone. The caller leaves it on the clipboard instead.
+    if focus_above_us() {
+        return false;
+    }
     let Some(saved) = Saved::take() else {
         return type_keys(text);
     };
@@ -236,6 +241,68 @@ const BATCH: usize = 256;
 
 /// Pause between batches, for the receiving window to empty its queue.
 const BATCH_PAUSE: Duration = Duration::from_millis(5);
+
+/// Whether the focused window runs with more rights than kyrr (as
+/// administrator). Windows then drops kyrr's key events, and `SendInput`
+/// still reports them as sent.
+fn focus_above_us() -> bool {
+    use windows::Win32::Foundation::{CloseHandle, E_ACCESSDENIED};
+    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+    let window = unsafe { GetForegroundWindow() };
+    let mut pid = 0;
+    if window.is_invalid() || unsafe { GetWindowThreadProcessId(window, Some(&mut pid)) } == 0 {
+        return false;
+    }
+    let Ok(ours) = integrity(unsafe { GetCurrentProcess() }) else {
+        return false;
+    };
+    let process = match unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) } {
+        Ok(process) => process,
+        Err(e) => return e.code() == E_ACCESSDENIED,
+    };
+    let theirs = integrity(process);
+    let _ = unsafe { CloseHandle(process) };
+    match theirs {
+        Ok(theirs) => theirs > ours,
+        // A process running as administrator may let others see it, but
+        // not its token.
+        Err(e) => e.code() == E_ACCESSDENIED,
+    }
+}
+
+/// A process's integrity level (the last part of its token's label): medium
+/// for normal apps, high for ones running as administrator.
+fn integrity(process: HANDLE) -> windows::core::Result<u32> {
+    use windows::Win32::Foundation::{CloseHandle, E_FAIL};
+    use windows::Win32::Security::{
+        GetSidSubAuthority, GetSidSubAuthorityCount, GetTokenInformation, TokenIntegrityLevel, TOKEN_MANDATORY_LABEL,
+        TOKEN_QUERY,
+    };
+    use windows::Win32::System::Threading::OpenProcessToken;
+    let mut token = HANDLE::default();
+    unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut token) }?;
+    // Room for the label and its SID, aligned for both.
+    let mut buf = [0u64; 16];
+    let mut len = 0;
+    let read = unsafe {
+        GetTokenInformation(
+            token,
+            TokenIntegrityLevel,
+            Some(buf.as_mut_ptr().cast()),
+            std::mem::size_of_val(&buf) as u32,
+            &mut len,
+        )
+    };
+    let _ = unsafe { CloseHandle(token) };
+    read?;
+    let sid = unsafe { (*(buf.as_ptr() as *const TOKEN_MANDATORY_LABEL)).Label.Sid };
+    let count = unsafe { *GetSidSubAuthorityCount(sid) };
+    if count == 0 {
+        return Err(E_FAIL.into());
+    }
+    Ok(unsafe { *GetSidSubAuthority(sid, u32::from(count) - 1) })
+}
 
 fn send(inputs: &[INPUT]) -> bool {
     for (index, batch) in inputs.chunks(BATCH).enumerate() {

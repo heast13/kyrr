@@ -264,6 +264,21 @@ impl ModelSpec {
         }
     }
 
+    /// Deletes the files whose SHA256 is wrong, so a download fetches them
+    /// again. True if there were any (a missing file counts).
+    pub fn remove_damaged(&self, root: &Path) -> bool {
+        let dir = self.dir(root);
+        let mut damaged = false;
+        for f in self.files {
+            let path = dir.join(f.name);
+            if sha256_file(&path).ok().as_deref() != Some(f.sha256) {
+                let _ = std::fs::remove_file(&path);
+                damaged = true;
+            }
+        }
+        damaged
+    }
+
     /// Full check of every file's SHA256.
     pub fn verify(&self, root: &Path) -> Result<(), String> {
         let dir = self.dir(root);
@@ -294,4 +309,46 @@ pub(crate) fn sha256_file(path: &Path) -> std::io::Result<String> {
 
 pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn damaged_files_are_removed_good_ones_kept() {
+        let good = b"good file".as_slice();
+        let spec: &'static ModelSpec = Box::leak(Box::new(ModelSpec {
+            id: "damaged",
+            attribution: "",
+            files: Box::leak(Box::new([
+                ModelFile {
+                    name: "a.bin",
+                    urls: &[],
+                    size: good.len() as u64,
+                    sha256: Box::leak(hex(&Sha256::digest(good)).into_boxed_str()),
+                },
+                ModelFile {
+                    name: "b.bin",
+                    urls: &[],
+                    size: good.len() as u64,
+                    sha256: Box::leak(hex(&Sha256::digest(good)).into_boxed_str()),
+                },
+            ])),
+            replaces: &[],
+        }));
+        let root = std::env::temp_dir().join(format!("kyrr-model-test-{}", std::process::id()));
+        let dir = spec.dir(&root);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.bin"), good).unwrap();
+        // Right size, wrong bytes: passes the quick check, not the full one.
+        std::fs::write(dir.join("b.bin"), b"bad! file").unwrap();
+        assert!(spec.is_installed(&root));
+        assert!(spec.remove_damaged(&root));
+        assert!(dir.join("a.bin").exists() && !dir.join("b.bin").exists());
+        std::fs::write(dir.join("b.bin"), good).unwrap();
+        assert!(!spec.remove_damaged(&root));
+        spec.verify(&root).unwrap();
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 }

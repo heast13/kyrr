@@ -81,6 +81,8 @@ const PACE_MAX: f32 = 0.25;
 const LEAD: f32 = 0.35;
 /// A replaced word fades out over this long.
 const LEAVE: f32 = 0.25;
+/// How long a note stays after the dictation ended, seconds.
+const NOTE_HOLD: f32 = 1.6;
 
 /// The bars slowly turn yellow from this many seconds before the
 /// dictation's limit, and then red; each over its own stretch of seconds,
@@ -282,6 +284,8 @@ pub struct Wave {
     limit: bool,
     /// How yellow and how red the bars are, 0..1 each, eased.
     warn: [f32; 2],
+    /// Seconds a note still stays on after the dictation ended.
+    hold: f32,
 }
 
 impl Default for Wave {
@@ -302,6 +306,7 @@ impl Default for Wave {
             end: None,
             limit: false,
             warn: [0.0; 2],
+            hold: 0.0,
         }
     }
 }
@@ -383,6 +388,7 @@ impl Wave {
             self.end = None;
             self.limit = false;
             self.warn = [0.0; 2];
+            self.hold = 0.0;
         }
         if mode != Mode::Hidden {
             self.look = mode;
@@ -446,6 +452,19 @@ impl Wave {
         self.set_words(&[note]);
     }
 
+    /// A word for the end of a dictation that came out empty: `note` stays
+    /// in the pill for a moment after it, with calm bars.
+    pub fn set_note(&mut self, note: String) {
+        self.words.clear();
+        self.leaving.clear();
+        self.last_words = None;
+        self.set_words(&[note]);
+        self.look = Mode::Listening;
+        self.limit = false;
+        self.warn = [0.0; 2];
+        self.hold = NOTE_HOLD;
+    }
+
     /// Something to show: on, or still fading out.
     pub fn visible(&self) -> bool {
         self.mode != Mode::Hidden || self.alpha > 0.0
@@ -460,7 +479,10 @@ impl Wave {
     pub fn step(&mut self, dt: f32, voice: &[f32; BANDS]) {
         let dt = dt.clamp(0.0, 0.1);
         self.t += dt;
-        self.alpha = if self.mode == Mode::Hidden {
+        if self.mode == Mode::Hidden {
+            self.hold = (self.hold - dt).max(0.0);
+        }
+        self.alpha = if self.mode == Mode::Hidden && self.hold <= 0.0 {
             (self.alpha - dt / FADE_OUT).max(0.0)
         } else {
             (self.alpha + dt / FADE_IN).min(1.0)
@@ -717,6 +739,7 @@ enum Message {
     Words(Vec<String>),
     End(Instant),
     Limit(String),
+    Note(String),
 }
 
 impl Wave {
@@ -726,6 +749,7 @@ impl Wave {
             Message::Words(words) => self.set_words(&words),
             Message::End(at) => self.set_end(at),
             Message::Limit(note) => self.set_limit(note),
+            Message::Note(note) => self.set_note(note),
         }
     }
 }
@@ -768,6 +792,11 @@ impl Overlay {
     /// The dictation reached its limit: `note` shows in red.
     pub fn set_limit(&self, note: String) {
         let _ = self.tx.send(Message::Limit(note));
+    }
+
+    /// The dictation came out empty: `note` stays a moment after it.
+    pub fn set_note(&self, note: String) {
+        let _ = self.tx.send(Message::Note(note));
     }
 }
 
@@ -1097,6 +1126,21 @@ mod tests {
         wave.set_mode(Mode::Hidden);
         wave.set_mode(Mode::Listening);
         assert!(!wave.limit && wave.words.is_empty() && wave.warn == [0.0; 2]);
+    }
+
+    #[test]
+    fn a_note_stays_a_moment_after_the_dictation_ends() {
+        let mut wave = shown(Mode::Listening, 0.5, &QUIET);
+        wave.set_mode(Mode::Writing);
+        wave.set_note("Nichts gehört".into());
+        wave.set_mode(Mode::Hidden);
+        run_for(&mut wave, 1.0);
+        assert!(wave.alpha > 0.99 && wave.words.len() == 1, "alpha {}", wave.alpha);
+        run_for(&mut wave, 1.5);
+        assert!(!wave.visible());
+        // The next dictation starts without it.
+        wave.set_mode(Mode::Listening);
+        assert!(wave.hold == 0.0 && wave.words.is_empty());
     }
 
     #[test]

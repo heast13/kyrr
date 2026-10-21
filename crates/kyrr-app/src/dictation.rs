@@ -52,6 +52,14 @@ const WAIT_FOR_KEY: Duration = Duration::from_secs(3);
 /// show the words far too late: the wave goes on without them for this
 /// dictation.
 const LOOK_TOO_SLOW: Duration = Duration::from_millis(2500);
+/// Seconds of recording (the tail after the key's release included) from
+/// which an empty result is worth a word in the pill.
+const NOTHING_MIN: f32 = 0.8;
+
+/// A tap the worker gets to only this late (it was busy typing a long
+/// dictation) is from the past: it would open the microphone unasked until
+/// the next tap. A held key still starts late, and its release ends it.
+const STALE_PRESS: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum State {
@@ -95,6 +103,8 @@ pub enum Event {
     Ends(Instant),
     /// The dictation reached its limit: this, in red in the pill.
     Limit(String),
+    /// A real dictation that came out empty: this, for a moment in the pill.
+    Nothing(String),
     /// Something to tell the user; `None` clears an earlier message.
     Message(Option<String>),
 }
@@ -116,7 +126,9 @@ pub enum Command {
     Live(bool),
     /// Dictations end after `SHORT_LIMIT` (the lean setting), or not.
     Short(bool),
-    KeyDown,
+    /// The key went down at this moment; true in tap mode (one tap starts,
+    /// the next ends).
+    KeyDown(Instant, bool),
     /// The dictation key went down (true) or up, whatever it starts or ends.
     Held(bool),
     /// The key went up at this moment.
@@ -134,6 +146,56 @@ pub type Typer = fn(&str) -> bool;
 /// Puts text on the clipboard. Returns false if that failed.
 pub type Clipboard = fn(&str) -> bool;
 
+/// A short grumble for an empty dictation, never the same one twice in a
+/// row: kyrr was woken for nothing.
+fn nothing(german: bool) -> String {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    const DE: [&str; 14] = [
+        "Dafür geweckt?",
+        "Nix. Danke auch.",
+        "Ich hatte Pause.",
+        "Ernsthaft? Stille.",
+        "Luft diktiert. Bravo.",
+        "Rede oder schweig.",
+        "Hirn aus?",
+        "Ich schlief.",
+        "Wecken kostet extra.",
+        "Hallo? Jemand da?",
+        "Grillenzirpen",
+        "Nada",
+        "Hä?",
+        "Räusper",
+    ];
+    const EN: [&str; 14] = [
+        "Woke for this?",
+        "Nothing. Thanks.",
+        "I was off.",
+        "Seriously? Silence.",
+        "Dictated air. Bravo.",
+        "Talk or leave.",
+        "Brain off?",
+        "I slept.",
+        "Waking costs extra.",
+        "Hello? Anyone?",
+        "Crickets",
+        "Nada",
+        "Huh?",
+        "Ahem",
+    ];
+    static LAST: AtomicUsize = AtomicUsize::new(usize::MAX);
+    let words = if german { &DE } else { &EN };
+    let clock = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.subsec_micros() as usize);
+    let mut pick = clock % words.len();
+    // Not the same word twice in a row.
+    if pick == LAST.load(Ordering::Relaxed) {
+        pick = (pick + 1) % words.len();
+    }
+    LAST.store(pick, Ordering::Relaxed);
+    words[pick].to_string()
+}
+
 /// What the worker says, in the language of the window.
 fn say(language: Language, what: &str) -> String {
     let german = language == Language::German;
@@ -145,6 +207,7 @@ fn say(language: Language, what: &str) -> String {
         };
     }
     match (what, german) {
+        ("nothing", german) => return nothing(german),
         ("limit", true) => "Maximale Diktatlänge",
         ("limit", false) => "Longest dictation reached",
         ("offline", true) => "Kein Internet oder der Server antwortet nicht. Nochmal versuchen?",
@@ -159,6 +222,8 @@ fn say(language: Language, what: &str) -> String {
         ("load", false) => "The speech model would not load. Try again?",
         ("mic", true) => "Konnte das Mikrofon nicht öffnen. Steckt es noch?",
         ("mic", false) => "Could not open the microphone. Is it still plugged in?",
+        ("mic gone", true) => "Das Mikrofon war mittendrin weg. Steckt es noch?",
+        ("mic gone", false) => "The microphone went away halfway through. Is it still plugged in?",
         ("crash", true) => "Das hat nicht geklappt. Nochmal sprechen?",
         ("crash", false) => "That did not work. Say it again?",
         ("clipboard", true) => "Konnte hier nicht einfügen. Der Text liegt in der Zwischenablage: Strg+V.",
@@ -207,6 +272,9 @@ struct Worker {
     /// download waits for it, both would write the same files.
     download_running: bool,
     download_again: bool,
+    /// The installed model would not load: a retry checks its files and
+    /// fetches the damaged ones again.
+    load_failed: bool,
     /// The new version of an installed model was fetched without asking;
     /// once is enough, a cancel or error leaves it to the user.
     upgrade_started: bool,
@@ -257,6 +325,7 @@ pub fn spawn(
         download_id: 0,
         download_running: false,
         download_again: false,
+        load_failed: false,
         upgrade_started: false,
         last_used: Instant::now(),
         words: Live::default(),
@@ -335,6 +404,11 @@ impl Worker {
         if self.download_cancel.is_some() {
             return;
         }
+        // A model change (the language) waits until the running dictation
+        // is typed: `key_up` comes back here.
+        if self.enabled && self.recording.is_some() {
+            return;
+        }
         if !self.enabled {
             self.model = None;
             self.transcript = None;
@@ -365,14 +439,33 @@ impl Worker {
                 (self.notify)(Event::Message(None));
                 self.set_state(State::Ready);
             }
-            Err(()) => self.error("load"),
+            Err(()) => {
+                self.load_failed = true;
+                self.error("load");
+            }
+        }
+    }
+
+    /// After a model that would not load: fetches the files that are
+    /// damaged on the disk again, else tries loading once more.
+    fn repair(&mut self) {
+        self.set_state(State::Loading);
+        let damaged = self.spec().remove_damaged(&self.root);
+        self.load_failed = false;
+        if damaged {
+            eprintln!("kyrr: dictation: the speech model was damaged, fetching it again");
+            self.start_download();
+        } else {
+            self.refresh();
         }
     }
 
     fn load(&mut self) -> Result<(), ()> {
         let threads = std::thread::available_parallelism().map_or(4, |n| n.get().min(4));
-        let model = Dictation::load(&self.root, self.spec(), threads).map_err(|_| ())?;
+        let model = Dictation::load(&self.root, self.spec(), threads)
+            .map_err(|e| eprintln!("kyrr: dictation: the speech model would not load: {e}"))?;
         self.model = Some(model);
+        self.load_failed = false;
         self.last_used = Instant::now();
         Ok(())
     }
@@ -529,7 +622,9 @@ impl Worker {
             }
             Command::Retry => {
                 (self.notify)(Event::Message(None));
-                if self.spec().is_installed(&self.root) {
+                if self.spec().is_installed(&self.root) && self.load_failed {
+                    self.repair();
+                } else if self.spec().is_installed(&self.root) {
                     self.refresh();
                 } else {
                     self.start_download();
@@ -558,16 +653,16 @@ impl Worker {
                     Err(DownloadError::Disk(_)) => self.error("disk"),
                 }
             }
-            Command::KeyDown => self.key_down(),
+            Command::KeyDown(at, tap) => self.key_down(at, tap),
             Command::KeyUp(at) => self.key_up(at),
             Command::Quit => {}
         }
     }
 
-    fn key_down(&mut self) {
+    fn key_down(&mut self, at: Instant, tap: bool) {
         // Still waiting for the key (its release got lost): first that.
         self.type_waiting();
-        if self.state != State::Ready || self.recording.is_some() {
+        if self.state != State::Ready || self.recording.is_some() || (tap && at.elapsed() > STALE_PRESS) {
             return;
         }
         match Recording::start(self.microphone.as_deref()) {
@@ -586,6 +681,7 @@ impl Worker {
                 // Asleep after a long pause: load while the recording runs.
                 if self.model.is_none() && self.load().is_err() {
                     self.recording = None;
+                    self.load_failed = true;
                     self.error("load");
                 }
             }
@@ -600,11 +696,13 @@ impl Worker {
         // A look may have kept the worker busy after the key went up; the
         // recording ran on meanwhile.
         std::thread::sleep(TAIL.saturating_sub(at.elapsed()));
+        let lost = rec.lost();
         let (rate, samples) = rec.finish();
         self.set_state(State::Transcribing);
         let started = Instant::now();
         let transcript = self.transcript.take();
         let ahead = transcript.as_ref().map_or(0, Transcript::pieces);
+        let mut ran = false;
         let text = match &self.model {
             Some(model) => match catch_unwind(AssertUnwindSafe(|| match transcript {
                 Some(mut transcript) => {
@@ -613,14 +711,22 @@ impl Worker {
                 }
                 None => model.transcribe(rate, &samples),
             })) {
-                Ok(text) => text,
+                Ok(text) => {
+                    ran = true;
+                    text
+                }
                 // Once more from the recording itself, without the pieces
                 // heard ahead.
-                Err(_) if ahead > 0 => catch_unwind(AssertUnwindSafe(|| model.transcribe(rate, &samples)))
-                    .unwrap_or_else(|_| {
+                Err(_) if ahead > 0 => match catch_unwind(AssertUnwindSafe(|| model.transcribe(rate, &samples))) {
+                    Ok(text) => {
+                        ran = true;
+                        text
+                    }
+                    Err(_) => {
                         self.tell("crash");
                         String::new()
-                    }),
+                    }
+                },
                 Err(_) => {
                     self.tell("crash");
                     String::new()
@@ -649,8 +755,14 @@ impl Worker {
         } else if heard {
             self.type_text(text);
         }
-        if !heard && self.muted {
+        if lost {
+            self.tell("mic gone");
+        } else if !heard && self.muted {
             self.tell("muted");
+        } else if !heard && ran && rate > 0 && samples.len() as f32 / rate as f32 >= NOTHING_MIN {
+            // A tap by accident is no dictation; a spoken one that came out
+            // empty gets a word, or the pill would vanish without a trace.
+            (self.notify)(Event::Nothing(say(self.language, "nothing")));
         }
         // The language may have changed while recording: back to whatever
         // the settings say, not blindly to Ready.
@@ -700,18 +812,23 @@ impl Worker {
         let (tx, notify) = (self.tx.clone(), Arc::clone(&self.notify));
         std::thread::spawn(move || {
             let mut last = -1.0f32;
-            let result = download(
-                spec,
-                &root,
-                &mut |p| {
-                    let f = p.done as f32 / p.total.max(1) as f32;
-                    if f - last >= 0.005 {
-                        last = f;
-                        notify(Event::Progress(f));
-                    }
-                },
-                &cancel,
-            );
+            // Whatever happens in there, the worker hears back, or it
+            // would wait for this download forever.
+            let result = catch_unwind(AssertUnwindSafe(|| {
+                download(
+                    spec,
+                    &root,
+                    &mut |p| {
+                        let f = p.done as f32 / p.total.max(1) as f32;
+                        if f - last >= 0.005 {
+                            last = f;
+                            notify(Event::Progress(f));
+                        }
+                    },
+                    &cancel,
+                )
+            }))
+            .unwrap_or_else(|_| Err(DownloadError::Offline("the download crashed".into())));
             let _ = tx.send(Command::Downloaded(id, result));
         });
     }
@@ -719,10 +836,28 @@ impl Worker {
     /// Stops the download; its thread reports back when it let go of the
     /// files (see `download_running`).
     fn cancel_download(&mut self) {
+        // Also a download still waiting for a cancelled one to let go.
+        self.download_again = false;
         if let Some(cancel) = self.download_cancel.take() {
             cancel.store(true, Ordering::Relaxed);
             self.download_id += 1;
-            self.download_again = false;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_empty_dictation_never_gets_the_same_grumble_twice_in_a_row() {
+        for german in [true, false] {
+            let mut last = String::new();
+            for _ in 0..200 {
+                let word = nothing(german);
+                assert!(!word.is_empty() && word.split(' ').count() <= 3 && word != last);
+                last = word;
+            }
         }
     }
 }

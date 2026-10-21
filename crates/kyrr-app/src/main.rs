@@ -1114,6 +1114,7 @@ impl App {
         let window = self.window.clone();
         std::thread::spawn(move || {
             let outcome = update::check();
+            UPDATE_CHECK_FAILED.store(outcome == update::Outcome::Failed, Ordering::Relaxed);
             let _ = slint::invoke_from_event_loop(move || {
                 let Some(w) = window.upgrade() else { return };
                 let state = w.global::<AppState>();
@@ -1203,7 +1204,12 @@ impl App {
     fn check_updates_daily(&self) {
         let due = {
             let config = self.config.borrow();
-            config.update_check && now().saturating_sub(config.update_checked) >= UPDATE_INTERVAL.as_secs()
+            config.update_check
+                && update_due(
+                    config.update_checked,
+                    now(),
+                    UPDATE_CHECK_FAILED.load(Ordering::Relaxed),
+                )
         };
         if due {
             self.check_updates(false);
@@ -1434,6 +1440,21 @@ impl App {
 /// How often kyrr asks GitHub for a newer version, when that is on.
 const UPDATE_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 
+/// After a check that failed (started before the Wi-Fi was up, say), the
+/// next try comes this much sooner than a day.
+const UPDATE_RETRY: Duration = Duration::from_secs(60 * 60);
+
+/// The last check did not reach GitHub.
+static UPDATE_CHECK_FAILED: AtomicBool = AtomicBool::new(false);
+
+/// Whether the daily check is due: a day after the last one, an hour after
+/// one that failed, and at once when the last one lies in the future (the
+/// clock was wrong then, or is now).
+fn update_due(checked: u64, now: u64, failed: bool) -> bool {
+    let since = now.saturating_sub(checked);
+    checked > now || since >= UPDATE_INTERVAL.as_secs() || (failed && since >= UPDATE_RETRY.as_secs())
+}
+
 /// Seconds since 1970.
 fn now() -> u64 {
     std::time::SystemTime::now()
@@ -1489,6 +1510,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             Event::Heard(words) => return wave.set_words(words),
             Event::Ends(at) => return wave.set_end(at),
             Event::Limit(text) => return wave.set_limit(text),
+            Event::Nothing(text) => return wave.set_note(text),
             _ => {}
         }
         if let Event::State(s) = &event {
@@ -1518,7 +1540,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 }
                 Event::Progress(p) => state.set_download_progress(p),
                 Event::Typed(text) => state.set_last_text(text.into()),
-                Event::Heard(_) | Event::Ends(_) | Event::Limit(_) => {}
+                Event::Heard(_) | Event::Ends(_) | Event::Limit(_) | Event::Nothing(_) => {}
                 Event::Message(m) => state.set_dictation_message(m.unwrap_or_default().into()),
             }
         });
@@ -1550,12 +1572,12 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                     break;
                 }
                 let cmd = match (key, toggle) {
-                    (platform::KeyEvent::Pressed, false) => Command::KeyDown,
+                    (platform::KeyEvent::Pressed, false) => Command::KeyDown(Instant::now(), false),
                     (platform::KeyEvent::Released, false) => Command::KeyUp(Instant::now()),
                     (platform::KeyEvent::Pressed, true) if recording.load(Ordering::Relaxed) => {
                         Command::KeyUp(Instant::now())
                     }
-                    (platform::KeyEvent::Pressed, true) => Command::KeyDown,
+                    (platform::KeyEvent::Pressed, true) => Command::KeyDown(Instant::now(), true),
                     (platform::KeyEvent::Released, true) => continue,
                 };
                 if worker.send(cmd).is_err() {
@@ -1666,6 +1688,16 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.on_install_update({
         let weak = window.as_weak();
         move || {
+            // One download at a time: the tray offers it during one too.
+            let busy = weak.upgrade().is_some_and(|w| {
+                matches!(
+                    w.global::<AppState>().get_update_state(),
+                    UpdateState::Downloading | UpdateState::Installing
+                )
+            });
+            if busy {
+                return;
+            }
             let Some(installer) = pending_installer().lock().unwrap_or_else(|e| e.into_inner()).clone() else {
                 return;
             };
@@ -2063,6 +2095,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     poll.start(slint::TimerMode::Repeated, Duration::from_secs(2), {
         let app = Rc::clone(&app);
         move || {
+            platform::revive_filter();
             // The microphones first: the filter's state is read against them.
             app.refresh_microphones();
             app.refresh_filter();
@@ -2280,6 +2313,20 @@ fn retry_tray(app: &Rc<App>) -> Result<(), slint::PlatformError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_check_timing() {
+        let day = UPDATE_INTERVAL.as_secs();
+        let t = 1_800_000_000;
+        assert!(!update_due(t, t + 60, false));
+        assert!(update_due(t, t + day, false));
+        // Failed: again after an hour, not a day.
+        assert!(!update_due(t, t + 60, true));
+        assert!(update_due(t, t + UPDATE_RETRY.as_secs(), true));
+        // A check stamped in the future (wrong clock back then).
+        assert!(update_due(t + 10 * day, t, false));
+        assert!(update_due(0, t, false));
+    }
 
     #[test]
     fn no_notes_when_all_is_well() {
