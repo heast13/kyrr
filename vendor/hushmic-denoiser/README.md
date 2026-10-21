@@ -86,11 +86,11 @@ same directory as the `.onnx` file. They come from the DPDFNet repository
 at the commit the C sources are taken from, and every HushMic release
 since 0.10.0 attaches the same files (`<model>.weights.f32`, listed in its
 `sha256sums.txt`); `scripts/setup-assets.sh` in the HushMic repository
-downloads and verifies them. The model file itself
-is still needed: it identifies the model, and ONNX Runtime is the fallback
-whenever the native engine cannot run (no AVX2, missing or damaged
-weights, an unrecognized model file). `Denoiser::fallback_reason` says
-why. `Inference::NativeFp32` is also available for comparisons.
+downloads and verifies them. The model file itself identifies the model,
+and ONNX Runtime is the fallback whenever the native engine cannot run (no
+AVX2, missing or damaged weights, an unrecognized model file).
+`Denoiser::fallback_reason` says why. (kyrr: without the model file the
+model is taken by its name and there is no fallback; see PATCHES.md.) `Inference::NativeFp32` is also available for comparisons.
 
 ## Example
 

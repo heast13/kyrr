@@ -71,6 +71,9 @@ impl Denoiser {
         }
         match crate::native::NativeModel::load(model_path, inference) {
             Ok((m, init_state)) => Ok(Denoiser::with_model(Model::native(m, init_state))),
+            // kyrr: without the .onnx file there is nothing to fall back
+            // to, and the native reason is the one worth reporting.
+            Err(why) if !model_path.is_file() => Err(Error::Model(why)),
             Err(why) => {
                 let mut d = Denoiser::from_file(model_path)?;
                 d.fallback_reason = Some(why);

@@ -68,5 +68,7 @@ both: dpdfnet8 29 % → 20 % of one core, dpdfnet2 11.6 % → 9.1 %.
 SHA-256 of its `.onnx` file. When that file is missing, it now takes the
 compiled-in model named like the file (`dpdfnet8_48khz_hr.onnx` →
 `dpdfnet8_48khz_hr`); the weights are still checked against their own
-SHA-256 before use. kyrr's Linux packages, which have no ONNX Runtime for
+SHA-256 before use. `Denoiser::from_file_with` (`src/denoiser.rs`) then
+returns the native engine's reason instead of trying ONNX Runtime on a
+file that is not there; the README notes it. kyrr's Linux packages, which have no ONNX Runtime for
 the noise filter, ship only the `.weights.f32` files (about 25 MB less).

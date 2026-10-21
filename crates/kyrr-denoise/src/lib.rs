@@ -80,7 +80,9 @@ pub fn load(dir: &Path, model: Model, ort_library: Option<&Path>) -> Result<Deno
         .stack_size(LOADER_STACK)
         .spawn(move || {
             if !native_possible(&path) {
-                let ort = ort.ok_or("native engine unavailable and no ONNX Runtime given")?;
+                let ort = ort.ok_or(
+                    "native engine unavailable (needs AVX2/FMA and the .weights.f32 file) and no ONNX Runtime given",
+                )?;
                 hushmic_denoiser::init_runtime(&ort).map_err(|e| format!("{}: {e:?}", ort.display()))?;
             }
             #[cfg(feature = "native")]

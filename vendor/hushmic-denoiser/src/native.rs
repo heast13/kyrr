@@ -323,8 +323,8 @@ unsafe impl Send for NativeModel {}
 unsafe impl Sync for NativeModel {}
 
 impl NativeModel {
-    /// Load the native build of the model in `onnx` (which may be missing,
-    /// kyrr) with the engine `inference` asks for (never `Onnx`). Returns the model and its
+    /// Load the native build of the model in `onnx` with the engine
+    /// `inference` asks for (never `Onnx`). Returns the model and its
     /// initial state, or why it cannot run natively.
     pub(crate) fn load(
         onnx: &Path,
@@ -347,9 +347,10 @@ impl NativeModel {
         };
         let registered = match file_sha256(onnx) {
             Ok(sha) => REGISTRY.iter().find(|r| r.onnx_sha256 == sha),
-            // kyrr: packages without ONNX Runtime ship only the weights; the
-            // model is then the one named like the file, and the weights'
-            // own checksum below pins it just as well.
+            // kyrr: the Linux packages ship only the weights (their noise
+            // filter never uses ONNX Runtime); the model is then the one
+            // named like the file, and the weights' own checksum below pins
+            // it just as well.
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 let stem = onnx.file_stem().and_then(|s| s.to_str());
                 REGISTRY

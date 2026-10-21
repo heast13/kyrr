@@ -218,5 +218,15 @@ fn native_needs_only_the_weights() {
         };
         assert_eq!(run(&only_weights), run(&dir), "{model:?}");
     }
+    // Damaged weights without an .onnx file: the native engine's reason,
+    // not an ONNX Runtime error about a file that is not there.
+    let weights = only_weights.join(Model::Light.weights_name());
+    let mut bytes = std::fs::read(&weights).unwrap();
+    bytes[1000] ^= 1;
+    std::fs::write(&weights, bytes).unwrap();
+    let e = load(&only_weights, Model::Light, None)
+        .err()
+        .expect("damaged weights refused");
+    assert!(e.contains("expected checksum"), "{e}");
     std::fs::remove_dir_all(&only_weights).unwrap();
 }
