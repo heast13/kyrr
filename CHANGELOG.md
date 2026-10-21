@@ -9,7 +9,17 @@
   audio, so they take a little more computing time. In a test with 27
   synthetic clips, 71 of 1536 shown words differed from what was said, down
   from 90 of 1518, at about 0.1 s more delay on average.
-- "Feedback" under Settings, About (and on the website and in the
+- Settings rebuilt for overview: the "Settings" page is now "Global
+  settings" (effort, language, start with the system, microphone, updates,
+  about). Each switch on the main page has its own gear that opens only
+  that card's settings: noise (filter strength, level check, listening),
+  voice (sound, automatic volume), dictation (key, hold or tap). Every
+  page opens in "Simple"; "Advanced" on the same page adds the rest (noise
+  model, own sound, compressor, S sounds, rumble, pops, distance
+  compensation, words while you talk, update settings). One column
+  everywhere, Windows and Linux alike. Simple or Advanced is no longer
+  remembered between visits.
+- "Feedback" under Global settings, About (and on the website and in the
   README): opens an e-mail to the maintainer with the kyrr version, the
   system (Windows, or distribution, desktop and install type on Linux) and
   the language filled in. kyrr sends nothing itself; no log is attached.
