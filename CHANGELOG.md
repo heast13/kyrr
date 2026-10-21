@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Distance compensation is out of beta and on by default, for existing
+  users too. The 0.5.8 switch (`VoiceDistance`) is no longer read; the
+  setting is now `VoiceDistanceOff`, so an off set in 0.5.8 does not carry
+  over. Settings, Advanced, "Distance compensation" switches it off.
 - Dictation wave: the words are written by an invisible pen that glides
   along the line at an even pace (the average of how fast words came in
   lately, plus a share of what waits), instead of every word fading in on

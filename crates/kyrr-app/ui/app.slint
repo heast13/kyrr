@@ -1108,7 +1108,7 @@ component VoiceSettings inherits Card {
             : @tr("Off. P and B can thump.");
     }
     if root.shown && AppState.advanced: HorizontalLayout {
-        Caption { text: @tr("Distance compensation (beta)"); vertical-alignment: center; }
+        Caption { text: @tr("Distance compensation"); vertical-alignment: center; }
         Rectangle { }
         Switch {
             checked <=> AppState.distance;
@@ -1117,7 +1117,7 @@ component VoiceSettings inherits Card {
     }
     if root.shown && AppState.advanced: Hint {
         text: AppState.distance ? @tr("Far from the mic, it takes some of the room's echo out. Close up, it does nothing.")
-            : @tr("Off. Far from the mic, the room echoes along. Still a beta: tell us how it sounds.");
+            : @tr("Off. Far from the mic, the room echoes along.");
     }
     if root.shown && !AppState.voice-is-default: HorizontalLayout {
         Rectangle { }
