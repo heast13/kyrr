@@ -31,7 +31,7 @@ wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 async-signal = "0.2"
 # Ending without the C++ exit handlers (see signals::exit_now).
 libc = "0.2"
-rustix = { version = "1", features = ["fs", "mm", "process"] }
+rustix = { version = "1", features = ["fs", "mm", "net", "process"] }
 # Clipboard fallback when typing is not possible: X11, and Wayland compositors
 # with the data-control protocol.
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }

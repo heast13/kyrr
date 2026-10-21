@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Linux, AppImage: pasting the install commands again no longer needs kyrr
+  closed first. The commands download to `kyrr.new` and move it over `kyrr`
+  (a running AppImage cannot be written to), and `kyrr --replace` ends the
+  running kyrr like quitting does (SIGTERM, the default microphone is given
+  back), waits until it is gone (up to 20 s; if it hangs longer, the old one
+  just shows its window) and starts in its place. If the download fails, the
+  old file stays and is merely restarted. Only
+  a process called kyrr is ended, found by the socket it listens on; a
+  Flatpak kyrr is left to Flatpak.
 - Dictation wave: the words are written by an invisible pen that glides
   along the line at an even pace (the average of how fast words came in
   lately, plus a share of what waits), instead of every word fading in on

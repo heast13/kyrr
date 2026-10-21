@@ -1,7 +1,9 @@
 //! One kyrr per user session. A second start hands its request to the
 //! running one over a socket in the runtime folder and exits: plain `kyrr`
 //! (from the app menu) shows the window, `kyrr --dictate` (bound to a key in
-//! the desktop settings) starts or ends dictation.
+//! the desktop settings) starts or ends dictation. `kyrr --replace` (the
+//! install command on the website, after an update) ends a running kyrr
+//! first and takes its place.
 
 use std::io::{Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -24,6 +26,8 @@ const DICTATE_STOP: &[u8] = b"dictate-stop";
 /// A start at sign-in while kyrr already runs (the session's autostart and
 /// the compositor's both started it): nothing to do.
 const BACKGROUND: &[u8] = b"background";
+/// How long a running kyrr gets to hand back the microphone and end.
+const REPLACE_WAIT: Duration = Duration::from_secs(20);
 
 fn socket_path() -> PathBuf {
     let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from) else {
@@ -41,7 +45,8 @@ fn socket_path() -> PathBuf {
 
 /// `args` are the program's arguments; `--dictate` asks the running kyrr to
 /// toggle dictation, `--dictate-start` and `--dictate-stop` to start and end
-/// it (for a key's press and release).
+/// it (for a key's press and release); `--replace` ends the running kyrr
+/// the way quitting does and takes its place.
 pub fn claim(args: &[String]) -> Instance {
     claim_at(socket_path(), args)
 }
@@ -59,6 +64,9 @@ fn claim_at(path: PathBuf, args: &[String]) -> Instance {
     } else {
         SHOW
     };
+    if has("--replace") {
+        end_running(&path);
+    }
     let ask = |request: &[u8]| {
         let mut stream = UnixStream::connect(&path).ok()?;
         stream.write_all(request).ok()
@@ -90,6 +98,45 @@ fn claim_at(path: PathBuf, args: &[String]) -> Instance {
             .spawn(move || serve(listener, tx));
     }
     Instance::First { show_requests: rx }
+}
+
+/// Ends the kyrr that listens on `path` with SIGTERM (it gives the default
+/// microphone back, see signals) and waits until it has gone. Whoever
+/// listens is asked by the system, not by name; only a process called kyrr
+/// is touched. Inside a Flatpak the process ids differ from the ones the
+/// system reports for the socket, and Flatpak updates its own kyrr, so
+/// nothing is done there.
+fn end_running(path: &std::path::Path) {
+    if std::env::var_os("FLATPAK_ID").is_some() {
+        return;
+    }
+    let Ok(mut stream) = UnixStream::connect(path) else {
+        return;
+    };
+    // Looking must not make the dying kyrr show its window.
+    let _ = stream.write_all(BACKGROUND);
+    let Ok(peer) = rustix::net::sockopt::socket_peercred(&stream) else {
+        return;
+    };
+    drop(stream);
+    let pid = peer.pid;
+    let is_kyrr = std::fs::read_to_string(format!("/proc/{}/comm", pid.as_raw_nonzero()))
+        .is_ok_and(|name| name.trim() == "kyrr");
+    if !is_kyrr || pid == rustix::process::getpid() {
+        return;
+    }
+    let _ = rustix::process::kill_process(pid, rustix::process::Signal::TERM);
+    // Gone when nothing accepts on the socket any more.
+    let until = std::time::Instant::now() + REPLACE_WAIT;
+    while std::time::Instant::now() < until {
+        match UnixStream::connect(path) {
+            Ok(mut stream) => {
+                let _ = stream.write_all(BACKGROUND);
+            }
+            Err(_) => break,
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
 }
 
 /// Takes the lock next to the socket for as long as kyrr runs: true when
@@ -158,6 +205,19 @@ mod tests {
             .expect("asked to show");
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// `--replace` ends only a process called kyrr: this test (the listener
+    /// here) is not one and goes on answering.
+    #[test]
+    fn replace_leaves_other_programs_alone() {
+        let dir = std::env::temp_dir().join(format!("kyrr-replace-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("kyrr.sock");
+        let _listener = UnixListener::bind(&path).unwrap();
+        end_running(&path);
+        assert!(UnixStream::connect(&path).is_ok());
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
