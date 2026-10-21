@@ -104,7 +104,7 @@ starts it:
 
 ```sh
 mkdir -p ~/.local/bin
-curl -L -o ~/.local/bin/kyrr https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage
+curl -fL -o ~/.local/bin/kyrr https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage
 chmod +x ~/.local/bin/kyrr
 ~/.local/bin/kyrr &
 ```
