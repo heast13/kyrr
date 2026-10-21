@@ -56,17 +56,33 @@ pub fn claim(args: &[String]) -> Instance {
     } else {
         SHOW
     };
-    if let Ok(mut stream) = UnixStream::connect(&path) {
-        let _ = stream.write_all(request);
-        return Instance::Other;
+    let hand_over = || {
+        UnixStream::connect(&path).map(|mut stream| {
+            let _ = stream.write_all(request);
+        })
+    };
+    match hand_over() {
+        Ok(()) => return Instance::Other,
+        // A missing socket is not stale: another start may be binding it
+        // right now and must keep it.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        // Nobody answers: a socket left by a kyrr that ended without
+        // cleaning up.
+        Err(_) => {
+            let _ = std::fs::remove_file(&path);
+        }
     }
-    // Nobody answers: a socket left by a kyrr that ended without cleaning up.
-    let _ = std::fs::remove_file(&path);
     let (tx, rx) = mpsc::channel();
-    if let Ok(listener) = UnixListener::bind(&path) {
-        let _ = std::thread::Builder::new()
-            .name("kyrr-instance".into())
-            .spawn(move || serve(listener, tx));
+    match UnixListener::bind(&path) {
+        Ok(listener) => {
+            let _ = std::thread::Builder::new()
+                .name("kyrr-instance".into())
+                .spawn(move || serve(listener, tx));
+        }
+        // Lost a race with a start at the same moment (the session's autostart
+        // and the compositor's): that one is the first, this one hands over.
+        Err(_) if hand_over().is_ok() => return Instance::Other,
+        Err(_) => {}
     }
     Instance::First { show_requests: rx }
 }
