@@ -486,11 +486,41 @@ mod imp {
                 filter: Filter::Off,
             });
             if let Some(mic) = start {
-                std::thread::spawn(move || start_filter(mic));
+                std::thread::spawn(move || start_filter_at_launch(mic));
             }
             state
         });
         state.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// The start at sign-in can come before PipeWire is up (a compositor
+    /// starting kyrr before its sound system): wait for it instead of
+    /// leaving the filter off until kyrr is started again.
+    fn start_filter_at_launch(microphone: String) {
+        let mut microphone = microphone;
+        loop {
+            start_filter(microphone.clone());
+            let waiting = matches!(&state().filter, Filter::Failed(e) if e == kyrr_linux::mic::NOT_RUNNING);
+            if !waiting {
+                return;
+            }
+            // Also when the socket is already there but PipeWire does not
+            // answer yet.
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            while !kyrr_linux::pipewire_setup::running() {
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            }
+            let mut s = state();
+            // Set up by hand meanwhile: nothing left to start.
+            if !matches!(s.filter, Filter::Failed(_)) {
+                return;
+            }
+            s.filter = Filter::Off;
+            // The microphone picked meanwhile, if any.
+            if let Some(picked) = s.saved.microphone.clone() {
+                microphone = picked;
+            }
+        }
     }
 
     /// Starts the filter on `microphone`; loading the noise model takes a

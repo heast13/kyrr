@@ -15,7 +15,9 @@
 //!
 //! If kyrr ends without restoring the default (a crash), PipeWire falls
 //! back to the real microphone by itself, and "kyrr" is the default again
-//! as soon as it comes back.
+//! as soon as it comes back. The other way round, when PipeWire restarts
+//! (a package update, a crash, the user restarting the sound system), kyrr
+//! waits for it to return and sets "kyrr" up again.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -35,6 +37,9 @@ pub const NODE_NAME: &str = "kyrr";
 /// The filter's rate; PipeWire converts from and to whatever the
 /// microphone and the apps use.
 pub const RATE: u32 = 48_000;
+
+/// What [`VirtualMic::start`] says when there is no PipeWire to connect to.
+pub const NOT_RUNNING: &str = "PipeWire is not running";
 
 const DEFAULT_SOURCE_KEY: &str = "default.configured.audio.source";
 
@@ -74,12 +79,19 @@ struct Shared {
     /// The microphone last plugged in, or last picked in the system's sound
     /// settings, while kyrr runs: what the system would use now.
     latest: Option<String>,
+    /// The microphone asked for (node name), kept for when PipeWire comes
+    /// back after a restart.
+    wanted: Option<String>,
+    /// The [`VirtualMic`] was dropped: stop, also while waiting for PipeWire.
+    quit: bool,
 }
 
 /// The running virtual microphone. Dropping it removes "kyrr" and gives the
 /// default back to the microphone that had it.
 pub struct VirtualMic {
-    commands: pw::channel::Sender<Command>,
+    /// To the PipeWire thread's current connection; replaced when PipeWire
+    /// restarts.
+    commands: Arc<Mutex<Option<pw::channel::Sender<Command>>>>,
     shared: Arc<Mutex<Shared>>,
     thread: Option<JoinHandle<()>>,
 }
@@ -90,18 +102,16 @@ impl VirtualMic {
     pub fn start(microphone: Option<String>, process: Process) -> Result<VirtualMic, String> {
         let shared = Arc::new(Mutex::new(Shared {
             status: Some(Status::Starting),
+            wanted: microphone,
             ..Shared::default()
         }));
-        let (commands, receiver) = pw::channel::channel();
+        let commands = Arc::new(Mutex::new(None));
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
         let thread_shared = shared.clone();
+        let thread_commands = commands.clone();
         let thread = std::thread::Builder::new()
             .name("kyrr-pipewire".into())
-            .spawn(move || {
-                if let Err(e) = run(microphone, process, receiver, thread_shared, &ready_tx) {
-                    let _ = ready_tx.send(Err(e));
-                }
-            })
+            .spawn(move || supervise(process, thread_commands, thread_shared, ready_tx))
             .map_err(|e| e.to_string())?;
         ready_rx.recv().map_err(|e| e.to_string())??;
         Ok(VirtualMic {
@@ -150,15 +160,90 @@ impl VirtualMic {
 
     /// Records from another microphone (node name) from now on.
     pub fn use_microphone(&self, name: &str) {
-        let _ = self.commands.send(Command::UseMicrophone(name.to_string()));
+        lock(&self.shared).wanted = Some(name.to_string());
+        self.send(Command::UseMicrophone(name.to_string()));
+    }
+
+    /// To the current PipeWire connection; while there is none (PipeWire
+    /// restarts) the shared state tells the next one.
+    fn send(&self, command: Command) {
+        if let Some(sender) = lock_commands(&self.commands).as_ref() {
+            let _ = sender.send(command);
+        }
     }
 }
 
 impl Drop for VirtualMic {
     fn drop(&mut self) {
-        let _ = self.commands.send(Command::Quit);
+        lock(&self.shared).quit = true;
+        self.send(Command::Quit);
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
+        }
+    }
+}
+
+fn lock_commands(
+    commands: &Mutex<Option<pw::channel::Sender<Command>>>,
+) -> std::sync::MutexGuard<'_, Option<pw::channel::Sender<Command>>> {
+    commands.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// How one connection to PipeWire ended.
+enum Ended {
+    /// "kyrr" was dropped.
+    Quit,
+    /// PipeWire went away.
+    Lost,
+}
+
+/// Runs the connection to PipeWire, and again after PipeWire restarts. Only
+/// the first connection reports to `ready`: where PipeWire is not there at
+/// all, the app has to say so.
+fn supervise(
+    process: Process,
+    commands: Arc<Mutex<Option<pw::channel::Sender<Command>>>>,
+    shared: Arc<Mutex<Shared>>,
+    ready: std::sync::mpsc::Sender<Result<(), String>>,
+) {
+    let process = Arc::new(Mutex::new(process));
+    let mut ready = Some(ready);
+    let mut reported = String::new();
+    loop {
+        let (sender, receiver) = pw::channel::channel();
+        *lock_commands(&commands) = Some(sender);
+        // After the sender is in place: a drop before it is seen here, one
+        // after it reaches the connection as a command.
+        if lock(&shared).quit {
+            return;
+        }
+        match run(process.clone(), receiver, shared.clone(), &mut ready) {
+            Ok(Ended::Quit) => return,
+            Ok(Ended::Lost) => {}
+            Err(e) => match ready.take() {
+                Some(ready) => {
+                    let _ = ready.send(Err(e));
+                    return;
+                }
+                // Once per kind of failure: the wait below tries every half second.
+                None if e != reported => {
+                    eprintln!("kyrr: {e}");
+                    reported = e;
+                }
+                None => {}
+            },
+        }
+        *lock_commands(&commands) = None;
+        lock(&shared).status = Some(Status::Starting);
+        // Until PipeWire is back (its socket is there again).
+        loop {
+            if lock(&shared).quit {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            if crate::pipewire_setup::running() {
+                break;
+            }
         }
     }
 }
@@ -169,9 +254,7 @@ pub fn list() -> Result<Vec<Microphone>, String> {
     pw::init();
     let mainloop = pw::main_loop::MainLoopRc::new(None).map_err(|e| e.to_string())?;
     let context = pw::context::ContextRc::new(&mainloop, None).map_err(|e| e.to_string())?;
-    let core = context
-        .connect_rc(None)
-        .map_err(|_| "PipeWire is not running".to_string())?;
+    let core = context.connect_rc(None).map_err(|_| NOT_RUNNING.to_string())?;
     let registry = core.get_registry_rc().map_err(|e| e.to_string())?;
     let found = Rc::new(RefCell::new(Vec::new()));
     let sink = found.clone();
@@ -311,27 +394,32 @@ struct SourceData {
 }
 
 fn run(
-    microphone: Option<String>,
-    process: Process,
+    process: Arc<Mutex<Process>>,
     receiver: pw::channel::Receiver<Command>,
     shared: Arc<Mutex<Shared>>,
-    ready: &std::sync::mpsc::Sender<Result<(), String>>,
-) -> Result<(), String> {
+    ready: &mut Option<std::sync::mpsc::Sender<Result<(), String>>>,
+) -> Result<Ended, String> {
     pw::init();
+    // What was listed before the restart is gone.
+    let microphone = {
+        let mut shared = lock(&shared);
+        shared.microphones.clear();
+        shared.wanted.clone()
+    };
     let mainloop = pw::main_loop::MainLoopRc::new(None).map_err(|e| e.to_string())?;
     let context = pw::context::ContextRc::new(&mainloop, None).map_err(|e| e.to_string())?;
     // WirePlumber lets a sandboxed (Flatpak) client change the default
     // microphone only when it says it manages audio, as EasyEffects does.
     let core = context
         .connect_rc(Some(properties! { *pw::keys::MEDIA_CATEGORY => "Manager" }))
-        .map_err(|_| "PipeWire is not running".to_string())?;
+        .map_err(|_| NOT_RUNNING.to_string())?;
     let registry = core.get_registry_rc().map_err(|e| e.to_string())?;
 
     let state = Rc::new(RefCell::new(State {
         core: core.clone(),
         shared,
         wanted: microphone,
-        process: Arc::new(Mutex::new(process)),
+        process,
         synced: false,
         metadata: None,
         previous_default: None,
@@ -417,10 +505,22 @@ fn run(
     // microphone and start.
     let on_done = state.clone();
     let mainloop_weak = mainloop.downgrade();
+    let lost = Rc::new(Cell::new(false));
+    let on_error_lost = lost.clone();
+    let error_mainloop = mainloop.downgrade();
     let listed = core.sync(0).map_err(|e| e.to_string())?;
     let told = Cell::new(None);
     let _core_listener = core
         .add_listener_local()
+        .error(move |id, _, res, _| {
+            // PipeWire ended or restarted: the connection is dead.
+            if id == pw::core::PW_ID_CORE && res == -libc::EPIPE {
+                on_error_lost.set(true);
+                if let Some(mainloop) = error_mainloop.upgrade() {
+                    mainloop.quit();
+                }
+            }
+        })
         .done(move |id, seq| {
             if id != pw::core::PW_ID_CORE {
                 return;
@@ -462,10 +562,12 @@ fn run(
         }
     });
 
-    let _ = ready.send(Ok(()));
+    if let Some(ready) = ready.take() {
+        let _ = ready.send(Ok(()));
+    }
     mainloop.run();
     state.borrow_mut().streams = None;
-    Ok(())
+    Ok(if lost.get() { Ended::Lost } else { Ended::Quit })
 }
 
 /// The default microphone changed: at start, the one from before "kyrr";
