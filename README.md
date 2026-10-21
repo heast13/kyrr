@@ -218,8 +218,8 @@ moves it slowly (5 dB/s up, 10 dB/s down, at most +24/−12 dB) towards about
 adjust the volume themselves (call apps, say) can work against it, so use
 one of the two.
 
-*Distance compensation* (beta, off by default) helps when you sit far from the
-microphone and the room echoes on every word. It listens to the raw
+*Distance compensation* (on by default, switch it off under advanced settings)
+helps when you sit far from the microphone and the room echoes on every word. It listens to the raw
 microphone: after a syllable a close voice falls 20 dB and more within
 40 ms, while far away no level falls faster than the room's echo dies down.
 After 5 to 15 seconds of speech that tells near from far. Only when far, it

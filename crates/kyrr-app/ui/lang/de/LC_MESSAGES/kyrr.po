@@ -254,14 +254,14 @@ msgstr "Nimmt den Plopp aus P und B, wenn du nah am Mikro bist."
 msgid "Off. P and B can thump."
 msgstr "Aus. P und B können ploppen."
 
-msgid "Distance compensation (beta)"
-msgstr "Abstandsausgleich (Beta)"
+msgid "Distance compensation"
+msgstr "Abstandsausgleich"
 
 msgid "Far from the mic, it takes some of the room's echo out. Close up, it does nothing."
 msgstr "Weit weg vom Mikro nimmt er etwas Raumhall raus. Nah dran tut er nichts."
 
-msgid "Off. Far from the mic, the room echoes along. Still a beta: tell us how it sounds."
-msgstr "Aus. Weit weg vom Mikro hallt der Raum mit. Noch Beta: Sag uns, wie es klingt."
+msgid "Off. Far from the mic, the room echoes along."
+msgstr "Aus. Weit weg vom Mikro hallt der Raum mit."
 
 msgid "Automatic volume"
 msgstr "Automatische Lautstärke"
