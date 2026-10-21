@@ -105,7 +105,10 @@ unsafe extern "system" fn inner_release(this: *mut c_void) -> u32 {
     let refs = object.refs.fetch_sub(1, Ordering::Release) - 1;
     if refs == 0 {
         std::sync::atomic::fence(Ordering::Acquire);
-        drop(unsafe { Box::from_raw(this as *mut Object) });
+        // The filter, its engine and the driver's effect go here; a panic on
+        // the way must not unwind into the audio engine (what is left leaks).
+        let object = unsafe { Box::from_raw(this as *mut Object) };
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || drop(object)));
     }
     refs
 }

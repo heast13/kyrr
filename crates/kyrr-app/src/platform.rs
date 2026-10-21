@@ -314,6 +314,9 @@ mod imp {
     /// The filter lives in the audio service; nothing to stop.
     pub fn shutdown() {}
 
+    /// The audio service keeps the filter going by itself.
+    pub fn revive_filter() {}
+
     /// A window for the dictation wave, on the screen the user types on.
     pub fn open_wave() -> Option<Box<dyn kyrr_common::wave::Surface>> {
         kyrr_windows::overlay::Overlay::open().map(|o| Box::new(o) as Box<dyn kyrr_common::wave::Surface>)
@@ -437,24 +440,19 @@ mod imp {
         }
 
         fn save(&self) {
-            let path = Saved::file();
-            if let Some(dir) = path.parent() {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            // Only the user may read it: it holds the keyboard portal's token.
-            use std::io::Write;
-            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
             if let Ok(json) = serde_json::to_vec_pretty(self) {
-                let file = std::fs::OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .truncate(true)
-                    .mode(0o600)
-                    .open(&path);
-                if let Ok(mut file) = file {
-                    let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600));
-                    let _ = file.write_all(&json);
-                }
+                Saved::write(&json);
+            }
+        }
+
+        /// One writer at a time: they share the file next to it.
+        fn write(json: &[u8]) {
+            static WRITING: Mutex<()> = Mutex::new(());
+            let _one = WRITING.lock().unwrap_or_else(|p| p.into_inner());
+            let path = Saved::file();
+            // Only the user may read it: it holds the keyboard portal's token.
+            if let Err(e) = crate::config::write_atomic(&path, json) {
+                eprintln!("kyrr: could not save {}: {e}", path.display());
             }
         }
 
@@ -515,7 +513,8 @@ mod imp {
     }
 
     pub fn microphones() -> Vec<Microphone> {
-        match &state().filter {
+        let s = state();
+        match &s.filter {
             // "kyrr" itself is the system's default; the filter follows the
             // microphone the system would use without it.
             Filter::On(engine) => {
@@ -532,18 +531,26 @@ mod imp {
                     .collect()
             }
             // Before the first setup: the microphones PipeWire offers, read
-            // without starting anything.
-            _ => kyrr_linux::mic::list()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|m| Microphone {
-                    id: m.name.clone(),
-                    guid: m.name,
-                    name: m.description,
-                    is_default: false,
-                })
-                .collect(),
+            // without starting anything, and without holding everyone else
+            // up meanwhile.
+            _ => {
+                drop(s);
+                list_microphones()
+            }
         }
+    }
+
+    fn list_microphones() -> Vec<Microphone> {
+        kyrr_linux::mic::list()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|m| Microphone {
+                id: m.name.clone(),
+                guid: m.name,
+                name: m.description,
+                is_default: false,
+            })
+            .collect()
     }
 
     /// Whether the microphone (node name) is muted in the sound settings,
@@ -551,14 +558,39 @@ mod imp {
     /// (the Flatpak sandbox) or the filter does not run.
     pub fn microphone_muted(name: &str) -> Option<bool> {
         let id = mic_node(name)?;
-        let out = std::process::Command::new("wpctl")
-            .args(["get-volume", &id.to_string()])
-            .stderr(std::process::Stdio::null())
-            .output()
-            .ok()?;
+        let mut wpctl = std::process::Command::new("wpctl");
+        wpctl.args(["get-volume", &id.to_string()]);
+        let out = output_within(&mut wpctl, std::time::Duration::from_secs(1))?;
         out.status
             .success()
             .then(|| String::from_utf8_lossy(&out.stdout).contains("[MUTED]"))
+    }
+
+    /// Runs `command` and returns what it printed; `None` if it did not
+    /// start or took longer than `limit` (the window asks every few seconds
+    /// and must not freeze on a hung sound server).
+    fn output_within(command: &mut std::process::Command, limit: std::time::Duration) -> Option<std::process::Output> {
+        use std::process::Stdio;
+        let mut child = command
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .ok()?;
+        let until = std::time::Instant::now() + limit;
+        loop {
+            match child.try_wait() {
+                Ok(Some(_)) => return child.wait_with_output().ok(),
+                Ok(None) if std::time::Instant::now() < until => {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                _ => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return None;
+                }
+            }
+        }
     }
 
     pub fn unmute_microphone(name: &str) -> bool {
@@ -593,6 +625,10 @@ mod imp {
             }
             Filter::Off if s.saved.microphone.is_none() => FilterStatus::NotAttached,
             Filter::Off | Filter::Starting => FilterStatus::Waiting(wanted),
+            // Tried again while PipeWire is there (see `revive_filter`).
+            Filter::Failed(_) if kyrr_linux::pipewire_setup::running() && s.saved.microphone.is_some() => {
+                FilterStatus::Waiting(wanted)
+            }
             Filter::Failed(_) => FilterStatus::Unsupported,
             Filter::On(engine) => match engine.status() {
                 Status::Starting => FilterStatus::Waiting(wanted),
@@ -620,10 +656,16 @@ mod imp {
         for (name, value) in values {
             s.saved.filter.insert(name.to_string(), *value);
         }
-        s.saved.save();
         let settings = s.saved.settings();
         if let Filter::On(engine) = &s.filter {
             engine.set_settings(&settings);
+        }
+        // After the sound changed, and without the lock: saving waits for
+        // the disk.
+        let json = serde_json::to_vec_pretty(&s.saved);
+        drop(s);
+        if let Ok(json) = json {
+            Saved::write(&json);
         }
         Ok(())
     }
@@ -659,7 +701,50 @@ mod imp {
 
     /// Gives the default microphone back before kyrr ends.
     pub fn shutdown() {
-        state().filter = Filter::Off;
+        let filter = std::mem::replace(&mut state().filter, Filter::Off);
+        // Without the lock: this waits for PipeWire a moment.
+        drop(filter);
+    }
+
+    /// Starts the filter again when it could not start (kyrr came up at
+    /// login before PipeWire did) or PipeWire went away under it (restarted,
+    /// updated), as soon as PipeWire is back. Waits longer after each try
+    /// that fails. Called every few seconds.
+    pub fn revive_filter() {
+        use std::time::{Duration, Instant};
+        const FIRST: Duration = Duration::from_secs(2);
+        const MOST: Duration = Duration::from_secs(60);
+        static NEXT: Mutex<Option<(Instant, Duration)>> = Mutex::new(None);
+        let mut next = NEXT.lock().unwrap_or_else(|p| p.into_inner());
+        let (microphone, old) = {
+            let mut s = state();
+            let dead = match &s.filter {
+                Filter::Failed(_) => true,
+                Filter::On(engine) => engine.gone(),
+                Filter::Off | Filter::Starting => false,
+            };
+            if !dead {
+                if matches!(s.filter, Filter::On(_)) {
+                    *next = None;
+                }
+                return;
+            }
+            let Some(microphone) = s.saved.microphone.clone() else {
+                return;
+            };
+            let now = Instant::now();
+            if !kyrr_linux::pipewire_setup::running() || next.is_some_and(|(at, _)| now < at) {
+                return;
+            }
+            let wait = next.map_or(FIRST, |(_, wait)| (wait * 2).min(MOST));
+            *next = Some((now + wait, wait));
+            (microphone, std::mem::replace(&mut s.filter, Filter::Off))
+        };
+        eprintln!("kyrr: starting the noise filter again");
+        std::thread::spawn(move || {
+            drop(old);
+            start_filter(microphone);
+        });
     }
 
     /// A surface for the dictation wave, on the screen the user types on.

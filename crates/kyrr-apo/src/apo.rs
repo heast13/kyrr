@@ -316,7 +316,10 @@ impl IAudioProcessingObject_Impl for Object {
             if let Some(ep) = &st.endpoint {
                 let key = format!(r"{REG_ENDPOINTS}\{ep}");
                 if let Some(clsid) = read_string(&key, endpoint::CHILD_SFX) {
-                    match parse_guid(&clsid).map(|g| Child::create(g, init)) {
+                    // Never itself: that would create kyrr inside kyrr
+                    // until the audio engine's stack runs out.
+                    let own = GUID::from_u128(APO_CLSID);
+                    match parse_guid(&clsid).filter(|g| *g != own).map(|g| Child::create(g, init)) {
                         Some(Ok(child)) => st.child = Some(child),
                         Some(Err(e)) => log(&format!("driver effect {clsid} failed, running without it: {e}")),
                         None => log(&format!("driver effect {clsid}: not a CLSID")),

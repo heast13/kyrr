@@ -8,13 +8,14 @@ use std::time::Duration;
 
 use x11rb::connection::Connection;
 use x11rb::protocol::xkb::{self, ConnectionExt as _};
-use x11rb::protocol::xproto::{ConnectionExt as _, Window};
+use x11rb::protocol::xproto::{self, ConnectionExt as _, Window};
 use x11rb::protocol::xtest::ConnectionExt as _;
 use x11rb::rust_connection::RustConnection;
 
 use super::KEY_DELAY;
 
 const SHIFT_L: u32 = 0xFFE1;
+const CAPS_LOCK: u32 = 0xFFE5;
 const KEY_PRESS: u8 = 2;
 const KEY_RELEASE: u8 = 3;
 
@@ -52,11 +53,15 @@ impl Keyboard {
         let (first, last) = (setup.min_keycode, setup.max_keycode);
         let table = self.connection.get_keyboard_mapping(first, last - first + 1)?.reply()?;
         let rows: Vec<&[u32]> = table.keysyms.chunks(usize::from(table.keysyms_per_keycode)).collect();
+        let state = self.xkb_state();
         let layout = LayoutLookup {
             first,
             rows: &rows,
-            base_group: self.in_base_group(),
+            base_group: state.as_ref().is_some_and(|s| u8::from(s.group) == 0),
         };
+        // Caps Lock would turn "Hallo" into "hALLO": off while typing.
+        let caps_locked = state.is_some_and(|s| s.locked_mods.contains(xproto::ModMask::LOCK));
+        let caps = layout.find(CAPS_LOCK).filter(|key| caps_locked && !key.shift);
 
         // Decide everything before the first key, so nothing is typed when
         // the characters do not fit.
@@ -88,7 +93,14 @@ impl Keyboard {
             self.connection.get_input_focus()?.reply()?;
             std::thread::sleep(REMAP_SETTLE);
         }
+        if let Some(caps) = caps {
+            self.tap(caps.code)?;
+        }
         let typed = self.press_all(keysyms, &keys, shift);
+        if let Some(caps) = caps {
+            self.tap(caps.code)?;
+            self.connection.flush()?;
+        }
         if !remapped.is_empty() {
             std::thread::sleep(REMAP_SETTLE);
             for &(code, _) in &remapped {
@@ -117,24 +129,27 @@ impl Keyboard {
         Ok(())
     }
 
+    fn tap(&self, code: u8) -> Result<(), Box<dyn Error>> {
+        self.fake(KEY_PRESS, code)?;
+        self.fake(KEY_RELEASE, code)
+    }
+
     fn fake(&self, kind: u8, code: u8) -> Result<(), Box<dyn Error>> {
         self.connection.xtest_fake_input(kind, code, 0, self.root, 0, 0, 0)?;
         Ok(())
     }
 
-    /// The core keyboard mapping describes the first layout group only; with
-    /// another one active (or if that cannot be told) the mapping is not
-    /// trusted.
-    fn in_base_group(&self) -> bool {
-        let state = self
-            .connection
+    /// The keyboard's group and locks. The core keyboard mapping describes
+    /// the first layout group only; with another one active (or if that
+    /// cannot be told) the mapping is not trusted.
+    fn xkb_state(&self) -> Option<xkb::GetStateReply> {
+        self.connection
             .xkb_use_extension(1, 0)
             .ok()
             .and_then(|cookie| cookie.reply().ok())
             .filter(|extension| extension.supported)
             .and_then(|_| self.connection.xkb_get_state(xkb::ID::USE_CORE_KBD.into()).ok())
-            .and_then(|cookie| cookie.reply().ok());
-        state.is_some_and(|state| u8::from(state.group) == 0)
+            .and_then(|cookie| cookie.reply().ok())
     }
 }
 

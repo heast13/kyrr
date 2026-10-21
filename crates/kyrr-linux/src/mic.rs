@@ -22,6 +22,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
+use std::time::Duration;
 
 use pipewire as pw;
 use pw::properties::properties;
@@ -74,6 +75,9 @@ struct Shared {
     /// The microphone last plugged in, or last picked in the system's sound
     /// settings, while kyrr runs: what the system would use now.
     latest: Option<String>,
+    /// PipeWire went away (restarted, crashed, updated): "kyrr" is gone
+    /// with it and needs a new start.
+    gone: bool,
 }
 
 /// The running virtual microphone. Dropping it removes "kyrr" and gives the
@@ -82,7 +86,13 @@ pub struct VirtualMic {
     commands: pw::channel::Sender<Command>,
     shared: Arc<Mutex<Shared>>,
     thread: Option<JoinHandle<()>>,
+    /// Closes when the thread ends.
+    ended: std::sync::mpsc::Receiver<()>,
 }
+
+/// How long quitting waits for PipeWire to take the default back; a hung
+/// PipeWire must not keep kyrr from ending (at logout it may be gone).
+const QUIT_WAIT: Duration = Duration::from_secs(3);
 
 impl VirtualMic {
     /// Starts "kyrr" on `microphone` (a node name), or on the system's
@@ -94,10 +104,12 @@ impl VirtualMic {
         }));
         let (commands, receiver) = pw::channel::channel();
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+        let (ended_tx, ended) = std::sync::mpsc::channel::<()>();
         let thread_shared = shared.clone();
         let thread = std::thread::Builder::new()
             .name("kyrr-pipewire".into())
             .spawn(move || {
+                let _ended = ended_tx;
                 if let Err(e) = run(microphone, process, receiver, thread_shared, &ready_tx) {
                     let _ = ready_tx.send(Err(e));
                 }
@@ -108,6 +120,7 @@ impl VirtualMic {
             commands,
             shared,
             thread: Some(thread),
+            ended,
         })
     }
 
@@ -121,6 +134,11 @@ impl VirtualMic {
 
     pub fn status(&self) -> Status {
         lock(&self.shared).status.clone().unwrap_or(Status::Starting)
+    }
+
+    /// PipeWire went away: this "kyrr" is over, a new one has to start.
+    pub fn gone(&self) -> bool {
+        lock(&self.shared).gone
     }
 
     /// PipeWire's id of a microphone (node name), for tools that take ids.
@@ -157,7 +175,13 @@ impl VirtualMic {
 impl Drop for VirtualMic {
     fn drop(&mut self) {
         let _ = self.commands.send(Command::Quit);
-        if let Some(thread) = self.thread.take() {
+        // Waits only so long; a thread stuck in a hung PipeWire is left
+        // behind and ends with the process.
+        let ended = matches!(
+            self.ended.recv_timeout(QUIT_WAIT),
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected)
+        );
+        if let Some(thread) = self.thread.take().filter(|_| ended) {
             let _ = thread.join();
         }
     }
@@ -198,6 +222,15 @@ pub fn list() -> Result<Vec<Microphone>, String> {
             }
         })
         .register();
+    // A PipeWire that takes the connection but never answers must not
+    // freeze the caller (the window asks every few seconds).
+    let mainloop_weak = mainloop.downgrade();
+    let timeout = mainloop.loop_().add_timer(move |_| {
+        if let Some(mainloop) = mainloop_weak.upgrade() {
+            mainloop.quit();
+        }
+    });
+    let _ = timeout.update_timer(Some(Duration::from_secs(2)), None);
     mainloop.run();
     let mut mics = found.take();
     mics.sort_by(|a, b| a.description.cmp(&b.description));
@@ -308,6 +341,9 @@ struct SourceData {
     /// Only ever locked by the real-time thread; shared so the streams can
     /// be replaced without taking the filter apart.
     process: Arc<Mutex<Process>>,
+    /// The filter panicked once: the microphone passes through unfiltered
+    /// rather than kyrr ending (a panic must not unwind into PipeWire).
+    broken: bool,
 }
 
 fn run(
@@ -359,7 +395,7 @@ fn run(
                         shared.microphones.push((global.id, mic));
                         state.synced
                     };
-                    if synced {
+                    if synced && on_global.borrow().quit_after.is_none() {
                         connect_if_needed(&on_global);
                     }
                 }
@@ -416,7 +452,9 @@ fn run(
     // the default metadata has told its values (second sync), pick the
     // microphone and start.
     let on_done = state.clone();
+    let on_error = state.clone();
     let mainloop_weak = mainloop.downgrade();
+    let mainloop_gone = mainloop.downgrade();
     let listed = core.sync(0).map_err(|e| e.to_string())?;
     let told = Cell::new(None);
     let _core_listener = core
@@ -438,6 +476,22 @@ fn run(
                 }
             }
         })
+        // The connection broke: PipeWire restarted, crashed or was updated.
+        // Nothing here works any more; the app starts a new "kyrr".
+        .error(move |id, _, res, message| {
+            if id != pw::core::PW_ID_CORE || res != -libc::EPIPE {
+                return;
+            }
+            eprintln!("kyrr: PipeWire went away: {message}");
+            if let Ok(state) = on_error.try_borrow() {
+                let mut shared = lock(&state.shared);
+                shared.gone = true;
+                shared.status = Some(Status::Failed("PipeWire went away".into()));
+            }
+            if let Some(mainloop) = mainloop_gone.upgrade() {
+                mainloop.quit();
+            }
+        })
         .register();
 
     let mainloop_weak = mainloop.downgrade();
@@ -445,7 +499,9 @@ fn run(
     let _receiver = receiver.attach(mainloop.loop_(), move |command| match command {
         Command::UseMicrophone(name) => {
             on_command.borrow_mut().wanted = Some(name);
-            reconnect(&on_command);
+            if on_command.borrow().quit_after.is_none() {
+                reconnect(&on_command);
+            }
         }
         Command::Quit => {
             let mut state = on_command.borrow_mut();
@@ -464,7 +520,15 @@ fn run(
 
     let _ = ready.send(Ok(()));
     mainloop.run();
-    state.borrow_mut().streams = None;
+    let mut state = state.borrow_mut();
+    state.streams = None;
+    // Ended for good, whatever the reason (also when the mainloop quit on
+    // its own): an app must not take it for running.
+    let mut shared = lock(&state.shared);
+    if !matches!(shared.status, Some(Status::Failed(_))) && state.quit_after.is_none() {
+        shared.gone = true;
+        shared.status = Some(Status::Failed("PipeWire went away".into()));
+    }
     Ok(())
 }
 
@@ -624,6 +688,7 @@ fn create_streams(core: &pw::core::CoreRc, microphone: &str, process: Arc<Mutex<
         .add_local_listener_with_user_data(SourceData {
             capture: capture_ptr.clone(),
             process,
+            broken: false,
         })
         .process(|source, data| unsafe { fill(source, data) })
         .register()
@@ -745,8 +810,15 @@ unsafe fn fill(source: &pw::stream::Stream, data: &mut SourceData) {
                 n
             }
         };
-        if let Ok(mut process) = data.process.try_lock() {
-            process(&mut samples[..frames]);
+        if !data.broken {
+            if let Ok(mut process) = data.process.try_lock() {
+                let block = &mut samples[..frames];
+                let ok = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| process(block))).is_ok();
+                if !ok {
+                    data.broken = true;
+                    eprintln!("kyrr: the filter crashed; the microphone passes through unfiltered");
+                }
+            }
         }
     }
     let chunk = out_data.chunk_mut();
