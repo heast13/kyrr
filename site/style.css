@@ -150,6 +150,8 @@ kbd.down { transform: translateY(2px); border-bottom-width: 1px; background: var
 
 /* download */
 .download { text-align: center; padding: clamp(3rem, 9vw, 6rem) 0; }
+.made-with { margin-top: 2.5rem; }
+.made-with img { display: inline-block; border-radius: 8px; vertical-align: middle; }
 .panel { padding-top: 1.5rem; }
 .panel + .panel { border-top: 1px solid var(--border); margin-top: 1.5rem; }
 .js .panel + .panel { border-top: 0; margin-top: 0; }

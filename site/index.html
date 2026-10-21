@@ -165,7 +165,7 @@
         <p class="small">The Linux version is still a beta: it works, but has been tested on fewer systems than the Windows version.</p>
         <p>Paste this into a terminal. It downloads kyrr to <code>~/.local/bin</code>, makes it executable and starts it:</p>
         <div class="codebox"><pre tabindex="0"><code>mkdir -p ~/.local/bin
-curl -L -o ~/.local/bin/kyrr https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage
+curl -fL -o ~/.local/bin/kyrr https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage
 chmod +x ~/.local/bin/kyrr
 ~/.local/bin/kyrr &amp;</code></pre></div>
         <p class="small">Without a terminal: <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">download the AppImage</a>, allow it to run as a program in your file manager (right click, Properties) and double click it. On first start kyrr adds itself to your app menu. On GNOME 48 or newer and KDE the desktop asks once for the dictation key and once whether kyrr may type; kyrr explains both steps. <a href="https://github.com/heast13/kyrr#install">Notes for other desktops</a></p>
@@ -188,6 +188,7 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
         </div>
       </div>
     </div>
+    <p class="made-with"><a href="https://slint.dev"><img src="made-with-slint.png" width="141" height="65" alt="Made with Slint"></a></p>
   </div>
 </section>
 
