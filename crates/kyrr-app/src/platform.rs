@@ -437,24 +437,19 @@ mod imp {
         }
 
         fn save(&self) {
-            let path = Saved::file();
-            if let Some(dir) = path.parent() {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            // Only the user may read it: it holds the keyboard portal's token.
-            use std::io::Write;
-            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
             if let Ok(json) = serde_json::to_vec_pretty(self) {
-                let file = std::fs::OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .truncate(true)
-                    .mode(0o600)
-                    .open(&path);
-                if let Ok(mut file) = file {
-                    let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600));
-                    let _ = file.write_all(&json);
-                }
+                Saved::write(&json);
+            }
+        }
+
+        /// One writer at a time: they share the file next to it.
+        fn write(json: &[u8]) {
+            static WRITING: Mutex<()> = Mutex::new(());
+            let _one = WRITING.lock().unwrap_or_else(|p| p.into_inner());
+            let path = Saved::file();
+            // Only the user may read it: it holds the keyboard portal's token.
+            if let Err(e) = crate::config::write_atomic(&path, json) {
+                eprintln!("kyrr: could not save {}: {e}", path.display());
             }
         }
 
@@ -620,10 +615,16 @@ mod imp {
         for (name, value) in values {
             s.saved.filter.insert(name.to_string(), *value);
         }
-        s.saved.save();
         let settings = s.saved.settings();
         if let Filter::On(engine) = &s.filter {
             engine.set_settings(&settings);
+        }
+        // After the sound changed, and without the lock: saving waits for
+        // the disk.
+        let json = serde_json::to_vec_pretty(&s.saved);
+        drop(s);
+        if let Ok(json) = json {
+            Saved::write(&json);
         }
         Ok(())
     }
