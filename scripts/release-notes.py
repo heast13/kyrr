@@ -115,6 +115,7 @@ def main() -> None:
         f"Linux, still a beta (64-bit Intel or AMD, glibc 2.39 or newer: Ubuntu 24.04, Fedora 40, Debian 13, Arch; "
         f"needs PipeWire; the noise filter needs AVX2): "
         f"make `kyrr-{version}-x86_64.AppImage` executable and run it. "
+        f"`kyrr-{version}-x86_64.flatpak` is the Flatpak (`flatpak install --user` with the file). "
         f"`kyrr-{version}-linux-x86_64.tar.gz` holds the same files as an install tree for packagers. "
         f"Compare them with their `.sha256` files.\n"
     )
