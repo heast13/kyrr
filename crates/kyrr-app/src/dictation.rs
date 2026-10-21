@@ -5,6 +5,7 @@
 //! blocked) are reported and the worker stays ready for the next; only a
 //! missing or broken model is a lasting error, with a retry.
 
+use std::collections::VecDeque;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,6 +15,7 @@ use std::time::{Duration, Instant};
 use kyrr_dictate::download::{download, DownloadError};
 use kyrr_dictate::{european, Dictation, Language, Live, ModelSpec, Transcript};
 
+use crate::memo::text;
 use crate::recorder::{Recording, MAX_SECONDS};
 
 /// Keeps recording this long after the key is released, so the last
@@ -107,6 +109,35 @@ pub enum Event {
     Nothing(String),
     /// Something to tell the user; `None` clears an earlier message.
     Message(Option<String>),
+    /// The title heard at the start of the voice memo at this path; None
+    /// when nothing fit was said or there is no speech model.
+    Titled(PathBuf, Option<String>),
+    /// How the text of the voice memo at this path comes along.
+    Text(PathBuf, Text),
+}
+
+/// How a voice memo's text comes along.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Text {
+    /// It waits for the one before it.
+    Waiting,
+    /// This far (0 to 1), and about this long still.
+    Writing(f32, Option<Duration>),
+    /// It lies beside the memo now.
+    Written,
+    /// Stopped by the user, or the memo went.
+    Cancelled,
+    /// The speech model is not on the computer.
+    NoModel,
+    Failed,
+}
+
+/// Work on voice memos, done with the speech model beside dictation.
+pub enum Job {
+    /// The title from the first seconds of a memo, at their rate.
+    Title(PathBuf, u32, Vec<f32>),
+    /// The whole text of a memo.
+    Text(PathBuf),
 }
 
 pub enum Command {
@@ -138,6 +169,13 @@ pub enum Command {
     Downloaded(u64, Result<(), DownloadError>),
     /// Internal: load number `.0` is done, loaded or not.
     Loaded(u64),
+    /// Work on a voice memo; titles go first.
+    Job(Job),
+    /// Stops writing the text of the memo at this path, or takes it out of
+    /// the queue.
+    CancelText(PathBuf),
+    /// Internal: the job beside the worker is done.
+    JobDone,
 }
 
 pub type Notify = Arc<dyn Fn(Event) + Send + Sync>;
@@ -258,7 +296,8 @@ struct Worker {
     language: Language,
     more_languages: bool,
     enabled: bool,
-    model: Option<Dictation>,
+    /// Shared with the job beside the worker (see [`Job`]).
+    model: Option<Arc<Dictation>>,
     /// The model loading beside the worker, and the number of that load.
     loader: Option<std::thread::JoinHandle<Result<Dictation, String>>>,
     load_id: u64,
@@ -298,6 +337,12 @@ struct Worker {
     /// The running recording's text so far, and when to take in more.
     transcript: Option<Transcript>,
     next_ahead: Instant,
+    /// Work on voice memos waiting, the one running (with the path of the
+    /// memo whose text it writes, and its cancel), and whether it waits for
+    /// a dictation.
+    jobs: VecDeque<Job>,
+    job: Option<(Option<PathBuf>, Arc<AtomicBool>)>,
+    pause: Arc<AtomicBool>,
     tx: mpsc::Sender<Command>,
     notify: Notify,
     typer: Typer,
@@ -346,6 +391,9 @@ pub fn spawn(
         looks: Vec::new(),
         transcript: None,
         next_ahead: Instant::now(),
+        jobs: VecDeque::new(),
+        job: None,
+        pause: Arc::new(AtomicBool::new(false)),
         tx: tx.clone(),
         notify,
         typer,
@@ -377,6 +425,12 @@ pub fn spawn(
                     Err(mpsc::RecvTimeoutError::Timeout) if due(worker.until_ahead()) => worker.work_ahead(),
                     Err(mpsc::RecvTimeoutError::Timeout) => worker.unload_when_idle(),
                 }
+                // A job waits while a dictation runs or is being typed.
+                worker.pause.store(worker.recording.is_some(), Ordering::Relaxed);
+                worker.next_job();
+            }
+            if let Some((_, cancel)) = &worker.job {
+                cancel.store(true, Ordering::Relaxed);
             }
             if let Some(cancel) = &worker.download_cancel {
                 cancel.store(true, Ordering::Relaxed);
@@ -423,7 +477,10 @@ impl Worker {
             return;
         }
         if !self.enabled {
-            self.model = None;
+            // Work on memos keeps it until that is done.
+            if !self.has_jobs() {
+                self.model = None;
+            }
             self.transcript = None;
             self.recording = None;
             self.set_state(State::Off);
@@ -509,12 +566,12 @@ impl Worker {
         // The settings changed while it loaded. A dictation in progress
         // still uses it; the switch follows once it is typed.
         let busy = self.recording.is_some() || self.state == State::Transcribing;
-        if !self.enabled || (model.model() != self.spec().id && !busy) {
+        if (!self.enabled && !self.has_jobs()) || (model.model() != self.spec().id && !busy) {
             drop(model);
             self.refresh();
             return true;
         }
-        self.model = Some(model);
+        self.model = Some(Arc::new(model));
         // A dictation that runs or waits for it keeps its state.
         if self.state == State::Loading {
             (self.notify)(Event::Message(None));
@@ -631,7 +688,11 @@ impl Worker {
     /// Lets the model go after a long pause; the state stays Ready and the
     /// next key press loads it again.
     fn unload_when_idle(&mut self) {
-        if self.state == State::Ready && self.model.is_some() && self.last_used.elapsed() >= IDLE_UNLOAD {
+        if self.state == State::Ready
+            && self.model.is_some()
+            && !self.has_jobs()
+            && self.last_used.elapsed() >= IDLE_UNLOAD
+        {
             self.model = None;
         }
     }
@@ -714,7 +775,116 @@ impl Worker {
                 self.finish_load();
             }
             Command::Loaded(_) => {}
+            Command::Job(Job::Title(path, rate, samples)) => {
+                // Before the texts, which take long.
+                let at = self.jobs.iter().take_while(|j| matches!(j, Job::Title(..))).count();
+                self.jobs.insert(at, Job::Title(path, rate, samples));
+            }
+            Command::Job(Job::Text(path)) => {
+                let queued = self.jobs.iter().any(|j| matches!(j, Job::Text(p) if *p == path));
+                let running = self.job.as_ref().is_some_and(|(p, _)| p.as_ref() == Some(&path));
+                if !queued && !running {
+                    (self.notify)(Event::Text(path.clone(), Text::Waiting));
+                    self.jobs.push_back(Job::Text(path));
+                }
+            }
+            Command::CancelText(path) => {
+                let before = self.jobs.len();
+                self.jobs.retain(|j| !matches!(j, Job::Text(p) if *p == path));
+                if self.jobs.len() != before {
+                    (self.notify)(Event::Text(path.clone(), Text::Cancelled));
+                }
+                if let Some((Some(running), cancel)) = &self.job {
+                    if *running == path {
+                        cancel.store(true, Ordering::Relaxed);
+                    }
+                }
+            }
+            Command::JobDone => {
+                self.job = None;
+                self.last_used = Instant::now();
+                if !self.enabled && !self.has_jobs() {
+                    self.model = None;
+                }
+            }
             Command::Quit => {}
+        }
+    }
+
+    fn has_jobs(&self) -> bool {
+        self.job.is_some() || !self.jobs.is_empty()
+    }
+
+    /// Starts the next job beside the worker once the model is there; with
+    /// no model on the computer the jobs end at once.
+    fn next_job(&mut self) {
+        if self.job.is_some() || self.jobs.is_empty() || self.download_cancel.is_some() {
+            return;
+        }
+        if !self.spec().is_installed(&self.root) || self.load_failed {
+            let failed = if self.load_failed { Text::Failed } else { Text::NoModel };
+            for job in self.jobs.drain(..) {
+                match job {
+                    Job::Title(path, ..) => (self.notify)(Event::Titled(path, None)),
+                    Job::Text(path) => (self.notify)(Event::Text(path, failed)),
+                }
+            }
+            return;
+        }
+        let Some(model) = self.model.clone() else {
+            self.start_load();
+            return;
+        };
+        let Some(job) = self.jobs.pop_front() else {
+            return;
+        };
+        let cancel = Arc::new(AtomicBool::new(false));
+        let path = match &job {
+            Job::Text(path) => Some(path.clone()),
+            Job::Title(..) => None,
+        };
+        self.job = Some((path, Arc::clone(&cancel)));
+        let (pause, notify, tx) = (Arc::clone(&self.pause), Arc::clone(&self.notify), self.tx.clone());
+        let spawned = std::thread::Builder::new()
+            .name("kyrr-memo-text".into())
+            .spawn(move || {
+                match job {
+                    Job::Title(path, rate, samples) => {
+                        // A dictation that started meanwhile goes first.
+                        while pause.load(Ordering::Relaxed) {
+                            std::thread::sleep(Duration::from_millis(100));
+                        }
+                        let title =
+                            catch_unwind(AssertUnwindSafe(|| text::title(&model, rate, &samples))).unwrap_or(None);
+                        notify(Event::Titled(path, title));
+                    }
+                    Job::Text(path) => {
+                        let started = Instant::now();
+                        let mut progress = |done, left| notify(Event::Text(path.clone(), Text::Writing(done, left)));
+                        let result = catch_unwind(AssertUnwindSafe(|| {
+                            text::write(&model, &path, &cancel, &pause, &mut progress)
+                        }))
+                        .unwrap_or_else(|_| Err("crashed".into()));
+                        let state = match result {
+                            Ok(text::Done::Written) => Text::Written,
+                            Ok(text::Done::Cancelled) => Text::Cancelled,
+                            Err(e) => {
+                                eprintln!("kyrr: memo: writing the text of {}: {e}", path.display());
+                                Text::Failed
+                            }
+                        };
+                        eprintln!(
+                            "kyrr: memo: text {state:?} after {:.1} s",
+                            started.elapsed().as_secs_f32()
+                        );
+                        notify(Event::Text(path, state));
+                    }
+                }
+                drop(model);
+                let _ = tx.send(Command::JobDone);
+            });
+        if spawned.is_err() {
+            self.job = None;
         }
     }
 

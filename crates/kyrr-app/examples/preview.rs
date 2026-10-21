@@ -41,6 +41,137 @@ fn render(window: &MinimalSoftwareWindow, ui: &MainWindow, path: &str) {
     ui.hide().unwrap();
 }
 
+/// The window at a set height, after its animations ran.
+fn render_at(window: &MinimalSoftwareWindow, ui: &MainWindow, height: f32, path: &str) {
+    let scale = ui.window().scale_factor();
+    ui.show().unwrap();
+    let w = (ui.get_page_width() * scale) as u32;
+    let h = (height * scale) as u32;
+    window.set_size(PhysicalSize::new(w, h));
+    std::thread::sleep(std::time::Duration::from_millis(450));
+    slint::platform::update_timers_and_animations();
+    let mut buf = vec![PremultipliedRgbaColor::default(); (w * h) as usize];
+    window.request_redraw();
+    window.draw_if_needed(|r| {
+        r.render(&mut buf, w as usize);
+    });
+    let bytes: Vec<u8> = buf.iter().flat_map(|p| [p.red, p.green, p.blue, p.alpha]).collect();
+    std::fs::write(path, bytes).unwrap();
+    std::fs::write(format!("{path}.size"), format!("{w}x{h}")).unwrap();
+    ui.hide().unwrap();
+}
+
+fn memos(window: &MinimalSoftwareWindow, ui: &MainWindow, out: &str, lang: &str) {
+    let de = lang == "de";
+    let state = ui.global::<AppState>();
+    let t = |g: &str, e: &str| -> slint::SharedString {
+        if de {
+            g.into()
+        } else {
+            e.into()
+        }
+    };
+    let item = |title: slint::SharedString, when: slint::SharedString, text_state: i32| MemoItem {
+        title,
+        when,
+        pending: false,
+        text_state,
+        text_progress: 0.0,
+        text_left: "".into(),
+    };
+    let mut writing = item(
+        t("Gespräch mit dem Steuerberater", "Call with the tax adviser"),
+        t("Gestern, 16:20 · 12:48", "Yesterday, 16:20 · 12:48"),
+        2,
+    );
+    writing.text_progress = 0.42;
+    writing.text_left = t("noch 3 Min.", "3 min left");
+    let mut pending = item("".into(), t("Heute, 18:05 · 0:42", "Today, 18:05 · 0:42"), 0);
+    pending.pending = true;
+    let items = vec![
+        pending,
+        item(
+            t("Einkaufsliste für Samstag", "Shopping list for Saturday"),
+            t("Heute, 09:12 · 0:48", "Today, 09:12 · 0:48"),
+            3,
+        ),
+        item(
+            t("Gedanken zur neuen Startseite", "Thoughts on the new home page"),
+            t("Gestern, 21:40 · 2:31", "Yesterday, 21:40 · 2:31"),
+            0,
+        ),
+        writing,
+        item(
+            t("Test Test hört man mich", "Testing can you hear me"),
+            "18.10.2026, 11:02 · 0:06".into(),
+            0,
+        ),
+    ];
+    state.set_memo_items(ModelRc::new(VecModel::from(items)));
+    state.set_memo_count(5);
+    state.set_memo_can_write(true);
+    state.set_memo_playing(1);
+    state.set_memo_play_fraction(0.35);
+    state.set_memo_play_time("0:17 / 0:48".into());
+    state.set_page(6);
+    render(window, ui, &format!("{out}/memos-{lang}.rgba"));
+    state.set_memo_playing(-1);
+    state.set_memo_confirm(4);
+    state.set_memo_recording(true);
+    state.set_memo_elapsed("1:07".into());
+    render(window, ui, &format!("{out}/memos-recording-{lang}.rgba"));
+    state.set_memo_confirm(-1);
+    state.set_memo_recording(false);
+
+    let p = |time: &str, seconds: i32, text: &str| MemoParagraph {
+        time: time.into(),
+        seconds,
+        text: text.into(),
+    };
+    let paragraphs = if de {
+        vec![
+            p(
+                "0:00",
+                0,
+                "Gedanken zur neuen Startseite. Oben soll sofort klar sein, was kyrr macht, ohne Werbesprech.",
+            ),
+            p(
+                "0:34",
+                34,
+                "Darunter der Download, groß, und gleich daneben die Befehle für Linux zum Kopieren.",
+            ),
+            p(
+                "1:12",
+                72,
+                "Die Beispiel-Pille als kurze Schleife, nicht als Video, das lädt sonst ewig.",
+            ),
+            p("2:05", 125, "Und unten nur noch die häufigen Fragen, zusammengeklappt."),
+        ]
+    } else {
+        vec![
+            p("0:00", 0, "Thoughts on the new home page. At the top it should be clear right away what kyrr does, no marketing talk."),
+            p("0:34", 34, "Below that the download, big, and right next to it the Linux commands to copy."),
+            p("1:12", 72, "The example pill as a short loop, not as a video, that takes forever to load."),
+            p("2:05", 125, "And at the bottom just the common questions, folded away."),
+        ]
+    };
+    state.set_memo_sheet_index(2);
+    state.set_memo_sheet_title(t("Gedanken zur neuen Startseite", "Thoughts on the new home page"));
+    state.set_memo_sheet_when(t("Gestern, 21:40 · 2:31", "Yesterday, 21:40 · 2:31"));
+    state.set_memo_sheet_paragraphs(ModelRc::new(VecModel::from(paragraphs)));
+    state.set_memo_sheet_open(true);
+    render_at(window, ui, 700.0, &format!("{out}/memos-text-{lang}.rgba"));
+    state.set_memo_sheet_open(false);
+    state.set_memo_items(ModelRc::new(VecModel::from(Vec::<MemoItem>::new())));
+    state.set_memo_count(0);
+    render(window, ui, &format!("{out}/memos-empty-{lang}.rgba"));
+    state.set_page(0);
+    state.set_memo_count(5);
+    state.set_memo_recording(true);
+    render(window, ui, &format!("{out}/main-memo-recording-{lang}.rgba"));
+    state.set_memo_recording(false);
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let out = args.get(1).cloned().unwrap_or_else(|| ".".into());
@@ -83,6 +214,7 @@ fn main() {
     state.set_auto_level(true);
     state.set_level_gain(8.6);
     render(&window, &ui, &format!("{out}/main-{lang}.rgba"));
+    memos(&window, &ui, &out, &lang);
 
     // The red notes at the bottom: the mic is out of the automatic volume's
     // reach, and the live listening is still on.

@@ -147,6 +147,41 @@ impl Dictation {
         tidy(&texts.join(" "))
     }
 
+    /// The next paragraph of a long recording once its piece is complete:
+    /// where it starts, in seconds, and its text (empty for a stretch
+    /// without speech). See [`Paragraphs`].
+    pub fn paragraph(&self, paragraphs: &mut Paragraphs) -> Option<(f32, String)> {
+        let transcript = &mut paragraphs.transcript;
+        let piece = transcript.complete_piece()?;
+        let text = self.recognize(&transcript.audio[..piece]).unwrap_or_default();
+        transcript.audio.drain(..piece);
+        let start = paragraphs.done as f32 / MODEL_RATE as f32;
+        paragraphs.done += piece;
+        Some((start, tidy(&text)))
+    }
+
+    /// The paragraphs left once the whole recording is pushed.
+    pub fn last_paragraphs(&self, paragraphs: Paragraphs) -> Vec<(f32, String)> {
+        let Paragraphs { mut transcript, done } = paragraphs;
+        let Some(resampler) = transcript.resampler.take() else {
+            return Vec::new();
+        };
+        if let Some(resampler) = resampler {
+            resampler.finish(&mut transcript.audio);
+        }
+        let shortest = (MIN_SECONDS * MODEL_RATE as f32) as usize;
+        let mut at = done;
+        let mut out = Vec::new();
+        for piece in pieces(&transcript.audio) {
+            if piece.len() >= shortest {
+                let text = self.recognize(piece).unwrap_or_default();
+                out.push((at as f32 / MODEL_RATE as f32, tidy(&text)));
+            }
+            at += piece.len();
+        }
+        out
+    }
+
     fn recognize(&self, audio: &[f32]) -> Option<String> {
         let stream = self.recognizer.create_stream();
         stream.accept_waveform(MODEL_RATE as i32, audio);
@@ -273,6 +308,30 @@ impl Transcript {
             return None;
         }
         cut(&self.audio)
+    }
+}
+
+/// A long recording (a voice memo) on its way to text, a paragraph for
+/// each piece: the pieces end at the quietest spot, mostly a pause, so a
+/// paragraph knows where in the recording it starts. Pushed bit by bit,
+/// only the newest piece waits in memory.
+pub struct Paragraphs {
+    transcript: Transcript,
+    /// Samples at the model's rate that are text already.
+    done: usize,
+}
+
+impl Paragraphs {
+    pub fn new(sample_rate: u32) -> Paragraphs {
+        Paragraphs {
+            transcript: Transcript::new(sample_rate),
+            done: 0,
+        }
+    }
+
+    /// Takes in the next samples of the recording.
+    pub fn push(&mut self, samples: &[f32]) {
+        self.transcript.push(samples);
     }
 }
 

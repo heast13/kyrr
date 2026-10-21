@@ -2,7 +2,7 @@
 // first-run setup or the main panel. All texts are English source strings
 // translated through the bundled translations in ui/lang.
 
-import { Button, ComboBox, Switch, Slider, ProgressIndicator, ScrollView, Palette } from "std-widgets.slint";
+import { Button, ComboBox, Switch, Slider, ProgressIndicator, ScrollView, LineEdit, Palette } from "std-widgets.slint";
 
 // detached: Windows (an update, a driver) took kyrr off the microphone.
 // unsupported: this PC cannot run the filter (Windows on ARM, Linux without
@@ -13,6 +13,27 @@ export enum ProbeState { idle, recording, before, after }
 // downloading and installing: "Update now" at work; download-failed
 // offers it again, and the download page.
 export enum UpdateState { idle, checking, current, available, failed, downloading, installing, download-failed }
+
+// One voice memo in the list. text-state: 0 none, 1 waiting for its turn,
+// 2 being written, 3 written, 4 failed.
+export struct MemoItem {
+    title: string,
+    // Date, time and length, one line.
+    when: string,
+    // Its title is still being found.
+    pending: bool,
+    text-state: int,
+    text-progress: float,
+    // "about 2 min. left", or "".
+    text-left: string,
+}
+
+// A paragraph of a memo's text: where it starts and what was said.
+export struct MemoParagraph {
+    time: string,
+    seconds: int,
+    text: string,
+}
 
 export global AppState {
     // Noise removal
@@ -133,7 +154,8 @@ export global AppState {
     in property <string> version;
 
     // 0 is the main view, 1 the global settings, then the settings of each
-    // card: 2 noise, 3 voice, 4 dictation.
+    // card: 2 noise, 3 voice, 4 dictation, 5 voice memos; 6 the voice memos
+    // themselves.
     in-out property <int> page;
     // Counts up every few seconds; the status line picks its next phrase
     // from it, so one state does not repeat the same sentence.
@@ -199,6 +221,52 @@ export global AppState {
     callback dismiss-update();
     callback skip-setup();
     callback next-setup();
+
+    // Voice memos
+    in-out property <bool> memos-enabled: true;
+    in-out property <int> memo-key-index;   // F8, F9, Pause, none
+    in property <int> memo-taken-index: 1;  // the dictation key's place there
+    in property <string> memo-key-name: "F8"; // "" for none
+    in property <bool> memo-recording;
+    in property <string> memo-elapsed;
+    in property <[MemoItem]> memo-items;
+    // All memos in the folder, whatever the search shows.
+    in property <int> memo-count;
+    in-out property <string> memo-query;
+    in property <int> memo-playing: -1;
+    in property <float> memo-play-fraction;
+    in property <string> memo-play-time;
+    in-out property <int> memo-confirm: -1;
+    in-out property <int> memo-editing: -1;
+    // The speech model is on the computer: texts can be written.
+    in property <bool> memo-can-write;
+    in-out property <bool> memo-auto-text;
+    in property <string> memo-message;
+    // The big text view: open, for which memo, and what it shows.
+    in-out property <bool> memo-sheet-open;
+    in property <int> memo-sheet-index: -1;
+    in property <string> memo-sheet-title;
+    in property <string> memo-sheet-when;
+    in property <[MemoParagraph]> memo-sheet-paragraphs;
+    in-out property <bool> memo-copied;
+    callback memos-toggled(bool);
+    callback memo-key-changed(int);
+    callback memo-auto-text-toggled(bool);
+    callback memo-record();
+    callback memo-open-list();
+    callback memo-play(int);
+    callback memo-play-from(int, int); // memo, seconds
+    callback memo-show(int);
+    callback memo-delete(int);
+    callback memo-rename(int, string);
+    callback memo-write-text(int);
+    callback memo-cancel-text(int);
+    callback memo-show-text(int);
+    callback memo-close-text();
+    callback memo-copy-text();
+    callback memo-open-text();
+    callback memo-search(string);
+    callback memo-open-folder();
 }
 
 // Colours for notes: darker on the light theme, so small text keeps its contrast.
@@ -217,16 +285,22 @@ export component Tray inherits SystemTrayIcon {
     in property <bool> dictation-enabled;
     in property <bool> dictation-ready;
     in property <string> key-name: "F9";
+    in property <bool> memos-enabled;
+    in property <bool> memo-recording;
+    in property <string> memo-key-name;
     // A newer version found ("" for none).
     in property <string> update-version;
     callback open();
+    callback toggle-memo();
+    callback open-memos();
     callback install-update();
     callback toggle-filter();
     callback toggle-voice();
     callback toggle-dictation();
     callback quit();
-    icon: recording ? @image-url("icons/kyrr-recording-32.png") : active ? @image-url("icons/kyrr-32.png") : @image-url("icons/kyrr-off-32.png");
-    tooltip: "kyrr · " + (root.filter-enabled ? @tr("noise filter on") : @tr("noise filter off"))
+    icon: recording || memo-recording ? @image-url("icons/kyrr-recording-32.png") : active ? @image-url("icons/kyrr-32.png") : @image-url("icons/kyrr-off-32.png");
+    tooltip: "kyrr · " + (root.memo-recording ? @tr("recording") + " · " : "")
+        + (root.filter-enabled ? @tr("noise filter on") : @tr("noise filter off"))
         + (root.dictation-ready ? " · " + @tr("{} ready", root.key-name) : "")
         + (root.update-version != "" ? " · " + @tr("update available") : "");
     // Some panels list tray icons by title.
@@ -248,6 +322,15 @@ export component Tray inherits SystemTrayIcon {
         MenuItem {
             title: root.dictation-enabled ? @tr("Dictation: on") : @tr("Dictation: off");
             activated => { root.toggle-dictation(); }
+        }
+        if root.memos-enabled: MenuItem {
+            title: (root.memo-recording ? @tr("Stop recording") : @tr("Start recording"))
+                + (root.memo-key-name != "" ? " (" + root.memo-key-name + ")" : "");
+            activated => { root.toggle-memo(); }
+        }
+        if root.memos-enabled: MenuItem {
+            title: @tr("Open recordings");
+            activated => { root.open-memos(); }
         }
         if root.update-version != "": MenuItem {
             title: @tr("Install update {}", root.update-version);
@@ -299,10 +382,12 @@ component Separator inherits Rectangle {
 component Segmented inherits FocusScope {
     in property <[string]> options;
     in-out property <int> selected;
+    // An option that cannot be picked (taken elsewhere); -1 for none.
+    in property <int> unavailable: -1;
     callback changed(int);
 
     function choose(i: int) {
-        if (root.enabled && i >= 0 && i < root.options.length && i != root.selected) {
+        if (root.enabled && i >= 0 && i < root.options.length && i != root.selected && i != root.unavailable) {
             root.selected = i;
             root.changed(i);
         }
@@ -328,7 +413,7 @@ component Segmented inherits FocusScope {
             background: i == root.selected ? Palette.accent-background : Palette.control-background;
             border-width: root.has-focus && i == root.selected ? 2px : 1px;
             border-color: root.has-focus && i == root.selected ? Palette.foreground : Palette.border;
-            opacity: root.enabled ? 1 : 0.5;
+            opacity: root.enabled && i != root.unavailable ? 1 : 0.4;
             accessible-role: radio-button;
             accessible-label: option;
             accessible-checkable: true;
@@ -341,7 +426,7 @@ component Segmented inherits FocusScope {
                 vertical-alignment: center;
             }
             TouchArea {
-                enabled: root.enabled;
+                enabled: root.enabled && i != root.unavailable;
                 clicked => {
                     root.focus();
                     root.choose(i);
@@ -472,6 +557,30 @@ component StatusLine inherits HorizontalLayout {
                 @tr("Notepad with ears."),
                 @tr("Words wanted."),
                 @tr("Sentence harvest."),
+            ]);
+        }
+        if (AppState.memo-recording) {
+            return pick([
+                @tr("Tape is rolling."),
+                @tr("Recording for posterity."),
+                @tr("Memory backup in progress."),
+                @tr("Said and saved."),
+                @tr("Voice note, freshly pressed."),
+                @tr("Bright ideas into the archive."),
+                @tr("Thoughts to go."),
+                @tr("Talk now, listen later."),
+                @tr("Off the record? Nope."),
+                @tr("Your private radio show."),
+                @tr("Every word into the drawer."),
+                @tr("The archive is listening."),
+                @tr("Sticky note with a voice."),
+                @tr("Memoirs, chapter one."),
+                @tr("Voice into the vault."),
+                @tr("Forgetting is cancelled."),
+                @tr("Dictaphone, only prettier."),
+                @tr("Thinking aloud, saved."),
+                @tr("Minutes for one."),
+                @tr("Ideas in the can."),
             ]);
         }
         if (AppState.dictation-state == DictationState.transcribing) {
@@ -654,7 +763,8 @@ component StatusLine inherits HorizontalLayout {
     spacing: 8px;
     property <bool> working: AppState.mic-active || AppState.probe-state != ProbeState.idle || AppState.model-switching
         || AppState.dictation-state == DictationState.recording || AppState.dictation-state == DictationState.transcribing
-        || AppState.dictation-state == DictationState.downloading || AppState.filter-state == FilterState.setting-up;
+        || AppState.dictation-state == DictationState.downloading || AppState.filter-state == FilterState.setting-up
+        || AppState.memo-recording;
     property <bool> waiting: (AppState.filter-enabled || AppState.voice-enabled)
         && (AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking);
     Text {
@@ -1188,12 +1298,9 @@ component HideRow inherits HorizontalLayout {
         clicked => { AppState.quit-app(); }
     }
     Hint {
-        // Without a tray, the window's X minimizes kyrr where the desktop
-        // can (which needs no word); tiling ones cannot, there it quits.
-        text: !AppState.linux ? @tr("kyrr keeps running in the tray, bottom right.")
-            : AppState.tray ? @tr("kyrr keeps running in the tray.")
-            : AppState.can-minimize ? ""
-            : @tr("No tray here: closing the window quits kyrr.");
+        // Only a warning: where neither a tray nor minimizing exists
+        // (tiling desktops), closing the window quits kyrr.
+        text: AppState.tray || AppState.can-minimize ? "" : @tr("No tray here: closing the window quits kyrr.");
         horizontal-alignment: center;
         vertical-alignment: center;
     }
@@ -1665,6 +1772,525 @@ export component NewsWindow inherits Window {
     }
 }
 
+// Small drawn icons (16 × 16), so no icon font has to be on the system.
+global Shapes {
+    out property <string> play: "M 4 2 L 14 8 L 4 14 Z";
+    out property <string> stop: "M 3 3 L 13 3 L 13 13 L 3 13 Z";
+    out property <string> pen: "M 11 1.5 L 14.5 5 L 5.5 14 L 1.5 14.5 L 2 10.5 Z";
+    out property <string> folder: "M 1 3 L 6 3 L 7.5 4.5 L 15 4.5 L 15 13.5 L 1 13.5 Z";
+    out property <string> bin: "M 2 3 L 14 3 L 14 4.5 L 2 4.5 Z M 6 1 L 10 1 L 10 3 L 6 3 Z M 3.5 5.5 L 12.5 5.5 L 11.5 15 L 4.5 15 Z";
+}
+
+// A round button with a drawn icon; `label` is what screen readers hear.
+component IconButton inherits Rectangle {
+    in property <string> shape;
+    in property <string> label;
+    in property <bool> enabled: true;
+    in property <color> tint: Palette.foreground.with-alpha(0.8);
+    in property <length> size: 28px;
+    callback clicked();
+    forward-focus: key;
+    width: root.size;
+    height: root.size;
+    border-radius: root.size / 2;
+    border-width: key.has-focus ? 2px : 0px;
+    border-color: Palette.foreground;
+    background: !root.enabled ? transparent : touch.pressed ? Palette.foreground.with-alpha(0.16)
+        : touch.has-hover ? Palette.foreground.with-alpha(0.08) : transparent;
+    opacity: root.enabled ? 1 : 0.35;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-action-default => { if (root.enabled) { root.clicked(); } }
+    key := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+    Path {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        width: root.size / 2;
+        height: root.size / 2;
+        viewbox-width: 16;
+        viewbox-height: 16;
+        commands: root.shape;
+        fill: root.tint;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// A small rounded text button inside a memo's row.
+component Chip inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    in property <bool> strong;
+    in property <bool> danger;
+    callback clicked();
+    forward-focus: key;
+    height: 24px;
+    width: label.preferred-width + 18px;
+    border-radius: 12px;
+    border-width: key.has-focus ? 2px : 0px;
+    border-color: Palette.foreground;
+    background: root.danger ? (touch.has-hover ? #cf3338 : #e5484d)
+        : root.strong ? Palette.accent-background
+        : touch.has-hover && root.enabled ? Palette.foreground.with-alpha(0.13) : Palette.foreground.with-alpha(0.07);
+    opacity: root.enabled ? 1 : 0.5;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-action-default => { if (root.enabled) { root.clicked(); } }
+    key := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+    label := Text {
+        text: root.text;
+        font-size: 12px;
+        color: root.danger ? white : root.strong ? Palette.accent-foreground : Palette.foreground;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// The voice memo on the main page: a switch, how it works, and the buttons.
+component RecordingCard inherits Card {
+    RowHead {
+        title: @tr("Voice memo");
+        gear-label: AppState.memos-enabled ? @tr("Settings: {}", @tr("Voice memo")) : "";
+        gear => { AppState.open-page(5); }
+        checked <=> AppState.memos-enabled;
+        toggled(on) => { AppState.memos-toggled(on); }
+    }
+    Caption {
+        text: !AppState.memos-enabled ? @tr("Off. Your recordings stay where they are.")
+            : AppState.memo-recording ? (AppState.memo-key-name != "" ? @tr("Recording. {} or the button ends it.", AppState.memo-key-name) : @tr("Recording. The button ends it."))
+            : AppState.memo-key-name == "" ? @tr("Record under Recordings or in the tray. kyrr saves and names the recording by itself.")
+            : @tr("Tap {}, talk, tap again. kyrr saves and names the recording by itself.", AppState.memo-key-name);
+    }
+    if AppState.memos-enabled: HorizontalLayout {
+        spacing: 8px;
+        // Started with the key; only a running one gets a button here.
+        if AppState.memo-recording: AlertButton {
+            text: "■ " + @tr("Stop") + "  " + AppState.memo-elapsed;
+            horizontal-stretch: 0;
+            clicked => { AppState.memo-record(); }
+        }
+        Rectangle { }
+        Button {
+            text: @tr("Recordings ({})", AppState.memo-count);
+            horizontal-stretch: 0;
+            clicked => { AppState.memo-open-list(); }
+        }
+    }
+    if AppState.memos-enabled && AppState.memo-message != "": Hint { text: AppState.memo-message; }
+}
+
+// One memo in the list: title and date, the buttons, and while something
+// runs (its text, playing, a question) one more line.
+component MemoRow inherits Rectangle {
+    in property <MemoItem> item;
+    in property <int> index;
+    property <bool> playing: AppState.memo-playing == root.index;
+    property <bool> editing: AppState.memo-editing == root.index;
+    property <bool> confirming: AppState.memo-confirm == root.index;
+    property <bool> busy: root.item.text-state == 1 || root.item.text-state == 2;
+    background: Palette.alternate-background;
+    border-radius: 10px;
+    VerticalLayout {
+        padding: 8px;
+        padding-left: 6px;
+        spacing: 4px;
+        HorizontalLayout {
+            spacing: 4px;
+            VerticalLayout {
+                alignment: center;
+                IconButton {
+                    shape: root.playing ? Shapes.stop : Shapes.play;
+                    label: root.playing ? @tr("Stop") : @tr("Play");
+                    tint: Palette.accent-background;
+                    clicked => { AppState.memo-play(root.index); }
+                }
+            }
+            VerticalLayout {
+                spacing: 0px;
+                alignment: center;
+                HorizontalLayout {
+                    spacing: 2px;
+                    if !root.editing: Text {
+                        text: root.item.pending ? @tr("Finding a title…") : root.item.title;
+                        font-size: 13px;
+                        font-weight: 600;
+                        font-italic: root.item.pending;
+                        overflow: elide;
+                        vertical-alignment: center;
+                        horizontal-stretch: 0;
+                    }
+                    if !root.editing && !root.item.pending && !root.busy: IconButton {
+                        shape: Shapes.pen;
+                        label: @tr("Rename");
+                        size: 22px;
+                        clicked => {
+                            AppState.memo-confirm = -1;
+                            AppState.memo-editing = root.index;
+                        }
+                    }
+                    if root.editing: FocusScope {
+                        height: edit.preferred-height;
+                        horizontal-stretch: 1;
+                        key-pressed(event) => {
+                            if (event.text == Key.Escape) {
+                                AppState.memo-editing = -1;
+                                return accept;
+                            }
+                            return reject;
+                        }
+                        edit := LineEdit {
+                            width: parent.width;
+                            text: root.item.title;
+                            font-size: 13px;
+                            accessible-label: @tr("Title");
+                            init => {
+                                self.focus();
+                                self.select-all();
+                            }
+                            accepted(text) => {
+                                AppState.memo-editing = -1;
+                                AppState.memo-rename(root.index, text);
+                            }
+                        }
+                    }
+                    if !root.editing: Rectangle { horizontal-stretch: 1; }
+                    IconButton {
+                        shape: Shapes.folder;
+                        label: @tr("Show in folder");
+                        clicked => { AppState.memo-show(root.index); }
+                    }
+                    IconButton {
+                        shape: Shapes.bin;
+                        label: @tr("Delete");
+                        enabled: !root.item.pending;
+                        clicked => {
+                            AppState.memo-editing = -1;
+                            AppState.memo-confirm = root.confirming ? -1 : root.index;
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 6px;
+                    Text {
+                        text: root.playing ? AppState.memo-play-time : root.item.when;
+                        font-size: 12px;
+                        color: Palette.foreground.with-alpha(0.65);
+                        overflow: elide;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+                    if root.item.text-state == 3: Chip {
+                        text: @tr("Show text");
+                        strong: true;
+                        clicked => { AppState.memo-show-text(root.index); }
+                    }
+                    if (root.item.text-state == 0 || root.item.text-state == 4) && !root.item.pending: Chip {
+                        text: @tr("Write text");
+                        enabled: AppState.memo-can-write;
+                        clicked => { AppState.memo-write-text(root.index); }
+                    }
+                    // The row keeps its height without a button.
+                    if root.item.pending || root.busy: Rectangle { height: 24px; width: 0px; }
+                }
+            }
+        }
+        if root.playing: Rectangle {
+            height: 3px;
+            border-radius: 1.5px;
+            background: Palette.foreground.with-alpha(0.1);
+            Rectangle {
+                x: 0;
+                width: parent.width * clamp(AppState.memo-play-fraction, 0, 1);
+                border-radius: 1.5px;
+                background: Palette.accent-background;
+            }
+        }
+        if root.busy: HorizontalLayout {
+            spacing: 8px;
+            padding-left: 32px;
+            Text {
+                text: root.item.text-state == 1 ? @tr("Waiting for its turn…")
+                    : root.item.text-left != "" ? @tr("Writing… {}% · {}", round(root.item.text-progress * 100), root.item.text-left)
+                    : @tr("Writing… {}%", round(root.item.text-progress * 100));
+                font-size: 12px;
+                color: Palette.foreground.with-alpha(0.7);
+                overflow: elide;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            Chip {
+                text: @tr("Cancel");
+                clicked => { AppState.memo-cancel-text(root.index); }
+            }
+        }
+        if root.busy: Rectangle {
+            height: 4px;
+            border-radius: 2px;
+            background: Palette.foreground.with-alpha(0.1);
+            Rectangle {
+                x: 0;
+                width: parent.width * clamp(root.item.text-progress, 0, 1);
+                border-radius: 2px;
+                background: Tone.good;
+                animate width { duration: 400ms; easing: ease-out; }
+            }
+        }
+        if root.item.text-state == 4: Text {
+            text: AppState.memo-can-write ? @tr("That did not work. Try again?") : @tr("Needs the speech model: download it under Dictation.");
+            font-size: 12px;
+            color: Tone.bad;
+            wrap: word-wrap;
+        }
+        if root.confirming: HorizontalLayout {
+            spacing: 8px;
+            padding-left: 32px;
+            Text {
+                text: @tr("Delete for good?");
+                font-size: 12px;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            Chip {
+                text: @tr("Keep");
+                clicked => { AppState.memo-confirm = -1; }
+            }
+            Chip {
+                text: @tr("Delete");
+                danger: true;
+                clicked => {
+                    AppState.memo-confirm = -1;
+                    AppState.memo-delete(root.index);
+                }
+            }
+        }
+    }
+}
+
+// The list of voice memos: the folder Documents/kyrr, newest first.
+component MemosPage inherits VerticalLayout {
+    spacing: 10px;
+    HorizontalLayout {
+        spacing: 10px;
+        Button {
+            text: @tr("← Back");
+            horizontal-stretch: 0;
+            clicked => {
+                AppState.memo-editing = -1;
+                AppState.memo-confirm = -1;
+                AppState.page = 0;
+                AppState.page-changed();
+            }
+        }
+        Heading { text: @tr("Recordings"); font-size: 20px; vertical-alignment: center; }
+        Rectangle { }
+    }
+    HorizontalLayout {
+        spacing: 8px;
+        if !AppState.memo-recording: Button {
+            text: "● " + (AppState.memo-key-name != "" ? @tr("New recording ({})", AppState.memo-key-name) : @tr("New recording"));
+            primary: true;
+            horizontal-stretch: 0;
+            clicked => { AppState.memo-record(); }
+        }
+        if AppState.memo-recording: AlertButton {
+            text: "■ " + @tr("Stop") + "  " + AppState.memo-elapsed;
+            horizontal-stretch: 0;
+            clicked => { AppState.memo-record(); }
+        }
+        Rectangle { }
+        Button {
+            text: @tr("Open folder");
+            horizontal-stretch: 0;
+            clicked => { AppState.memo-open-folder(); }
+        }
+    }
+    if AppState.memo-message != "": Hint { text: AppState.memo-message; }
+    if AppState.memo-count > 0: LineEdit {
+        placeholder-text: @tr("Search titles and texts");
+        text <=> AppState.memo-query;
+        edited(text) => { AppState.memo-search(text); }
+    }
+    for item[i] in AppState.memo-items: MemoRow {
+        item: item;
+        index: i;
+    }
+    if AppState.memo-count == 0: Caption {
+        text: @tr("Nothing said yet. The folder is waiting.");
+        horizontal-alignment: center;
+    }
+    if AppState.memo-count > 0 && AppState.memo-items.length == 0: Caption {
+        text: @tr("Nothing found. Maybe said differently?");
+        horizontal-alignment: center;
+    }
+}
+
+// Settings: the voice memo's key, its text and where the memos are.
+component RecordingSettings inherits Card {
+    in property <string> folder;
+    Caption { text: @tr("Key"); }
+    Segmented {
+        options: ["F8", "F9", "Pause", @tr("None")];
+        selected <=> AppState.memo-key-index;
+        unavailable: AppState.memo-taken-index;
+        changed(i) => { AppState.memo-key-changed(i); }
+    }
+    Hint {
+        text: AppState.memo-key-index == 3 ? @tr("No key: record with the button and in the tray.")
+            : @tr("Tap once to start, once more to stop. Dictation keeps {}.", AppState.key-name);
+    }
+    Separator { }
+    HorizontalLayout {
+        Caption { text: @tr("Write the text after every recording"); vertical-alignment: center; }
+        Rectangle { }
+        Switch {
+            checked <=> AppState.memo-auto-text;
+            toggled => { AppState.memo-auto-text-toggled(self.checked); }
+        }
+    }
+    Hint {
+        text: AppState.memo-auto-text ? @tr("kyrr writes down every new recording right away. Long ones take a while on slow laptops.")
+            : @tr("Off. A recording gets its text with a click.");
+    }
+    Separator { }
+    HorizontalLayout {
+        spacing: 8px;
+        Caption { text: @tr("Saved in the folder kyrr in {}", root.folder); vertical-alignment: center; horizontal-stretch: 1; }
+        Button { text: @tr("Open folder"); clicked => { AppState.memo-open-folder(); } }
+    }
+    Hint { text: @tr("About 11 MB per hour, everything stays on your computer. Only record conversations when everyone agrees."); }
+}
+
+// A memo's text, big: it slides up over the list and back down.
+component TranscriptSheet inherits Rectangle {
+    in property <bool> open;
+    background: Palette.background;
+    // Clicks stay here, not in the list below.
+    TouchArea { }
+    keys := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                AppState.memo-close-text();
+                return accept;
+            }
+            return reject;
+        }
+    }
+    changed open => {
+        if (self.open) {
+            keys.focus();
+        }
+    }
+    property <bool> playing: AppState.memo-playing == AppState.memo-sheet-index && AppState.memo-sheet-index >= 0;
+    VerticalLayout {
+        padding: 18px;
+        spacing: 10px;
+        HorizontalLayout {
+            spacing: 8px;
+            Button {
+                text: @tr("← Back");
+                horizontal-stretch: 0;
+                clicked => { AppState.memo-close-text(); }
+            }
+            Rectangle { }
+            Button {
+                text: AppState.memo-copied ? "✓ " + @tr("Copied") : @tr("Copy");
+                horizontal-stretch: 0;
+                clicked => { AppState.memo-copy-text(); }
+            }
+            Button {
+                text: @tr("Open as text file");
+                horizontal-stretch: 0;
+                clicked => { AppState.memo-open-text(); }
+            }
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            VerticalLayout {
+                alignment: center;
+                IconButton {
+                    shape: root.playing ? Shapes.stop : Shapes.play;
+                    label: root.playing ? @tr("Stop") : @tr("Play");
+                    tint: Palette.accent-background;
+                    size: 34px;
+                    clicked => { AppState.memo-play(AppState.memo-sheet-index); }
+                }
+            }
+            VerticalLayout {
+                spacing: 2px;
+                alignment: center;
+                Heading { text: AppState.memo-sheet-title; font-size: 17px; overflow: elide; }
+                Text {
+                    text: root.playing ? AppState.memo-play-time : AppState.memo-sheet-when;
+                    font-size: 12px;
+                    color: Palette.foreground.with-alpha(0.65);
+                }
+            }
+        }
+        Rectangle {
+            background: Palette.alternate-background;
+            border-radius: 10px;
+            ScrollView {
+                VerticalLayout {
+                    alignment: start;
+                    width: parent.visible-width;
+                    padding: 14px;
+                    spacing: 14px;
+                    for paragraph in AppState.memo-sheet-paragraphs: HorizontalLayout {
+                        spacing: 10px;
+                        Text {
+                            text: paragraph.time;
+                            width: 40px;
+                            font-size: 12px;
+                            color: Palette.accent-background;
+                            vertical-alignment: top;
+                            TouchArea {
+                                enabled: paragraph.seconds >= 0;
+                                mouse-cursor: pointer;
+                                clicked => { AppState.memo-play-from(AppState.memo-sheet-index, paragraph.seconds); }
+                            }
+                        }
+                        Text {
+                            text: paragraph.text;
+                            font-size: 14px;
+                            wrap: word-wrap;
+                        }
+                    }
+                    if AppState.memo-sheet-paragraphs.length == 0: Caption {
+                        text: @tr("Nothing understood in there. Was it quiet?");
+                    }
+                }
+            }
+        }
+        Hint { text: @tr("Click a time to listen from there."); horizontal-alignment: center; }
+    }
+}
+
 export component MainWindow inherits Window {
     in property <bool> setup-mode;
     in property <int> setup-step;
@@ -1706,14 +2332,18 @@ export component MainWindow inherits Window {
     }
 
     property <bool> main-page: !setup-mode && AppState.page == 0;
-    property <bool> settings-page: !setup-mode && AppState.page > 0;
+    property <bool> settings-page: !setup-mode && AppState.page >= 1 && AppState.page <= 5;
+    property <bool> memos-page: !setup-mode && AppState.page == 6;
     // The simple view and the advanced one: global settings and the pages
     // of cards that have something more to show.
     property <bool> has-advanced: AppState.page >= 1 && AppState.page <= 4;
     property <string> page-title: AppState.page == 2 ? @tr("Remove background noise")
         : AppState.page == 3 ? @tr("Improve voice")
         : AppState.page == 4 ? @tr("Dictation")
+        : AppState.page == 5 ? @tr("Voice memo")
         : @tr("Global settings");
+    // Where the memos are, as the user knows the folder.
+    in property <string> memo-folder;
 
     scroll := ScrollView {
         content-width: self.visible-width;
@@ -1744,6 +2374,7 @@ export component MainWindow inherits Window {
             if main-page: NoiseCard { }
             if main-page: VoiceCard { }
             if main-page: DictationCard { }
+            if main-page: RecordingCard { }
             if main-page && !AppState.update-dismissed && (AppState.update-state == UpdateState.available
                 || AppState.update-state == UpdateState.downloading || AppState.update-state == UpdateState.installing
                 || AppState.update-state == UpdateState.download-failed): UpdateBanner { }
@@ -1804,6 +2435,8 @@ export component MainWindow inherits Window {
             if settings-page && AppState.page == 3: VoiceSettings { }
             if settings-page && AppState.page == 3: LevelSettings { }
             if settings-page && AppState.page == 4: DictationSettings { }
+            if settings-page && AppState.page == 5: RecordingSettings { folder: root.memo-folder; }
+            if memos-page: MemosPage { }
             if settings-page && AppState.page == 1: Caption {
                 // English in every language, on purpose.
                 text: "Proudly presented by heast13 and Claude “Silent but deadly” Opus. No microphones were harmed.";
@@ -1817,5 +2450,18 @@ export component MainWindow inherits Window {
                 font-size: 12px;
             }
         }
+    }
+
+    // A memo's text, slid up over the list.
+    TranscriptSheet {
+        open: memos-page && AppState.memo-sheet-open;
+        x: 0;
+        y: self.open ? 0 : root.height;
+        width: root.width;
+        height: root.height;
+        opacity: self.open ? 1 : 0;
+        visible: self.opacity > 0.01;
+        animate y { duration: 280ms; easing: cubic-bezier(0.22, 1, 0.36, 1); }
+        animate opacity { duration: 220ms; easing: ease-out; }
     }
 }

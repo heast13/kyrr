@@ -151,6 +151,8 @@ pub enum Mode {
     Listening,
     /// Recognising and typing: a quicker wave.
     Writing,
+    /// A voice memo: red bars that follow the voice, no words.
+    Recording,
 }
 
 /// Where the pixels go: a window above all others that never takes the
@@ -393,7 +395,8 @@ impl Analyzer {
 
 impl Wave {
     pub fn set_mode(&mut self, mode: Mode) {
-        if mode == Mode::Listening && self.mode != Mode::Listening {
+        let listening = matches!(mode, Mode::Listening | Mode::Recording);
+        if listening && self.mode != mode {
             // A new dictation: its own words.
             self.words.clear();
             self.leaving.clear();
@@ -633,7 +636,11 @@ impl Wave {
         pixels.resize((width * height) as usize, 0);
         let (w, h) = (WIDTH as f32, HEIGHT as f32);
         let colors = if self.dark { &DARK } else { &LIGHT };
-        let bar_color = mix(mix(colors.bar, colors.yellow, self.warn[0]), colors.red, self.warn[1]);
+        let bar_color = if self.look == Mode::Recording {
+            colors.red
+        } else {
+            mix(mix(colors.bar, colors.yellow, self.warn[0]), colors.red, self.warn[1])
+        };
         let text_color = if self.limit { colors.red } else { colors.text };
         let open = self.open.clamp(0.0, 1.0);
         let pill = self.pill.clamp(PILL, w);
@@ -826,6 +833,7 @@ impl Wave {
 
 /// The wave on its own thread. Cheap to keep: the thread sleeps between
 /// dictations and the surface exists only while something shows.
+#[derive(Clone)]
 pub struct Overlay {
     tx: Sender<Message>,
 }
@@ -894,7 +902,7 @@ fn run(rx: &Receiver<Message>, open: fn() -> Option<Box<dyn Surface>>, tail: fn(
             let now = Instant::now();
             // Only listening looks at the microphone.
             let mut voice = [0.0; BANDS];
-            if wave.mode == Mode::Listening {
+            if matches!(wave.mode, Mode::Listening | Mode::Recording) {
                 let rate = tail(&mut samples);
                 if rate > 0 {
                     if analyzer.as_ref().map(Analyzer::rate) != Some(rate) {
@@ -1061,6 +1069,14 @@ mod tests {
             wave.step(0.033, &QUIET);
         }
         assert!(!wave.visible());
+    }
+
+    #[test]
+    fn a_voice_memo_shows_the_voice_without_words() {
+        let quiet = shown(Mode::Recording, 1.0, &QUIET);
+        let loud = shown(Mode::Recording, 1.0, &[0.8; BANDS]);
+        assert!(loud.visible() && loud.bars[BARS / 2] > quiet.bars[BARS / 2] + 0.3);
+        assert!(loud.words.is_empty());
     }
 
     #[test]

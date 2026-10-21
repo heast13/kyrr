@@ -7,6 +7,7 @@
 pub mod background;
 pub mod binds;
 pub mod display;
+pub mod files;
 pub mod gnome;
 pub mod hotkey;
 pub mod instance;
