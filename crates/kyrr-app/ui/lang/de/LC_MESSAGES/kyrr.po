@@ -47,12 +47,6 @@ msgstr "Hoppla, da ging was schief. Details unten."
 msgid "Oops, the filter is stuck. Your mic passes through as it is."
 msgstr "Hoppla, der Filter hakt. Dein Mikro läuft unverändert durch."
 
-msgid "Day off. Everything is off."
-msgstr "Feierabend. Alles aus."
-
-msgid "Noise allowed, voice polished."
-msgstr "Lärm erlaubt, Stimme poliert."
-
 msgid "Remove background noise"
 msgstr "Störgeräusche entfernen"
 
@@ -446,6 +440,54 @@ msgstr "Probesprechstunde."
 msgid "Shopping-list reading hour."
 msgstr "Einkaufslistenvorlesezeit."
 
+msgid "Say anything."
+msgstr "Quasselfreigabe."
+
+msgid "Tongue-twister warm-up."
+msgstr "Zungenbrecheraufwärmung."
+
+msgid "Voicemail audition."
+msgstr "Mailboxvorsprechen."
+
+msgid "Phone-book recital."
+msgstr "Telefonbuchrezitation."
+
+msgid "Interview with yourself."
+msgstr "Selbstgesprächsinterview."
+
+msgid "Nobody's judging. Much."
+msgstr "Urteilsfreie Zone. Fast."
+
+msgid "Humming allowed."
+msgstr "Brummerlaubnis."
+
+msgid "Podcast career, take one."
+msgstr "Podcastkarriere, Klappe eins."
+
+msgid "Cough on cue."
+msgstr "Hustenstichwort."
+
+msgid "Talking to the void."
+msgstr "Leerengeplauder."
+
+msgid "Improvised weather report."
+msgstr "Wetterberichtsimprovisation."
+
+msgid "Karaoke, no music."
+msgstr "Karaokeentzug."
+
+msgid "Speech of your life."
+msgstr "Lebensrede."
+
+msgid "Reading the room aloud."
+msgstr "Raumvorlesung."
+
+msgid "Toast rehearsal."
+msgstr "Trinkspruchprobe."
+
+msgid "Self-introduction, awkward edition."
+msgstr "Vorstellungsrundenpeinlichkeit."
+
 msgid "All ears."
 msgstr "Ganzohrigkeit."
 
@@ -455,6 +497,57 @@ msgstr "Nuschelerlaubnis."
 msgid "Listening intently."
 msgstr "Zuhörhochbetrieb."
 
+msgid "Spill the words."
+msgstr "Wortentleerung."
+
+msgid "Take your time."
+msgstr "Lasszeitmodus."
+
+msgid "Rambling welcome."
+msgstr "Schwafelfreigabe."
+
+msgid "Tape rolling."
+msgstr "Bandlauf."
+
+msgid "Ears pricked."
+msgstr "Ohrenspitzerei."
+
+msgid "Stage is yours."
+msgstr "Bühnenüberlassung."
+
+msgid "Typing is overrated."
+msgstr "Tippverweigerung."
+
+msgid "Mouth-to-text resuscitation."
+msgstr "Mund-zu-Text-Beatmung."
+
+msgid "Thinking out loud, recorded."
+msgstr "Lautdenkprotokoll."
+
+msgid "Eavesdropping, officially."
+msgstr "Offizielle Lauscherei."
+
+msgid "Ums included."
+msgstr "Ähmsinklusive."
+
+msgid "Throat clearing accepted."
+msgstr "Räusperduldung."
+
+msgid "Fingers on holiday."
+msgstr "Fingerurlaub."
+
+msgid "Blab away."
+msgstr "Draufloslaberei."
+
+msgid "Notepad with ears."
+msgstr "Ohrenblock."
+
+msgid "Words wanted."
+msgstr "Wortbedarf."
+
+msgid "Sentence harvest."
+msgstr "Satzernte."
+
 msgid "Mumble translation."
 msgstr "Gemurmelübersetzung."
 
@@ -463,6 +556,57 @@ msgstr "Schnelltipperei."
 
 msgid "Word sorting."
 msgstr "Wortsortierung."
+
+msgid "Decoding the ums."
+msgstr "Ähmentschlüsselung."
+
+msgid "Syllable shuffling."
+msgstr "Silbenschieberei."
+
+msgid "Air into letters."
+msgstr "Luftbuchstabierung."
+
+msgid "Comma distribution."
+msgstr "Kommaverteilung."
+
+msgid "Sentence construction site."
+msgstr "Satzbaustelle."
+
+msgid "Grammar ironing."
+msgstr "Grammatikbügelei."
+
+msgid "Ghostwriting."
+msgstr "Geisterschreiberei."
+
+msgid "Ramble polishing."
+msgstr "Gestammelpolitur."
+
+msgid "Sense-making."
+msgstr "Sinnstiftung."
+
+msgid "Letter assembly line."
+msgstr "Buchstabenfließband."
+
+msgid "Typo hunt."
+msgstr "Tippfehlerjagd."
+
+msgid "Punctuation roulette."
+msgstr "Satzzeichenroulette."
+
+msgid "Sound in, text out."
+msgstr "Ton-zu-Text-Wandlung."
+
+msgid "Hold on, typing."
+msgstr "Momentchen-Getippe."
+
+msgid "Word wrangling."
+msgstr "Wortgerangel."
+
+msgid "Spelling bee."
+msgstr "Buchstabierwettbewerb."
+
+msgid "Syntax tinkering."
+msgstr "Satzgebastel."
 
 msgid "{}% · Patience test."
 msgstr "{} % · Geduldsprobe."
@@ -476,6 +620,54 @@ msgstr "{} % · Balkenhypnose."
 msgid "{}% · Chunky delivery."
 msgstr "{} % · Brockenlieferung."
 
+msgid "{}% · Bits on the way."
+msgstr "{} % · Bitreise."
+
+msgid "{}% · Watching paint dry."
+msgstr "{} % · Farbtrocknungsbeobachtung."
+
+msgid "{}% · Brain by post."
+msgstr "{} % · Gehirnpost."
+
+msgid "{}% · Slow but trying."
+msgstr "{} % · Langsamkeitsbemühung."
+
+msgid "{}% · Bytes marching in."
+msgstr "{} % · Byteneinmarsch."
+
+msgid "{}% · Kettle time."
+msgstr "{} % · Wasserkocherzeit."
+
+msgid "{}% · Internet doing its best."
+msgstr "{} % · Netzbemühung."
+
+msgid "{}% · Stretch your legs."
+msgstr "{} % · Beinevertretzeit."
+
+msgid "{}% · Heavy freight."
+msgstr "{} % · Schwerlasttransport."
+
+msgid "{}% · Don't stare at it."
+msgstr "{} % · Starrverbot."
+
+msgid "{}% · Pigeon post, upgraded."
+msgstr "{} % · Brieftaubenupgrade."
+
+msgid "{}% · Brain filling up."
+msgstr "{} % · Hirnbefüllung."
+
+msgid "{}% · Worth the wait. Probably."
+msgstr "{} % · Wartelohn, vermutlich."
+
+msgid "{}% · Byte by byte."
+msgstr "{} % · Bytewanderung."
+
+msgid "{}% · Slow-motion magic."
+msgstr "{} % · Zeitlupenzauber."
+
+msgid "{}% · Staring contest with a bar."
+msgstr "{} % · Balkenstarrduell."
+
 msgid "Brain transplant."
 msgstr "Gehirntransplantation."
 
@@ -485,35 +677,56 @@ msgstr "Neuronenumzug."
 msgid "Model swap break."
 msgstr "Modellwechselpause."
 
-msgid "Noise bouncer on duty."
-msgstr "Lärmtürsteher."
+msgid "Head swap."
+msgstr "Kopftausch."
 
-msgid "Dog eraser."
-msgstr "Hundeausblender."
+msgid "Mid-flight engine swap."
+msgstr "Flugumbau."
 
-msgid "Fan whisperer."
-msgstr "Lüfterflüsterer."
+msgid "Brain surgery, no anaesthetic."
+msgstr "Narkoseverzicht."
 
-msgid "Quiet zone management."
-msgstr "Ruhezonenverwaltung."
+msgid "Grey-matter reboot."
+msgstr "Graue-Zellen-Neustart."
 
-msgid "Drill defence."
-msgstr "Bohrmaschinenabwehr."
+msgid "New knowledge loading."
+msgstr "Wissensnachladung."
 
-msgid "Voice-first policy."
-msgstr "Stimmenvorzugsbehandlung."
+msgid "Thinking-cap fitting."
+msgstr "Denkermützenanprobe."
 
-msgid "Coffee machine censorship."
-msgstr "Kaffeemaschinenzensur."
+msgid "Change of mind."
+msgstr "Sinneswandel."
 
-msgid "Noise disposal."
-msgstr "Störgeräuschentsorgung."
+msgid "Blackboard wiping."
+msgstr "Tafelwischerei."
 
-msgid "Chair creak swallower."
-msgstr "Stuhlknarzschlucker."
+msgid "Synapse shuffle."
+msgstr "Synapsenrochade."
 
-msgid "Noise quarantine."
-msgstr "Lärmquarantäne."
+msgid "Light brainwashing."
+msgstr "Kurzwaschgang."
+
+msgid "Wits swap."
+msgstr "Verstandstausch."
+
+msgid "Out with the old IQ."
+msgstr "Altintelligenzentsorgung."
+
+msgid "Brief stupidity."
+msgstr "Kurzdummheit."
+
+msgid "Musical neurons."
+msgstr "Neuronen-Reise-nach-Jerusalem."
+
+msgid "Mind reshuffle."
+msgstr "Hirnumbesetzung."
+
+msgid "Upgrade pending."
+msgstr "Klugheitsupdate."
+
+msgid "Opening the skull gently."
+msgstr "Schädeldeckenlüftung."
 
 msgid "Slurpless."
 msgstr "Schmatzfrei."
@@ -539,20 +752,8 @@ msgstr "Lüfterknebel."
 msgid "Keyclackfree."
 msgstr "Tastaturgeklapperweg."
 
-msgid "Sniffleproof."
-msgstr "Räusperfilter."
-
-msgid "Leafblowerbanned."
-msgstr "Laubbläserverbannt."
-
 msgid "Coworkerpuffstop."
 msgstr "Kollegenschnaufstopp."
-
-msgid "Babywailbreak."
-msgstr "Babygeschreipause."
-
-msgid "Jackhammerhushed."
-msgstr "Bauarbeiterstumm."
 
 msgid "Snoreproof."
 msgstr "Schnarchsicher."
@@ -563,14 +764,149 @@ msgstr "Klospülungsfrei."
 msgid "Doorbelldeaf."
 msgstr "Türklingeltaub."
 
-msgid "Mowermuzzled."
-msgstr "Rasenmähermaulkorb."
-
-msgid "Hiccupshielded."
-msgstr "Schluckaufschutz."
-
 msgid "Sneezeswallowed."
 msgstr "Niesgeschluckt."
+
+msgid "Stomachgrowlmuted."
+msgstr "Magenknurrstumm."
+
+msgid "Tootproof."
+msgstr "Pupssicher."
+
+msgid "Creakcancelled."
+msgstr "Knarzgekündigt."
+
+msgid "Dishclatterdeleted."
+msgstr "Geschirrklapperfrei."
+
+msgid "Throatclearbanned."
+msgstr "Räuspersperre."
+
+msgid "Hornhushed."
+msgstr "Hupenstumm."
+
+msgid "Penclickproof."
+msgstr "Klickstiftfrei."
+
+msgid "Noise allowed, voice polished."
+msgstr "Lärm erlaubt, Stimme poliert."
+
+msgid "Voice makeover only."
+msgstr "Stimmenverschönerung."
+
+msgid "Let the dog bark."
+msgstr "Hundebellfreigabe."
+
+msgid "Vacuum may sing."
+msgstr "Staubsaugerchor."
+
+msgid "Background chaos, untouched."
+msgstr "Hintergrundchaoserhalt."
+
+msgid "Voice shines, room doesn't."
+msgstr "Stimmglanz, Raumschlamassel."
+
+msgid "Noise gets a free pass."
+msgstr "Lärmfreifahrtschein."
+
+msgid "Neighbour's drill included."
+msgstr "Nachbarbohrerinklusive."
+
+msgid "Keyboard clatter stays."
+msgstr "Klapperbestandsschutz."
+
+msgid "Voice on the red carpet."
+msgstr "Stimmenrotteppich."
+
+msgid "Hair and make-up for voices."
+msgstr "Stimmenfrisur."
+
+msgid "Studio voice, garage room."
+msgstr "Garagenstudio."
+
+msgid "Noise in the front row."
+msgstr "Lärmerstereihe."
+
+msgid "Voice spa, noise welcome."
+msgstr "Stimmwellness."
+
+msgid "Background keeps its charm."
+msgstr "Hintergrundcharme."
+
+msgid "Voice upgrade, noise policy: none."
+msgstr "Lärmpolitik: keine."
+
+msgid "Noise on the guest list."
+msgstr "Lärmgästeliste."
+
+msgid "Chaos tolerance, voice care."
+msgstr "Chaostoleranz mit Stimmpflege."
+
+msgid "Coughs stay in."
+msgstr "Hustenerhaltung."
+
+msgid "Squeaky chair, shiny voice."
+msgstr "Quietschstuhl, Glanzstimme."
+
+msgid "Day off. Everything is off."
+msgstr "Feierabend. Alles aus."
+
+msgid "Hammock mode."
+msgstr "Hängemattenmodus."
+
+msgid "Nothing to do. Wonderful."
+msgstr "Nichtstun-Glück."
+
+msgid "Lights out, kyrr snoozes."
+msgstr "Lichtaus-Nickerchen."
+
+msgid "Out of office."
+msgstr "Abwesenheitsnotiz."
+
+msgid "Vacation, do not disturb."
+msgstr "Bitte-nicht-stören-Schild."
+
+msgid "Feet up."
+msgstr "Füßehochlegen."
+
+msgid "Doing absolutely nothing."
+msgstr "Nichtstuerei."
+
+msgid "Sabbatical in progress."
+msgstr "Auszeitwoche."
+
+msgid "Off, but smiling."
+msgstr "Abgeschaltetes Lächeln."
+
+msgid "All quiet on the kyrr front."
+msgstr "Kyrrfrontruhe."
+
+msgid "Sleeping in."
+msgstr "Ausschlafmodus."
+
+msgid "Pyjama day."
+msgstr "Schlafanzugtag."
+
+msgid "Couch time."
+msgstr "Sofazeit."
+
+msgid "Taking five. Or fifty."
+msgstr "Pause, unbefristet."
+
+msgid "Mic left alone."
+msgstr "Mikrofoneinsamkeit."
+
+msgid "Binge break."
+msgstr "Serienpause."
+
+msgid "Off the clock."
+msgstr "Stechuhrflucht."
+
+msgid "Zero-effort mode."
+msgstr "Nullbockmodus."
+
+msgid "Recharging by doing nothing."
+msgstr "Nichtstunakku."
 
 msgid "On-call napping."
 msgstr "Bereitschaftsdösen."
@@ -589,6 +925,48 @@ msgstr "Wachsamkeitsnickerchen."
 
 msgid "Stockpiling silence."
 msgstr "Ruhevorratshaltung."
+
+msgid "Waiting for noise."
+msgstr "Lärmerwartung."
+
+msgid "Ears on standby."
+msgstr "Ohrenstandby."
+
+msgid "Bored but ready."
+msgstr "Gelangweilte Bereitschaft."
+
+msgid "Sheep counting."
+msgstr "Schäfchenzählerei."
+
+msgid "Nothing on the line."
+msgstr "Leitungsleere."
+
+msgid "Gathering dust."
+msgstr "Staubansatz."
+
+msgid "Silence tasting."
+msgstr "Stillenverkostung."
+
+msgid "Tumbleweed passing."
+msgstr "Steppenläuferdurchzug."
+
+msgid "Polite lurking."
+msgstr "Höflichkeitsherumlungern."
+
+msgid "Humming along quietly."
+msgstr "Leerlaufgebrumm."
+
+msgid "Quiet job, steady pay."
+msgstr "Ruheposten."
+
+msgid "Standing by, sort of."
+msgstr "Bereitschaft, so halb."
+
+msgid "Crickets in the room."
+msgstr "Grillenkonzert."
+
+msgid "Quiet before the noise."
+msgstr "Lärmvorgeplänkel."
 
 msgid "Your mic delivers pure silence. Muted?"
 msgstr "Dein Mikro liefert nur Stille. Stummgeschaltet?"

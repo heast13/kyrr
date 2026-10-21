@@ -404,10 +404,21 @@ const PHRASE_TICKS: u32 = 150;
 /// (matches the fade in the .slint file).
 const PHRASE_FADE_TICKS: u32 = 5;
 
-/// Moves the status line on to its next phrase (the .slint side takes it
-/// modulo the number of phrases, so it only has to stay non-negative).
+/// How many phrases every state of the status line has (the lists in
+/// app.slint; a test keeps them in step).
+const PHRASES: i32 = 20;
+
+/// Moves the status line on to a random phrase, never the one it shows now
+/// (every list in the .slint file has `PHRASES` entries, so "the same
+/// index" is "the same phrase" in whatever state comes next).
 fn next_phrase(state: &AppState) {
-    state.set_phrase(state.get_phrase().wrapping_add(1) & i32::MAX);
+    let clock = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.subsec_nanos());
+    let current = state.get_phrase().rem_euclid(PHRASES);
+    // 1..PHRASES steps forward from the current one.
+    let step = 1 + (clock / 1000 % (PHRASES - 1) as u32) as i32;
+    state.set_phrase((current + step) % PHRASES);
 }
 
 /// The small red notes at the bottom of the main page, numbered as the
@@ -2323,6 +2334,18 @@ fn retry_tray(app: &Rc<App>) -> Result<(), slint::PlatformError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_status_list_has_the_same_length() {
+        let ui = include_str!("../ui/app.slint");
+        let mut lists = 0;
+        for chunk in ui.split("pick([").skip(1) {
+            let list = chunk.split("])").next().unwrap();
+            assert_eq!(list.matches("@tr(").count() as i32, PHRASES, "{list}");
+            lists += 1;
+        }
+        assert_eq!(lists, 9);
+    }
 
     #[test]
     fn update_check_timing() {
