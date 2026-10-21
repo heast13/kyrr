@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Dictation: a key press while the speech model still loads (a few seconds
+  after kyrr starts or was installed) starts the recording at once, and it
+  is recognised when the model is there. Before, the recording waited for
+  the model, so the first words were missing or cut and came out wrong.
 - Dictation wave: the words are written by an invisible pen that glides
   along the line at an even pace (the average of how fast words came in
   lately, plus a share of what waits), instead of every word fading in on
