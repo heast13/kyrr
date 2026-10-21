@@ -1,6 +1,7 @@
-//! "Check for updates" and "Update now": asks GitHub for the newest release,
-//! only when the user clicks, and on request downloads its installer, checks
-//! it against the release's SHA256 file and starts it.
+//! "Check for updates" and "Update now": asks GitHub for the newest release
+//! (once a day unless switched off, or when the user clicks), and on request
+//! downloads its installer, checks it against the release's SHA256 file and
+//! starts it.
 
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -54,9 +55,12 @@ pub enum Outcome {
     Failed,
 }
 
+/// HTTPS only, redirects included: GitHub sends downloads on to another
+/// host, and a redirect to plain HTTP must not be followed.
 fn agent(timeout: Duration) -> ureq::Agent {
     use ureq::tls::{TlsConfig, TlsProvider};
     ureq::config::Config::builder()
+        .https_only(true)
         .tls_config(TlsConfig::builder().provider(TlsProvider::NativeTls).build())
         .timeout_connect(Some(Duration::from_secs(15)))
         .timeout_global(Some(timeout))
@@ -469,6 +473,15 @@ mod tests {
             parse(&answer("v9.0.0", "https://example.com/kyrr.exe"), "0.1.0", false),
             Outcome::Failed
         );
+    }
+
+    /// Refused before any connection, so no network is needed.
+    #[test]
+    fn plain_http_is_refused() {
+        let result = agent(Duration::from_secs(5))
+            .get("http://github.com/heast13/kyrr")
+            .call();
+        assert!(matches!(result, Err(ureq::Error::RequireHttpsOnly(_))), "{result:?}");
     }
 
     #[test]
