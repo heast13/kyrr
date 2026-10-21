@@ -24,8 +24,8 @@ void dpdf_qaffine(const dpdf_qmatrix *, const float *, const float *, float *, i
 void dpdf_qaffine_pair(const dpdf_qmatrix *, const dpdf_qmatrix *, const float *,
                        const float *, const float *, float *, float *, int);
 /* kyrr: which build of the INT8 kernels in int8.c runs. Detected once; the
- * DPDF_INT8_KERNEL environment variable (avx2, avxvnni, avx512vnni) can only
- * pick a lower one, for comparisons. dpdf_int8_use is for tests. */
+ * DPDF_INT8_KERNEL environment variable (avx2, or avx512vnni where the CPU
+ * has it) picks another one for comparisons. dpdf_int8_use is for tests. */
 enum { DPDF_INT8_AVX2 = 0, DPDF_INT8_AVXVNNI = 1, DPDF_INT8_AVX512VNNI = 2 };
 int dpdf_int8_kernel(void);
 int dpdf_int8_use(int kernel);

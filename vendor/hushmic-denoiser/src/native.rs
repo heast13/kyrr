@@ -77,7 +77,7 @@ impl Engine {
 impl std::fmt::Display for Engine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // kyrr: the INT8 kernels in use, unless they are the plain AVX2 ones.
-        if *self == Engine::NativeInt8 && int8_kernel() != "avx2" {
+        if *self == Engine::NativeInt8 && !matches!(int8_kernel(), "avx2" | "none") {
             return write!(f, "native int8 {}", int8_kernel());
         }
         f.write_str(match self {

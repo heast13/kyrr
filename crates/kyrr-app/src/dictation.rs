@@ -337,6 +337,7 @@ impl Worker {
         }
         if !self.enabled {
             self.model = None;
+            self.transcript = None;
             self.recording = None;
             self.set_state(State::Off);
             return;
@@ -347,6 +348,8 @@ impl Worker {
             return;
         }
         self.model = None;
+        // Its pieces were heard by the model that goes.
+        self.transcript = None;
         if !spec.is_installed(&self.root) {
             if !self.upgrade_started && spec.replaces_installed(&self.root) {
                 self.upgrade_started = true;
@@ -611,6 +614,13 @@ impl Worker {
                 None => model.transcribe(rate, &samples),
             })) {
                 Ok(text) => text,
+                // Once more from the recording itself, without the pieces
+                // heard ahead.
+                Err(_) if ahead > 0 => catch_unwind(AssertUnwindSafe(|| model.transcribe(rate, &samples)))
+                    .unwrap_or_else(|_| {
+                        self.tell("crash");
+                        String::new()
+                    }),
                 Err(_) => {
                     self.tell("crash");
                     String::new()

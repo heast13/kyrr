@@ -10,7 +10,7 @@ use kyrr_common::wave::TAIL;
 
 /// Longest dictation: then kyrr types what it heard. The recording is held in
 /// memory at the microphone's rate (about 170 MB at 48 kHz for this long)
-/// and recognized in pieces afterwards.
+/// and recognized in pieces, most of them while it runs.
 pub const MAX_SECONDS: usize = 15 * 60;
 
 /// The newest audio of the running recording, for the wave on the screen.

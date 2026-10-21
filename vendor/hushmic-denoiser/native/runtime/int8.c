@@ -114,7 +114,8 @@ static void quantize(const float *x,int8_t *out,int k,float *scale,int *zp) {
 /* Keep integer reduction separate from quantization/dequantization: inlining
  * their live temporaries caused GCC 12 to spill two accumulators every K step.
  * Short weight lifetimes let all eight accumulators stay in registers. The
- * noinline boundary is intentional; this still uses only the existing AVX2 ISA.
+ * noinline boundary is intentional; this still uses only the existing AVX2 ISA
+ * (kyrr: in the plain build; the VNNI builds use vpdpbusd, see above).
  * Inputs/weights exclude -128, so pair sums fit i16 (2*127*127=32258).
  * K<=512 also keeps the full dot product safely within i32. */
 static DPDF_NOINLINE void qdot64(const int8_t *activation,

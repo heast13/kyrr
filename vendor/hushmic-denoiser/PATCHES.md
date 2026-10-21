@@ -54,8 +54,10 @@ both: dpdfnet8 29 % → 20 % of one core, dpdfnet2 11.6 % → 9.1 %.
   `dpdf_qaffine` and `dpdf_qaffine_pair` dispatch to the VNNI builds;
   `dpdf_qcreate` detects the CPU at load time, off the audio thread.
 - `dpdf_dprnn.c`: CPUID/XCR0 detection (`dpdf_int8_kernel`), the
-  `DPDF_INT8_KERNEL` environment variable (`avx2`, `avx512vnni`) to pick a
-  lower build for comparisons, and `dpdf_int8_use` for tests.
+  `DPDF_INT8_KERNEL` environment variable (`avx2`, or `avx512vnni` where
+  the CPU has it) to pick another build for comparisons, and
+  `dpdf_int8_use` for tests.
 - `internal.h`: their declarations.
-- `src/native.rs`, `src/lib.rs`: `int8_kernel()`, `use_int8_kernel()`
-  (tests), and the kernel in `Engine`'s text ("native int8 avx-vnni").
+- `build.rs`, `src/native.rs`, `src/lib.rs` (changes marked "kyrr:"): the
+  two extra builds, `int8_kernel()`, `use_int8_kernel()` (tests), and the
+  kernel in `Engine`'s text ("native int8 avx-vnni").
