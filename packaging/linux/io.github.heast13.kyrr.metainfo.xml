@@ -3,8 +3,8 @@
 <component type="desktop-application">
   <id>io.github.heast13.kyrr</id>
   <name>kyrr</name>
-  <summary>Clean microphone and dictation, on your computer</summary>
-  <summary xml:lang="de">Sauberes Mikrofon und Diktieren, auf deinem Computer</summary>
+  <summary>Clean microphone and dictation</summary>
+  <summary xml:lang="de">Sauberes Mikro und Diktieren</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT OR Apache-2.0</project_license>
   <developer id="io.github.heast13">
@@ -43,13 +43,16 @@
   <url type="bugtracker">https://github.com/heast13/kyrr/issues</url>
   <url type="vcs-browser">https://github.com/heast13/kyrr</url>
   <screenshots>
+    <!-- Flathub wants the images from a tag or commit, not a branch. A commit
+         that has the files (flathub.py accepts it or the release's tag); when
+         the screenshots change, point it at the new commit. -->
     <screenshot type="default">
       <caption>Noise filter, voice and dictation, each with one switch</caption>
-      <image>https://raw.githubusercontent.com/heast13/kyrr/main/docs/screenshots/main.png</image>
+      <image>https://raw.githubusercontent.com/heast13/kyrr/ab8dd4c1290bff1da9540b84337da8a0931e0a77/docs/screenshots/main.png</image>
     </screenshot>
     <screenshot>
       <caption>Settings</caption>
-      <image>https://raw.githubusercontent.com/heast13/kyrr/main/docs/screenshots/settings.png</image>
+      <image>https://raw.githubusercontent.com/heast13/kyrr/ab8dd4c1290bff1da9540b84337da8a0931e0a77/docs/screenshots/settings.png</image>
     </screenshot>
   </screenshots>
   <branding>
@@ -73,11 +76,63 @@
     <keyword>speech to text</keyword>
   </keywords>
   <releases>
-    <release version="0.5.8" date="2026-10-20"/>
-    <release version="0.5.7" date="2026-10-19"/>
-    <release version="0.5.6" date="2026-10-17"/>
-    <release version="0.5.5" date="2026-10-15"/>
-    <release version="0.5.4" date="2026-10-15"/>
-    <release version="0.5.3" date="2026-10-14"/>
+    <release version="0.5.8" date="2026-10-20">
+      <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.5.8</url>
+      <description>
+        <ul>
+          <li>Dictation in more European languages: "Multilingual" next to German and English</li>
+          <li>The wave shows the words kyrr has heard while you dictate</li>
+          <li>New to try: an option for speaking far from the microphone</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.5.7" date="2026-10-19">
+      <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.5.7</url>
+      <description>
+        <ul>
+          <li>A calmer dictation wave that follows your system's light or dark style</li>
+          <li>On Hyprland, dictated text keeps its spaces in browser text fields</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.5.6" date="2026-10-17">
+      <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.5.6</url>
+      <description>
+        <ul>
+          <li>A small wave at the bottom of the screen shows while you dictate</li>
+          <li>Dictation runs up to 15 minutes at a stretch</li>
+          <li>On Hyprland, kyrr from the tray opens as a floating window and the second dictation comes out right</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.5.5" date="2026-10-15">
+      <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.5.5</url>
+      <description>
+        <ul>
+          <li>Letters your keyboard layout does not have, like umlauts on a US keyboard, are typed into the window by themselves</li>
+          <li>The window's close button minimizes kyrr every time, and going back to simple settings makes the window smaller again</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.5.4" date="2026-10-15">
+      <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.5.4</url>
+      <description>
+        <ul>
+          <li>On Hyprland, Sway, river and niri kyrr sets up the dictation key and the start at sign-in itself; on GNOME 46 and 47 it adds the key to GNOME's keyboard shortcuts</li>
+          <li>"Set up PipeWire" installs PipeWire where it is missing</li>
+          <li>Clearer messages where kyrr needs your help</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.5.3" date="2026-10-14">
+      <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.5.3</url>
+      <description>
+        <ul>
+          <li>First release for Linux: a microphone of its own called "kyrr" with the noise removed, and dictation into any window</li>
+          <li>On GNOME and KDE kyrr walks you through the key and the permission to type</li>
+          <li>kyrr follows the microphone you plug in or pick in the sound settings</li>
+        </ul>
+      </description>
+    </release>
   </releases>
 </component>

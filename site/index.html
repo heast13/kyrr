@@ -104,7 +104,7 @@
         <li><b>Installation.</b> Windows: an installer, which needs administrator rights. Linux: a single AppImage file, no administrator rights. kyrr sets itself up on first start.</li>
         <li><b>Audio.</b> On Windows, kyrr adds a filter to the Windows audio system that runs directly on the microphone. On Linux, kyrr creates a PipeWire microphone called “kyrr” and makes it the default. Your apps need no changes. If you switch to another microphone, kyrr switches with it.</li>
         <li><b>Dictation.</b> The first time you dictate, kyrr downloads the speech model for your language once (German 900 MB, English 663 MB, other European languages 900 MB). After that, dictation works offline.</li>
-        <li><b>Updates.</b> kyrr checks once a day for a new version and tells you about it. On Windows, “Update” installs it. On Linux, quit kyrr and run the install commands again.</li>
+        <li><b>Updates.</b> kyrr checks once a day for a new version and tells you about it. On Windows, “Update” installs it. On Linux, run the install commands again; a running kyrr is replaced by the new version.</li>
       </ol>
     </section>
   </main>
@@ -163,11 +163,10 @@
       <div class="panel" id="appimage" data-label="Linux (beta)">
         <h3>Linux (beta)</h3>
         <p class="small">The Linux version is still a beta: it works, but has been tested on fewer systems than the Windows version.</p>
-        <p>Paste this into a terminal. It downloads kyrr to <code>~/.local/bin</code>, makes it executable and starts it:</p>
+        <p>Paste this into a terminal. It downloads kyrr to <code>~/.local/bin</code>, makes it executable and starts it. Run it again for an update: a running kyrr closes and the new one starts.</p>
         <div class="codebox"><pre tabindex="0"><code>mkdir -p ~/.local/bin
-curl -fL -o ~/.local/bin/kyrr https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage
-chmod +x ~/.local/bin/kyrr
-~/.local/bin/kyrr &amp;</code></pre></div>
+curl -fL -o ~/.local/bin/kyrr.new https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage && chmod +x ~/.local/bin/kyrr.new && mv -f ~/.local/bin/kyrr.new ~/.local/bin/kyrr
+~/.local/bin/kyrr --replace &amp;</code></pre></div>
         <p class="small">Without a terminal: <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage">download the AppImage</a>, allow it to run as a program in your file manager (right click, Properties) and double click it. On first start kyrr adds itself to your app menu. On GNOME 48 or newer and KDE the desktop asks once for the dictation key and once whether kyrr may type; kyrr explains both steps. <a href="https://github.com/heast13/kyrr#install">Notes for other desktops</a></p>
         <div class="more-info">
           <details>
