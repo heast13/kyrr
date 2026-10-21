@@ -183,7 +183,7 @@ export global AppState {
     callback open-licenses();
     callback check-updates();
     callback open-update();
-    callback report-problem();
+    callback send-feedback();
     callback show-news();
     // What the running version brought (from the NEWS built into the app).
     callback show-current-news();
@@ -787,7 +787,7 @@ component AboutSettings inherits Card {
             text: root.unfolded ? @tr("Less") : @tr("Credits");
             clicked => { root.unfolded = !root.unfolded; }
         }
-        Button { text: @tr("Report a problem"); clicked => { AppState.report-problem(); } }
+        Button { text: @tr("Feedback"); clicked => { AppState.send-feedback(); } }
     }
     HorizontalLayout {
         spacing: 8px;

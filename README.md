@@ -338,9 +338,9 @@ Ubuntu 24.04: glibc 2.39).
 The cores (`kyrr-denoise`, `kyrr-voice`, `kyrr-dictate`) build and test on Linux too;
 `cargo run -p kyrr --example preview -- <dir>` renders the window headless.
 
-## Report a problem
+## Feedback
 
-In kyrr, Settings, About, "Report a problem" opens an e-mail to
+In kyrr, Settings, About, "Feedback" opens an e-mail to
 stueckig.habicht_2o@icloud.com with the kyrr version and your system filled
 in. kyrr sends nothing by itself. Issues on GitHub work too.
 

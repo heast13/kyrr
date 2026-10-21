@@ -12,20 +12,20 @@ use sha2::{Digest, Sha256};
 
 const LATEST: &str = "https://api.github.com/repos/heast13/kyrr/releases/latest";
 
-/// The address for problem reports. Someone without a GitHub account can
+/// The address for feedback. Someone without a GitHub account can
 /// write there too.
-const REPORT_ADDRESS: &str = "stueckig.habicht_2o@icloud.com";
+const FEEDBACK_ADDRESS: &str = "stueckig.habicht_2o@icloud.com";
 
-/// A ready e-mail for "Report a problem": the subject, a place to write and
+/// A ready e-mail for "Feedback": the subject, a place to write and
 /// the version and system below. Nothing is sent by kyrr; the mail program
 /// opens and the user decides.
-pub fn report_mailto(language: Language, version: &str, system: &str) -> String {
+pub fn feedback_mailto(language: Language, version: &str, system: &str) -> String {
     let (subject, ask, language_name) = match language {
-        Language::German => ("kyrr: Problem melden", "Was ist passiert?", "Deutsch"),
-        Language::English => ("kyrr: Problem report", "What happened?", "English"),
+        Language::German => ("kyrr: Feedback", "Dein Feedback:", "Deutsch"),
+        Language::English => ("kyrr: Feedback", "Your feedback:", "English"),
     };
     let body = format!("{ask}\n\n\n\n---\nkyrr {version}\n{system}\n{language_name}");
-    format!("mailto:{REPORT_ADDRESS}?subject={}&body={}", percent_encode(subject), percent_encode(&body))
+    format!("mailto:{FEEDBACK_ADDRESS}?subject={}&body={}", percent_encode(subject), percent_encode(&body))
 }
 
 fn percent_encode(text: &str) -> String {
@@ -396,12 +396,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn report_mail_is_ready_to_send() {
-        let m = report_mailto(Language::German, "0.6.0", "Windows");
-        assert!(m.starts_with("mailto:stueckig.habicht_2o@icloud.com?subject=kyrr%3A%20Problem%20melden&body="));
+    fn feedback_mail_is_ready_to_send() {
+        let m = feedback_mailto(Language::German, "0.6.0", "Windows");
+        assert!(m.starts_with("mailto:stueckig.habicht_2o@icloud.com?subject=kyrr%3A%20Feedback&body="));
         assert!(m.contains("kyrr%200.6.0%0AWindows%0ADeutsch"));
         assert!(!m.contains(' ') && !m.contains('\n'));
-        assert!(report_mailto(Language::English, "0.6.0", "Ubuntu 26.10, GNOME").contains("What%20happened%3F"));
+        assert!(feedback_mailto(Language::English, "0.6.0", "Ubuntu 26.10, GNOME").contains("Your%20feedback%3A"));
     }
 
     fn answer(tag: &str, url: &str) -> String {
