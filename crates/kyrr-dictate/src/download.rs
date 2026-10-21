@@ -10,11 +10,13 @@ use sha2::{Digest, Sha256};
 use crate::model::{hex, ModelFile, ModelSpec};
 
 /// A dead connection gives up instead of hanging (ureq waits forever by
-/// default); the body itself may take long on a slow line.
+/// default); the body itself may take long on a slow line. HTTPS only,
+/// redirects included (the hosts send downloads on to their storage).
 fn agent() -> ureq::Agent {
     use std::time::Duration;
     use ureq::tls::{TlsConfig, TlsProvider};
     ureq::config::Config::builder()
+        .https_only(true)
         .tls_config(TlsConfig::builder().provider(TlsProvider::NativeTls).build())
         .timeout_connect(Some(Duration::from_secs(30)))
         .timeout_recv_response(Some(Duration::from_secs(60)))
