@@ -1547,7 +1547,11 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                     }
                     t.set_recording(s == State::Recording);
                     t.set_dictation_ready(matches!(s, State::Ready | State::Recording | State::Transcribing));
-                    platform::set_hotkey_active(matches!(s, State::Ready | State::Recording | State::Transcribing));
+                    // While the model loads, the key records all the same.
+                    platform::set_hotkey_active(matches!(
+                        s,
+                        State::Ready | State::Loading | State::Recording | State::Transcribing
+                    ));
                 }
                 Event::Progress(p) => state.set_download_progress(p),
                 Event::Typed(text) => state.set_last_text(text.into()),

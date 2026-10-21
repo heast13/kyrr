@@ -821,7 +821,7 @@ component DictationCard inherits Card {
             : AppState.dictation-state == DictationState.downloading ? @tr("Downloading the speech model… {}%", round(AppState.download-progress * 100))
             : AppState.dictation-state == DictationState.loading ? @tr("Loading the speech model…")
             : AppState.dictation-state == DictationState.ready && AppState.key-unbound && !root.in-setup ? @tr("{} is not set up yet: kyrr needs your desktop's OK for it.", AppState.key-name)
-            : AppState.dictation-state == DictationState.ready && AppState.key-note != "" && !(root.in-setup && AppState.guide) ? @tr("Dictate with your key, the text lands at your cursor. Setting up the key: see the gear.")
+            : AppState.dictation-state == DictationState.ready && AppState.key-note != "" && !root.in-setup ? @tr("Dictate with your key, the text lands at your cursor. Setting up the key: see the gear.")
             : AppState.dictation-state == DictationState.ready ? (AppState.key-toggle ? @tr("Tap {}, talk, tap again. The text lands at your cursor.", AppState.key-name) : @tr("Hold {}, talk, let go. The text lands at your cursor.", AppState.key-name))
             : AppState.dictation-state == DictationState.recording ? @tr("Listening…")
             : AppState.dictation-state == DictationState.transcribing ? @tr("Writing…")

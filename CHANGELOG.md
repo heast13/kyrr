@@ -21,12 +21,15 @@
   remembered between visits.
 - "Feedback" under Global settings, About (and on the website and in the
   README): opens an e-mail to the maintainer with the kyrr version, the
-  system (Windows, or distribution, desktop and install type on Linux) and
-  the language filled in. kyrr sends nothing itself; no log is attached.
+  system (Windows version and build, or distribution, desktop and install
+  type on Linux; in the Flatpak the host's distribution, not the runtime's)
+  and the language filled in. kyrr sends nothing itself; no log is attached.
 - Dictation: a key press while the speech model still loads (a few seconds
   after kyrr starts or was installed) starts the recording at once, and it
   is recognised when the model is there. Before, the recording waited for
   the model, so the first words were missing or cut and came out wrong.
+  The key is held for kyrr while the model loads, too (it was let go to
+  the app in front until the model was there).
 - Linux, AppImage: pasting the install commands again no longer needs kyrr
   closed first. The commands download to `kyrr.new` and move it over `kyrr`
   (a running AppImage cannot be written to), and `kyrr --replace` ends the
@@ -49,8 +52,8 @@
   of the effect the words stand about 0.3 to 0.5 s later than with the old
   look, in return for no stop and go.
 - Live words: after a look that found nothing new, the next look starts
-  0.8 s before where that one ended, so a pause no longer makes the
-  stretch grow up to 8 s. In a simulation of a computer 4x slower than the
+  shortly before where that one ended (0.8 s here, 1.5 s since the entry
+  above), so a pause no longer makes the stretch grow up to 8 s. In a simulation of a computer 4x slower than the
   test machine, the words after a 15 s pause showed about 1.5 s sooner;
   the share of CPU time spent on looks stayed about the same.
 - Flatpak on Hyprland, sway, niri and river: kyrr types and shows the

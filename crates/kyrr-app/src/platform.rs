@@ -224,7 +224,7 @@ mod imp {
 
     /// One line about this computer for a problem report.
     pub fn system_info() -> String {
-        "Windows".into()
+        kyrr_windows::version_name()
     }
 
     /// Push-to-talk events; `None` when the key could not be hooked.
@@ -1172,8 +1172,12 @@ mod imp {
     /// One line about this computer for a problem report: the distribution,
     /// the desktop and how kyrr is installed.
     pub fn system_info() -> String {
-        let distro = std::fs::read_to_string("/etc/os-release")
-            .ok()
+        // In the Flatpak, /etc/os-release is the runtime's; the host's is here.
+        let host = flatpak()
+            .then(|| std::fs::read_to_string("/run/host/os-release").ok())
+            .flatten();
+        let distro = host
+            .or_else(|| std::fs::read_to_string("/etc/os-release").ok())
             .and_then(|text| {
                 text.lines()
                     .find_map(|l| l.strip_prefix("PRETTY_NAME="))
