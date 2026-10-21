@@ -133,6 +133,8 @@ version; quit kyrr and paste the install commands again to replace the file.
   missing, a button in kyrr installs it (your system asks for your password).
 - A processor with AVX2 for the noise filter (most from 2015 on); dictation
   works without.
+- FUSE 3 (the `fuse3` package), which AppImages need to start. Every
+  desktop system has it; a bare server image may not.
 - No administrator rights needed.
 
 **Desktop notes**

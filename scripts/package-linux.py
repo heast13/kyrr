@@ -40,6 +40,8 @@ DIST = ROOT / "dist"
 TOOLS = ROOT / "target" / "linux-tools"
 APP_ID = "io.github.heast13.kyrr"
 ARCH = "x86_64"
+# The glibc the release runner has (see release.yml); AppRun checks for it.
+GLIBC_MIN = "2.39"
 
 # name, download url, sha256
 LINUXDEPLOY = (
@@ -90,6 +92,19 @@ NO_PIPEWIRE = "usr/lib/kyrr-no-pipewire"
 # a dictation key makes.
 APPRUN = f"""#!/bin/sh
 here="$(dirname "$(readlink -f "$0")")"
+# The binary needs the glibc of the build machine ({GLIBC_MIN}) or newer. On an older
+# system it would only stop with a loader message nobody sees after a double
+# click: say what is wrong, in a dialog where the desktop has one.
+have="$(getconf GNU_LIBC_VERSION 2>/dev/null | cut -d' ' -f2)"
+if [ -n "$have" ] && [ "$(printf '%s\\n%s\\n' {GLIBC_MIN} "$have" | sort -V | head -n 1)" != {GLIBC_MIN} ]; then
+    text="kyrr needs a newer Linux: glibc {GLIBC_MIN} or newer (Ubuntu 24.04, Fedora 40, Debian 13, Linux Mint 22, Arch). This system has glibc $have."
+    echo "$text" >&2
+    if command -v zenity >/dev/null 2>&1; then zenity --error --title=kyrr --text="$text" 2>/dev/null
+    elif command -v kdialog >/dev/null 2>&1; then kdialog --title kyrr --error "$text" 2>/dev/null
+    elif command -v notify-send >/dev/null 2>&1; then notify-send kyrr "$text" 2>/dev/null
+    fi
+    exit 1
+fi
 found=
 for dir in /usr/lib/x86_64-linux-gnu /usr/lib64 /usr/lib /lib/x86_64-linux-gnu; do
     [ -e "$dir/libpipewire-0.3.so.0" ] && found=1 && break
