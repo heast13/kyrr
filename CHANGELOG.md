@@ -2,6 +2,10 @@
 
 ## 0.6.0 (2026-10-21)
 
+- "Feedback" under Settings, About (and on the website and in the
+  README): opens an e-mail to the maintainer with the kyrr version, the
+  system (Windows, or distribution, desktop and install type on Linux) and
+  the language filled in. kyrr sends nothing itself; no log is attached.
 - Dictation: a key press while the speech model still loads (a few seconds
   after kyrr starts or was installed) starts the recording at once, and it
   is recognised when the model is there. Before, the recording waited for
