@@ -8,6 +8,7 @@ components, each under its own license.
 | DPDFNet models (`dpdfnet8_48khz_hr`, `dpdfnet2_48khz_hr`) and packed weights (`*.weights.f32`) | Ceva ([ceva-ip/DPDFNet](https://github.com/ceva-ip/DPDFNet)) | Apache-2.0 | fetched by `scripts/fetch-assets.py` from kyrr's mirror ([heast13/kyrr-assets](https://github.com/heast13/kyrr-assets), release `build-1`), else from the HushMic v0.10.2 release |
 | DPDFNet native C runtime and generated model code | Ceva | Apache-2.0 | `vendor/hushmic-denoiser/native/` (see its `LICENSE` and `README.md`) |
 | hushmic-denoiser v0.10.2 | Fovty ([HushMic](https://github.com/Fovty/HushMic)) | MIT OR Apache-2.0 | `vendor/hushmic-denoiser/`, patched for MSVC, see `PATCHES.md` |
+| ksni 0.3.6 | iovxw ([ksni](https://github.com/iovxw/ksni)) | Unlicense | tray icon on Linux (through Slint); `vendor/ksni/`, patched for the Flatpak, see `PATCHES.md` |
 | ONNX Runtime 1.27.0 | Microsoft ([onnxruntime](https://github.com/microsoft/onnxruntime)) | MIT | `onnxruntime.dll`, Windows fallback engine |
 | rubato | HEnquist ([rubato](https://github.com/HEnquist/rubato)) | MIT | resampling to and from 48 kHz |
 | sherpa-onnx 1.13.8, the official static libraries *without* text-to-speech (no espeak-ng), statically linked with ONNX Runtime | Xiaomi Corp. and contributors ([sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)) | Apache-2.0 (ONNX Runtime inside: MIT, notices in `licenses/`) | dictation engine |

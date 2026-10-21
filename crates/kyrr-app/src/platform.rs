@@ -197,6 +197,10 @@ mod imp {
         typing::copy_to_clipboard(text)
     }
 
+    pub fn typing_blocked_by_sandbox() -> bool {
+        false
+    }
+
     pub fn set_hotkey_key(vk: u32) {
         hotkey::set_key(vk);
     }
@@ -789,6 +793,15 @@ mod imp {
         kyrr_linux::typing::copy_to_clipboard(text)
     }
 
+    /// Typing failed in a Flatpak on a desktop without the RemoteDesktop
+    /// portal and without kyrr's link to the compositor: the sandbox is the
+    /// reason, which the message can name. On GNOME and KDE a "no" in the
+    /// portal's dialog is the likely reason, and the AppImage would ask the
+    /// same.
+    pub fn typing_blocked_by_sandbox() -> bool {
+        flatpak() && desktop() == Desktop::Other
+    }
+
     pub fn set_hotkey_key(vk: u32) {
         kyrr_linux::hotkey::set_key(vk);
     }
@@ -798,9 +811,7 @@ mod imp {
     /// when the setup gets to it, not out of the blue at the start.
     pub fn start_hotkey(description: &str, setup_done: bool) -> Option<std::sync::mpsc::Receiver<KeyEvent>> {
         integrate_appimage();
-        if !flatpak() {
-            start_in_compositor(autostart_enabled());
-        }
+        start_in_compositor(autostart_enabled());
         kyrr_linux::hotkey::start(description, setup_done || desktop() == Desktop::Other).ok()
     }
 
@@ -982,6 +993,7 @@ mod imp {
             key: kyrr_linux::hotkey::key_name().to_string(),
             portal,
             program: program(),
+            link: flatpak(),
         };
         let base = binds::config_home();
         // Dictation is off: nothing to bind, so nothing to say.
@@ -1205,6 +1217,10 @@ mod imp {
     }
 
     pub fn set_autostart(on: bool) {
+        // Tiling compositors without XDG autostart start what their config
+        // says; a Flatpak may write there too, its desktop often has no
+        // Background portal (Hyprland). A start from both is harmless.
+        start_in_compositor(on);
         if flatpak() {
             // Taken as asked; the desktop may ask the user first, and its
             // answer lands in the settings the next time they are shown.
@@ -1222,7 +1238,6 @@ mod imp {
             });
             return;
         }
-        start_in_compositor(on);
         let file = autostart_file();
         if !on {
             if std::fs::remove_file(file).is_ok() {

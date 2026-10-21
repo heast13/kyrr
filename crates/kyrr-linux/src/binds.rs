@@ -30,6 +30,9 @@ const APP_ID: &str = "io.github.heast13.kyrr";
 const GLOBAL: &str = "io.github.heast13.kyrr:dictate";
 /// The config sway reads when the user has none.
 const SWAY_SYSTEM: &str = "/etc/sway/config";
+/// The name of the link to the compositor's socket in the Flatpak's runtime
+/// folder (see [`crate::display`]).
+pub const WAYLAND_LINK: &str = "wayland";
 
 /// The compositors whose config kyrr writes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -116,6 +119,9 @@ pub struct Keys {
     /// How kyrr is started: the program and the arguments before the flag
     /// (`flatpak run <id>`).
     pub program: Vec<String>,
+    /// A Flatpak: the lines also have the compositor link its own socket
+    /// into the app's runtime folder, for typing and the dictation wave.
+    pub link: bool,
 }
 
 impl Keys {
@@ -276,6 +282,39 @@ pub fn target_or_default(compositor: Compositor, base: &Path) -> Target {
 
 /// The lines that bind the key.
 pub fn lines(syntax: Syntax, keys: &Keys) -> String {
+    let binds = bind_lines(syntax, keys);
+    if !keys.link {
+        return binds;
+    }
+    // On every start and reload of the config, so the key works without a
+    // new sign-in; niri runs it with the key (its binds block holds binds
+    // only).
+    let link = link_command();
+    match syntax {
+        Syntax::Conf => format!("{binds}\nexec = {link}"),
+        Syntax::Lua => {
+            let call = format!("function() hl.exec_cmd(\"{}\") end", quoted(&link));
+            format!("{binds}\nhl.on(\"hyprland.start\", {call})\nhl.on(\"config.reloaded\", {call})")
+        }
+        Syntax::Sway => format!("{binds}\nexec_always {link}"),
+        Syntax::River => format!("{binds}\n{link}"),
+        Syntax::Niri => binds,
+    }
+}
+
+/// The shell command that links the compositor's socket into the Flatpak's
+/// runtime folder, which the sandbox shares. A hard link: Flatpak keeps a
+/// name of its own at the socket's usual place. The variables are in braces,
+/// which Hyprland and sway leave to the shell instead of putting in their
+/// own values when they read the config.
+fn link_command() -> String {
+    let dir = format!("\"${{XDG_RUNTIME_DIR}}/app/{APP_ID}\"");
+    format!(
+        "mkdir -p {dir} && ln -f \"${{XDG_RUNTIME_DIR}}/${{WAYLAND_DISPLAY}}\" \"${{XDG_RUNTIME_DIR}}/app/{APP_ID}/{WAYLAND_LINK}\""
+    )
+}
+
+fn bind_lines(syntax: Syntax, keys: &Keys) -> String {
     let key = &keys.key;
     let (start, stop) = (keys.command("--dictate-start"), keys.command("--dictate-stop"));
     // Omarchy puts its own tools on some keys; unbinding frees the key.
@@ -297,6 +336,10 @@ pub fn lines(syntax: Syntax, keys: &Keys) -> String {
         (Syntax::Niri, _) => {
             let mut words = keys.program.clone();
             words.push("--dictate".into());
+            if keys.link {
+                let command = format!("{}; exec {}", link_command(), keys.command("--dictate"));
+                words = vec!["sh".into(), "-c".into(), command];
+            }
             let words: Vec<String> = words.iter().map(|w| format!("\"{}\"", quoted(w))).collect();
             format!("    {key} repeat=false {{ spawn {}; }}", words.join(" "))
         }
@@ -736,6 +779,15 @@ mod tests {
             key: key.into(),
             portal,
             program: vec!["kyrr".into()],
+            link: false,
+        }
+    }
+
+    fn flatpak_keys(key: &str, portal: bool) -> Keys {
+        Keys {
+            program: vec!["flatpak".into(), "run".into(), APP_ID.into()],
+            link: true,
+            ..keys(key, portal)
         }
     }
 
@@ -902,6 +954,42 @@ mod tests {
             command(&["/home/u/My Apps/kyrr.AppImage".into()], "--dictate"),
             "'/home/u/My Apps/kyrr.AppImage' --dictate"
         );
+    }
+
+    #[test]
+    fn a_flatpak_links_the_compositor_socket() {
+        let link = "mkdir -p \"${XDG_RUNTIME_DIR}/app/io.github.heast13.kyrr\" && ln -f \"${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}\" \"${XDG_RUNTIME_DIR}/app/io.github.heast13.kyrr/wayland\"";
+        assert_eq!(
+            lines(Syntax::Conf, &flatpak_keys("F9", true)),
+            format!("unbind = , F9\nbind = , F9, global, io.github.heast13.kyrr:dictate\nexec = {link}")
+        );
+        let lua = lines(Syntax::Lua, &flatpak_keys("F9", true));
+        let call = format!("function() hl.exec_cmd(\"{}\") end", quoted(link));
+        assert!(lua.ends_with(&format!(
+            "\nhl.on(\"hyprland.start\", {call})\nhl.on(\"config.reloaded\", {call})"
+        )));
+        assert!(lines(Syntax::Sway, &flatpak_keys("F9", false)).ends_with(&format!("\nexec_always {link}")));
+        assert!(lines(Syntax::River, &flatpak_keys("F9", false)).ends_with(&format!("\n{link}")));
+        assert_eq!(
+            lines(Syntax::Niri, &flatpak_keys("F9", false)),
+            format!(
+                "    F9 repeat=false {{ spawn \"sh\" \"-c\" \"{}\"; }}",
+                quoted(&format!("{link}; exec flatpak run io.github.heast13.kyrr --dictate"))
+            )
+        );
+        // The extra line is no bind: the block still tells its key.
+        for syntax in [Syntax::Conf, Syntax::Lua, Syntax::Sway, Syntax::River] {
+            let text = block("", syntax, &flatpak_keys("F9", false)).unwrap();
+            let rows: Vec<&str> = text.split_inclusive('\n').collect();
+            let (a, b) = find_block(&rows, syntax, Block::Key).unwrap().unwrap();
+            let keys: Vec<String> = rows[a + 1..b].iter().filter_map(|r| key_of(r, syntax)).collect();
+            assert!(
+                !keys.is_empty() && keys.iter().all(|k| k == "F9"),
+                "{syntax:?}: {keys:?}"
+            );
+        }
+        let niri = block("binds {\n}\n", Syntax::Niri, &flatpak_keys("F9", false)).unwrap();
+        assert!(matches!(claim(&niri, Syntax::Niri, "F9").unwrap(), Claim::Free));
     }
 
     #[test]

@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Flatpak on Hyprland, sway, niri and river: kyrr types and shows the
+  dictation wave there too. The block kyrr writes into the compositor's
+  config (dictation key, start at sign-in) now also links the compositor's
+  Wayland socket into kyrr's runtime folder, because the sandbox's own
+  socket hides the virtual keyboard and layer surfaces. Without the link,
+  kyrr says that the AppImage can type there. The start at sign-in on these
+  compositors also goes through their config in the Flatpak.
+- Flatpak: the tray icon works (registers under its unique D-Bus name, as
+  sandboxed apps must; `vendor/ksni` patches the tray library for that).
+  On CPUs without AVX2 the noise filter uses the shipped ONNX Runtime.
+  `packaging/flatpak/flathub.py` writes the files for Flathub, and a CI
+  workflow builds and lints them the way Flathub does.
+- AUR: `kyrr-bin` at the current version, built and checked on Arch for
+  every change to the package, and pushed to the AUR after each release once the key is
+  set up.
+
 ## 0.5.8 (2026-10-20)
 
 - Dictation: while you speak, the words kyrr hears so far run through the

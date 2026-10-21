@@ -23,15 +23,13 @@
     </p>
     <ul>
       <li>Neural noise suppression (DPDFNet) on a virtual microphone that becomes the default</li>
+      <li xml:lang="de">Neuronale Entfernung von Störgeräuschen (DPDFNet) auf einem virtuellen Mikrofon, das zum Standard wird</li>
       <li>Voice shaping: sound, compressor, softer S sounds, pop protection, automatic volume</li>
+      <li xml:lang="de">Stimme: Klang, Kompressor, weichere S-Laute, Popschutz, automatische Lautstärke</li>
       <li>Dictation in German, English and more European languages: hold a key, speak, release</li>
+      <li xml:lang="de">Diktieren auf Deutsch, Englisch und weiteren europäischen Sprachen: Taste halten, sprechen, loslassen</li>
       <li>Level check, a before/after test and listening to yourself</li>
-    </ul>
-    <ul xml:lang="de">
-      <li>Neuronale Entfernung von Störgeräuschen (DPDFNet) auf einem virtuellen Mikrofon, das zum Standard wird</li>
-      <li>Stimme: Klang, Kompressor, weichere S-Laute, Popschutz, automatische Lautstärke</li>
-      <li>Diktieren auf Deutsch, Englisch und weiteren europäischen Sprachen: Taste halten, sprechen, loslassen</li>
-      <li>Pegelanzeige, Vorher/Nachher-Test und Mithören</li>
+      <li xml:lang="de">Pegelanzeige, Vorher/Nachher-Test und Mithören</li>
     </ul>
     <p>
       The speech model (about 700 to 900 MB) is downloaded once on first use.
@@ -54,11 +52,15 @@
       <image>https://raw.githubusercontent.com/heast13/kyrr/main/docs/screenshots/settings.png</image>
     </screenshot>
   </screenshots>
+  <branding>
+    <color type="primary" scheme_preference="light">#ccfbf1</color>
+    <color type="primary" scheme_preference="dark">#134e4a</color>
+  </branding>
   <content_rating type="oars-1.1"/>
   <supports>
     <control>keyboard</control>
     <control>pointing</control>
-    <internet>always</internet>
+    <internet>first-run</internet>
   </supports>
   <categories>
     <category>AudioVideo</category>

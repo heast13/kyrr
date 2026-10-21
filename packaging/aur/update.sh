@@ -12,6 +12,10 @@ read -r sum name < <(curl -fsSL "$base/$file.sha256")
 [[ $sum =~ ^[0-9a-f]{64}$ && ${name#\*} == "$file" ]] || { echo "unexpected $file.sha256 on the release" >&2; exit 1; }
 sed -i -e "s/^pkgver=.*/pkgver=$ver/" -e 's/^pkgrel=.*/pkgrel=1/' \
   -e "s/^sha256sums=.*/sha256sums=('$sum')/" "$dir/PKGBUILD"
-sed -i -e "s/^\tpkgver = .*/\tpkgver = $ver/" -e 's/^\tpkgrel = .*/\tpkgrel = 1/' \
-  -e "s|^\tsource = .*|\tsource = $base/$file|" -e "s/^\tsha256sums = .*/\tsha256sums = $sum/" "$dir/.SRCINFO"
+if command -v makepkg >/dev/null; then
+  (cd "$dir" && makepkg --printsrcinfo > .SRCINFO)
+else
+  sed -i -e "s/^\tpkgver = .*/\tpkgver = $ver/" -e 's/^\tpkgrel = .*/\tpkgrel = 1/' \
+    -e "s|^\tsource = .*|\tsource = $base/$file|" -e "s/^\tsha256sums = .*/\tsha256sums = $sum/" "$dir/.SRCINFO"
+fi
 echo "kyrr-bin $ver, sha256 $sum"

@@ -116,7 +116,7 @@ impl Keyboard {
 
 impl Session {
     fn open() -> Option<Session> {
-        let connection = Connection::connect_to_env().ok()?;
+        let connection = crate::display::connect()?;
         let (globals, mut queue) = registry_queue_init::<State>(&connection).ok()?;
         let handle = queue.handle();
         let seat: WlSeat = globals.bind(&handle, 1..=1, ()).ok()?;
