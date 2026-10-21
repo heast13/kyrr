@@ -227,6 +227,12 @@ fn say(language: Language, what: &str) -> String {
         ("blocked", false) if cfg!(windows) => "Could not paste here (a window running as administrator?).",
         ("blocked", true) => "Konnte hier nicht tippen, und auch die Zwischenablage war nicht erreichbar.",
         ("blocked", false) => "Could not type here, and the clipboard was out of reach too.",
+        ("sandbox", true) => {
+            "Konnte hier nicht tippen: Im Flatpak darf kyrr das auf diesem Desktop nicht. Das AppImage von kyrr kann es."
+        }
+        ("sandbox", false) => {
+            "Could not type here: in the Flatpak, kyrr is not allowed to on this desktop. The kyrr AppImage can."
+        }
         ("muted", true) if cfg!(windows) => {
             "Dein Mikrofon ist in Windows stummgeschaltet. Auf der Hauptseite kannst du das aufheben."
         }
@@ -712,6 +718,8 @@ impl Worker {
             (self.notify)(Event::Typed(text));
         } else if (self.clipboard)(&text) {
             self.tell("clipboard");
+        } else if crate::platform::typing_blocked_by_sandbox() {
+            self.tell("sandbox");
         } else {
             self.tell("blocked");
         }

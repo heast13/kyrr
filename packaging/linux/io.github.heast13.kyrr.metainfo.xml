@@ -54,11 +54,15 @@
       <image>https://raw.githubusercontent.com/heast13/kyrr/main/docs/screenshots/settings.png</image>
     </screenshot>
   </screenshots>
+  <branding>
+    <color type="primary" scheme_preference="light">#ccfbf1</color>
+    <color type="primary" scheme_preference="dark">#134e4a</color>
+  </branding>
   <content_rating type="oars-1.1"/>
   <supports>
     <control>keyboard</control>
     <control>pointing</control>
-    <internet>always</internet>
+    <internet>first-run</internet>
   </supports>
   <categories>
     <category>AudioVideo</category>

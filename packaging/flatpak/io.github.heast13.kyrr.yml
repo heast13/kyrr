@@ -16,8 +16,6 @@ finish-args:
   - --socket=fallback-x11
   # X11 shared memory (MIT-SHM); needed together with X11 access.
   - --share=ipc
-  # OpenGL drawing of the window (Slint's default renderer).
-  - --device=dri
   # Speech model download on first dictation and "Check for updates".
   - --share=network
   # The virtual microphone "kyrr": a PipeWire source node and the default
@@ -28,7 +26,20 @@ finish-args:
   # through cpal -> ALSA, whose default device in the Freedesktop runtime is
   # the PulseAudio plugin.
   - --socket=pulseaudio
-  # Tray icon (StatusNotifierItem).
+  # Tray icon (StatusNotifierItem). It registers under its unique D-Bus name
+  # in a sandbox (vendor/ksni/PATCHES.md), so no --own-name.
+  - --talk-name=org.kde.StatusNotifierWatcher
+  # Tiling compositors have no dialog for keys: kyrr writes its dictation key
+  # (and, when asked, the start at sign-in) into the compositor's config,
+  # between its own marker lines (crates/kyrr-linux/src/binds.rs). The same
+  # lines have the compositor link its own Wayland socket into the app's
+  # runtime folder: the sandbox's socket hides the virtual keyboard and layer
+  # surfaces there, which typing and the dictation wave need. Each is used
+  # only on its own compositor.
+  - --filesystem=xdg-config/hypr
+  - --filesystem=xdg-config/sway
+  - --filesystem=xdg-config/niri
+  - --filesystem=xdg-config/river
 cleanup:
   - /include
   - /lib/libonnxruntime.so
@@ -40,7 +51,8 @@ modules:
   # with (cmake/onnxruntime-linux-x86_64*.cmake); it moves with sherpa-onnx,
   # not on its own, so no x-checker-data here or on sherpa-onnx (pinned by
   # crates/kyrr-dictate/Cargo.toml). Installed as a shared library;
-  # libonnxruntime.so.1 is the only file that ships.
+  # libonnxruntime.so.1 and the versioned file it points to are all that
+  # ships.
   - name: onnxruntime
     buildsystem: simple
     only-arches:
@@ -183,8 +195,8 @@ modules:
       - install -Dm644 crates/kyrr-common/fonts/OFL.txt ${FLATPAK_DEST}/share/doc/kyrr/licenses/OFL-Inter.txt
       - install -Dm644 -t ${FLATPAK_DEST}/share/licenses/${FLATPAK_ID}/kyrr LICENSE-MIT LICENSE-APACHE NOTICE
     sources:
-      # Local builds: the repository this file is in. For Flathub, replace
-      # this with the git source below (tag and commit of the release).
+      # Local builds: the repository this file is in. For Flathub,
+      # flathub.py swaps this block for the release's git tag and commit.
       - type: dir
         path: ../..
         skip:
@@ -192,16 +204,10 @@ modules:
           - .git
           - assets
           - build-dir
+          - builddir
           - dist
           - repo
           - target
-      # - type: git
-      #   url: https://github.com/heast13/kyrr.git
-      #   tag: v0.5.0
-      #   commit: 0000000000000000000000000000000000000000
-      #   x-checker-data:
-      #     type: git
-      #     tag-pattern: ^v([\d.]+)$
       - cargo-sources.json
       # DPDFNet models and native-engine weights (Ceva, Apache-2.0), the same
       # files and SHA256 as scripts/fetch-assets.py: kyrr's own mirror

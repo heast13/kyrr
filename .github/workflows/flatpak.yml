@@ -1,0 +1,80 @@
+name: flatpak
+
+# Builds the Flatpak (packaging/flatpak) the way Flathub does: the manifest
+# that flathub.py writes, with this commit from GitHub as the source, built
+# by Flathub's own builder and checked with its linter. Hands it out as a
+# .flatpak bundle to try. Slow: sherpa-onnx is built into it. Runs when the
+# packaging changes, and by hand.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/flatpak.yml"
+      - "packaging/flatpak/**"
+      - "packaging/linux/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "vendor/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  flatpak:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The branch's commit, which Flathub's builder can fetch from GitHub
+          # (not the merge commit of a pull request).
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Free disk space
+        # The runtime, the SDK and the build need about 12 GB.
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL
+      - name: cargo-sources.json matches Cargo.lock
+        run: |
+          git clone --depth 1 https://github.com/flatpak/flatpak-builder-tools "$RUNNER_TEMP/fbt"
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet aiohttp tomlkit PyYAML
+          "$RUNNER_TEMP/venv/bin/python" "$RUNNER_TEMP/fbt/cargo/flatpak-cargo-generator.py" \
+            Cargo.lock -o "$RUNNER_TEMP/cargo-sources.json"
+          diff -q packaging/flatpak/cargo-sources.json "$RUNNER_TEMP/cargo-sources.json" \
+            || { echo "::error::cargo-sources.json is out of date, see packaging/flatpak/README.md"; exit 1; }
+      - name: Flatpak
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak dbus-daemon
+          # bubblewrap needs user namespaces, which Ubuntu 24.04 restricts.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+      - name: Build
+        # flathub-build: the options Flathub's builders use (repo/, builddir/).
+        run: |
+          python3 packaging/flatpak/flathub.py "$(git rev-parse HEAD)" "$RUNNER_TEMP/flathub"
+          cd "$RUNNER_TEMP/flathub"
+          dbus-run-session -- flatpak run --command=flathub-build org.flatpak.Builder --install io.github.heast13.kyrr.yml
+      - name: Lint
+        # Permissions that need Flathub's review show as warnings (they are
+        # explained in the submission); any other finding fails.
+        working-directory: ${{ runner.temp }}/flathub
+        run: |
+          lint() { flatpak run --command=flatpak-builder-lint org.flatpak.Builder --permission-review "$@"; }
+          lint manifest io.github.heast13.kyrr.yml
+          lint repo repo
+      - name: Every library the program needs is in the Flatpak
+        run: |
+          flatpak run --command=ldd io.github.heast13.kyrr /app/bin/kyrr > "$RUNNER_TEMP/ldd.txt"
+          if grep "not found" "$RUNNER_TEMP/ldd.txt"; then exit 1; fi
+      - name: Bundle
+        run: |
+          flatpak build-bundle "$RUNNER_TEMP/flathub/repo" "$RUNNER_TEMP/kyrr.flatpak" io.github.heast13.kyrr
+          (cd "$RUNNER_TEMP" && sha256sum kyrr.flatpak > kyrr.flatpak.sha256)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kyrr-flatpak
+          path: |
+            ${{ runner.temp }}/kyrr.flatpak
+            ${{ runner.temp }}/kyrr.flatpak.sha256
+          retention-days: 14

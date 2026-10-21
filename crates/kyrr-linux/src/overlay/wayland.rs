@@ -61,7 +61,7 @@ struct State {
 
 impl Layer {
     pub fn open() -> Option<Layer> {
-        let connection = Connection::connect_to_env().ok()?;
+        let connection = crate::display::connect()?;
         let (globals, mut queue) = registry_queue_init::<State>(&connection).ok()?;
         let handle = queue.handle();
         // Version 6 tells the surface's scale.
