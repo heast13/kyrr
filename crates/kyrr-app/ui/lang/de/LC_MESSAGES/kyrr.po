@@ -254,14 +254,14 @@ msgstr "Nimmt den Plopp aus P und B, wenn du nah am Mikro bist."
 msgid "Off. P and B can thump."
 msgstr "Aus. P und B können ploppen."
 
-msgid "Distance compensation (beta)"
-msgstr "Abstandsausgleich (Beta)"
+msgid "Distance compensation"
+msgstr "Abstandsausgleich"
 
 msgid "Far from the mic, it takes some of the room's echo out. Close up, it does nothing."
 msgstr "Weit weg vom Mikro nimmt er etwas Raumhall raus. Nah dran tut er nichts."
 
-msgid "Off. Far from the mic, the room echoes along. Still a beta: tell us how it sounds."
-msgstr "Aus. Weit weg vom Mikro hallt der Raum mit. Noch Beta: Sag uns, wie es klingt."
+msgid "Off. Far from the mic, the room echoes along."
+msgstr "Aus. Weit weg vom Mikro hallt der Raum mit."
 
 msgid "Automatic volume"
 msgstr "Automatische Lautstärke"
@@ -410,8 +410,8 @@ msgstr "Windows fragt gleich um Erlaubnis. Während kyrr sich einrichtet, setzt 
 msgid "Setting up…"
 msgstr "Wird eingerichtet …"
 
-msgid "Talk instead of typing"
-msgstr "Reden statt tippen"
+msgid "Language and dictation model"
+msgstr "Sprache und Diktiermodell"
 
 msgid "Done"
 msgstr "Fertig"
@@ -671,11 +671,23 @@ msgstr "Die Anzeige unten am Bildschirm zeigt schon beim Sprechen, was kyrr hör
 msgid "Off. The display shows only the bars; the text comes when you are done."
 msgstr "Aus. Die Anzeige zeigt nur die Balken, der Text kommt, wenn du fertig bist."
 
-msgid "Step 1 of 2"
-msgstr "Schritt 1 von 2"
+msgid "Step 1 of 3"
+msgstr "Schritt 1 von 3"
 
-msgid "Step 2 of 2"
-msgstr "Schritt 2 von 2"
+msgid "Step 2 of 3"
+msgstr "Schritt 2 von 3"
+
+msgid "Step 3 of 3"
+msgstr "Schritt 3 von 3"
+
+msgid "Performance setting"
+msgstr "Leistungseinstellung"
+
+msgid "How much may kyrr ask of your computer?"
+msgstr "Wie viel darf kyrr von deinem Rechner verlangen?"
+
+msgid "Next"
+msgstr "Weiter"
 
 msgid "Tap"
 msgstr "Antippen"
