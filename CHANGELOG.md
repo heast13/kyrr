@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Dictation, words in the pill: fewer wrong and missing words. A word shows
+  once 1.2 s of the recording followed it (was 0.8 s), and after a pause
+  the next look starts 1.5 s before where the last one ended (was 0.8 s), so
+  speech that had just begun is not cut off. Looks cover a little more
+  audio, so they take a little more computing time. In a test with 27
+  synthetic clips, 71 of 1536 shown words differed from what was said, down
+  from 90 of 1518, at about 0.1 s more delay on average.
 - Settings rebuilt for overview: the "Settings" page is now "Global
   settings" (effort, language, start with the system, microphone, updates,
   about). Each switch on the main page has its own gear that opens only
