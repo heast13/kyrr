@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Linux, AppImage: pasting the install commands again no longer needs kyrr
+  closed first. The commands download to `kyrr.new` and move it over `kyrr`
+  (a running AppImage cannot be written to), and `kyrr --replace` ends the
+  running kyrr like quitting does (SIGTERM, the default microphone is given
+  back), waits until it is gone (up to 20 s; if it hangs longer, the old one
+  just shows its window) and starts in its place. If the download fails, the
+  old file stays and is merely restarted. Only
+  a process called kyrr is ended, found by the socket it listens on; a
+  Flatpak kyrr is left to Flatpak.
 - Distance compensation is out of beta and on by default, for existing
   users too. The 0.5.8 switch (`VoiceDistance`) is no longer read; the
   setting is now `VoiceDistanceOff`, so an off set in 0.5.8 does not carry
