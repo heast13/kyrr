@@ -68,9 +68,6 @@ msgstr "Wird eingerichtet … der Ton setzt kurz aus."
 msgid "Set up microphone"
 msgstr "Mikrofon einrichten"
 
-msgid "Voice"
-msgstr "Stimme"
-
 msgid "Improve voice"
 msgstr "Stimme verbessern"
 
@@ -121,9 +118,6 @@ msgstr "Ein Drittel der Rechenleistung, kaum weniger sauber. Für alte Laptops."
 
 msgid "Cleanest result, a bit more CPU. Default for a reason."
 msgstr "Sauberstes Ergebnis, etwas mehr Rechenleistung. Nicht umsonst die Vorgabe."
-
-msgid "Background noise"
-msgstr "Störgeräusche"
 
 msgid "Set up a microphone first."
 msgstr "Richte zuerst ein Mikrofon ein."
@@ -371,9 +365,6 @@ msgstr "Mithören beenden"
 msgid "Your mic live in your headphones, the way your apps hear it. On speakers it squeals."
 msgstr "Dein Mikro live im Kopfhörer, so wie deine Apps es hören. Über Lautsprecher pfeift’s."
 
-msgid "General"
-msgstr "Allgemein"
-
 msgid "Language"
 msgstr "Sprache"
 
@@ -410,8 +401,11 @@ msgstr "Sprache und Diktiermodell"
 msgid "Done"
 msgstr "Fertig"
 
-msgid "Settings"
-msgstr "Einstellungen"
+msgid "Global settings"
+msgstr "Globale Einstellungen"
+
+msgid "Settings: {}"
+msgstr "Einstellungen: {}"
 
 msgid "Simple"
 msgstr "Einfach"
@@ -998,6 +992,9 @@ msgstr "Taste"
 msgid "Licenses"
 msgstr "Lizenzen"
 
+msgid "Feedback"
+msgstr "Feedback"
+
 msgid "Check for updates"
 msgstr "Nach Updates suchen"
 
@@ -1210,8 +1207,8 @@ msgstr "kyrr legt ein Mikrofon namens „kyrr“ an und macht es zum Standard. A
 msgid "kyrr starts when you sign in and lives in the tray, if your desktop has one. Both can be changed in the settings."
 msgstr "kyrr startet beim Anmelden und wohnt im Tray, wenn dein Desktop eins hat. Beides lässt sich in den Einstellungen ändern."
 
-msgid "Dictate with your key, the text lands at your cursor. Setting up the key: see Settings."
-msgstr "Diktieren per Taste, der Text landet an deinem Cursor. Taste einrichten: siehe Einstellungen."
+msgid "Dictate with your key, the text lands at your cursor. Setting up the key: see the gear."
+msgstr "Diktieren per Taste, der Text landet an deinem Cursor. Taste einrichten: siehe Zahnrad."
 
 msgid "Start dictation with a key and speak. When you end it, kyrr types what you said, in any app. It runs on your computer, nothing is sent anywhere."
 msgstr "Starte das Diktieren per Taste und sprich. Beim Beenden tippt kyrr, was du gesagt hast, in jeder App. Läuft auf deinem Rechner, nichts wird verschickt."

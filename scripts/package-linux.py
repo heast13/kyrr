@@ -177,7 +177,7 @@ def stage(root: Path) -> None:
     hicolor = usr / "share" / "icons" / "hicolor"
     copy(icons / "kyrr-256.png", hicolor / "256x256" / "apps" / f"{APP_ID}.png")
     copy(icons / "kyrr.svg", hicolor / "scalable" / "apps" / f"{APP_ID}.svg")
-    # Where the app's Settings, About finds THIRD_PARTY.md.
+    # Where the app's Global settings, About finds THIRD_PARTY.md.
     doc = usr / "share" / "doc" / "kyrr"
     for f in ("THIRD_PARTY.md", "NOTICE", "LICENSE-MIT", "LICENSE-APACHE"):
         copy(ROOT / f, doc / f)

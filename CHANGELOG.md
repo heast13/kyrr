@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Settings rebuilt for overview: the "Settings" page is now "Global
+  settings" (effort, language, start with the system, microphone, updates,
+  about). Each switch on the main page has its own gear that opens only
+  that card's settings: noise (filter strength, level check, listening),
+  voice (sound, automatic volume), dictation (key, hold or tap). Every
+  page opens in "Simple"; "Advanced" on the same page adds the rest (noise
+  model, own sound, compressor, S sounds, rumble, pops, distance
+  compensation, words while you talk, update settings). One column
+  everywhere, Windows and Linux alike. Simple or Advanced is no longer
+  remembered between visits.
+
+- "Feedback" under Settings, About (and on the website and in the
+  README): opens an e-mail to the maintainer with the kyrr version, the
+  system (Windows, or distribution, desktop and install type on Linux) and
+  the language filled in. kyrr sends nothing itself; no log is attached.
 - Dictation: a key press while the speech model still loads (a few seconds
   after kyrr starts or was installed) starts the recording at once, and it
   is recognised when the model is there. Before, the recording waited for

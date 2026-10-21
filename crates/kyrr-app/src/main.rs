@@ -269,7 +269,7 @@ fn show_voice(state: &AppState, v: &VoiceSettings) {
 }
 
 /// Tallest the window gets, screen permitting; more content scrolls. Room
-/// for the whole two-column settings page in its advanced view (about 1260).
+/// for the tallest settings page in its advanced view (about 1260).
 const MAX_HEIGHT: f32 = 1310.0;
 /// Tallest when the screen is unknown: fits a 768-pixel-high laptop screen
 /// with the taskbar and title bar.
@@ -1640,7 +1640,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_linux(cfg!(target_os = "linux"));
     state.set_tray(platform::has_tray());
     state.set_can_minimize(platform::can_minimize());
-    state.set_advanced(app.config.borrow().advanced_settings);
     state.set_live_words(app.config.borrow().dictation_live);
     app.show_effort();
     app.apply_key();
@@ -1673,14 +1672,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     });
     state.on_advanced_toggled({
         let app = Rc::clone(&app);
-        move |on| {
-            {
-                let mut config = app.config.borrow_mut();
-                config.advanced_settings = on;
-                config.save();
-            }
-            fit(&app.window);
-        }
+        move |_| fit(&app.window)
     });
     state.on_dismiss_update({
         let app = Rc::clone(&app);
@@ -1754,6 +1746,17 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.on_show_news({
         let app = Rc::clone(&app);
         move || app.show_news()
+    });
+    state.on_send_feedback({
+        let app = Rc::clone(&app);
+        move || {
+            let system = platform::system_info();
+            platform::open_url(&update::feedback_mailto(
+                app.language(),
+                env!("CARGO_PKG_VERSION"),
+                &system,
+            ));
+        }
     });
     state.on_open_update({
         let app = Rc::clone(&app);
