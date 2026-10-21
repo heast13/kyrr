@@ -104,9 +104,8 @@ starts it:
 
 ```sh
 mkdir -p ~/.local/bin
-curl -fL -o ~/.local/bin/kyrr https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage
-chmod +x ~/.local/bin/kyrr
-~/.local/bin/kyrr &
+curl -fL -o ~/.local/bin/kyrr.new https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage && chmod +x ~/.local/bin/kyrr.new && mv -f ~/.local/bin/kyrr.new ~/.local/bin/kyrr
+~/.local/bin/kyrr --replace &
 ```
 
 **Prefer clicking?**
@@ -123,7 +122,8 @@ Either way kyrr adds itself to your app menu on its first start.
 done. Switch it off or on again in Settings, "Start when you sign in".
 
 **Updates** are not installed by themselves: kyrr says when there is a new
-version; quit kyrr and paste the install commands again to replace the file.
+version; paste the install commands again: a running kyrr closes, the file is
+replaced and the new version starts.
 
 **Requirements**
 
