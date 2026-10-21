@@ -44,11 +44,12 @@ const SHORT_LIMIT: Duration = Duration::from_secs(2 * 60);
 const WAIT_FOR_KEY: Duration = Duration::from_secs(3);
 
 /// Once, the first time the model loads, kyrr times a look at a stretch
-/// this long (about what a look hears while you speak). A computer that
-/// needs longer than `LOOK_SLOW` for it would show each word about three
-/// seconds after it was said: kyrr then suggests the lean setting.
+/// this long (about what a look hears while you speak). Quiet noise is
+/// heard quicker than speech: a laptop that took 0.6 s here showed each
+/// word about three seconds after it was said. A computer that needs
+/// longer than `LOOK_SLOW` gets the suggestion of the lean setting.
 const LOOK_TEST_SECONDS: usize = 4;
-const LOOK_SLOW: Duration = Duration::from_millis(700);
+const LOOK_SLOW: Duration = Duration::from_millis(400);
 
 /// A computer that needs longer than this for two looks in a row would
 /// show the words far too late: the wave goes on without them for this
