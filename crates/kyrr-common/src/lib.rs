@@ -58,8 +58,10 @@ pub mod filter {
     pub const VOICE_POPS: &str = "VoicePops";
     /// 1 = bring the voice to a steady level, whatever the mic's gain.
     pub const VOICE_AUTO_LEVEL: &str = "VoiceAutoLevel";
-    /// 1 = take some of the room's echo out when the mic is far away.
-    pub const VOICE_DISTANCE: &str = "VoiceDistance";
+    /// 1 = the user switched distance compensation off. Absent or 0 = on.
+    /// (Up to 0.5.8 the key was `VoiceDistance`, off by default; it is not
+    /// read any more, so everyone gets it on.)
+    pub const VOICE_DISTANCE_OFF: &str = "VoiceDistanceOff";
 }
 
 /// Value names below [`REG_STATUS`].
@@ -128,7 +130,7 @@ impl FilterSettings {
                 compressor: amount(filter::VOICE_COMPRESSOR, d.voice.compressor),
                 pops: flag(filter::VOICE_POPS, d.voice.pops),
                 auto_level: flag(filter::VOICE_AUTO_LEVEL, d.voice.auto_level),
-                distance: flag(filter::VOICE_DISTANCE, d.voice.distance),
+                distance: !flag(filter::VOICE_DISTANCE_OFF, !d.voice.distance),
             },
         }
     }
@@ -153,7 +155,7 @@ impl FilterSettings {
             (filter::VOICE_COMPRESSOR, v.compressor as u32),
             (filter::VOICE_POPS, v.pops as u32),
             (filter::VOICE_AUTO_LEVEL, v.auto_level as u32),
-            (filter::VOICE_DISTANCE, v.distance as u32),
+            (filter::VOICE_DISTANCE_OFF, (!v.distance) as u32),
         ]
     }
 }
@@ -186,7 +188,7 @@ pub struct VoiceSettings {
     /// Slowly brings the voice to one level, however loud the mic is set.
     pub auto_level: bool,
     /// Far from the mic, takes some of the room's echo out and suggests
-    /// moving closer. Does nothing close up. Beta, off by default.
+    /// moving closer. Does nothing close up.
     pub distance: bool,
 }
 
@@ -203,8 +205,7 @@ impl Default for VoiceSettings {
             compressor: Amount::Medium,
             pops: false,
             auto_level: true,
-            // Beta: off until it was heard in real rooms.
-            distance: false,
+            distance: true,
         }
     }
 }
@@ -346,6 +347,15 @@ mod tests {
         assert_eq!(bad.voice.look, Look::Neutral);
         assert_eq!(bad.voice.deesser, Amount::Light);
         assert_eq!(bad.voice.body, -CUSTOM_RANGE);
+    }
+
+    #[test]
+    fn distance_compensation_is_on_unless_switched_off() {
+        assert!(FilterSettings::default().voice.distance);
+        let old_off = FilterSettings::from_dwords(|name| (name == "VoiceDistance").then_some(0));
+        assert!(old_off.voice.distance);
+        let off = FilterSettings::from_dwords(|name| (name == filter::VOICE_DISTANCE_OFF).then_some(1));
+        assert!(!off.voice.distance);
     }
 
     #[test]
