@@ -24,6 +24,18 @@ def git(*args, text=True):
     return subprocess.run(["git", *args], check=True, capture_output=True, text=text).stdout
 
 
+def check_metainfo(commit, version):
+    """Flathub shows the newest <release> and wants the screenshots from a
+    tag or commit, not a branch: both must match the release."""
+    info = git("show", f"{commit}:packaging/linux/io.github.heast13.kyrr.metainfo.xml")
+    newest = re.search(r'<release version="([^"]+)"', info)
+    if not newest or newest.group(1) != version:
+        sys.exit(f"the metainfo's newest <release> is {newest.group(1) if newest else 'missing'}, not {version}")
+    for url in re.findall(r"<image>([^<]+)</image>", info):
+        if f"/kyrr/v{version}/" not in url:
+            sys.exit(f"screenshot {url} is not from the tag v{version}")
+
+
 def main():
     if len(sys.argv) != 3:
         sys.exit(__doc__)
@@ -38,6 +50,9 @@ def main():
         except subprocess.CalledProcessError:
             git("fetch", "--quiet", URL, f"refs/tags/{tag}:refs/tags/{tag}")
             commit = git("rev-parse", f"{tag}^{{commit}}").strip()
+
+    if tag:
+        check_metainfo(commit, version)
 
     manifest = git("show", f"{commit}:{HERE}/io.github.heast13.kyrr.yml")
     # The dir source with its comment, up to the cargo sources.
