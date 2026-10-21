@@ -998,6 +998,9 @@ msgstr "Taste"
 msgid "Licenses"
 msgstr "Lizenzen"
 
+msgid "Feedback"
+msgstr "Feedback"
+
 msgid "Check for updates"
 msgstr "Nach Updates suchen"
 

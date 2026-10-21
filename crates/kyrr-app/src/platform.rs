@@ -222,6 +222,11 @@ mod imp {
         let _ = std::process::Command::new("explorer.exe").arg(url).spawn();
     }
 
+    /// One line about this computer for a problem report.
+    pub fn system_info() -> String {
+        "Windows".into()
+    }
+
     /// Push-to-talk events; `None` when the key could not be hooked.
     pub fn start_hotkey(_description: &str, _setup_done: bool) -> Option<std::sync::mpsc::Receiver<hotkey::KeyEvent>> {
         hotkey::start().ok()
@@ -1162,6 +1167,31 @@ mod imp {
 
     pub fn open_url(url: &str) {
         let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+    }
+
+    /// One line about this computer for a problem report: the distribution,
+    /// the desktop and how kyrr is installed.
+    pub fn system_info() -> String {
+        let distro = std::fs::read_to_string("/etc/os-release")
+            .ok()
+            .and_then(|text| {
+                text.lines()
+                    .find_map(|l| l.strip_prefix("PRETTY_NAME="))
+                    .map(|v| v.trim_matches('"').to_string())
+            })
+            .unwrap_or_else(|| "Linux".into());
+        let mut parts = vec![distro];
+        if let Ok(desktop) = std::env::var("XDG_CURRENT_DESKTOP") {
+            if !desktop.is_empty() {
+                parts.push(desktop);
+            }
+        }
+        if flatpak() {
+            parts.push("Flatpak".into());
+        } else if std::env::var_os("APPIMAGE").is_some() {
+            parts.push("AppImage".into());
+        }
+        parts.join(", ")
     }
 
     fn autostart_file() -> PathBuf {

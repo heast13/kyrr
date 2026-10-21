@@ -1755,6 +1755,17 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         let app = Rc::clone(&app);
         move || app.show_news()
     });
+    state.on_send_feedback({
+        let app = Rc::clone(&app);
+        move || {
+            let system = platform::system_info();
+            platform::open_url(&update::feedback_mailto(
+                app.language(),
+                env!("CARGO_PKG_VERSION"),
+                &system,
+            ));
+        }
+    });
     state.on_open_update({
         let app = Rc::clone(&app);
         move || platform::open_url(update::download_page(app.language()))
