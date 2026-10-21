@@ -315,7 +315,7 @@ mod imp {
     pub fn shutdown() {}
 
     /// The audio service keeps the filter going by itself.
-    pub fn revive_filter() {}
+    pub fn tend_filter() {}
 
     /// A window for the dictation wave, on the screen the user types on.
     pub fn open_wave() -> Option<Box<dyn kyrr_common::wave::Surface>> {
@@ -415,6 +415,10 @@ mod imp {
         /// In a Flatpak: the Background portal starts kyrr at login. The
         /// portal's own record is out of the sandbox's reach.
         autostart: bool,
+        /// The system's default microphone from before "kyrr" (PipeWire's
+        /// metadata JSON). After a crash the system still names "kyrr" as
+        /// its default; this is what quitting gives it back to then.
+        system_default: Option<String>,
     }
 
     impl Saved {
@@ -494,15 +498,15 @@ mod imp {
     /// Starts the filter on `microphone`; loading the noise model takes a
     /// moment, so this runs off the UI thread.
     fn start_filter(microphone: String) {
-        let settings = {
+        let (settings, remembered) = {
             let mut s = state();
             if matches!(s.filter, Filter::Starting | Filter::On(_)) {
                 return;
             }
             s.filter = Filter::Starting;
-            s.saved.settings()
+            (s.saved.settings(), s.saved.system_default.clone())
         };
-        let filter = match Engine::start(Some(microphone), &settings) {
+        let filter = match Engine::start(Some(microphone), remembered, &settings) {
             Ok(engine) => Filter::On(engine),
             Err(e) => {
                 eprintln!("kyrr: the noise filter did not start: {e}");
@@ -625,7 +629,7 @@ mod imp {
             }
             Filter::Off if s.saved.microphone.is_none() => FilterStatus::NotAttached,
             Filter::Off | Filter::Starting => FilterStatus::Waiting(wanted),
-            // Tried again while PipeWire is there (see `revive_filter`).
+            // Tried again while PipeWire is there (see `tend_filter`).
             Filter::Failed(_) if kyrr_linux::pipewire_setup::running() && s.saved.microphone.is_some() => {
                 FilterStatus::Waiting(wanted)
             }
@@ -706,11 +710,12 @@ mod imp {
         drop(filter);
     }
 
-    /// Starts the filter again when it could not start (kyrr came up at
-    /// login before PipeWire did) or PipeWire went away under it (restarted,
-    /// updated), as soon as PipeWire is back. Waits longer after each try
-    /// that fails. Called every few seconds.
-    pub fn revive_filter() {
+    /// Called every few seconds: keeps the system's default microphone from
+    /// before "kyrr" in the saved settings, and starts the filter again
+    /// when it could not start (kyrr came up at login before PipeWire did)
+    /// or PipeWire went away under it (restarted, updated), as soon as
+    /// PipeWire is back. Waits longer after each try that fails.
+    pub fn tend_filter() {
         use std::time::{Duration, Instant};
         const FIRST: Duration = Duration::from_secs(2);
         const MOST: Duration = Duration::from_secs(60);
@@ -724,8 +729,13 @@ mod imp {
                 Filter::Off | Filter::Starting => false,
             };
             if !dead {
-                if matches!(s.filter, Filter::On(_)) {
+                if let Filter::On(engine) = &s.filter {
                     *next = None;
+                    let previous = engine.previous_default();
+                    if previous.is_some() && previous != s.saved.system_default {
+                        s.saved.system_default = previous;
+                        s.saved.save();
+                    }
                 }
                 return;
             }

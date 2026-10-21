@@ -72,6 +72,8 @@ struct Shared {
     status: Option<Status>,
     /// The microphone the system default was before "kyrr" took it.
     previous: Option<String>,
+    /// The same as the default metadata's JSON, for the app to keep.
+    previous_json: Option<String>,
     /// The microphone last plugged in, or last picked in the system's sound
     /// settings, while kyrr runs: what the system would use now.
     latest: Option<String>,
@@ -96,10 +98,19 @@ const QUIT_WAIT: Duration = Duration::from_secs(3);
 
 impl VirtualMic {
     /// Starts "kyrr" on `microphone` (a node name), or on the system's
-    /// default microphone when it is `None` or not connected.
-    pub fn start(microphone: Option<String>, process: Process) -> Result<VirtualMic, String> {
+    /// default microphone when it is `None` or not connected. `remembered`
+    /// is [`VirtualMic::previous_default`] from an earlier run: after a
+    /// crash the system still names "kyrr" as its default, and only this
+    /// knows the microphone to give it back to.
+    pub fn start(
+        microphone: Option<String>,
+        remembered: Option<String>,
+        process: Process,
+    ) -> Result<VirtualMic, String> {
         let shared = Arc::new(Mutex::new(Shared {
             status: Some(Status::Starting),
+            previous: remembered.as_deref().and_then(json_name).map(str::to_string),
+            previous_json: remembered.clone(),
             ..Shared::default()
         }));
         let (commands, receiver) = pw::channel::channel();
@@ -110,7 +121,7 @@ impl VirtualMic {
             .name("kyrr-pipewire".into())
             .spawn(move || {
                 let _ended = ended_tx;
-                if let Err(e) = run(microphone, process, receiver, thread_shared, &ready_tx) {
+                if let Err(e) = run(microphone, remembered, process, receiver, thread_shared, &ready_tx) {
                     let _ = ready_tx.send(Err(e));
                 }
             })
@@ -134,6 +145,12 @@ impl VirtualMic {
 
     pub fn status(&self) -> Status {
         lock(&self.shared).status.clone().unwrap_or(Status::Starting)
+    }
+
+    /// The system's default microphone from before "kyrr" (the default
+    /// metadata's JSON), to keep for [`VirtualMic::start`] next time.
+    pub fn previous_default(&self) -> Option<String> {
+        lock(&self.shared).previous_json.clone()
     }
 
     /// PipeWire went away: this "kyrr" is over, a new one has to start.
@@ -348,6 +365,7 @@ struct SourceData {
 
 fn run(
     microphone: Option<String>,
+    remembered: Option<String>,
     process: Process,
     receiver: pw::channel::Receiver<Command>,
     shared: Arc<Mutex<Shared>>,
@@ -370,7 +388,7 @@ fn run(
         process: Arc::new(Mutex::new(process)),
         synced: false,
         metadata: None,
-        previous_default: None,
+        previous_default: remembered,
         streams: None,
         quit_after: None,
     }));
@@ -544,6 +562,7 @@ fn default_changed(state: &Rc<RefCell<State>>, value: Option<&str>) {
     s.previous_default = value.map(str::to_string);
     let mut shared = lock(&s.shared);
     shared.previous = name.clone();
+    shared.previous_json = s.previous_default.clone();
     if !s.synced || s.quit_after.is_some() {
         return;
     }
