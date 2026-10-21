@@ -2,7 +2,8 @@
 
 > **dpdf-voice:** four files here are modified for MSVC (Windows):
 > `runtime/dpdf_dprnn.c`, `runtime/fp16.c`, `runtime/int8.c` and
-> `runtime/internal.h`. Each starts with a notice; the changes are listed in
+> `runtime/internal.h`, and for kyrr the first, third and fourth also for
+> faster INT8 kernels on newer CPUs. Each starts with a notice; the changes are listed in
 > `../PATCHES.md`. They no longer match `artifacts/v1/SHA256SUMS`, which is
 > why the upstream test suite is not run in dpdf-voice. The weight blobs come
 > from `scripts/fetch-assets.ps1` of dpdf-voice (same files and checksums as

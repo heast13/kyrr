@@ -41,7 +41,7 @@ pub use denoiser::Denoiser;
 pub use error::Error;
 pub use mode::{GainRamp, Mode, MUTE_RAMP_SAMPLES};
 #[cfg(feature = "native")]
-pub use native::{Engine, Inference};
+pub use native::{int8_kernel, use_int8_kernel, Engine, Inference};
 #[cfg(feature = "load-dynamic")]
 pub use runtime::{init_runtime, RuntimeInit};
 pub use stream::StreamDenoiser;

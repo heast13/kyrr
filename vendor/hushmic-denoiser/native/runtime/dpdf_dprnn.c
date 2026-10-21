@@ -1,4 +1,5 @@
-/* Modified 2026 by heast13 for dpdf-voice: MSVC (Windows) support.
+/* Modified 2026 by heast13 for dpdf-voice: MSVC (Windows) support, and for
+ * kyrr: the choice of INT8 kernels (dpdf_int8_kernel).
  * See vendor/hushmic-denoiser/PATCHES.md. Original: ceva-ip/DPDFNet, Apache-2.0. */
 #include "internal.h"
 #include <math.h>
@@ -58,6 +59,72 @@ int dpdf_has_fp16(void) {
 #else
     return 0;
 #endif
+}
+#endif
+
+#ifdef DPDF_X86_DISPATCH
+#if defined(_MSC_VER) && !defined(__clang__)
+#include <intrin.h>
+static void dpdf_cpuid(int leaf, int sub, int r[4]) { __cpuidex(r, leaf, sub); }
+static unsigned long long dpdf_xcr0(void) { return _xgetbv(0); }
+#else
+#include <cpuid.h>
+static void dpdf_cpuid(int leaf, int sub, int r[4]) {
+    unsigned a = 0, b = 0, c = 0, d = 0;
+    __cpuid_count((unsigned)leaf, (unsigned)sub, a, b, c, d);
+    r[0] = (int)a; r[1] = (int)b; r[2] = (int)c; r[3] = (int)d;
+}
+static unsigned long long dpdf_xcr0(void) {
+    unsigned lo, hi;
+    __asm__ volatile("xgetbv" : "=a"(lo), "=d"(hi) : "c"(0));
+    return ((unsigned long long)hi << 32) | lo;
+}
+#endif
+
+/* kyrr: whether the CPU and the OS support an INT8 kernel build. Both VNNI
+ * builds need everything the AVX2 one does; AVX-512 also needs the OS to
+ * save the opmask and upper ZMM state (XCR0 bits 5-7). */
+static int dpdf_int8_has(int kernel) {
+    if (!dpdf_has_avx2()) return 0;
+    if (kernel == DPDF_INT8_AVX2) return 1;
+    int r[4];
+    dpdf_cpuid(0, 0, r);
+    if (r[0] < 7) return 0;
+    dpdf_cpuid(7, 0, r);
+    if (kernel == DPDF_INT8_AVX512VNNI)
+        return ((r[1] >> 16) & 1) && ((r[1] >> 31) & 1) && ((r[2] >> 11) & 1)
+               && (dpdf_xcr0() & 0xe6) == 0xe6;
+    if (kernel != DPDF_INT8_AVXVNNI || r[0] < 1) return 0;
+    dpdf_cpuid(7, 1, r);
+    return (r[0] >> 4) & 1;
+}
+
+static int dpdf_int8_detect(void) {
+    int best = dpdf_int8_has(DPDF_INT8_AVXVNNI) ? DPDF_INT8_AVXVNNI
+             : dpdf_int8_has(DPDF_INT8_AVX512VNNI) ? DPDF_INT8_AVX512VNNI
+             : DPDF_INT8_AVX2;
+    const char *want = getenv("DPDF_INT8_KERNEL");
+    if (want && strcmp(want, "avx2") == 0) best = DPDF_INT8_AVX2;
+    else if (want && strcmp(want, "avx512vnni") == 0 && dpdf_int8_has(DPDF_INT8_AVX512VNNI)) best = DPDF_INT8_AVX512VNNI;
+    return best;
+}
+
+/* Set once at the first model load; the audio thread only reads it. */
+static volatile int dpdf_int8_choice = -1;
+
+int dpdf_int8_kernel(void) {
+    int k = dpdf_int8_choice;
+    if (k < 0) { k = dpdf_int8_detect(); dpdf_int8_choice = k; }
+    return k;
+}
+
+/* Tests: runs `kernel` from now on if the CPU has it (returns 1), else
+ * changes nothing (0). A negative kernel goes back to the detected one. */
+int dpdf_int8_use(int kernel) {
+    if (kernel < 0) kernel = dpdf_int8_detect();
+    if (!dpdf_int8_has(kernel)) return 0;
+    dpdf_int8_choice = kernel;
+    return 1;
 }
 #endif
 
