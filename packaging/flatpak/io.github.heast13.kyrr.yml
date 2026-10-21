@@ -182,9 +182,8 @@ modules:
       - cargo --offline build --release --locked -p kyrr
       - install -Dm755 target/release/kyrr ${FLATPAK_DEST}/bin/kyrr
       # The noise models, where engine.rs `assets_dir()` looks next to the
-      # program: /app/bin/../share/kyrr. Only the native engine's weights;
-      # the .onnx files would only be read by ONNX Runtime.
-      - install -Dm644 -t ${FLATPAK_DEST}/share/kyrr assets/dpdfnet8_48khz_hr.weights.f32 assets/dpdfnet2_48khz_hr.weights.f32
+      # program: /app/bin/../share/kyrr.
+      - install -Dm644 -t ${FLATPAK_DEST}/share/kyrr assets/dpdfnet8_48khz_hr.onnx assets/dpdfnet2_48khz_hr.onnx assets/dpdfnet8_48khz_hr.weights.f32 assets/dpdfnet2_48khz_hr.weights.f32
       - install -Dm644 packaging/linux/${FLATPAK_ID}.desktop ${FLATPAK_DEST}/share/applications/${FLATPAK_ID}.desktop
       - install -Dm644 packaging/linux/${FLATPAK_ID}.metainfo.xml ${FLATPAK_DEST}/share/metainfo/${FLATPAK_ID}.metainfo.xml
       - install -Dm644 crates/kyrr-app/ui/icons/kyrr-256.png ${FLATPAK_DEST}/share/icons/hicolor/256x256/apps/${FLATPAK_ID}.png
@@ -210,9 +209,21 @@ modules:
           - repo
           - target
       - cargo-sources.json
-      # DPDFNet native-engine weights (Ceva, Apache-2.0), the same files and
-      # SHA256 as scripts/fetch-assets.py: kyrr's own mirror first, HushMic's
-      # v0.10.2 release as the fallback.
+      # DPDFNet models and native-engine weights (Ceva, Apache-2.0), the same
+      # files and SHA256 as scripts/fetch-assets.py: kyrr's own mirror
+      # first, HushMic's v0.10.2 release as the fallback.
+      - type: file
+        url: https://github.com/heast13/kyrr-assets/releases/download/build-1/dpdfnet8_48khz_hr.onnx
+        mirror-urls:
+          - https://github.com/Fovty/HushMic/releases/download/v0.10.2/dpdfnet8_48khz_hr.onnx
+        sha256: 7b3afbb260a08fe9af3d16e3bda992971be1e7e951d1dee7c2d235f5c43f5631
+        dest: assets
+      - type: file
+        url: https://github.com/heast13/kyrr-assets/releases/download/build-1/dpdfnet2_48khz_hr.onnx
+        mirror-urls:
+          - https://github.com/Fovty/HushMic/releases/download/v0.10.2/dpdfnet2_48khz_hr.onnx
+        sha256: 7f0575a5cec0ba4ffd8f8bd657e06d007e4ccdd955d76faab922b9d3291dc14b
+        dest: assets
       - type: file
         url: https://github.com/heast13/kyrr-assets/releases/download/build-1/dpdfnet8_48khz_hr.weights.f32
         mirror-urls:

@@ -71,7 +71,7 @@ impl Model {
 /// engine runs when the CPU has AVX2/FMA and the `.weights.f32` file is
 /// present; otherwise ONNX Runtime from `ort_library` (initialized once per
 /// process, later paths are ignored). Only ONNX Runtime needs the `.onnx`
-/// file itself; the Linux packages ship just the weights.
+/// file itself; the AppImage and the tarball ship just the weights.
 pub fn load(dir: &Path, model: Model, ort_library: Option<&Path>) -> Result<Denoiser, String> {
     let path = dir.join(model.file_name());
     let ort = ort_library.map(PathBuf::from);

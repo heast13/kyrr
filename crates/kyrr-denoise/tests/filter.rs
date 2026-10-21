@@ -188,8 +188,8 @@ fn every_engine_and_model() {
     let _ = std::fs::remove_dir_all(&only_onnx);
 }
 
-/// The native engine runs from the packed weights alone (the Linux packages
-/// leave out the .onnx files), with the same output.
+/// The native engine runs from the packed weights alone (the AppImage and
+/// the tarball leave out the .onnx files), with the same output.
 #[test]
 fn native_needs_only_the_weights() {
     let Some(dir) = assets() else {

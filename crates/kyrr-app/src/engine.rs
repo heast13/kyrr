@@ -375,8 +375,8 @@ fn onnx_runtime() -> Option<PathBuf> {
 /// Where the noise models are: `$KYRR_ASSETS`, else `../share/kyrr` next to
 /// the program (packages, AppImage), else the program's own folder, else the
 /// repository's `assets/` (development builds). Recognised by the packed
-/// weights: Linux packages leave out the `.onnx` files, only ONNX Runtime
-/// would read them.
+/// weights: the AppImage and the tarball leave out the `.onnx` files, which
+/// only ONNX Runtime reads (the Flatpak keeps them for `onnx_runtime()`).
 fn assets_dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("KYRR_ASSETS") {
         return PathBuf::from(dir);

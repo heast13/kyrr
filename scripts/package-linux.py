@@ -62,7 +62,8 @@ RUNTIME = (
     "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d",
 )
 # Only the native engine's weights: the .onnx files would only be read by
-# ONNX Runtime, which the Linux build does not use for the noise filter.
+# ONNX Runtime, which the AppImage and the tarball do not have (sherpa-onnx
+# links it in statically). The Flatpak keeps them for its fallback.
 MODELS = [
     "dpdfnet8_48khz_hr.weights.f32",
     "dpdfnet2_48khz_hr.weights.f32",

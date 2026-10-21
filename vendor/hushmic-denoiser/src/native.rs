@@ -347,8 +347,8 @@ impl NativeModel {
         };
         let registered = match file_sha256(onnx) {
             Ok(sha) => REGISTRY.iter().find(|r| r.onnx_sha256 == sha),
-            // kyrr: the Linux packages ship only the weights (their noise
-            // filter never uses ONNX Runtime); the model is then the one
+            // kyrr: the AppImage and the tarball ship only the weights
+            // (they have no ONNX Runtime); the model is then the one
             // named like the file, and the weights' own checksum below pins
             // it just as well.
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
