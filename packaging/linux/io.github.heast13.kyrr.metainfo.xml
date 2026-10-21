@@ -80,6 +80,7 @@
       <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.6.0</url>
       <description>
         <ul>
+          <li>Voice memos with F8, a list and one-click text</li>
           <li>Setup in three steps, with a Lean or Best quality setting for slower computers</li>
           <li>The wave writes the words smoothly, and they show sooner on slower computers</li>
           <li>Distance compensation is on by default</li>
