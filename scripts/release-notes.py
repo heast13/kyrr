@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Prints the release notes for one version: its section of CHANGELOG.md and
-a few lines about the installer. When NEWS.md has a section for the version,
-its summary (English and German, for Windows and for Linux) is added as
-hidden comments; kyrr shows it under "What's new" next to the update note.
+"""Prints the release notes for one version. When NEWS.md has a section for
+the version, that plain summary comes first (English, with the German one
+folded away) and the technical CHANGELOG.md section is folded away below it;
+without one, the CHANGELOG.md section stands alone. A few lines about the
+installer follow. The NEWS.md summary (English and German, for Windows and
+for Linux) is also added as hidden comments; kyrr shows it under "What's new"
+next to the update note.
 
   python scripts/release-notes.py 0.2.0 [--signed] [--out notes.md]
 """
@@ -44,6 +47,19 @@ def for_system(body: str, system: str) -> str:
     return "\n".join(out).strip()
 
 
+def news_section(version: str) -> tuple[str, str] | None:
+    """The English and German text of a version's NEWS.md section, or None."""
+    path = ROOT / "NEWS.md"
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8")
+    match = re.search(rf"^## {re.escape(version)}\b.*?\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+    if match is None:
+        return None
+    english, _, german = match.group(1).partition("### Deutsch")
+    return english.strip(), german.strip()
+
+
 def news(version: str) -> str:
     """The hidden blocks for kyrr's "What's new"; empty without a NEWS.md
     section for this version. Plain words, only what a user notices. Windows
@@ -81,8 +97,19 @@ def main() -> None:
             "This installer is not code-signed yet, so Windows SmartScreen and your browser may "
             f"warn about it ([code signing policy]({POLICY}))."
         )
+    summary = news_section(version)
+    if summary is None:
+        top = section(version)
+    else:
+        english, german = summary
+        deutsch = f"<details>\n<summary>Deutsch</summary>\n\n{german}\n\n</details>\n\n" if german else ""
+        top = (
+            f"{english}\n\n"
+            f"{deutsch}"
+            f"<details>\n<summary>Technical details</summary>\n\n{section(version)}\n\n</details>"
+        )
     notes = (
-        f"{section(version)}\n\n"
+        f"{top}\n\n"
         f"Windows 10 22H2 or Windows 11, 64-bit. {signing} Compare the installer with "
         f"`kyrr-setup-{version}.exe.sha256` first. See the README for what the installer changes.\n\n"
         f"Linux, still a beta (64-bit Intel or AMD, glibc 2.39 or newer: Ubuntu 24.04, Fedora 40, Debian 13, Arch; "
