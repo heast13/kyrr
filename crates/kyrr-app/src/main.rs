@@ -2081,18 +2081,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             });
         }
     });
-    state.on_live_words_toggled({
-        let app = Rc::clone(&app);
-        move |on| {
-            {
-                let mut config = app.config.borrow_mut();
-                config.dictation_live = on;
-                config.save();
-            }
-            let _ = app.worker.send(Command::Live(on));
-            app.show_effort();
-        }
-    });
     state.on_effort_changed({
         let app = Rc::clone(&app);
         move |i| {
@@ -2144,13 +2132,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 w.invoke_reset_scroll();
             }
             fit(&weak);
-        }
-    });
-    state.on_model_changed({
-        let app = Rc::clone(&app);
-        move |i| {
-            app.set_model(i == 1);
-            app.show_effort();
         }
     });
     state.on_probe_record({
