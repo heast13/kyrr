@@ -207,46 +207,34 @@ mod imp {
 
     /// The voice memo key, 0 for none.
     pub fn set_memo_key(vk: u32, _description: &str) {
-        MEMO_KEY.store(vk, std::sync::atomic::Ordering::Relaxed);
         hotkey::set_memo_key(vk);
     }
 
-    static MEMO_KEY: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-
-    /// The hook takes the memo key in every window. A press it lets through
-    /// (or never sees) and that reaches kyrr's own window is one the window
-    /// turns into `press`, so the key works there whatever the hook does. As
-    /// with the hook, Ctrl, Alt, Shift or Windows held leaves the key to the
-    /// window.
-    pub fn memo_key_in_window(window: &slint::Window, press: impl Fn() + 'static) {
+    /// Windows does not run the key hook for keys that reach kyrr's own
+    /// window, so the window passes the dictation and memo keys on to it.
+    pub fn keys_in_window(window: &slint::Window) {
         use slint::winit_030::winit::event::{ElementState, WindowEvent};
         use slint::winit_030::winit::keyboard::{KeyCode, PhysicalKey};
         use slint::winit_030::{EventResult, WinitWindowAccessor};
-        let mut modifiers = false;
-        window.on_winit_window_event(move |_, event| {
-            match event {
-                WindowEvent::ModifiersChanged(m) => modifiers = !m.state().is_empty(),
-                // Not the synthetic press for a key already down when the
-                // window gained focus.
-                WindowEvent::KeyboardInput {
-                    event,
-                    is_synthetic: false,
-                    ..
-                } if !modifiers => {
-                    let code = match MEMO_KEY.load(std::sync::atomic::Ordering::Relaxed) {
-                        0x77 => KeyCode::F8,
-                        0x78 => KeyCode::F9,
-                        0x13 => KeyCode::Pause,
-                        _ => return EventResult::Propagate,
-                    };
-                    if event.physical_key == PhysicalKey::Code(code) {
-                        if event.state == ElementState::Pressed && !event.repeat {
-                            press();
-                        }
-                        return EventResult::PreventDefault;
-                    }
+        window.on_winit_window_event(|_, event| {
+            // Not the synthetic presses and releases winit makes up when the
+            // window gains or loses focus with a key down.
+            if let WindowEvent::KeyboardInput {
+                event,
+                is_synthetic: false,
+                ..
+            } = event
+            {
+                let vk = match event.physical_key {
+                    PhysicalKey::Code(KeyCode::F8) => 0x77,
+                    PhysicalKey::Code(KeyCode::F9) => 0x78,
+                    PhysicalKey::Code(KeyCode::Pause) => 0x13,
+                    PhysicalKey::Code(KeyCode::ControlRight) => 0xA3,
+                    _ => return EventResult::Propagate,
+                };
+                if hotkey::window_key(vk, event.state == ElementState::Pressed) {
+                    return EventResult::PreventDefault;
                 }
-                _ => {}
             }
             EventResult::Propagate
         });
@@ -874,8 +862,8 @@ mod imp {
         kyrr_linux::hotkey::set_memo_key(vk, description);
     }
 
-    /// The desktop's shortcut works in kyrr's window too.
-    pub fn memo_key_in_window(_: &slint::Window, _: impl Fn() + 'static) {}
+    /// The desktop's shortcuts work in kyrr's window too.
+    pub fn keys_in_window(_: &slint::Window) {}
 
     /// `description` names the shortcut in the desktop's dialog and settings.
     /// Before the setup is done, GNOME and KDE are asked for the key only
