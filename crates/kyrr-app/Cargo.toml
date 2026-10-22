@@ -40,7 +40,7 @@ kyrr-denoise = { path = "../kyrr-denoise" }
 kyrr-voice = { path = "../kyrr-voice" }
 
 [target.'cfg(windows)'.dependencies]
-slint = { version = "1.18", features = ["system-tray", "renderer-software", "software-renderer-systemfonts", "raw-window-handle-06"] }
+slint = { version = "1.18", features = ["system-tray", "renderer-software", "software-renderer-systemfonts", "raw-window-handle-06", "unstable-winit-030"] }
 kyrr-windows = { path = "../kyrr-windows" }
 # The window's HWND, to bring it to the front. The Documents folder for voice
 # memos (Shell), wherever Windows keeps it.
