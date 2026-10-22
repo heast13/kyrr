@@ -272,7 +272,8 @@ in front: Windows keeps normal programs from seeing the keyboard there.
 
 **Voice memos.** The memo key (F8, or a key of your own; hold it while you
 talk, or tap it to start and again to end, as you like) starts and ends a
-recording, as does the tray menu. kyrr records the
+recording, as does the tray menu. Where the desktop does not report a key
+being let go (GNOME 46 and 47, niri), it is tap only. kyrr records the
 microphone as dictation hears it (with the noise filter when it is on) as Opus (mono,
 24 kbit/s, about 11 MB an hour) for up to four hours, into `Documents/kyrr`
 (the folder Windows or your desktop calls Documents, wherever it is). The
@@ -285,7 +286,7 @@ said (`[1:30 · 14:06] …`). The text opens in a field: select and copy as you
 like (the times never go along), correct it (it saves itself, in the file
 too), show the times as position, time of day or not at all, and "Play from
 here" plays from the paragraph the cursor is in. You can edit the `.txt` by
-hand as well; kyrr reads it again each time. Dictation comes first: while you
+hand as well; kyrr reads it again when you open the text. Dictation comes first: while you
 dictate, the text waits. The memo key does nothing while you dictate, and
 the dictation key nothing while a memo records.
 

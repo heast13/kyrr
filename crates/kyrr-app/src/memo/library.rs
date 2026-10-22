@@ -23,6 +23,9 @@ pub struct Memo {
     /// From the name, else when the file was last written.
     pub when: NaiveDateTime,
     pub seconds: f64,
+    /// When the file was last written (seconds since 1970; 0 unknown): a
+    /// memo finished after the list was last looked at is new.
+    pub saved: u64,
     /// Its text, when it has one.
     pub text: Option<Vec<Paragraph>>,
 }
@@ -120,7 +123,13 @@ pub fn list(dir: &Path) -> Vec<Memo> {
                     (chrono::DateTime::<Local>::from(modified).naive_local(), stem)
                 }
             };
+            let saved = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map_or(0, |d| d.as_secs());
             Some(Memo {
+                saved,
                 seconds: opusfile::seconds(&path).unwrap_or(0.0),
                 text: read_text(&path),
                 path,
@@ -300,6 +309,7 @@ fn paragraphs(text: &str) -> Vec<Paragraph> {
                 },
             }
         })
+        .filter(|p| !p.text.is_empty())
         .collect()
 }
 
@@ -363,7 +373,9 @@ fn without_stamp(block: &str) -> &str {
         return block;
     };
     match rest.split_once(']') {
-        Some((stamp, text)) if !stamp.is_empty() && stamp.chars().all(|c| c.is_ascii_digit() || ":· ".contains(c)) => {
+        Some((stamp, text))
+            if stamp.contains(':') && stamp.chars().all(|c| c.is_ascii_digit() || ":· ".contains(c)) =>
+        {
             text.trim_start()
         }
         _ => block,
@@ -640,7 +652,7 @@ mod tests {
     fn old_and_new_stamps_both_read() {
         assert_eq!(
             paragraphs("[0:05] alt\n\n[1:30 · 14:06] neu\n\n[2:00 · 14:07]   \n"),
-            vec![para(5, "alt"), para(90, "neu"), para(120, "")]
+            vec![para(5, "alt"), para(90, "neu")]
         );
     }
 
@@ -675,6 +687,8 @@ mod tests {
         );
         // A selection that begins inside a paragraph has no stamp to lose.
         assert_eq!(without_stamps("ganz mitten drin"), "ganz mitten drin");
+        // A number in brackets is a note of the user's, not a stamp.
+        assert_eq!(without_stamps("[1] Punkt eins"), "[1] Punkt eins");
     }
 
     #[test]

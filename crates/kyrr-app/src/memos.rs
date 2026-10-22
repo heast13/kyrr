@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
 
-use chrono::{Local, NaiveDateTime, TimeZone};
+use chrono::{Local, NaiveDateTime};
 use kyrr_common::wave::{Mode, Overlay};
 use kyrr_dictate::Language;
 use slint::{ComponentHandle, Model, ModelRc, VecModel, Weak};
@@ -403,11 +403,7 @@ impl Memos {
         state.set_memo_editing(index_of(&editing));
         state.set_memo_confirm(index_of(&confirm));
         state.set_memo_count(all.len() as i32);
-        let seen = i64::try_from(self.seen.get())
-            .ok()
-            .and_then(|secs| Local.timestamp_opt(secs, 0).single())
-            .map(|when| when.naive_local());
-        state.set_memo_new(state.get_page() != 6 && seen.is_some_and(|seen| all.iter().any(|m| m.when > seen)));
+        state.set_memo_new(state.get_page() != 6 && all.iter().any(|m| m.saved > self.seen.get()));
         // The same rows: changed in place, so a row being edited keeps what
         // was typed into it.
         if same_rows && self.rows.row_count() == items.len() {
@@ -679,6 +675,11 @@ impl Memos {
         let _ = self.worker.send(Command::CancelText(path.clone()));
         self.texts.borrow_mut().remove(&path);
         self.auto_named.borrow_mut().remove(&path);
+        // Nothing typed into its text is saved after it is gone.
+        if self.sheet.borrow().as_ref() == Some(&path) {
+            self.saving.stop();
+            self.dirty.set(false);
+        }
         if let Err(e) = library::delete(&path) {
             eprintln!("kyrr: memo: deleting {}: {e}", path.display());
             self.tell(&self.say("Konnte die Aufnahme nicht löschen.", "Could not delete the recording."));

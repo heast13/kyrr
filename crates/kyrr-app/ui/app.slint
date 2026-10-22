@@ -2459,7 +2459,8 @@ component TranscriptSheet inherits Rectangle {
                             return accept;
                         }
                         // The stamps never go onto the clipboard.
-                        if (event.modifiers.control && (event.text == "c" || event.text == "C")) {
+                        if (event.modifiers.control && (event.text == "c" || event.text == "C")
+                            && self.cursor-position-byte-offset != self.anchor-position-byte-offset) {
                             AppState.memo-copy-text(self.cursor-position-byte-offset, self.anchor-position-byte-offset);
                             return accept;
                         }
