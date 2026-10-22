@@ -1403,6 +1403,7 @@ impl App {
         };
         platform::set_key_wanted(self.config.borrow().dictation);
         platform::set_hotkey_key(key);
+        platform::set_hotkey_tap(toggle);
         self.key_toggle.store(toggle, Ordering::Relaxed);
         let name = keys::label(key, self.language() == Language::German);
         if let Some(w) = self.window.upgrade() {
@@ -1885,6 +1886,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     };
     // Both keys before the start: the desktop's dialog asks for them at once.
     platform::set_hotkey_key(config.dictation_key());
+    platform::set_hotkey_tap(config.dictation_toggle);
     platform::set_memo_hold(!config.memo_toggle);
     let memo_description = match language {
         Language::German => MEMO_DESCRIPTION.0,
@@ -1938,8 +1940,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 }
                 let toggle = key_toggle.load(Ordering::Relaxed);
                 held = down && !toggle;
+                // A worker that is gone (quitting) takes the dictation key
+                // along, not the memo key.
                 if worker.send(Command::Held(down)).is_err() {
-                    break;
+                    continue;
                 }
                 let cmd = match (key, toggle) {
                     (platform::KeyEvent::Pressed, false) => Command::KeyDown(Instant::now(), false),
@@ -1951,9 +1955,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                     (platform::KeyEvent::Released, true)
                     | (platform::KeyEvent::MemoPressed | platform::KeyEvent::MemoReleased, _) => continue,
                 };
-                if worker.send(cmd).is_err() {
-                    break;
-                }
+                let _ = worker.send(cmd);
             }
         });
     }
@@ -2121,6 +2123,17 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                     }
                 };
                 set(UpdateState::Installing);
+                // The installer ends kyrr without asking: a memo being
+                // recorded is closed first, and typed text saved.
+                let (closed, done) = mpsc::channel();
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(m) = memos::memos() {
+                        m.end();
+                        m.flush();
+                    }
+                    let _ = closed.send(());
+                });
+                let _ = done.recv_timeout(Duration::from_secs(5));
                 // The installer ends this kyrr and starts the new one. Back
                 // here means nothing was installed: Windows' permission was
                 // declined, so the offer stands again.
@@ -2644,15 +2657,13 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             }
         });
     }
-    let tray_at_start = platform::has_tray();
+    // Without a tray host Slint would only log a complaint: wait for one
+    // (the retry below) instead of shouting at start. One that is there but
+    // takes no icon is waited for the same way, not the end of kyrr.
+    let tray_at_start = platform::has_tray() && tray.show().map_err(|e| eprintln!("kyrr: tray: {e}")).is_ok();
     // One lookup for both, so a host that turns up in between cannot leave
     // the window saying "no tray" next to a visible icon.
     window.global::<AppState>().set_tray(tray_at_start);
-    // Without a tray host Slint would only log a complaint: wait for one
-    // (the retry below) instead of shouting at start.
-    if tray_at_start {
-        tray.show()?;
-    }
     drop(tray);
     // A panel that hosts tray icons may start after kyrr (both at login).
     // An icon can only register once one is there: make a new one then.

@@ -243,15 +243,16 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
         file.sync_all()
     });
     let mut result = written;
-    for _ in 0..5 {
-        if result.is_err() {
-            break;
+    if result.is_ok() {
+        for attempt in 0..5 {
+            if attempt > 0 {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            result = std::fs::rename(&tmp, path);
+            if result.is_ok() {
+                return Ok(());
+            }
         }
-        result = std::fs::rename(&tmp, path);
-        if result.is_ok() {
-            return Ok(());
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
     }
     let _ = std::fs::remove_file(&tmp);
     result

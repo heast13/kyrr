@@ -53,8 +53,14 @@ async fn show_items(path: &Path) -> zbus::Result<()> {
         .map(|_| ())
 }
 
+/// Waits for `xdg-open` (it hands the file on and ends): no process is left
+/// behind, and one that found no app for the file says so, so the portal
+/// can try.
 fn xdg_open(path: &Path) -> bool {
-    std::process::Command::new("xdg-open").arg(path).spawn().is_ok()
+    std::process::Command::new("xdg-open")
+        .arg(path)
+        .status()
+        .is_ok_and(|status| status.success())
 }
 
 /// A path as it goes into a `file://` URI: everything but plain characters
