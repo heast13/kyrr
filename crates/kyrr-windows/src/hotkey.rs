@@ -60,48 +60,63 @@ pub fn set_active(active: bool) {
     ACTIVE.store(active, Ordering::Relaxed);
 }
 
+/// What a key event does. True when kyrr takes it and the app it was meant
+/// for does not see it.
+fn process(vk: u32, down: bool, up: bool, injected: bool) -> bool {
+    let key = KEY.load(Ordering::Relaxed);
+    let ours = vk == key && !injected;
+    let memo = MEMO_KEY.load(Ordering::Relaxed);
+    if memo != 0 && vk == memo && !injected {
+        if up && MEMO_HELD.swap(false, Ordering::Relaxed) {
+            return true;
+        }
+        if down && (MEMO_HELD.load(Ordering::Relaxed) || !modifier_held(memo)) {
+            // Auto-repeat while it is held is one press.
+            if !MEMO_HELD.swap(true, Ordering::Relaxed) {
+                if let Some(tx) = SENDER.get() {
+                    let _ = tx.send(KeyEvent::Memo);
+                }
+            }
+            return true;
+        }
+    }
+    if ours && up && HELD.swap(false, Ordering::Relaxed) {
+        // Released after a press we took: report it even if dictation
+        // stopped meanwhile, so the next press is seen again.
+        if let Some(tx) = SENDER.get() {
+            let _ = tx.send(KeyEvent::Released);
+        }
+        return true;
+    }
+    if ours && down && ACTIVE.load(Ordering::Relaxed) && (HELD.load(Ordering::Relaxed) || !modifier_held(key)) {
+        if !HELD.swap(true, Ordering::Relaxed) {
+            if let Some(tx) = SENDER.get() {
+                let _ = tx.send(KeyEvent::Pressed);
+            }
+        }
+        return true;
+    }
+    false
+}
+
 unsafe extern "system" fn hook(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if code >= 0 {
         let info = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
-        let key = KEY.load(Ordering::Relaxed);
-        let ours = info.vkCode == key && (info.flags.0 & LLKHF_INJECTED.0) == 0;
         let msg = wparam.0 as u32;
-        let up = matches!(msg, WM_KEYUP | WM_SYSKEYUP);
-        let memo = MEMO_KEY.load(Ordering::Relaxed);
-        if memo != 0 && info.vkCode == memo && (info.flags.0 & LLKHF_INJECTED.0) == 0 {
-            if up && MEMO_HELD.swap(false, Ordering::Relaxed) {
-                return LRESULT(1);
-            }
-            let down = matches!(msg, WM_KEYDOWN | WM_SYSKEYDOWN);
-            if down && (MEMO_HELD.load(Ordering::Relaxed) || !modifier_held(memo)) {
-                // Auto-repeat while it is held is one press.
-                if !MEMO_HELD.swap(true, Ordering::Relaxed) {
-                    if let Some(tx) = SENDER.get() {
-                        let _ = tx.send(KeyEvent::Memo);
-                    }
-                }
-                return LRESULT(1);
-            }
-        }
-        if ours && up && HELD.swap(false, Ordering::Relaxed) {
-            // Released after a press we took: report it even if dictation
-            // stopped meanwhile, so the next press is seen again.
-            if let Some(tx) = SENDER.get() {
-                let _ = tx.send(KeyEvent::Released);
-            }
-            return LRESULT(1);
-        }
         let down = matches!(msg, WM_KEYDOWN | WM_SYSKEYDOWN);
-        if ours && down && ACTIVE.load(Ordering::Relaxed) && (HELD.load(Ordering::Relaxed) || !modifier_held(key)) {
-            if !HELD.swap(true, Ordering::Relaxed) {
-                if let Some(tx) = SENDER.get() {
-                    let _ = tx.send(KeyEvent::Pressed);
-                }
-            }
+        let up = matches!(msg, WM_KEYUP | WM_SYSKEYUP);
+        if process(info.vkCode, down, up, (info.flags.0 & LLKHF_INJECTED.0) != 0) {
             return LRESULT(1);
         }
     }
     unsafe { CallNextHookEx(None, code, wparam, lparam) }
+}
+
+/// A key that reached kyrr's own window. Windows does not run the hook for
+/// those, so the window passes them on; the keys then work there as in
+/// every other app. True when kyrr takes the key.
+pub fn window_key(vk: u32, down: bool) -> bool {
+    process(vk, down, !down, false)
 }
 
 /// Starts the hook on its own thread (hooks need a message loop) and returns
