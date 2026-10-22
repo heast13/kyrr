@@ -1,7 +1,8 @@
 //! One kyrr per user session. A second start hands its request to the
 //! running one over a socket in the runtime folder and exits: plain `kyrr`
 //! (from the app menu) shows the window, `kyrr --dictate` (bound to a key in
-//! the desktop settings) starts or ends dictation. `kyrr --replace` (the
+//! the desktop settings) starts or ends dictation, `kyrr --memo` a voice
+//! memo. `kyrr --replace` (the
 //! install command on the website, after an update) ends a running kyrr
 //! first and takes its place.
 
@@ -23,6 +24,7 @@ const SHOW: &[u8] = b"show";
 const DICTATE: &[u8] = b"dictate";
 const DICTATE_START: &[u8] = b"dictate-start";
 const DICTATE_STOP: &[u8] = b"dictate-stop";
+const MEMO: &[u8] = b"memo";
 /// A start at sign-in while kyrr already runs (the session's autostart and
 /// the compositor's both started it): nothing to do.
 const BACKGROUND: &[u8] = b"background";
@@ -45,7 +47,8 @@ fn socket_path() -> PathBuf {
 
 /// `args` are the program's arguments; `--dictate` asks the running kyrr to
 /// toggle dictation, `--dictate-start` and `--dictate-stop` to start and end
-/// it (for a key's press and release); `--replace` ends the running kyrr
+/// it (for a key's press and release), `--memo` to start or end a voice
+/// memo; `--replace` ends the running kyrr
 /// the way quitting does and takes its place.
 pub fn claim(args: &[String]) -> Instance {
     claim_at(socket_path(), args)
@@ -59,6 +62,8 @@ fn claim_at(path: PathBuf, args: &[String]) -> Instance {
         DICTATE_START
     } else if has("--dictate-stop") {
         DICTATE_STOP
+    } else if has("--memo") {
+        MEMO
     } else if has("--background") {
         BACKGROUND
     } else {
@@ -175,6 +180,7 @@ fn serve(listener: UnixListener, show: mpsc::Sender<()>) {
             DICTATE => crate::hotkey::toggle(),
             DICTATE_START => crate::hotkey::remote_press(),
             DICTATE_STOP => crate::hotkey::remote_release(),
+            MEMO => crate::hotkey::memo_press(),
             BACKGROUND => {}
             _ => {
                 if show.send(()).is_err() {

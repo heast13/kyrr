@@ -36,6 +36,11 @@ What it does:
   "neue Zeile" for a line break. While you dictate, a small wave at the
   bottom of the screen shows that kyrr is listening, with the words heard so
   far (switchable under the dictation gear, Advanced), and then that it is writing.
+- **Voice memos.** Tap F8, talk, tap F8 again: kyrr saves the recording
+  as a small audio file in Documents/kyrr and names it after its first
+  words. Play, rename, show in the folder or delete them in the list; one
+  click writes the whole text of a memo, with the minute each part starts,
+  on your PC. Can be switched off on the main page.
 - **Check.** A live level of what the microphone hears and what apps get,
   a ten-second test (record once, then play the take before and after kyrr)
   and listening to yourself live on headphones.
@@ -139,10 +144,10 @@ replaced and the new version starts.
 
 **Desktop notes**
 
-- GNOME 48+ and KDE: your desktop asks once for the dictation key and once
-  whether kyrr may type; kyrr walks you through both.
-- GNOME 46 and 47: kyrr adds the key to GNOME's own keyboard shortcuts, where
-  each press starts or ends dictation.
+- GNOME 48+ and KDE: your desktop asks once for the dictation and voice
+  memo keys and once whether kyrr may type; kyrr walks you through both.
+- GNOME 46 and 47: kyrr adds the keys to GNOME's own keyboard shortcuts,
+  where each press starts or ends dictation (or a voice memo).
 - Hyprland (Omarchy, say), Sway, river and niri: kyrr adds the key to your
   key bindings itself, in a block of its own that it keeps up to date, and
   the start at sign-in too where the session does not start XDG autostart
@@ -171,8 +176,9 @@ leave it out to keep them. Used a different place for the file? Delete that
 instead of `~/.local/bin/kyrr`.
 
 On Hyprland, Sway, river and niri, delete the blocks between the `>>> kyrr`
-and `<<< kyrr` lines (key and start at sign-in) from your config; on GNOME,
-delete the "kyrr" entry under Custom Shortcuts in the keyboard settings.
+and `<<< kyrr` lines (keys and start at sign-in) from your config; on GNOME,
+delete the "kyrr" and "kyrr: voice memo" entries under Custom Shortcuts in
+the keyboard settings. Your voice memos stay in Documents/kyrr.
 
 </details>
 
@@ -261,6 +267,25 @@ of after a quarter of an hour without dictation:
 On Windows dictation does nothing while a window running as administrator is
 in front: Windows keeps normal programs from seeing the keyboard there.
 
+**Voice memos.** The memo key (F8; F9 or Pause if dictation has F8, or none)
+starts and ends a recording, as does the tray menu. kyrr records the
+microphone as dictation hears it (with the noise filter when it is on) as Opus (mono,
+24 kbit/s, about 11 MB an hour) for up to four hours, into `Documents/kyrr`
+(the folder Windows or your desktop calls Documents, wherever it is). The
+file is called `2026-10-21 14-05 Title.opus`: when the recording ends, the
+dictation model listens to its first seconds and the first real sentence
+becomes the title. "Write text" transcribes the whole memo in pieces of
+half a minute, cut at a pause, and saves the text beside it as
+`… Title.txt`, one paragraph per piece with its start time (`[1:30] …`).
+Clicking a time plays the memo from there. Dictation comes first: while you
+dictate, the text waits. The memo key does nothing while you dictate, and
+the dictation key nothing while a memo records.
+
+On Linux the memo key is set up like the dictation key: GNOME 48 and KDE
+ask for both keys in one dialog, GNOME 46 and 47 get a second custom
+shortcut, and on Hyprland, sway, river and niri the key goes into kyrr's
+block in the config.
+
 ## Privacy
 
 Audio and text never leave your computer. No telemetry. kyrr connects to
@@ -282,6 +307,9 @@ the internet for exactly these things:
   version from this repository's releases, checked against its SHA256 file.
   Where kyrr cannot install it itself (Linux, or a failed download), it
   opens the download page on the website instead.
+
+Voice memos and their texts stay in your Documents folder; kyrr sends
+none of them anywhere. Record other people only when they agree to it.
 
 Nothing is installed without your click. (Building kyrr also downloads its
 assets and libraries, from kyrr's mirror on GitHub first.)

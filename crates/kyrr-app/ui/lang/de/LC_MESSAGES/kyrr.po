@@ -1016,8 +1016,6 @@ msgstr "Version {} ist da. Herunterladen und den Installer starten, deine Einste
 msgid "Moves while an app uses the mic."
 msgstr "Bewegt sich, solange eine App das Mikro nutzt."
 
-msgid "kyrr keeps running in the tray, bottom right."
-msgstr "kyrr läuft unten rechts im Infobereich weiter."
 
 msgid "Off to the corner"
 msgstr "Ab in die Ecke"
@@ -1118,8 +1116,6 @@ msgstr "Einschalten"
 msgid "Your mic is muted."
 msgstr "Dein Mikro ist stummgeschaltet."
 
-msgid "kyrr keeps running in the tray."
-msgstr "kyrr läuft im Tray weiter."
 
 msgid "No tray here: closing the window quits kyrr."
 msgstr "Kein Tray hier: Fenster schließen beendet kyrr."
@@ -1281,3 +1277,201 @@ msgstr "Für ältere oder schwächere Laptops, und wenn’s ruckelt. Einfachere 
 
 msgid "Typed just as well either way. You can switch any time in the settings."
 msgstr "Getippt wird bei beiden gleich gut. Umschalten geht jederzeit in den Einstellungen."
+
+msgid "recording"
+msgstr "Aufnahme läuft"
+
+msgid "Stop recording"
+msgstr "Aufnahme beenden"
+
+msgid "Start recording"
+msgstr "Aufnahme starten"
+
+msgid "Open recordings"
+msgstr "Aufzeichnungen öffnen"
+
+msgid "Tape is rolling."
+msgstr "Band läuft."
+
+msgid "Recording for posterity."
+msgstr "Für die Nachwelt."
+
+msgid "Memory backup in progress."
+msgstr "Gedächtnis-Backup läuft."
+
+msgid "Said and saved."
+msgstr "Gesagt, gespeichert."
+
+msgid "Voice note, freshly pressed."
+msgstr "Sprachnotiz, frisch gepresst."
+
+msgid "Bright ideas into the archive."
+msgstr "Geistesblitze ins Archiv."
+
+msgid "Thoughts to go."
+msgstr "Gedanken zum Mitnehmen."
+
+msgid "Talk now, listen later."
+msgstr "Jetzt reden, später hören."
+
+msgid "Off the record? Nope."
+msgstr "Inoffiziell? Nix da."
+
+msgid "Your private radio show."
+msgstr "Deine private Radiosendung."
+
+msgid "Every word into the drawer."
+msgstr "Jedes Wort in die Schublade."
+
+msgid "The archive is listening."
+msgstr "Das Archiv hört mit."
+
+msgid "Sticky note with a voice."
+msgstr "Klebezettel mit Stimme."
+
+msgid "Memoirs, chapter one."
+msgstr "Memoiren, Kapitel eins."
+
+msgid "Voice into the vault."
+msgstr "Stimme in den Tresor."
+
+msgid "Forgetting is cancelled."
+msgstr "Vergessen fällt aus."
+
+msgid "Dictaphone, only prettier."
+msgstr "Diktiergerät, nur hübscher."
+
+msgid "Thinking aloud, saved."
+msgstr "Lautes Denken, gesichert."
+
+msgid "Minutes for one."
+msgstr "Protokoll für eine Person."
+
+msgid "Ideas in the can."
+msgstr "Ideen im Kasten."
+
+msgid "Voice memo"
+msgstr "Sprachaufzeichnung"
+
+msgid "Off. Your recordings stay where they are."
+msgstr "Aus. Deine Aufnahmen bleiben, wo sie sind."
+
+msgid "Recording. {} or the button ends it."
+msgstr "Aufnahme läuft. {} oder der Knopf beendet sie."
+
+msgid "Recording. The button ends it."
+msgstr "Aufnahme läuft. Der Knopf beendet sie."
+
+msgid "Record under Recordings or in the tray. kyrr saves and names the recording by itself."
+msgstr "Aufnehmen unter Aufzeichnungen oder im Tray. kyrr speichert und benennt die Aufnahme selbst."
+
+msgid "Tap {}, talk, tap again. kyrr saves and names the recording by itself."
+msgstr "Tippe {}, sprich, tippe nochmal. kyrr speichert und benennt die Aufnahme selbst."
+
+msgid "Stop"
+msgstr "Stopp"
+
+msgid "Recordings ({})"
+msgstr "Aufzeichnungen ({})"
+
+msgid "Play"
+msgstr "Abspielen"
+
+msgid "Finding a title…"
+msgstr "Titel wird gesucht…"
+
+msgid "Rename"
+msgstr "Umbenennen"
+
+msgid "Title"
+msgstr "Titel"
+
+msgid "Show text"
+msgstr "Text zeigen"
+
+msgid "Write text"
+msgstr "Text schreiben"
+
+msgid "Show in folder"
+msgstr "Im Ordner zeigen"
+
+msgid "Waiting for its turn…"
+msgstr "Wartet, bis sie dran ist…"
+
+msgid "Writing… {}% · {}"
+msgstr "Schreibt mit… {} % · {}"
+
+msgid "Writing… {}%"
+msgstr "Schreibt mit… {} %"
+
+msgid "That did not work. Try again?"
+msgstr "Das hat nicht geklappt. Nochmal versuchen?"
+
+msgid "Needs the speech model: download it under Dictation."
+msgstr "Braucht das Sprachmodell: bei der Diktierfunktion herunterladen."
+
+msgid "Delete for good?"
+msgstr "Endgültig löschen?"
+
+msgid "Keep"
+msgstr "Behalten"
+
+msgid "Recordings"
+msgstr "Aufzeichnungen"
+
+msgid "Open folder"
+msgstr "Ordner öffnen"
+
+msgid "New recording ({})"
+msgstr "Neue Aufnahme ({})"
+
+msgid "New recording"
+msgstr "Neue Aufnahme"
+
+msgid "Search titles and texts"
+msgstr "Titel und Texte durchsuchen"
+
+msgid "Nothing said yet. The folder is waiting."
+msgstr "Noch nichts gesagt. Der Ordner wartet."
+
+msgid "Nothing found. Maybe said differently?"
+msgstr "Nichts gefunden. Vielleicht anders gesagt?"
+
+msgid "None"
+msgstr "Keine"
+
+msgid "No key: record with the button and in the tray."
+msgstr "Keine Taste: Aufnehmen per Knopf unter Aufzeichnungen und im Tray."
+
+msgid "Tap once to start, once more to stop. Dictation keeps {}."
+msgstr "Einmal tippen startet, nochmal tippen beendet. Diktieren bleibt auf {}."
+
+msgid "Write the text after every recording"
+msgstr "Nach jeder Aufnahme Text schreiben"
+
+msgid "kyrr writes down every new recording right away. Long ones take a while on slow laptops."
+msgstr "kyrr schreibt jede neue Aufnahme gleich mit. Lange Aufnahmen brauchen auf schwachen Laptops eine Weile."
+
+msgid "Off. A recording gets its text with a click."
+msgstr "Aus. Text gibt es auf Klick an der Aufnahme."
+
+msgid "Saved in the folder kyrr in {}"
+msgstr "Gespeichert im Ordner kyrr unter {}"
+
+msgid "About 11 MB per hour, everything stays on your computer. Only record conversations when everyone agrees."
+msgstr "Etwa 11 MB pro Stunde, alles bleibt auf deinem Computer. Gespräche nur aufnehmen, wenn alle einverstanden sind."
+
+msgid "Copied"
+msgstr "Kopiert"
+
+msgid "Copy"
+msgstr "Kopieren"
+
+msgid "Open as text file"
+msgstr "Als Textdatei öffnen"
+
+msgid "Nothing understood in there. Was it quiet?"
+msgstr "Da war nichts zu verstehen. War es still?"
+
+msgid "Click a time to listen from there."
+msgstr "Klick auf eine Zeit spielt ab dort ab."

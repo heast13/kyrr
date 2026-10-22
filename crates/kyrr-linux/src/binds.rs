@@ -21,6 +21,9 @@
 //!   The key's lines go inside the file's `binds { }`. Source: niri's wiki,
 //!   "Configuration: Key Bindings".
 //!
+//! The voice memo key goes into the same block: a press runs `kyrr --memo`
+//! (Hyprland: the portal's shortcut "memo").
+//!
 //! Only the standard library is used here.
 
 use std::path::{Path, PathBuf};
@@ -28,6 +31,7 @@ use std::path::{Path, PathBuf};
 const APP_ID: &str = "io.github.heast13.kyrr";
 /// The shortcut's name in `bind = , F9, global, <APP_ID>:dictate`.
 const GLOBAL: &str = "io.github.heast13.kyrr:dictate";
+const GLOBAL_MEMO: &str = "io.github.heast13.kyrr:memo";
 /// The config sway reads when the user has none.
 const SWAY_SYSTEM: &str = "/etc/sway/config";
 /// The name of the link to the compositor's socket in the Flatpak's runtime
@@ -112,6 +116,8 @@ impl Syntax {
 pub struct Keys {
     /// The key's name, e.g. "F9".
     pub key: String,
+    /// The voice memo key's name, e.g. "F8"; a press starts or ends a memo.
+    pub memo: Option<String>,
     /// Through the GlobalShortcuts portal (Hyprland only); otherwise the key
     /// runs kyrr with `--dictate-start` on press and `--dictate-stop` on
     /// release, or `--dictate` on each press where it cannot be held.
@@ -315,6 +321,36 @@ fn link_command() -> String {
 }
 
 fn bind_lines(syntax: Syntax, keys: &Keys) -> String {
+    let dictate = dictate_lines(syntax, keys);
+    match &keys.memo {
+        Some(memo) => format!("{dictate}\n{}", memo_lines(syntax, keys, memo)),
+        None => dictate,
+    }
+}
+
+/// A press of `memo` starts or ends a voice memo.
+fn memo_lines(syntax: Syntax, keys: &Keys, memo: &str) -> String {
+    let run = keys.command("--memo");
+    match (syntax, keys.portal) {
+        (Syntax::Conf, true) => format!("unbind = , {memo}\nbind = , {memo}, global, {GLOBAL_MEMO}"),
+        (Syntax::Conf, false) => format!("unbind = , {memo}\nbind = , {memo}, exec, {run}"),
+        (Syntax::Lua, true) => format!("hl.unbind(\"{memo}\")\nhl.bind(\"{memo}\", hl.dsp.global(\"{GLOBAL_MEMO}\"))"),
+        (Syntax::Lua, false) => format!(
+            "hl.unbind(\"{memo}\")\nhl.bind(\"{memo}\", hl.dsp.exec_cmd(\"{}\"))",
+            quoted(&run)
+        ),
+        (Syntax::Sway, _) => format!("bindsym --no-repeat {memo} exec {run}"),
+        (Syntax::River, _) => format!("riverctl map normal None {memo} spawn {}", sh_quoted(&run)),
+        (Syntax::Niri, _) => {
+            let mut words = keys.program.clone();
+            words.push("--memo".into());
+            let words: Vec<String> = words.iter().map(|w| format!("\"{}\"", quoted(w))).collect();
+            format!("    {memo} repeat=false {{ spawn {}; }}", words.join(" "))
+        }
+    }
+}
+
+fn dictate_lines(syntax: Syntax, keys: &Keys) -> String {
     let key = &keys.key;
     let (start, stop) = (keys.command("--dictate-start"), keys.command("--dictate-stop"));
     // Omarchy puts its own tools on some keys; unbinding frees the key.
@@ -384,14 +420,26 @@ pub fn display(path: &Path) -> String {
     }
 }
 
-/// The key kyrr's block in the compositor's config binds now, to free it
-/// when the key changes (river keeps binds until they are unmapped).
-pub fn bound_key(compositor: Compositor, base: &Path) -> Option<String> {
-    let target = target(compositor, base)?;
-    let text = std::fs::read_to_string(&target.path).ok()?;
+/// The keys kyrr's block in the compositor's config binds now, to free
+/// them when they change (river keeps binds until they are unmapped).
+pub fn bound_keys(compositor: Compositor, base: &Path) -> Vec<String> {
+    let Some(target) = target(compositor, base) else {
+        return Vec::new();
+    };
+    let Ok(text) = std::fs::read_to_string(&target.path) else {
+        return Vec::new();
+    };
     let rows: Vec<&str> = text.split_inclusive('\n').collect();
-    let (a, b) = find_block(&rows, target.syntax, Block::Key).ok()??;
-    rows[a + 1..b].iter().find_map(|row| key_of(row, target.syntax))
+    let Ok(Some((a, b))) = find_block(&rows, target.syntax, Block::Key) else {
+        return Vec::new();
+    };
+    let mut keys: Vec<String> = Vec::new();
+    for key in rows[a + 1..b].iter().filter_map(|row| key_of(row, target.syntax)) {
+        if !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
+    keys
 }
 
 /// Puts the key's lines into the compositor's config below `base`, or brings
@@ -443,7 +491,22 @@ pub fn ensure(compositor: Compositor, base: &Path, keys: &Keys) -> Outcome {
     if let Some(taken) = taken {
         return taken;
     }
-    let block = lines(target.syntax, keys);
+    // A memo key that a bind of the user's has stays theirs: no memo key
+    // here then.
+    let mut keys = keys.clone();
+    if let Some(memo) = keys.memo.clone() {
+        let theirs = files
+            .iter()
+            .find_map(|file| match claim(&read(file)?, file.syntax, &memo) {
+                Ok(Claim::Other { line, bind }) => Some((file.path.clone(), line, bind)),
+                _ => None,
+            });
+        if let Some((file, line, bind)) = theirs {
+            eprintln!("kyrr: {memo} is taken in {} line {line}: {bind}", display(&file));
+            keys.memo = None;
+        }
+    }
+    let block = lines(target.syntax, &keys);
     match put_block(target, Block::Key, Some(&block)) {
         Ok(written) => Outcome::Bound {
             file: target.path.clone(),
@@ -757,7 +820,7 @@ fn claim(text: &str, syntax: Syntax, key: &str) -> Result<Claim, ()> {
         if !on_key {
             continue;
         }
-        if row.contains(APP_ID) || row.contains("--dictate") {
+        if row.contains(APP_ID) || row.contains("--dictate") || row.contains("--memo") {
             return Ok(Claim::Kyrr);
         }
         if matches!(claim, Claim::Free) {
@@ -777,6 +840,7 @@ mod tests {
     fn keys(key: &str, portal: bool) -> Keys {
         Keys {
             key: key.into(),
+            memo: None,
             portal,
             program: vec!["kyrr".into()],
             link: false,
@@ -993,6 +1057,51 @@ mod tests {
     }
 
     #[test]
+    fn the_memo_key_comes_along() {
+        let with_memo = |key: &str, portal: bool| Keys {
+            memo: Some("F8".into()),
+            ..keys(key, portal)
+        };
+        assert_eq!(
+            lines(Syntax::Conf, &with_memo("F9", true)),
+            "unbind = , F9\nbind = , F9, global, io.github.heast13.kyrr:dictate\nunbind = , F8\nbind = , F8, global, io.github.heast13.kyrr:memo"
+        );
+        assert!(lines(Syntax::Conf, &with_memo("F9", false)).ends_with("\nbind = , F8, exec, kyrr --memo"));
+        assert!(lines(Syntax::Sway, &with_memo("F9", false)).ends_with("\nbindsym --no-repeat F8 exec kyrr --memo"));
+        assert!(lines(Syntax::River, &with_memo("F9", false))
+            .ends_with("\nriverctl map normal None F8 spawn 'kyrr --memo'"));
+        assert!(lines(Syntax::Niri, &with_memo("F9", false))
+            .ends_with("\n    F8 repeat=false { spawn \"kyrr\" \"--memo\"; }"));
+        assert!(lines(Syntax::Lua, &with_memo("F9", true))
+            .ends_with("hl.bind(\"F8\", hl.dsp.global(\"io.github.heast13.kyrr:memo\"))"));
+        // kyrr's own memo bind, added by hand, is kyrr's.
+        assert!(matches!(
+            claim("bind = , F8, exec, kyrr --memo\n", Syntax::Conf, "F8").unwrap(),
+            Claim::Kyrr
+        ));
+
+        // A memo key the user has is left to them; dictation still binds.
+        let base = folder("memo");
+        let dir = base.join("hypr");
+        std::fs::create_dir_all(&dir).unwrap();
+        let main = dir.join("hyprland.conf");
+        std::fs::write(&main, "bind = , F8, exec, playerctl next\n").unwrap();
+        let hypr = Compositor::Hyprland;
+        assert!(matches!(
+            ensure(hypr, &base, &with_memo("F9", true)),
+            Outcome::Bound { .. }
+        ));
+        assert_eq!(bound_keys(hypr, &base), ["F9"]);
+        std::fs::write(&main, "monitor = , preferred\n").unwrap();
+        assert!(matches!(
+            ensure(hypr, &base, &with_memo("F9", true)),
+            Outcome::Bound { .. }
+        ));
+        assert_eq!(bound_keys(hypr, &base), ["F9", "F8"]);
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
     fn niri() {
         let config = "input {\n    keyboard {\n    }\n}\n\nbinds {\n    Mod+F9 { spawn \"x\"; }\n    /- F9 { spawn \"y\"; }\n}\n\nwindow-rule {\n    F9 { }\n}\n";
         assert!(matches!(claim(config, Syntax::Niri, "F9").unwrap(), Claim::Free));
@@ -1051,7 +1160,7 @@ mod tests {
                 written: false
             }
         );
-        assert_eq!(bound_key(hypr, &base).as_deref(), Some("F9"));
+        assert_eq!(bound_keys(hypr, &base), ["F9"]);
         let text = std::fs::read_to_string(&file).unwrap();
         assert!(text.starts_with("bind = SUPER, Q, killactive\n\n# >>> kyrr"));
         assert_eq!(std::fs::read_to_string(&main).unwrap().lines().count(), 1);
@@ -1123,7 +1232,7 @@ mod tests {
             Outcome::Bound { written: true, .. }
         ));
         assert_eq!(std::fs::metadata(&init).unwrap().permissions().mode() & 0o777, 0o755);
-        assert_eq!(bound_key(Compositor::River, &base).as_deref(), Some("F9"));
+        assert_eq!(bound_keys(Compositor::River, &base), ["F9"]);
         std::fs::remove_dir_all(&base).unwrap();
     }
 }

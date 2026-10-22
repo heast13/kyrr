@@ -38,6 +38,12 @@ pub struct Config {
     /// The version that ran last: when it differs, kyrr was updated and shows
     /// what the new version brings, once.
     pub last_run_version: String,
+    /// Voice memos: the card on the main page, the key and the tray entry.
+    pub memos: bool,
+    /// The voice memo key, see [`MEMO_KEYS`]; 0 for none.
+    pub memo_key: u32,
+    /// Every new memo gets its text right away, not just on a click.
+    pub memo_text_auto: bool,
 }
 
 /// The language setting for dictation in many languages.
@@ -46,6 +52,10 @@ pub const MULTI: &str = "multi";
 /// Keys dictation can use, as Windows virtual-key codes: F8, F9, Pause and
 /// right Ctrl. The index is what the settings page shows.
 pub const DICTATION_KEYS: [u32; 4] = [0x77, 0x78, 0x13, 0xA3];
+
+/// Keys a voice memo can use: F8, F9, Pause, and none (only the button and
+/// the tray).
+pub const MEMO_KEYS: [u32; 4] = [0x77, 0x78, 0x13, 0];
 
 impl Default for Config {
     fn default() -> Self {
@@ -62,6 +72,9 @@ impl Default for Config {
             update_dismissed: String::new(),
             pinned_default: String::new(),
             last_run_version: String::new(),
+            memos: true,
+            memo_key: MEMO_KEYS[0],
+            memo_text_auto: false,
         }
     }
 }
@@ -109,6 +122,21 @@ impl Config {
             return system_language();
         }
         Language::from_code(&self.language).unwrap_or(Language::English)
+    }
+
+    /// The voice memo key as it works: never dictation's, which goes first
+    /// (the next free one then); 0 for none, also while memos are off.
+    pub fn memo_key(&self) -> u32 {
+        if !self.memos || self.memo_key == 0 {
+            return 0;
+        }
+        if self.memo_key != self.dictation_key {
+            return self.memo_key;
+        }
+        MEMO_KEYS
+            .into_iter()
+            .find(|&k| k != 0 && k != self.dictation_key)
+            .unwrap_or(0)
     }
 
     /// Dictation with the model for many European languages.
@@ -251,6 +279,27 @@ pub fn models_dir() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_memo_key_is_never_dictations() {
+        let config = Config::default();
+        assert_eq!(config.memo_key(), 0x77);
+        let config = Config {
+            dictation_key: 0x77,
+            ..Config::default()
+        };
+        assert_eq!(config.memo_key(), 0x78);
+        let config = Config {
+            memo_key: 0,
+            ..Config::default()
+        };
+        assert_eq!(config.memo_key(), 0);
+        let config = Config {
+            memos: false,
+            ..Config::default()
+        };
+        assert_eq!(config.memo_key(), 0);
+    }
 
     #[test]
     fn settings_survive_saving() {

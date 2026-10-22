@@ -3,6 +3,9 @@
 //! not also react to it. Auto-repeat while holding is ignored. With Ctrl,
 //! Alt, Shift or Windows held the key belongs to the app (Ctrl+F9 in Excel,
 //! Shift+F9 in Visual Studio).
+//!
+//! A second key (F8 unless the user picks another) starts and ends a voice
+//! memo: a press, no release.
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{mpsc, OnceLock};
@@ -21,6 +24,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 pub enum KeyEvent {
     Pressed,
     Released,
+    /// The voice memo key was pressed.
+    Memo,
 }
 
 static KEY: AtomicU32 = AtomicU32::new(VK_F9.0 as u32);
@@ -39,6 +44,15 @@ fn modifier_held(key: u32) -> bool {
 }
 static ACTIVE: AtomicBool = AtomicBool::new(false);
 static HELD: AtomicBool = AtomicBool::new(false);
+/// The voice memo key; 0 for none.
+static MEMO_KEY: AtomicU32 = AtomicU32::new(0);
+static MEMO_HELD: AtomicBool = AtomicBool::new(false);
+
+/// The voice memo key (a virtual-key code), 0 for none.
+pub fn set_memo_key(vk: u32) {
+    MEMO_KEY.store(vk, Ordering::Relaxed);
+    MEMO_HELD.store(false, Ordering::Relaxed);
+}
 static SENDER: OnceLock<mpsc::Sender<KeyEvent>> = OnceLock::new();
 
 /// Whether the key is captured. When inactive, the key reaches apps normally.
@@ -53,6 +67,22 @@ unsafe extern "system" fn hook(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRE
         let ours = info.vkCode == key && (info.flags.0 & LLKHF_INJECTED.0) == 0;
         let msg = wparam.0 as u32;
         let up = matches!(msg, WM_KEYUP | WM_SYSKEYUP);
+        let memo = MEMO_KEY.load(Ordering::Relaxed);
+        if memo != 0 && info.vkCode == memo && (info.flags.0 & LLKHF_INJECTED.0) == 0 {
+            if up && MEMO_HELD.swap(false, Ordering::Relaxed) {
+                return LRESULT(1);
+            }
+            let down = matches!(msg, WM_KEYDOWN | WM_SYSKEYDOWN);
+            if down && (MEMO_HELD.load(Ordering::Relaxed) || !modifier_held(memo)) {
+                // Auto-repeat while it is held is one press.
+                if !MEMO_HELD.swap(true, Ordering::Relaxed) {
+                    if let Some(tx) = SENDER.get() {
+                        let _ = tx.send(KeyEvent::Memo);
+                    }
+                }
+                return LRESULT(1);
+            }
+        }
         if ours && up && HELD.swap(false, Ordering::Relaxed) {
             // Released after a press we took: report it even if dictation
             // stopped meanwhile, so the next press is seen again.

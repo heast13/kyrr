@@ -20,6 +20,10 @@
 //! held by then. The shortcut names show in `hyprctl globalshortcuts`.
 //! Sources: `src/portals/GlobalShortcuts.cpp` of xdg-desktop-portal-hyprland
 //! and <https://wiki.hyprland.org/Configuring/Binds/>.
+//!
+//! A second key starts and ends a voice memo ([`set_memo_key`]), caught the
+//! same ways as shortcut "memo" (`kyrr --memo` without them); only its press
+//! counts.
 
 use std::pin::pin;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, AtomicUsize, Ordering};
@@ -39,6 +43,8 @@ use x11rb::rust_connection::RustConnection;
 pub enum KeyEvent {
     Pressed,
     Released,
+    /// The voice memo key was pressed.
+    Memo,
 }
 
 /// Where binding the key through the portal stands.
@@ -82,6 +88,7 @@ pub enum Backend {
 
 /// The id of the shortcut in the portal, and the app id the portal knows kyrr by.
 const SHORTCUT: &str = "dictate";
+const MEMO_SHORTCUT: &str = "memo";
 const APP_ID: &str = "io.github.heast13.kyrr";
 
 /// The keys the app offers: Windows virtual-key code, X11 keysym and the
@@ -94,6 +101,12 @@ const KEYS: [(u32, u32, &str); 4] = [
 ];
 
 static KEY: AtomicUsize = AtomicUsize::new(1);
+/// The voice memo key, an index into `KEYS`; `NO_KEY` for none.
+static MEMO_KEY: AtomicUsize = AtomicUsize::new(NO_KEY);
+const NO_KEY: usize = usize::MAX;
+static MEMO_HELD: AtomicBool = AtomicBool::new(false);
+/// The description of the memo shortcut in the desktop's settings.
+static MEMO_DESCRIPTION: Mutex<String> = Mutex::new(String::new());
 static ACTIVE: AtomicBool = AtomicBool::new(false);
 static HELD: AtomicBool = AtomicBool::new(false);
 /// Where binding the shortcut stands, a [`Binding`] as u8.
@@ -116,6 +129,24 @@ pub fn set_key(vk: u32) {
             let _ = x.rebind();
         }
     }
+}
+
+/// The voice memo key (a Windows virtual-key code, e.g. 0x77 for F8), 0
+/// for none; `description` names it in the desktop's settings. With the
+/// portal the desktop owns the key: a change counts from the next binding
+/// ([`bind_again`], or the next start).
+pub fn set_memo_key(vk: u32, description: &str) {
+    let index = KEYS.iter().position(|k| k.0 == vk).unwrap_or(NO_KEY);
+    MEMO_KEY.store(index, Ordering::Relaxed);
+    *MEMO_DESCRIPTION.lock().unwrap_or_else(PoisonError::into_inner) = description.to_string();
+    if let Some(x) = X11.get() {
+        let _ = x.rebind();
+    }
+}
+
+/// The voice memo key's name for the portal and for Hyprland's binds.
+pub fn memo_key_name() -> Option<&'static str> {
+    KEYS.get(MEMO_KEY.load(Ordering::Relaxed)).map(|k| k.2)
 }
 
 /// Whether the key is captured. When inactive, key events are ignored and,
@@ -152,6 +183,22 @@ fn press() {
     if ACTIVE.load(Ordering::Relaxed) && !HELD.swap(true, Ordering::Relaxed) {
         send(KeyEvent::Pressed);
     }
+}
+
+/// `kyrr --memo`, and the memo key from the portal or the X server: starts
+/// or ends a memo. A key held down (auto-repeat) is one press.
+pub fn memo_press() {
+    send(KeyEvent::Memo);
+}
+
+fn memo_down() {
+    if !MEMO_HELD.swap(true, Ordering::Relaxed) {
+        memo_press();
+    }
+}
+
+fn memo_up() {
+    MEMO_HELD.store(false, Ordering::Relaxed);
 }
 
 /// Reported after any press we took, even if dictation stopped meanwhile, so
@@ -302,14 +349,18 @@ async fn portal(ready: mpsc::Sender<Result<(), String>>, description: String, as
             bind(&shortcuts, &session, &description).await;
         }
     };
-    let pressed = pressed.filter_map(|a| (a.shortcut_id() == SHORTCUT).then_some(KeyEvent::Pressed));
-    let released = released.filter_map(|d| (d.shortcut_id() == SHORTCUT).then_some(KeyEvent::Released));
+    // (shortcut, pressed)
+    let pressed = pressed.map(|a| (a.shortcut_id().to_string(), true));
+    let released = released.map(|d| (d.shortcut_id().to_string(), false));
     let events = async {
         let mut events = pin!(stream::or(pressed, released));
-        while let Some(event) = events.next().await {
-            match event {
-                KeyEvent::Pressed => press(),
-                KeyEvent::Released => release(),
+        while let Some((id, down)) = events.next().await {
+            match (id.as_str(), down) {
+                (SHORTCUT, true) => press(),
+                (SHORTCUT, false) => release(),
+                (MEMO_SHORTCUT, true) => memo_down(),
+                (MEMO_SHORTCUT, false) => memo_up(),
+                _ => {}
             }
         }
     };
@@ -319,18 +370,29 @@ async fn portal(ready: mpsc::Sender<Result<(), String>>, description: String, as
     eprintln!("kyrr: shortcut portal: the connection ended");
 }
 
-/// Asks the desktop to bind the key to kyrr; GNOME and KDE show a dialog.
+/// Asks the desktop to bind the key (and the memo key) to kyrr; GNOME and
+/// KDE show a dialog.
 async fn bind(shortcuts: &GlobalShortcuts, session: &Session<GlobalShortcuts>, description: &str) {
     let trigger = KEYS[KEY.load(Ordering::Relaxed)].2;
-    let shortcut = NewShortcut::new(SHORTCUT, description).preferred_trigger(trigger);
-    let bound = async {
-        shortcuts
-            .bind_shortcuts(session, &[shortcut], None, Default::default())
-            .await?
-            .response()
-    };
+    let mut wanted = vec![NewShortcut::new(SHORTCUT, description).preferred_trigger(trigger)];
+    if let Some(memo) = memo_key_name() {
+        let memo_description = MEMO_DESCRIPTION.lock().unwrap_or_else(PoisonError::into_inner).clone();
+        wanted.push(NewShortcut::new(MEMO_SHORTCUT, memo_description.as_str()).preferred_trigger(memo));
+    }
     Binding::Asking.set();
-    match bound.await {
+    let mut result = bind_these(shortcuts, session, &wanted).await;
+    // The memo key must not cost the dictation key: refused for another
+    // reason than the user saying no, dictation is asked for alone.
+    let cancelled = matches!(
+        result,
+        Err(ashpd::Error::Response(ashpd::desktop::ResponseError::Cancelled))
+    );
+    if result.is_err() && !cancelled && wanted.len() > 1 {
+        eprintln!("kyrr: binding both shortcuts failed, dictation alone");
+        wanted.truncate(1);
+        result = bind_these(shortcuts, session, &wanted).await;
+    }
+    match result {
         Ok(_) => Binding::Bound.set(),
         Err(e) => {
             eprintln!("kyrr: binding the dictation shortcut: {e}");
@@ -339,13 +401,26 @@ async fn bind(shortcuts: &GlobalShortcuts, session: &Session<GlobalShortcuts>, d
     }
 }
 
+/// One request to the portal for `wanted`.
+async fn bind_these(
+    shortcuts: &GlobalShortcuts,
+    session: &Session<GlobalShortcuts>,
+    wanted: &[NewShortcut],
+) -> ashpd::Result<()> {
+    shortcuts
+        .bind_shortcuts(session, wanted, None, Default::default())
+        .await?
+        .response()
+        .map(drop)
+}
+
 /// One connection serves the event thread and the requests of [`set_key`] and
 /// [`set_active`]; `RustConnection` allows both at once.
 struct X11 {
     conn: RustConnection,
     root: Window,
-    /// The keycode currently grabbed.
-    grabbed: Mutex<Option<u8>>,
+    /// The keycodes currently grabbed: dictation's and the memo key's.
+    grabbed: Mutex<[Option<u8>; 2]>,
 }
 
 impl X11 {
@@ -359,31 +434,42 @@ impl X11 {
             ModMask::M2,
             ModMask::LOCK | ModMask::M2,
         ];
-        if let Some(code) = grabbed.take() {
+        for code in grabbed.iter_mut().filter_map(Option::take) {
             for modifiers in locks {
                 self.conn.ungrab_key(code, self.root, modifiers)?;
             }
         }
-        if ACTIVE.load(Ordering::Relaxed) {
-            if let Some(code) = self.keycode(KEYS[KEY.load(Ordering::Relaxed)].1)? {
-                // Caps Lock and Num Lock count as modifiers to the grab; Ctrl,
-                // Alt and Shift are left out on purpose, the key is then the
-                // focused app's.
-                *grabbed = Some(code);
-                let cookies = locks
-                    .map(|m| {
-                        self.conn
-                            .grab_key(false, self.root, m, code, GrabMode::ASYNC, GrabMode::ASYNC)
-                    })
-                    .into_iter()
-                    .collect::<Result<Vec<_>, _>>()?;
-                for cookie in cookies {
-                    cookie.check()?;
-                }
+        let dictate = ACTIVE
+            .load(Ordering::Relaxed)
+            .then(|| KEYS[KEY.load(Ordering::Relaxed)].1);
+        let memo = KEYS.get(MEMO_KEY.load(Ordering::Relaxed)).map(|k| k.1);
+        for (slot, keysym) in [dictate, memo].into_iter().enumerate() {
+            let Some(code) = keysym.map(|k| self.keycode(k)).transpose()?.flatten() else {
+                continue;
+            };
+            // Caps Lock and Num Lock count as modifiers to the grab; Ctrl,
+            // Alt and Shift are left out on purpose, the key is then the
+            // focused app's.
+            grabbed[slot] = Some(code);
+            let cookies = locks
+                .map(|m| {
+                    self.conn
+                        .grab_key(false, self.root, m, code, GrabMode::ASYNC, GrabMode::ASYNC)
+                })
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?;
+            for cookie in cookies {
+                cookie.check()?;
             }
         }
         self.conn.flush()?;
         Ok(())
+    }
+
+    /// Whether `code` is the memo key's (not dictation's).
+    fn is_memo(&self, code: u8) -> bool {
+        let grabbed = self.grabbed.lock().unwrap_or_else(PoisonError::into_inner);
+        grabbed[1] == Some(code) && grabbed[0] != Some(code)
     }
 
     fn keycode(&self, keysym: u32) -> Result<Option<u8>, ReplyError> {
@@ -425,13 +511,15 @@ fn start_x11() -> Result<(), String> {
     let x = X11.get_or_init(|| X11 {
         conn,
         root,
-        grabbed: Mutex::new(None),
+        grabbed: Mutex::new([None; 2]),
     });
     std::thread::Builder::new()
         .name("kyrr-hotkey".into())
         .spawn(move || {
             while let Ok(event) = x.conn.wait_for_event() {
                 match event {
+                    Event::KeyPress(e) if x.is_memo(e.detail) => memo_down(),
+                    Event::KeyRelease(e) if x.is_memo(e.detail) => memo_up(),
                     Event::KeyPress(_) => press(),
                     Event::KeyRelease(_) => release(),
                     _ => {}

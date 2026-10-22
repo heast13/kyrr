@@ -205,6 +205,11 @@ mod imp {
         hotkey::set_key(vk);
     }
 
+    /// The voice memo key, 0 for none.
+    pub fn set_memo_key(vk: u32, _description: &str) {
+        hotkey::set_memo_key(vk);
+    }
+
     /// Shows the license notices that ship in the install folder.
     pub fn open_licenses() {
         if let Some(dir) = std::env::current_exe()
@@ -821,6 +826,12 @@ mod imp {
         kyrr_linux::hotkey::set_key(vk);
     }
 
+    /// The voice memo key, 0 for none; `description` names it in the
+    /// desktop's settings.
+    pub fn set_memo_key(vk: u32, description: &str) {
+        kyrr_linux::hotkey::set_memo_key(vk, description);
+    }
+
     /// `description` names the shortcut in the desktop's dialog and settings.
     /// Before the setup is done, GNOME and KDE are asked for the key only
     /// when the setup gets to it, not out of the blue at the start.
@@ -1006,13 +1017,14 @@ mod imp {
     fn compositor_note(compositor: Compositor, portal: bool) -> KeyNote {
         let keys = binds::Keys {
             key: kyrr_linux::hotkey::key_name().to_string(),
+            memo: kyrr_linux::hotkey::memo_key_name().map(str::to_string),
             portal,
             program: program(),
             link: flatpak(),
         };
         let base = binds::config_home();
-        // Dictation is off: nothing to bind, so nothing to say.
-        let Some(outcome) = compositor_outcome(compositor, &base, &keys) else {
+        // Dictation is off: nothing to say about its key.
+        let Some(outcome) = compositor_outcome(compositor, &base, &keys).filter(|_| dictation_wanted()) else {
             return KeyNote::None;
         };
         match outcome {
@@ -1047,6 +1059,15 @@ mod imp {
     fn gnome_note() -> KeyNote {
         let key = kyrr_linux::hotkey::key_name().to_string();
         let command = binds::command(&program(), "--dictate");
+        let memo = kyrr_linux::hotkey::memo_key_name().map(str::to_string);
+        // The memo key has no note of its own on the main page: the log.
+        match memo_outcome(memo.clone(), binds::command(&program(), "--memo")) {
+            Some(gnome::Outcome::Taken { name }) => {
+                eprintln!("kyrr: the voice memo key {memo:?} is taken by GNOME's shortcut \"{name}\"")
+            }
+            Some(gnome::Outcome::Failed) => eprintln!("kyrr: could not add GNOME's shortcut for the voice memo key"),
+            _ => {}
+        }
         let Some(outcome) = gnome_outcome(&key, &command) else {
             return KeyNote::None;
         };
@@ -1066,23 +1087,29 @@ mod imp {
     type Memo<K, O> = std::sync::Mutex<Option<(K, O)>>;
     static COMPOSITOR: Memo<(Compositor, binds::Keys), binds::Outcome> = std::sync::Mutex::new(None);
     static GNOME: Memo<(String, String), gnome::Outcome> = std::sync::Mutex::new(None);
+    static GNOME_MEMO: Memo<(Option<String>, String), gnome::Outcome> = std::sync::Mutex::new(None);
 
-    /// Runs `bind` while dictation is on, once per what it binds: the answer
+    /// Runs `bind` while `wanted`, once per what it binds: the answer
     /// stands until that changes, so a key freed elsewhere is noticed after
-    /// the next start.
-    fn memo<K: PartialEq, O: Clone>(memo: &Memo<K, O>, key: K, bind: impl FnOnce() -> O) -> Option<O> {
-        if !KEY_WANTED.load(std::sync::atomic::Ordering::Relaxed) {
+    /// the next start. No longer wanted, a change still binds once more
+    /// (the memo key switched off comes out again), but nothing is said.
+    fn memo<K: PartialEq, O: Clone>(memo: &Memo<K, O>, key: K, wanted: bool, bind: impl FnOnce() -> O) -> Option<O> {
+        let mut memo = memo.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !wanted && memo.is_none() {
             return None;
         }
-        let mut memo = memo.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some((seen, outcome)) = memo.as_ref() {
             if *seen == key {
-                return Some(outcome.clone());
+                return wanted.then(|| outcome.clone());
             }
         }
         let outcome = bind();
         *memo = Some((key, outcome.clone()));
-        Some(outcome)
+        wanted.then_some(outcome)
+    }
+
+    fn dictation_wanted() -> bool {
+        KEY_WANTED.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Puts the key into the compositor's config and has it read the file.
@@ -1091,22 +1118,27 @@ mod imp {
         base: &std::path::Path,
         keys: &binds::Keys,
     ) -> Option<binds::Outcome> {
-        memo(&COMPOSITOR, (compositor, keys.clone()), || {
-            let before = binds::bound_key(compositor, base);
-            let outcome = binds::ensure(compositor, base, keys);
-            if matches!(outcome, binds::Outcome::Bound { written: true, .. }) && !flatpak() {
-                let lines = binds::target(compositor, base).map(|t| binds::lines(t.syntax, keys));
-                let key = keys.key.clone();
-                std::thread::spawn(move || reload(compositor, before, &key, lines));
-            }
-            outcome
-        })
+        memo(
+            &COMPOSITOR,
+            (compositor, keys.clone()),
+            dictation_wanted() || keys.memo.is_some(),
+            || {
+                let before = binds::bound_keys(compositor, base);
+                let outcome = binds::ensure(compositor, base, keys);
+                if matches!(outcome, binds::Outcome::Bound { written: true, .. }) && !flatpak() {
+                    let lines = binds::target(compositor, base).map(|t| binds::lines(t.syntax, keys));
+                    let now = binds::bound_keys(compositor, base);
+                    std::thread::spawn(move || reload(compositor, before, &now, lines));
+                }
+                outcome
+            },
+        )
     }
 
     /// Makes the compositor take the new key now. Hyprland and niri see the
     /// change by themselves (this only makes Hyprland quicker), sway reads
     /// the file on `reload`, river only at its start: there the lines run.
-    fn reload(compositor: Compositor, before: Option<String>, key: &str, lines: Option<String>) {
+    fn reload(compositor: Compositor, before: Vec<String>, now: &[String], lines: Option<String>) {
         let run = |program: &str, args: &[&str]| {
             let _ = std::process::Command::new(program).args(args).status();
         };
@@ -1115,9 +1147,9 @@ mod imp {
             Compositor::Sway => run("swaymsg", &["reload"]),
             Compositor::Niri => {}
             Compositor::River => {
-                if let Some(old) = before.filter(|old| old != key) {
-                    run("riverctl", &["unmap", "normal", "None", &old]);
-                    run("riverctl", &["unmap", "-release", "normal", "None", &old]);
+                for old in before.iter().filter(|old| !now.contains(old)) {
+                    run("riverctl", &["unmap", "normal", "None", old]);
+                    run("riverctl", &["unmap", "-release", "normal", "None", old]);
                 }
                 if let Some(lines) = lines {
                     run("sh", &["-c", &lines]);
@@ -1126,10 +1158,20 @@ mod imp {
         }
     }
 
-    fn gnome_outcome(key: &str, command: &str) -> Option<gnome::Outcome> {
-        memo(&GNOME, (key.to_string(), command.to_string()), || {
-            gnome::ensure(key, command)
+    /// The voice memo key as a second custom shortcut of GNOME's, or none.
+    fn memo_outcome(key: Option<String>, command: String) -> Option<gnome::Outcome> {
+        memo(&GNOME_MEMO, (key.clone(), command.clone()), true, || {
+            gnome::ensure_memo(key.as_deref(), &command)
         })
+    }
+
+    fn gnome_outcome(key: &str, command: &str) -> Option<gnome::Outcome> {
+        memo(
+            &GNOME,
+            (key.to_string(), command.to_string()),
+            dictation_wanted(),
+            || gnome::ensure(key, command),
+        )
     }
 
     /// How this kyrr is started: through Flatpak, the AppImage's path, or the
