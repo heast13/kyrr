@@ -304,6 +304,10 @@ fn main() {
     state.set_download_progress(0.42);
     state.set_phrase(2);
     render(&window, &ui, &format!("{out}/download-{lang}.rgba"));
+    // The note after the computer could not keep up.
+    state.set_overload_note(OverloadNote::Switched);
+    render(&window, &ui, &format!("{out}/overload-{lang}.rgba"));
+    state.set_overload_note(OverloadNote::None);
 
     // The settings pages: setup, then one for each card's gear.
     state.set_dictation_state(DictationState::Ready);

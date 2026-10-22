@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use chrono::{Local, NaiveDateTime};
 use kyrr_common::wave::{Mode, Overlay};
@@ -32,6 +32,8 @@ const COPIED: Duration = Duration::from_secs(2);
 const BRIEF: Duration = Duration::from_secs(5);
 /// How long after the last key typed in a text it is saved.
 const SAVE_AFTER: Duration = Duration::from_millis(700);
+/// How often the open text looks whether its file changed outside kyrr.
+const WATCH: Duration = Duration::from_secs(1);
 
 /// Told when the list was looked at (seconds since 1970).
 type SeenHook = Box<dyn Fn(u64)>;
@@ -69,6 +71,9 @@ pub struct Memos {
     sheet: RefCell<Option<PathBuf>>,
     /// The text field holds changes that are not on disk yet.
     dirty: Cell<bool>,
+    /// When the open text's file was last written, as the field shows it: a
+    /// different one means it was changed outside kyrr.
+    sheet_stamp: Cell<Option<SystemTime>>,
     /// What the text field shows before each paragraph.
     stamps: Cell<Stamps>,
     /// When the list was last looked at (seconds since 1970); memos made
@@ -79,6 +84,7 @@ pub struct Memos {
     copied: slint::Timer,
     brief: slint::Timer,
     saving: slint::Timer,
+    watching: slint::Timer,
 }
 
 thread_local! {
@@ -122,6 +128,7 @@ impl Memos {
             texts: RefCell::new(HashMap::new()),
             sheet: RefCell::new(None),
             dirty: Cell::new(false),
+            sheet_stamp: Cell::new(None),
             stamps: Cell::new(Stamps::None),
             seen: Cell::new(0),
             on_seen: RefCell::new(None),
@@ -129,6 +136,7 @@ impl Memos {
             copied: slint::Timer::default(),
             brief: slint::Timer::default(),
             saving: slint::Timer::default(),
+            watching: slint::Timer::default(),
         });
         MEMOS.set(Some(Rc::clone(&memos)));
         window
@@ -812,7 +820,7 @@ impl Memos {
         }
     }
 
-    fn show_text(&self, index: i32) {
+    fn show_text(self: &Rc<Self>, index: i32) {
         let Some(path) = self.path(index) else {
             return;
         };
@@ -821,6 +829,12 @@ impl Memos {
         self.dirty.set(false);
         *self.sheet.borrow_mut() = Some(path);
         self.show_sheet();
+        let weak = Rc::downgrade(self);
+        self.watching.start(slint::TimerMode::Repeated, WATCH, move || {
+            if let Some(m) = weak.upgrade() {
+                m.watch_sheet();
+            }
+        });
         let Some(w) = self.window.upgrade() else {
             return;
         };
@@ -850,6 +864,7 @@ impl Memos {
                 state.set_memo_sheet_text(field.into());
             }
             state.set_memo_sheet_saved(true);
+            self.sheet_stamp.set(text_stamp(&memo.path));
         }
         state.set_memo_sheet_title(memo.title.as_str().into());
         state.set_memo_sheet_when(self.when(memo).into());
@@ -861,10 +876,37 @@ impl Memos {
 
     fn close_text(&self) {
         self.flush();
+        self.watching.stop();
         if let Some(w) = self.window.upgrade() {
             w.global::<AppState>().set_memo_sheet_open(false);
             crate::fit_sheet(&w, false);
         }
+    }
+
+    /// The open text changed outside kyrr (an editor, a sync): the field
+    /// shows the file again, unless something typed waits to be saved. A
+    /// memo gone from the folder closes its text.
+    fn watch_sheet(&self) {
+        let Some(path) = self.sheet.borrow().clone() else {
+            self.watching.stop();
+            return;
+        };
+        if !path.exists() {
+            self.saving.stop();
+            self.dirty.set(false);
+            *self.sheet.borrow_mut() = None;
+            self.close_text();
+            self.refresh();
+            return;
+        }
+        let stamp = text_stamp(&path);
+        if self.dirty.get() || stamp == self.sheet_stamp.get() {
+            return;
+        }
+        if let Some(memo) = self.all.borrow_mut().iter_mut().find(|m| m.path == path) {
+            memo.text = library::read_text(&path);
+        }
+        self.show_sheet();
     }
 
     /// The text field changed: saved a moment after the last key.
@@ -895,11 +937,17 @@ impl Memos {
             self.dirty.set(false);
             return;
         };
+        // The memo went (deleted or renamed outside kyrr): no text without it.
+        if !path.exists() {
+            self.dirty.set(false);
+            return;
+        }
         let old = self.paragraphs_of(&path);
         let paragraphs = library::edited(&old, state.get_memo_sheet_text().as_str());
         match library::write_text(&path, &paragraphs) {
             Ok(_) => {
                 self.dirty.set(false);
+                self.sheet_stamp.set(text_stamp(&path));
                 if let Some(memo) = self.all.borrow_mut().iter_mut().find(|m| m.path == path) {
                     memo.text = Some(paragraphs);
                 }
@@ -998,4 +1046,11 @@ impl Memos {
         }
         self.player.borrow_mut().take();
     }
+}
+
+/// When the text of the memo at `path` was last written.
+fn text_stamp(path: &Path) -> Option<SystemTime> {
+    std::fs::metadata(library::text_path(path))
+        .and_then(|m| m.modified())
+        .ok()
 }

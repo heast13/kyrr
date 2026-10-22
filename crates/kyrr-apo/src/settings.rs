@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use kyrr_common::{FilterSettings, REG_FILTER};
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{ERROR_SUCCESS, WAIT_TIMEOUT};
+use windows::Win32::Foundation::{ERROR_SUCCESS, WAIT_FAILED, WAIT_TIMEOUT};
 use windows::Win32::System::Registry::{
     RegCloseKey, RegNotifyChangeKeyValue, RegOpenKeyExW, HKEY, HKEY_LOCAL_MACHINE, KEY_NOTIFY, KEY_QUERY_VALUE,
     REG_NOTIFY_CHANGE_LAST_SET,
@@ -107,8 +107,16 @@ fn watch() {
             let settings = read(key);
             live().set(settings);
             crate::swap::settings_changed(settings.light_model);
-            while unsafe { WaitForSingleObject(event, 1000) } == WAIT_TIMEOUT {
+            let woke = loop {
+                let woke = unsafe { WaitForSingleObject(event, 1000) };
+                if woke != WAIT_TIMEOUT {
+                    break woke;
+                }
                 crate::swap::report_too_slow();
+            };
+            // A wait that fails at once would spin.
+            if woke == WAIT_FAILED {
+                std::thread::sleep(Duration::from_secs(1));
             }
         }
         unsafe {

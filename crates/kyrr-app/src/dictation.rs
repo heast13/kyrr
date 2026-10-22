@@ -416,20 +416,30 @@ pub fn spawn(
                 .min()
                 .unwrap_or(Duration::from_secs(60));
                 let due = |d: Option<Duration>| d.is_some_and(|d| d.is_zero());
-                match rx.recv_timeout(wait) {
-                    Ok(Command::Quit) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
-                    Ok(cmd) => worker.handle(cmd),
-                    Err(mpsc::RecvTimeoutError::Timeout) if due(worker.until_end()) => worker.end_at_limit(),
-                    Err(mpsc::RecvTimeoutError::Timeout) if due(worker.until_typed()) => worker.type_waiting(),
-                    Err(mpsc::RecvTimeoutError::Timeout) if due(worker.until_look()) => worker.look(),
-                    Err(mpsc::RecvTimeoutError::Timeout) if due(worker.until_ahead()) => worker.work_ahead(),
-                    Err(mpsc::RecvTimeoutError::Timeout) => worker.unload_when_idle(),
+                let received = rx.recv_timeout(wait);
+                if matches!(received, Ok(Command::Quit) | Err(mpsc::RecvTimeoutError::Disconnected)) {
+                    break;
                 }
-                // A job waits while a dictation runs or is being typed.
-                let busy =
-                    worker.recording.is_some() || worker.state == State::Transcribing || worker.waiting.is_some();
-                worker.pause.store(busy, Ordering::Relaxed);
-                worker.next_job();
+                // A crash in here costs the dictation at hand, not the key
+                // for the rest of the day.
+                let step = catch_unwind(AssertUnwindSafe(|| {
+                    match received {
+                        Ok(cmd) => worker.handle(cmd),
+                        Err(_) if due(worker.until_end()) => worker.end_at_limit(),
+                        Err(_) if due(worker.until_typed()) => worker.type_waiting(),
+                        Err(_) if due(worker.until_look()) => worker.look(),
+                        Err(_) if due(worker.until_ahead()) => worker.work_ahead(),
+                        Err(_) => worker.unload_when_idle(),
+                    }
+                    // A job waits while a dictation runs or is being typed.
+                    let busy =
+                        worker.recording.is_some() || worker.state == State::Transcribing || worker.waiting.is_some();
+                    worker.pause.store(busy, Ordering::Relaxed);
+                    worker.next_job();
+                }));
+                if step.is_err() {
+                    worker.start_over();
+                }
             }
             if let Some((_, cancel)) = &worker.job {
                 cancel.store(true, Ordering::Relaxed);
@@ -459,6 +469,17 @@ impl Worker {
 
     fn tell(&self, what: &str) {
         (self.notify)(Event::Message(Some(say(self.language, what))));
+    }
+
+    /// After a crash in the worker: the dictation at hand is given up, the
+    /// rest goes on as the settings say.
+    fn start_over(&mut self) {
+        eprintln!("kyrr: dictation: crashed, starting over");
+        self.recording = None;
+        self.transcript = None;
+        self.waiting = None;
+        self.pause.store(false, Ordering::Relaxed);
+        let _ = catch_unwind(AssertUnwindSafe(|| self.refresh()));
     }
 
     /// A lasting problem: the message stays until a retry.
@@ -560,7 +581,10 @@ impl Worker {
             self.load_failed = true;
             self.recording = None;
             self.transcript = None;
-            self.error("load");
+            // Loaded for a memo's text with dictation off: the memo says so.
+            if self.enabled {
+                self.error("load");
+            }
             return false;
         };
         self.load_failed = false;

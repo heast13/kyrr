@@ -42,10 +42,11 @@ impl Player {
         let spawned = std::thread::Builder::new()
             .name("kyrr-memo-play".into())
             .spawn(move || {
+                // Done also when playing crashed: the row stops showing it.
+                let _done = Done(done);
                 if let Err(e) = play(&path, from, &stop, &played, &rate) {
                     eprintln!("kyrr: memo: playing {}: {e}", path.display());
                 }
-                done.store(true, Ordering::Relaxed);
             });
         if spawned.is_err() {
             player.done.store(true, Ordering::Relaxed);
@@ -69,6 +70,15 @@ impl Player {
     /// Whether it played to the end (or could not play).
     pub fn finished(&self) -> bool {
         self.done.load(Ordering::Relaxed)
+    }
+}
+
+/// Sets its flag when it goes, however the thread ends.
+struct Done(Arc<AtomicBool>);
+
+impl Drop for Done {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Relaxed);
     }
 }
 

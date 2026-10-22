@@ -116,16 +116,26 @@ impl Chain {
             if let Some(filter) = self.filter.as_mut() {
                 filter.reset();
             }
+            // Its first block after a pause (or a sleep) is slow again.
+            self.load.restart();
         }
         self.last = Some(now);
         self.voice.set(&s.voice);
         self.voice.pre(buf);
+        // Left out a while: tried again, from a clean start.
+        if self.slow && self.load.rest(buf.len(), RATE) {
+            if let Some(filter) = self.filter.as_mut() {
+                filter.reset();
+            }
+            self.slow = false;
+            self.shared.too_slow.store(false, Ordering::Relaxed);
+        }
         if let Some(filter) = self.filter.as_mut().filter(|_| !self.slow) {
             filter.set_mode(if s.enabled { Mode::Process } else { Mode::Bypass });
             filter.set_limit_db(s.limit_db as f32);
             let started = Instant::now();
             filter.process_in_place(buf);
-            // Left out from then on: PipeWire's real-time thread would fall
+            // Left out for a while: PipeWire's real-time thread would fall
             // behind, and the system ends kyrr when it never gets to rest.
             if self.load.add(started.elapsed(), buf.len(), RATE) {
                 self.slow = true;

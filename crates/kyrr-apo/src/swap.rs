@@ -120,6 +120,13 @@ impl Swap {
         self.too_slow.store(true, Ordering::Release);
     }
 
+    /// On the audio thread: the filter left out is tried again; a second
+    /// time too slow is told again.
+    pub fn try_again(&self) {
+        self.too_slow.store(false, Ordering::Release);
+        self.reported.store(false, Ordering::Release);
+    }
+
     pub fn unlocked(&self) {
         self.generation.fetch_add(1, Ordering::AcqRel);
         if let Ok(mut f) = self.format.lock() {
@@ -260,6 +267,17 @@ fn load(swap: &Swap, format: Format, generation: u32, model: Model) -> bool {
     }
     if let Ok(mut incoming) = swap.incoming.lock() {
         *incoming = None;
+    }
+    // Taken right after the last look: the old filter waits here, and while
+    // it does the stream can never switch again.
+    if let Ok(mut outgoing) = swap.outgoing.lock() {
+        drop(outgoing.take());
+    }
+    // Taken all the same, just after the last look.
+    if swap.model.load(Ordering::Acquire) == code(Some(model)) {
+        log(&format!("switched: {label}, engine {engine}"));
+        report("running", &engine, &label);
+        return true;
     }
     false
 }

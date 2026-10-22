@@ -205,6 +205,9 @@ mod imp {
         hotkey::set_key(vk);
     }
 
+    /// The hook reports press and release either way; the app decides.
+    pub fn set_hotkey_tap(_: bool) {}
+
     /// The voice memo key, 0 for none.
     pub fn set_memo_key(vk: u32, _description: &str) {
         hotkey::set_memo_key(vk);
@@ -850,6 +853,12 @@ mod imp {
 
     pub fn set_hotkey_key(vk: u32) {
         kyrr_linux::hotkey::set_key(vk);
+    }
+
+    /// Dictation is tapped, not held: a shortcut that runs `kyrr --dictate`
+    /// is a press each time.
+    pub fn set_hotkey_tap(tap: bool) {
+        kyrr_linux::hotkey::set_tap(tap);
     }
 
     /// The voice memo key, 0 for none; `description` names it in the

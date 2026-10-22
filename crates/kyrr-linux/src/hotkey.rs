@@ -106,6 +106,8 @@ static ACTIVE: AtomicBool = AtomicBool::new(false);
 /// press starts anything.
 static CAPTURING: AtomicBool = AtomicBool::new(false);
 static HELD: AtomicBool = AtomicBool::new(false);
+/// Dictation is tapped (one press starts, the next ends), not held.
+static TAP: AtomicBool = AtomicBool::new(false);
 /// Where binding the shortcut stands, a [`Binding`] as u8.
 static BINDING: AtomicU8 = AtomicU8::new(Binding::NotAsked as u8);
 /// Presses of the key seen, whether dictation was ready or not, so the
@@ -126,6 +128,12 @@ pub fn set_key(vk: u32) {
             let _ = x.rebind();
         }
     }
+}
+
+/// Whether dictation is tapped rather than held: `kyrr --dictate` then
+/// reports each call as a press.
+pub fn set_tap(tap: bool) {
+    TAP.store(tap, Ordering::Relaxed);
 }
 
 /// The voice memo key (a Windows virtual-key code, e.g. 0x77 for F8), 0
@@ -280,9 +288,17 @@ pub fn bind_again() {
     }
 }
 
-/// `kyrr --dictate`: starts dictation, or ends it when it runs.
+/// `kyrr --dictate`: starts dictation, or ends it when it runs. Tapped,
+/// every call is a press, as the app takes them; held, a call is a press
+/// and the next its release.
 pub fn toggle() {
-    if HELD.load(Ordering::Relaxed) {
+    if TAP.load(Ordering::Relaxed) {
+        PRESSES.fetch_add(1, Ordering::Relaxed);
+        if ACTIVE.load(Ordering::Relaxed) && !CAPTURING.load(Ordering::Relaxed) {
+            HELD.store(false, Ordering::Relaxed);
+            send(KeyEvent::Pressed);
+        }
+    } else if HELD.load(Ordering::Relaxed) {
         release();
     } else {
         press();
@@ -291,9 +307,15 @@ pub fn toggle() {
 
 /// `kyrr --dictate-start` and `--dictate-stop`, bound to a key's press and
 /// release where the desktop can (Hyprland's `bind` and `bindr`): hold to
-/// talk without the portal.
+/// talk without the portal. A press whatever came before, as for the memo
+/// key: a release that never came (a locked screen) does not leave the key
+/// dead.
 pub fn remote_press() {
-    press();
+    PRESSES.fetch_add(1, Ordering::Relaxed);
+    if ACTIVE.load(Ordering::Relaxed) && !CAPTURING.load(Ordering::Relaxed) {
+        HELD.store(true, Ordering::Relaxed);
+        send(KeyEvent::Pressed);
+    }
 }
 
 pub fn remote_release() {

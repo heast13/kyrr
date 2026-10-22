@@ -628,8 +628,10 @@ struct App {
     /// Ticks in a row the microphone was in use but silent.
     silent_ticks: Cell<u32>,
     model_changed: Cell<Option<Instant>>,
-    /// The noise model was too slow for this computer once.
+    /// The filter's status says its model is too slow for this computer.
     too_slow: Cell<bool>,
+    /// The main page said that the noise filter pauses now and then.
+    overload_told: Cell<bool>,
     /// Events from the probe thread, picked up by `tick`.
     probe_events: (mpsc::Sender<probe::Event>, mpsc::Receiver<probe::Event>),
     /// The last before/after take, for playing it again.
@@ -835,17 +837,25 @@ impl App {
         // On CPUs without AVX2 the filter runs ONNX Runtime, at several times
         // the CPU: kyrr picks the lean setting, once.
         let old_cpu = fs == FilterState::Running && detail.starts_with("onnx");
-        // The noise model took most of the audio's time and is left out
-        // (see `kyrr_denoise::Load`): the light one, whatever was picked,
-        // or the microphone stutters (and on Linux the system ends kyrr).
+        // The noise model took most of the audio's time and is left out a
+        // while (see `kyrr_denoise::Load`): the light one, whatever was
+        // picked, or the microphone stutters (and on Linux the system ends
+        // kyrr). Unless the user wants to stay; then the main page says so,
+        // once.
+        // Only when it turns too slow: the status says so until the next
+        // filter runs, and a pick by hand meanwhile stays.
         let too_slow = detail.starts_with(kyrr_common::TOO_SLOW);
-        if too_slow {
-            self.too_slow.set(true);
-        }
-        state.set_old_cpu(old_cpu || self.too_slow.get());
-        if too_slow && !self.filter.borrow().light_model {
-            eprintln!("kyrr: the noise model is too slow for this computer, switching to lean ({detail})");
-            self.set_effort(true);
+        let turned = too_slow && !self.too_slow.replace(too_slow);
+        state.set_old_cpu(old_cpu);
+        if turned {
+            if self.config.borrow().auto_lean && !self.filter.borrow().light_model {
+                eprintln!("kyrr: the noise model is too slow for this computer, switching to lean ({detail})");
+                self.set_effort(true);
+                state.set_overload_note(OverloadNote::Switched);
+            } else if !self.overload_told.replace(true) {
+                eprintln!("kyrr: the noise model is too slow for this computer, left out a while ({detail})");
+                state.set_overload_note(OverloadNote::Pauses);
+            }
         } else if old_cpu && !self.config.borrow().lean_suggested {
             {
                 let mut config = self.config.borrow_mut();
@@ -1403,6 +1413,7 @@ impl App {
         };
         platform::set_key_wanted(self.config.borrow().dictation);
         platform::set_hotkey_key(key);
+        platform::set_hotkey_tap(toggle);
         self.key_toggle.store(toggle, Ordering::Relaxed);
         let name = keys::label(key, self.language() == Language::German);
         if let Some(w) = self.window.upgrade() {
@@ -1885,6 +1896,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     };
     // Both keys before the start: the desktop's dialog asks for them at once.
     platform::set_hotkey_key(config.dictation_key());
+    platform::set_hotkey_tap(config.dictation_toggle);
     platform::set_memo_hold(!config.memo_toggle);
     let memo_description = match language {
         Language::German => MEMO_DESCRIPTION.0,
@@ -1938,8 +1950,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 }
                 let toggle = key_toggle.load(Ordering::Relaxed);
                 held = down && !toggle;
+                // A worker that is gone (quitting) takes the dictation key
+                // along, not the memo key.
                 if worker.send(Command::Held(down)).is_err() {
-                    break;
+                    continue;
                 }
                 let cmd = match (key, toggle) {
                     (platform::KeyEvent::Pressed, false) => Command::KeyDown(Instant::now(), false),
@@ -1951,9 +1965,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                     (platform::KeyEvent::Released, true)
                     | (platform::KeyEvent::MemoPressed | platform::KeyEvent::MemoReleased, _) => continue,
                 };
-                if worker.send(cmd).is_err() {
-                    break;
-                }
+                let _ = worker.send(cmd);
             }
         });
     }
@@ -1973,6 +1985,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         silent_ticks: Cell::new(0),
         model_changed: Cell::new(None),
         too_slow: Cell::new(false),
+        overload_told: Cell::new(false),
         probe_events: mpsc::channel(),
         take: RefCell::new(None),
         listening: RefCell::new(None),
@@ -2121,6 +2134,17 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                     }
                 };
                 set(UpdateState::Installing);
+                // The installer ends kyrr without asking: a memo being
+                // recorded is closed first, and typed text saved.
+                let (closed, done) = mpsc::channel();
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(m) = memos::memos() {
+                        m.end();
+                        m.flush();
+                    }
+                    let _ = closed.send(());
+                });
+                let _ = done.recv_timeout(Duration::from_secs(5));
                 // The installer ends this kyrr and starts the new one. Back
                 // here means nothing was installed: Windows' permission was
                 // declined, so the offer stands again.
@@ -2333,7 +2357,19 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                     config.save();
                 }
                 app.set_effort(i == 0);
+                if let Some(w) = app.window.upgrade() {
+                    w.global::<AppState>().set_overload_note(OverloadNote::None);
+                }
             }
+        }
+    });
+    state.set_auto_lean(app.config.borrow().auto_lean);
+    state.on_auto_lean_toggled({
+        let app = Rc::clone(&app);
+        move |on| {
+            let mut config = app.config.borrow_mut();
+            config.auto_lean = on;
+            config.save();
         }
     });
     state.on_key_toggle_changed({
@@ -2644,15 +2680,13 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             }
         });
     }
-    let tray_at_start = platform::has_tray();
+    // Without a tray host Slint would only log a complaint: wait for one
+    // (the retry below) instead of shouting at start. One that is there but
+    // takes no icon is waited for the same way, not the end of kyrr.
+    let tray_at_start = platform::has_tray() && tray.show().map_err(|e| eprintln!("kyrr: tray: {e}")).is_ok();
     // One lookup for both, so a host that turns up in between cannot leave
     // the window saying "no tray" next to a visible icon.
     window.global::<AppState>().set_tray(tray_at_start);
-    // Without a tray host Slint would only log a complaint: wait for one
-    // (the retry below) instead of shouting at start.
-    if tray_at_start {
-        tray.show()?;
-    }
     drop(tray);
     // A panel that hosts tray icons may start after kyrr (both at login).
     // An icon can only register once one is there: make a new one then.
