@@ -617,6 +617,9 @@ impl Memos {
             Some(title) if path.exists() && !recording => match library::rename(&path, &title) {
                 Ok(to) => {
                     self.moved(&path, &to);
+                    if self.sheet.borrow().as_ref() == Some(&path) {
+                        *self.sheet.borrow_mut() = Some(to.clone());
+                    }
                     to
                 }
                 Err(_) => path,

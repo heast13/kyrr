@@ -93,10 +93,10 @@ fn keywords(text: &str) -> Option<String> {
     let mut seen: HashMap<String, Seen> = HashMap::new();
     let mut at = 0;
     for sentence in text.split(['.', '!', '?', '\n']) {
-        for (i, raw) in sentence
+        let tokens = sentence
             .split(|c: char| !c.is_alphanumeric() && c != '-' && c != '\'')
-            .enumerate()
-        {
+            .filter(|t| !t.is_empty());
+        for (i, raw) in tokens.enumerate() {
             let raw = raw.trim_matches(['-', '\'']);
             let lower = raw.to_lowercase();
             if !is_content(&lower) || FILLERS.contains(&lower.as_str()) {
@@ -135,11 +135,8 @@ fn keywords(text: &str) -> Option<String> {
     let mut chosen: Vec<&Seen> = Vec::new();
     for s in ranked {
         // "Termin" and "Termine" are one word.
-        let (a, b) = (s.word.to_lowercase(), |o: &&Seen| o.word.to_lowercase());
-        if chosen.iter().any(|o| {
-            let b = b(o);
-            (a.starts_with(&b) || b.starts_with(&a)) && a.len().abs_diff(b.len()) <= 2
-        }) {
+        let a = s.word.to_lowercase();
+        if chosen.iter().any(|o| same_word(&a, &o.word.to_lowercase())) {
             continue;
         }
         chosen.push(s);
@@ -161,6 +158,13 @@ fn keywords(text: &str) -> Option<String> {
         title = next;
     }
     capitalized(&title)
+}
+
+/// One word with an ending of the other: a plural or a case.
+fn same_word(a: &str, b: &str) -> bool {
+    let (short, long) = if a.len() <= b.len() { (a, b) } else { (b, a) };
+    long.strip_prefix(short)
+        .is_some_and(|end| matches!(end, "e" | "en" | "n" | "er" | "s" | "es" | "se" | "ern"))
 }
 
 /// `words` as a title, cut to [`WORDS`] and [`CHARS`].
@@ -260,6 +264,15 @@ mod tests {
             .as_deref(),
             Some("Dashboard, March, Sarah")
         );
+    }
+
+    #[test]
+    fn a_word_after_a_full_stop_is_no_noun() {
+        assert_eq!(
+            from_text("Ich muss die Heizung im Keller prüfen lassen. Morgen kommt der Handwerker.").as_deref(),
+            Some("Heizung, Keller, Handwerker")
+        );
+        assert!(same_word("termin", "termine") && !same_word("termin", "terminal"));
     }
 
     #[test]

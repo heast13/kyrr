@@ -173,7 +173,6 @@ mod tests {
         writer.finish().unwrap();
 
         let named = title(&model, rate, &said).expect("a title");
-        println!("title: {named}");
         assert!(named.contains("Ende") || named.contains("Wurst"), "{named}");
         let mut steps = Vec::new();
         let (cancel, pause) = (AtomicBool::new(false), AtomicBool::new(false));
