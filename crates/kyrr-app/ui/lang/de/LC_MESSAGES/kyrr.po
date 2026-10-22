@@ -1491,8 +1491,8 @@ msgstr "Überlastschutz"
 msgid "If the computer cannot keep up, kyrr switches to Lean by itself."
 msgstr "Kommt der Rechner nicht mit, wechselt kyrr selbst auf Sparsam."
 
-msgid "Off: if the computer cannot keep up, noise removal pauses now and then."
-msgstr "Aus: Kommt der Rechner nicht mit, setzt die Geräuschunterdrückung ab und zu aus."
+msgid "Off: when overloaded, the microphone may stutter and noise removal may pause."
+msgstr "Aus: Bei Überlast kann das Mikro stocken und die Geräuschunterdrückung aussetzen."
 
 msgid "The computer could not keep up: now Lean."
 msgstr "Rechner kam nicht mit: jetzt Sparsam."
