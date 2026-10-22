@@ -595,6 +595,7 @@ fn show(window: &MainWindow) {
         window.window().set_size(LogicalSize::new(width, FALLBACK_HEIGHT));
         resize(window, wanted_height(window));
     }
+    window.global::<AppState>().set_window_shown(true);
     let _ = window.show();
     window.window().set_minimized(false);
     platform::bring_to_front(window.window());
@@ -617,6 +618,9 @@ struct App {
     monitor: RefCell<Option<platform::Monitor>>,
     /// Runs `tick` while the window is open; nobody sees the meter otherwise.
     meter: slint::Timer,
+    /// In the setup, shows the desktop's answers and the first press of the
+    /// key at once; runs with the window like the meter.
+    guide: slint::Timer,
     heartbeat: Cell<u32>,
     ticks: Cell<u32>,
     /// Which of the red notes is up; moves on with the phrases.
@@ -969,11 +973,42 @@ impl App {
         }
         let app = Rc::downgrade(self);
         self.meter
-            .start(slint::TimerMode::Repeated, Duration::from_millis(100), move || {
-                if let Some(app) = app.upgrade() {
-                    app.tick();
+            .start(slint::TimerMode::Repeated, Duration::from_millis(100), {
+                let app = app.clone();
+                move || {
+                    if let Some(app) = app.upgrade() {
+                        app.tick();
+                    }
                 }
             });
+        self.guide
+            .start(slint::TimerMode::Repeated, Duration::from_millis(250), move || {
+                if let Some(app) = app.upgrade() {
+                    app.follow_guide();
+                }
+            });
+    }
+
+    /// In the setup the answers to the desktop's questions and the first
+    /// press of the key show at once.
+    fn follow_guide(&self) {
+        let Some(w) = self.window.upgrade() else {
+            return;
+        };
+        if w.get_setup_mode() && w.get_setup_step() == 1 && w.global::<AppState>().get_guide() {
+            let before = (
+                w.global::<AppState>().get_key_state(),
+                w.global::<AppState>().get_key_tried(),
+            );
+            self.refresh_key_note();
+            let after = (
+                w.global::<AppState>().get_key_state(),
+                w.global::<AppState>().get_key_tried(),
+            );
+            if before != after {
+                fit(&self.window);
+            }
+        }
     }
 
     /// The window went away: no meter, no listening.
@@ -989,9 +1024,11 @@ impl App {
 
     fn window_closed(&self) {
         self.meter.stop();
+        self.guide.stop();
         self.stop_listening();
         if let Some(w) = self.window.upgrade() {
             let state = w.global::<AppState>();
+            state.set_window_shown(false);
             state.set_mic_active(false);
             state.set_alert(0);
             state.set_level_before(0.0);
@@ -1929,6 +1966,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         attached: RefCell::new(None),
         monitor: RefCell::new(None),
         meter: slint::Timer::default(),
+        guide: slint::Timer::default(),
         heartbeat: Cell::new(0),
         ticks: Cell::new(0),
         alert_turn: Cell::new(0),
@@ -2541,31 +2579,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             app.check_mute();
             app.follow_default();
             app.refresh_key_note();
-        }
-    });
-    // In the setup the answers to the desktop's questions and the first
-    // press of the key show at once.
-    let guide_poll = slint::Timer::default();
-    guide_poll.start(slint::TimerMode::Repeated, Duration::from_millis(250), {
-        let app = Rc::clone(&app);
-        move || {
-            let Some(w) = app.window.upgrade() else {
-                return;
-            };
-            if w.get_setup_mode() && w.get_setup_step() == 1 && w.global::<AppState>().get_guide() {
-                let before = (
-                    w.global::<AppState>().get_key_state(),
-                    w.global::<AppState>().get_key_tried(),
-                );
-                app.refresh_key_note();
-                let after = (
-                    w.global::<AppState>().get_key_state(),
-                    w.global::<AppState>().get_key_tried(),
-                );
-                if before != after {
-                    fit(&app.window);
-                }
-            }
         }
     });
     if let Some(requests) = show_requests {

@@ -668,36 +668,90 @@ impl Wave {
             pill_left + BARS_PAD + bars_span(1.0) + BARS_TEXT_GAP,
             pill_left + pill - TEXT_PAD,
         );
+        // The pill's body, as it is without bars and words, is the same along
+        // a row wherever the ends are not round: worked out once per row.
+        let (half_width, half_height) = (pill / 2.0, h / 2.0);
+        let radius = half_height.min(half_width);
+        // Deep inside the pill, away from the hairline, every pixel is the
+        // same.
+        let deep = -(1.0 + 0.5 / scale) - 1e-3;
+        let shell = |d: f32| {
+            let inside = coverage(d, scale);
+            if inside <= 0.0 {
+                return None;
+            }
+            let mut color = [0.0f32; 4];
+            over(&mut color, colors.background, inside);
+            // A hairline just inside the edge.
+            over(&mut color, colors.edge, inside - coverage(d + 1.0, scale));
+            Some((color, inside))
+        };
+        let (interior, _) = shell(-100.0).unwrap_or_default();
+        let interior_pixel = pack(interior, self.alpha);
+        let columns: Vec<f32> = (0..width).map(|px| (px as f32 + 0.5) / scale).collect();
+        // Further than a pixel from the pill's ends, nothing is drawn.
+        let near = columns.partition_point(|x| w / 2.0 - x - half_width > 1.0) as u32
+            ..columns.partition_point(|x| x - w / 2.0 - half_width <= 1.0) as u32;
+        let straight: Vec<bool> = columns
+            .iter()
+            .map(|x| (x - w / 2.0).abs() - half_width + radius <= 0.0)
+            .collect();
+        // The bars each pixel column can touch: a range of the bars, which
+        // are in order.
+        let mut touched = vec![(0u8, 0u8, 0u16); width as usize];
+        for (i, &(bx, _)) in bars.iter().enumerate() {
+            let from = columns.partition_point(|x| x - bx < -bar_width);
+            let to = columns.partition_point(|x| x - bx <= bar_width);
+            for column in &mut touched[from..to] {
+                if column.0 == column.1 {
+                    column.0 = i as u8;
+                }
+                column.1 = i as u8 + 1;
+                column.2 |= 1 << i;
+            }
+        }
         for py in 0..height {
-            for px in 0..width {
+            let y = (py as f32 + 0.5) / scale;
+            let cy = y - h / 2.0;
+            let row = &mut pixels[(py * width) as usize..((py + 1) * width) as usize];
+            // The bars this row is within reach of (the others are too far
+            // above or below to touch it).
+            let reached = bars.iter().enumerate().fold(0u16, |mask, (i, &(_, half))| {
+                mask | u16::from((cy.abs() - half) * scale < 0.5) << i
+            });
+            // Straight stretch of the pill: its distance is the same all along.
+            let body = (cy.abs() - half_height + radius >= 0.0)
+                .then(|| rounded_box(0.0, cy, half_width, half_height, half_height));
+            for px in near.clone() {
                 // The pixel's centre in logical pixels, from the middle.
-                let x = (px as f32 + 0.5) / scale;
-                let y = (py as f32 + 0.5) / scale;
-                let (cx, cy) = (x - w / 2.0, y - h / 2.0);
-                let d = rounded_box(cx, cy, pill / 2.0, h / 2.0, h / 2.0);
-                let inside = coverage(d, scale);
-                if inside <= 0.0 {
+                let x = columns[px as usize];
+                let cx = x - w / 2.0;
+                let d = match body {
+                    Some(d) if straight[px as usize] => d,
+                    _ => rounded_box(cx, cy, half_width, half_height, half_height),
+                };
+                let (first, last, mask) = touched[px as usize];
+                let ink = text.as_ref().map_or(0.0, |text| text[(py * width + px) as usize]);
+                if d < deep && mask & reached == 0 && ink <= 0.0 {
+                    row[px as usize] = interior_pixel;
                     continue;
                 }
-                let mut color = [0.0f32; 4];
-                over(&mut color, colors.background, inside);
-                // A hairline just inside the edge.
-                over(&mut color, colors.edge, inside - coverage(d + 1.0, scale));
-                for &(bx, half) in &bars {
-                    if (x - bx).abs() > bar_width {
+                let Some((mut color, inside)) = shell(d) else {
+                    continue;
+                };
+                for &(bx, half) in &bars[first as usize..last as usize] {
+                    // Too far above or below the bar to touch it.
+                    if (cy.abs() - half) * scale >= 0.5 {
                         continue;
                     }
                     let r = bar_width / 2.0;
                     let bar = coverage(rounded_box(x - bx, cy, r, half, r), scale);
                     over(&mut color, bar_color, bar);
                 }
-                if let Some(text) = &text {
-                    let ink = text[(py * width + px) as usize];
-                    if ink > 0.0 {
-                        over(&mut color, text_color, ink.min(1.0) * open * inside);
-                    }
+                if ink > 0.0 {
+                    over(&mut color, text_color, ink.min(1.0) * open * inside);
                 }
-                pixels[(py * width + px) as usize] = pack(color, self.alpha);
+                row[px as usize] = pack(color, self.alpha);
             }
         }
         (width, height)
