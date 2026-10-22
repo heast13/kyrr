@@ -109,6 +109,9 @@ fn text(language: Language, english: &str) -> String {
         "probe failed" => "Der Test hat nicht geklappt. Sind Lautsprecher oder Kopfhörer angeschlossen?",
         "listen failed" => "Mithören hat nicht geklappt. Sind Mikrofon und Kopfhörer angeschlossen?",
         "typing key" => "Diese Taste braucht jedes Programm. Nimm eine F-Taste, Pause oder Strg rechts.",
+        "memo key taken" => {
+            "{} gehört schon einem anderen Kurzbefehl, die Aufzeichnung hat darum keine Taste. Such dir eine andere."
+        }
         "taken by voice memos" => "{} ist schon für die Sprachaufzeichnung belegt.",
         "taken by dictation" => "{} ist schon fürs Diktieren belegt.",
         "right ctrl busy" => {
@@ -124,6 +127,7 @@ fn text(language: Language, english: &str) -> String {
         "probe failed" => "The test did not work. Are your speakers or headphones plugged in?",
         "listen failed" => "Listening did not work. Are your microphone and headphones plugged in?",
         "typing key" => "Every program needs that key. Take an F key, Pause or Right Ctrl.",
+        "memo key taken" => "Another shortcut already has {}, so recordings have no key. Pick another.",
         "taken by voice memos" => "{} is already used for voice memos.",
         "taken by dictation" => "{} is already used for dictation.",
         "right ctrl busy" => "With Right Ctrl, shortcuts in other programs stop working, and kyrr starts every time.",
@@ -1444,7 +1448,7 @@ impl App {
         let (other, taken) = {
             let config = self.config.borrow();
             match slot {
-                1 => (config.memo_key_choice(), "taken by voice memos"),
+                1 => (config.memo_key(), "taken by voice memos"),
                 _ => (config.dictation_key(), "taken by dictation"),
             }
         };
@@ -1513,12 +1517,25 @@ impl App {
         let language = self.language();
         let note = platform::key_note();
         // A key that only reports its press (GNOME 46 and 47, niri, a command
-        // the user binds) cannot be
-        // held: each press toggles, whatever the setting says.
-        let can_hold = !matches!(note, KeyNote::PressOnly { .. } | KeyNote::Command(_));
+        // the user binds) cannot be held: each press toggles, whatever the
+        // setting says.
+        let can_hold = platform::memo_can_hold();
         self.memo_toggle
             .store(self.config.borrow().memo_toggle || !can_hold, Ordering::Relaxed);
         state.set_memo_can_hold(can_hold);
+        // Another bind of the user's has the memo key: it does not work, and
+        // the settings say so.
+        let blocked = platform::memo_key_blocked();
+        if blocked.is_some() {
+            state.set_memo_key_name("".into());
+            if let Some(t) = tray() {
+                t.set_memo_key_name("".into());
+            }
+            let label = keys::label(self.config.borrow().memo_key_choice(), language == Language::German);
+            state.set_memo_key_note(text(language, "memo key taken").replace("{}", &label).into());
+        } else {
+            state.set_memo_key_note("".into());
+        }
         let fixed = matches!(note, KeyNote::Desktop(_) | KeyNote::Unbound);
         let unbound = matches!(note, KeyNote::Unbound);
         let german = language == Language::German;

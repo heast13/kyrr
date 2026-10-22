@@ -187,7 +187,7 @@ fn serve(listener: UnixListener, show: mpsc::Sender<()>) {
             DICTATE_START => crate::hotkey::remote_press(),
             DICTATE_STOP => crate::hotkey::remote_release(),
             MEMO => crate::hotkey::memo_press(),
-            MEMO_START => crate::hotkey::memo_down(),
+            MEMO_START => crate::hotkey::memo_remote_start(),
             MEMO_STOP => crate::hotkey::memo_up(),
             BACKGROUND => {}
             _ => {

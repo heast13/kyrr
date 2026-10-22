@@ -226,6 +226,16 @@ mod imp {
     /// The hook reports the release either way; the app decides.
     pub fn set_memo_hold(_: bool) {}
 
+    /// The hook sees every key up.
+    pub fn memo_can_hold() -> bool {
+        true
+    }
+
+    /// No other program has the memo key (the hook comes first).
+    pub fn memo_key_blocked() -> Option<String> {
+        None
+    }
+
     /// Shows the license notices that ship in the install folder.
     pub fn open_licenses() {
         if let Some(dir) = std::env::current_exe()
@@ -867,6 +877,28 @@ mod imp {
 
     static MEMO_HOLD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+    /// Whether the memo key's release reaches kyrr here, so it can be held:
+    /// not with a GNOME 46 or 47 shortcut, niri or a command the user binds,
+    /// whatever dictation does.
+    pub fn memo_can_hold() -> bool {
+        use kyrr_linux::hotkey::{self, Backend};
+        match hotkey::backend() {
+            Backend::X11 | Backend::Portal => true,
+            Backend::None => Compositor::detect().is_some_and(Compositor::holds),
+        }
+    }
+
+    /// The memo key, when another bind or shortcut of the user's has it and
+    /// kyrr leaves it alone: then there is no memo key.
+    pub fn memo_key_blocked() -> Option<String> {
+        MEMO_BLOCKED
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    static MEMO_BLOCKED: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
     /// `description` names the shortcut in the desktop's dialog and settings.
     /// Before the setup is done, GNOME and KDE are asked for the key only
     /// when the setup gets to it, not out of the blue at the start.
@@ -1053,6 +1085,7 @@ mod imp {
         let keys = binds::Keys {
             key: kyrr_linux::hotkey::key_name(),
             memo: kyrr_linux::hotkey::memo_key_name(),
+            dictation: true,
             memo_hold: MEMO_HOLD.load(std::sync::atomic::Ordering::Relaxed) && compositor.holds(),
             portal,
             program: program(),
@@ -1099,10 +1132,11 @@ mod imp {
         // The memo key has no note of its own on the main page: the log.
         match memo_outcome(memo.clone(), binds::command(&program(), "--memo")) {
             Some(gnome::Outcome::Taken { name }) => {
-                eprintln!("kyrr: the voice memo key {memo:?} is taken by GNOME's shortcut \"{name}\"")
+                eprintln!("kyrr: the voice memo key {memo:?} is taken by GNOME's shortcut \"{name}\"");
+                *MEMO_BLOCKED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = memo.clone();
             }
             Some(gnome::Outcome::Failed) => eprintln!("kyrr: could not add GNOME's shortcut for the voice memo key"),
-            _ => {}
+            _ => *MEMO_BLOCKED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = None,
         }
         let Some(outcome) = gnome_outcome(&key, &command) else {
             return KeyNote::None;
@@ -1161,6 +1195,11 @@ mod imp {
             || {
                 let before = binds::bound_keys(compositor, base);
                 let outcome = binds::ensure(compositor, base, keys);
+                *MEMO_BLOCKED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = keys
+                    .memo
+                    .iter()
+                    .find(|memo| binds::claimed(compositor, base, memo))
+                    .cloned();
                 if matches!(outcome, binds::Outcome::Bound { written: true, .. }) && !flatpak() {
                     let lines = binds::target(compositor, base).map(|t| binds::lines(t.syntax, keys));
                     let now = binds::bound_keys(compositor, base);
@@ -1183,7 +1222,10 @@ mod imp {
             Compositor::Sway => run("swaymsg", &["reload"]),
             Compositor::Niri => {}
             Compositor::River => {
-                for old in before.iter().filter(|old| !now.contains(old)) {
+                // Every key of the block first, press and release alike: a
+                // key that went from tap to hold (or back) keeps its old map
+                // otherwise.
+                for old in before.iter().chain(now) {
                     run("riverctl", &["unmap", "normal", "None", old]);
                     run("riverctl", &["unmap", "-release", "normal", "None", old]);
                 }

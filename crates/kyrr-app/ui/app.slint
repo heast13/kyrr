@@ -232,6 +232,8 @@ export global AppState {
     in property <string> memo-key-name: "F8"; // "" while no key is taken
     // The memo key whether it is taken or not, for the settings.
     in property <string> memo-key-label: "F8";
+    // Another shortcut of the user's has the memo key; "" for none.
+    in property <string> memo-key-note;
     in property <bool> memo-toggle: true;     // tap to start and stop instead of holding
     // The key's release is reported (not on GNOME 46 and 47, niri).
     in property <bool> memo-can-hold: true;
@@ -2248,6 +2250,7 @@ component RecordingSettings inherits Card {
     }
     if !AppState.key-fixed && AppState.key-refusal != "": Hint { text: AppState.key-refusal; color: #e0604f; }
     if !AppState.key-fixed && AppState.key-warning != "": Hint { text: AppState.key-warning; }
+    if AppState.memo-key-note != "": Hint { text: AppState.memo-key-note; color: #e0604f; }
     // Where the desktop owns the key, its own settings change it.
     if AppState.key-fixed: Hint { text: @tr("Your desktop sets this key, now {}.", AppState.memo-key-label); }
     if AppState.key-fixed && AppState.key-button != "": Button {

@@ -203,10 +203,20 @@ pub fn memo_press() {
     }
 }
 
-/// The memo key from the portal or the X server, and `kyrr --memo-start`:
-/// a key held down (auto-repeat) is one press.
+/// The memo key from the portal or the X server: a key held down
+/// (auto-repeat) is one press.
 pub fn memo_down() {
     if !CAPTURING.load(Ordering::Relaxed) && !MEMO_HELD.swap(true, Ordering::Relaxed) {
+        send(KeyEvent::MemoPressed);
+    }
+}
+
+/// `kyrr --memo-start`: a press whatever came before, so a release that
+/// never came (a locked screen) does not leave the key dead; the app ends a
+/// memo that still runs.
+pub fn memo_remote_start() {
+    if !CAPTURING.load(Ordering::Relaxed) {
+        MEMO_HELD.store(true, Ordering::Relaxed);
         send(KeyEvent::MemoPressed);
     }
 }
@@ -461,6 +471,9 @@ impl X11 {
             .then(|| keys::keysym(KEY.load(Ordering::Relaxed)))
             .flatten();
         let memo = grab.then(|| keys::keysym(MEMO_KEY.load(Ordering::Relaxed))).flatten();
+        // Each key on its own: one that another program has grabbed already
+        // costs only itself.
+        let mut result = Ok(());
         for (slot, keysym) in [dictate, memo].into_iter().enumerate() {
             let Some(code) = keysym.map(|k| self.keycode(k)).transpose()?.flatten() else {
                 continue;
@@ -468,20 +481,33 @@ impl X11 {
             // Caps Lock and Num Lock count as modifiers to the grab; Ctrl,
             // Alt and Shift are left out on purpose, the key is then the
             // focused app's.
-            grabbed[slot] = Some(code);
-            let cookies = locks
-                .map(|m| {
-                    self.conn
-                        .grab_key(false, self.root, m, code, GrabMode::ASYNC, GrabMode::ASYNC)
-                })
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>()?;
-            for cookie in cookies {
-                cookie.check()?;
+            let grab = || -> Result<(), ReplyError> {
+                let cookies = locks
+                    .map(|m| {
+                        self.conn
+                            .grab_key(false, self.root, m, code, GrabMode::ASYNC, GrabMode::ASYNC)
+                    })
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>()?;
+                for cookie in cookies {
+                    cookie.check()?;
+                }
+                Ok(())
+            };
+            match grab() {
+                Ok(()) => grabbed[slot] = Some(code),
+                Err(e) => {
+                    eprintln!("kyrr: the key (keycode {code}) is taken by another program: {e}");
+                    // What the failed grab got through is let go again.
+                    for modifiers in locks {
+                        let _ = self.conn.ungrab_key(code, self.root, modifiers);
+                    }
+                    result = Err(e);
+                }
             }
         }
         self.conn.flush()?;
-        Ok(())
+        result
     }
 
     /// Whether `code` is the memo key's (not dictation's).

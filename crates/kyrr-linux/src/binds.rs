@@ -120,6 +120,9 @@ pub struct Keys {
     pub key: String,
     /// The voice memo key's name, e.g. "F8"; a press starts or ends a memo.
     pub memo: Option<String>,
+    /// Dictation's own bind goes in. Off when another bind of the user's has
+    /// the key: the memo key still gets its lines.
+    pub dictation: bool,
     /// The memo key is held to record, not tapped. Only where the compositor
     /// can hold a key (niri taps).
     pub memo_hold: bool,
@@ -326,10 +329,11 @@ fn link_command() -> String {
 }
 
 fn bind_lines(syntax: Syntax, keys: &Keys) -> String {
-    let dictate = dictate_lines(syntax, keys);
-    match &keys.memo {
-        Some(memo) => format!("{dictate}\n{}", memo_lines(syntax, keys, memo)),
-        None => dictate,
+    let memo = keys.memo.as_ref().map(|memo| memo_lines(syntax, keys, memo));
+    match (keys.dictation, memo) {
+        (true, Some(memo)) => format!("{}\n{memo}", dictate_lines(syntax, keys)),
+        (true, None) => dictate_lines(syntax, keys),
+        (false, memo) => memo.unwrap_or_default(),
     }
 }
 
@@ -513,11 +517,8 @@ pub fn ensure(compositor: Compositor, base: &Path, keys: &Keys) -> Outcome {
             }
         }
     }
-    if let Some(taken) = taken {
-        return taken;
-    }
     // A memo key that a bind of the user's has stays theirs: no memo key
-    // here then.
+    // here then. Likewise, dictation's key taken leaves the memo key its lines.
     let mut keys = keys.clone();
     if let Some(memo) = keys.memo.clone() {
         let theirs = files
@@ -531,6 +532,14 @@ pub fn ensure(compositor: Compositor, base: &Path, keys: &Keys) -> Outcome {
             keys.memo = None;
         }
     }
+    if let Some(taken) = taken {
+        // Only the memo key's lines, if it has any; else what an earlier
+        // block held goes (a key no longer free is not kyrr's to bind).
+        keys.dictation = false;
+        let block = keys.memo.is_some().then(|| lines(target.syntax, &keys));
+        let _ = put_block(target, Block::Key, block.as_deref());
+        return taken;
+    }
     let block = lines(target.syntax, &keys);
     match put_block(target, Block::Key, Some(&block)) {
         Ok(written) => Outcome::Bound {
@@ -539,6 +548,14 @@ pub fn ensure(compositor: Compositor, base: &Path, keys: &Keys) -> Outcome {
         },
         Err(()) => Outcome::Failed,
     }
+}
+
+/// Whether another bind of the user's already has `key`: kyrr then leaves it
+/// alone and the voice memo key does not work.
+pub fn claimed(compositor: Compositor, base: &Path, key: &str) -> bool {
+    files(compositor, base)
+        .iter()
+        .any(|file| read(file).is_some_and(|text| matches!(claim(&text, file.syntax, key), Ok(Claim::Other { .. }))))
 }
 
 /// Starts kyrr with the session from the compositor's config (`program`
@@ -866,6 +883,7 @@ mod tests {
         Keys {
             key: key.into(),
             memo: None,
+            dictation: true,
             memo_hold: false,
             portal,
             program: vec!["kyrr".into()],
@@ -1154,6 +1172,29 @@ mod tests {
             Outcome::Bound { .. }
         ));
         assert_eq!(bound_keys(hypr, &base), ["F9", "F8"]);
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn a_taken_dictation_key_leaves_the_memo_key_its_lines() {
+        let base = folder("taken");
+        let dir = base.join("hypr");
+        std::fs::create_dir_all(&dir).unwrap();
+        let main = dir.join("hyprland.conf");
+        std::fs::write(&main, "bind = , F9, exec, playerctl next\n").unwrap();
+        let hypr = Compositor::Hyprland;
+        let keys = Keys {
+            memo: Some("F8".into()),
+            ..keys("F9", true)
+        };
+        assert!(matches!(ensure(hypr, &base, &keys), Outcome::Taken { .. }));
+        assert_eq!(bound_keys(hypr, &base), ["F8"]);
+        assert!(!claimed(hypr, &base, "F8"));
+        assert!(claimed(hypr, &base, "F9"));
+        // The other way round, and both taken: nothing of kyrr's stays.
+        std::fs::write(&main, "bind = , F9, exec, a\nbind = , F8, exec, b\n").unwrap();
+        assert!(matches!(ensure(hypr, &base, &keys), Outcome::Taken { .. }));
+        assert!(bound_keys(hypr, &base).is_empty());
         let _ = std::fs::remove_dir_all(base);
     }
 
