@@ -3,7 +3,7 @@
 //! themselves have their own threads (see [`crate::memo`]).
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,6 +19,7 @@ use crate::dictation::{Command, Job, Text};
 use crate::memo::library::{self, Memo, Paragraph};
 use crate::memo::player::Player;
 use crate::memo::recorder::{Ending, Recording};
+use crate::memo::title;
 use crate::{AppState, MainWindow, MemoItem, MemoParagraph};
 
 /// Shorter memos are a key pressed twice by accident: not kept.
@@ -52,6 +53,10 @@ pub struct Memos {
     /// Memos whose title is still being found (they keep their first name
     /// until then), and the texts on their way.
     titling: RefCell<Vec<PathBuf>>,
+    /// Memos still named as the start of the recording gave: once their
+    /// text is written, a title from all of it replaces that, unless the
+    /// user named them meanwhile.
+    auto_named: RefCell<HashSet<PathBuf>>,
     texts: RefCell<HashMap<PathBuf, Text>>,
     /// The memo whose text is open big.
     sheet: RefCell<Option<PathBuf>>,
@@ -96,6 +101,7 @@ impl Memos {
             recording: RefCell::new(None),
             player: RefCell::new(None),
             titling: RefCell::new(Vec::new()),
+            auto_named: RefCell::new(HashSet::new()),
             texts: RefCell::new(HashMap::new()),
             sheet: RefCell::new(None),
             timer: slint::Timer::default(),
@@ -553,6 +559,7 @@ impl Memos {
         }
         let _ = self.worker.send(Command::CancelText(path.clone()));
         self.texts.borrow_mut().remove(&path);
+        self.auto_named.borrow_mut().remove(&path);
         if let Err(e) = library::delete(&path) {
             eprintln!("kyrr: memo: deleting {}: {e}", path.display());
             self.tell(&self.say("Konnte die Aufnahme nicht löschen.", "Could not delete the recording."));
@@ -570,6 +577,7 @@ impl Memos {
         if self.player.borrow().as_ref().is_some_and(|p| p.path() == path) {
             self.player.borrow_mut().take();
         }
+        self.auto_named.borrow_mut().remove(&path);
         match library::rename(&path, title) {
             Ok(to) => {
                 self.moved(&path, &to);
@@ -621,16 +629,45 @@ impl Memos {
             Some(title) if path.exists() && !recording => match library::rename(&path, &title) {
                 Ok(to) => {
                     self.moved(&path, &to);
+                    if self.sheet.borrow().as_ref() == Some(&path) {
+                        *self.sheet.borrow_mut() = Some(to.clone());
+                    }
                     to
                 }
                 Err(_) => path,
             },
             _ => path,
         };
+        if path.exists() && !recording {
+            self.auto_named.borrow_mut().insert(path.clone());
+        }
         if self.auto_text.get() && path.exists() && !recording {
             let _ = self.worker.send(Command::Job(Job::Text(path)));
         }
         self.refresh();
+    }
+
+    /// A memo whose name came from its start gets one from all it says,
+    /// once. Returns where the memo is now.
+    fn retitle(&self, path: PathBuf) -> PathBuf {
+        if !self.auto_named.borrow_mut().remove(&path) {
+            return path;
+        }
+        let Some(title) =
+            library::read_text(&path).and_then(|paragraphs| title::from_text(&library::plain(&paragraphs)))
+        else {
+            return path;
+        };
+        if self.player.borrow().as_ref().is_some_and(|p| p.path() == path) {
+            self.player.borrow_mut().take();
+        }
+        let Ok(to) = library::rename(&path, &title) else {
+            return path;
+        };
+        if self.sheet.borrow().as_ref() == Some(&path) {
+            *self.sheet.borrow_mut() = Some(to.clone());
+        }
+        to
     }
 
     /// How the text of a memo comes along.
@@ -638,6 +675,11 @@ impl Memos {
         match text {
             Text::Written | Text::Cancelled => {
                 self.texts.borrow_mut().remove(&path);
+                let path = if text == Text::Written {
+                    self.retitle(path)
+                } else {
+                    path
+                };
                 self.refresh();
                 if text == Text::Written && self.sheet.borrow().as_ref() == Some(&path) {
                     self.show_sheet();
