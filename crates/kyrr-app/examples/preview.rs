@@ -106,9 +106,17 @@ fn memos(window: &MinimalSoftwareWindow, ui: &MainWindow, out: &str, lang: &str)
             "18.10.2026, 11:02 · 0:06".into(),
             0,
         ),
+        item(
+            t(
+                "Besprechung mit dem Steuerberater über die Homeoffice Pauschale und alle Belege",
+                "Meeting with the tax adviser about the home office allowance and all the receipts",
+            ),
+            "17.10.2026, 09:30 · 31:12".into(),
+            3,
+        ),
     ];
     state.set_memo_items(ModelRc::new(VecModel::from(items)));
-    state.set_memo_count(5);
+    state.set_memo_count(6);
     state.set_memo_can_write(true);
     state.set_memo_playing(1);
     state.set_memo_play_fraction(0.35);
@@ -123,44 +131,64 @@ fn memos(window: &MinimalSoftwareWindow, ui: &MainWindow, out: &str, lang: &str)
     state.set_memo_confirm(-1);
     state.set_memo_recording(false);
 
-    let p = |time: &str, seconds: i32, text: &str| MemoParagraph {
-        time: time.into(),
-        seconds,
-        text: text.into(),
-    };
-    let paragraphs = if de {
+    let paragraphs: Vec<(&str, &str)> = if de {
         vec![
-            p(
+            (
                 "0:00",
-                0,
                 "Gedanken zur neuen Startseite. Oben soll sofort klar sein, was kyrr macht, ohne Werbesprech.",
             ),
-            p(
+            (
                 "0:34",
-                34,
                 "Darunter der Download, groß, und gleich daneben die Befehle für Linux zum Kopieren.",
             ),
-            p(
+            (
                 "1:12",
-                72,
                 "Die Beispiel-Pille als kurze Schleife, nicht als Video, das lädt sonst ewig.",
             ),
-            p("2:05", 125, "Und unten nur noch die häufigen Fragen, zusammengeklappt."),
+            ("2:05", "Und unten nur noch die häufigen Fragen, zusammengeklappt."),
         ]
     } else {
         vec![
-            p("0:00", 0, "Thoughts on the new home page. At the top it should be clear right away what kyrr does, no marketing talk."),
-            p("0:34", 34, "Below that the download, big, and right next to it the Linux commands to copy."),
-            p("1:12", 72, "The example pill as a short loop, not as a video, that takes forever to load."),
-            p("2:05", 125, "And at the bottom just the common questions, folded away."),
+            ("0:00", "Thoughts on the new home page. At the top it should be clear right away what kyrr does, no marketing talk."),
+            ("0:34", "Below that the download, big, and right next to it the Linux commands to copy."),
+            ("1:12", "The example pill as a short loop, not as a video, that takes forever to load."),
+            ("2:05", "And at the bottom just the common questions, folded away."),
         ]
+    };
+    // The field as it shows with the stamps: none, how far in, time of day
+    // (this memo began at 21:40).
+    let field = |stamps: i32| -> slint::SharedString {
+        let minutes = [(21, 40), (21, 40), (21, 41), (21, 42)];
+        paragraphs
+            .iter()
+            .zip(minutes)
+            .map(|((time, text), (h, m))| match stamps {
+                1 => format!("[{time}] {text}"),
+                2 => format!("[{h}:{m:02}] {text}"),
+                _ => (*text).to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
+            .into()
     };
     state.set_memo_sheet_index(2);
     state.set_memo_sheet_title(t("Gedanken zur neuen Startseite", "Thoughts on the new home page"));
     state.set_memo_sheet_when(t("Gestern, 21:40 · 2:31", "Yesterday, 21:40 · 2:31"));
-    state.set_memo_sheet_paragraphs(ModelRc::new(VecModel::from(paragraphs)));
+    state.set_memo_sheet_text(field(0));
+    state.set_memo_sheet_stamps(0);
     state.set_memo_sheet_open(true);
-    render_at(window, ui, 700.0, &format!("{out}/memos-text-{lang}.rgba"));
+    render_at(window, ui, 820.0, &format!("{out}/memos-text-{lang}.rgba"));
+    for stamps in [1, 2] {
+        state.set_memo_sheet_stamps(stamps);
+        state.set_memo_sheet_text(field(stamps));
+        render_at(
+            window,
+            ui,
+            820.0,
+            &format!("{out}/memos-text-stamps{stamps}-{lang}.rgba"),
+        );
+    }
+    state.set_memo_sheet_stamps(0);
     state.set_memo_sheet_open(false);
     // Let the text slide away before the next pictures.
     std::thread::sleep(std::time::Duration::from_millis(450));
@@ -173,6 +201,10 @@ fn memos(window: &MinimalSoftwareWindow, ui: &MainWindow, out: &str, lang: &str)
     state.set_memo_recording(true);
     render(window, ui, &format!("{out}/main-memo-recording-{lang}.rgba"));
     state.set_memo_recording(false);
+    // A recording not looked at yet: the dot beside the button.
+    state.set_memo_new(true);
+    render(window, ui, &format!("{out}/main-memo-new-{lang}.rgba"));
+    state.set_memo_new(false);
 }
 
 fn main() {

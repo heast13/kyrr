@@ -339,12 +339,18 @@ fn screen(w: &MainWindow) -> Option<(i32, i32, i32, i32)> {
     platform::work_area(w.window())
 }
 
+/// The recordings page is this tall at least (screen permitting): a list
+/// and a text to read want room.
+const MEMOS_HEIGHT: f32 = 780.0;
+
 /// The height the content wants, up to what the screen has room for.
 fn wanted_height(w: &MainWindow) -> f32 {
     let cap = screen(w).map_or(FALLBACK_HEIGHT, |(_, top, _, bottom)| {
         ((bottom - top) as f32 / w.window().scale_factor() - FRAME).clamp(MIN_HEIGHT, MAX_HEIGHT)
     });
-    w.get_content_height().min(cap)
+    let memos = !w.get_setup_mode() && w.global::<AppState>().get_page() == 6;
+    let content = w.get_content_height();
+    (if memos { content.max(MEMOS_HEIGHT) } else { content }).min(cap)
 }
 
 #[cfg(target_os = "linux")]
@@ -453,7 +459,7 @@ fn grow(window: &Weak<MainWindow>) {
 /// Room for a memo's text: the window grows as tall as the screen allows
 /// (up to a comfortable reading height) while it is open, and fits its
 /// content again after.
-const SHEET_HEIGHT: f32 = 760.0;
+const SHEET_HEIGHT: f32 = 820.0;
 
 fn fit_sheet(w: &MainWindow, open: bool) {
     if !open {
@@ -1957,6 +1963,25 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     );
     memos.set_can_write(model_installed(&app.config.borrow()));
     memos.set_enabled(app.config.borrow().memos);
+    memos.set_stamps(i32::from(app.config.borrow().memo_stamps));
+    {
+        // Memos from before this version's first start are not "new".
+        let mut config = app.config.borrow_mut();
+        if config.memos_seen == 0 {
+            config.memos_seen = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(1, |d| d.as_secs());
+            config.save();
+        }
+    }
+    memos.set_seen(app.config.borrow().memos_seen, {
+        let app = Rc::clone(&app);
+        move |seconds| {
+            let mut config = app.config.borrow_mut();
+            config.memos_seen = seconds;
+            config.save();
+        }
+    });
 
     let state = window.global::<AppState>();
     state.set_version(env!("CARGO_PKG_VERSION").into());
@@ -2168,6 +2193,19 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             app.apply_memo_key();
         }
     });
+    state.on_memo_sheet_stamps_changed({
+        let app = Rc::clone(&app);
+        move |i| {
+            {
+                let mut config = app.config.borrow_mut();
+                config.memo_stamps = i.clamp(0, 2) as u8;
+                config.save();
+            }
+            if let Some(m) = memos::memos() {
+                m.stamps_changed(i);
+            }
+        }
+    });
     state.on_memo_auto_text_toggled({
         let app = Rc::clone(&app);
         move |on| {
@@ -2187,6 +2225,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             let Some(w) = weak.upgrade() else { return };
             if let Some(m) = memos::memos() {
                 m.refresh();
+                m.mark_seen();
             }
             let state = w.global::<AppState>();
             state.set_memo_sheet_open(false);
