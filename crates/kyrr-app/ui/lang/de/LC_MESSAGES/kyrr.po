@@ -1338,6 +1338,9 @@ msgstr "Aus. Deine Aufnahmen bleiben, wo sie sind."
 msgid "Recording. {} or the button ends it."
 msgstr "Aufnahme läuft. {} oder der Knopf beendet sie."
 
+msgid "Recording. Let go of {} or press the button to end it."
+msgstr "Aufnahme läuft. Zum Beenden {} loslassen oder den Knopf drücken."
+
 msgid "Recording. The button ends it."
 msgstr "Aufnahme läuft. Der Knopf beendet sie."
 
@@ -1346,6 +1349,9 @@ msgstr "Aufnehmen unter Aufzeichnungen oder im Tray. kyrr speichert und benennt 
 
 msgid "Tap {}, talk, tap again. kyrr saves and names the recording by itself."
 msgstr "Tippe {}, sprich, tippe nochmal. kyrr speichert und benennt die Aufnahme selbst."
+
+msgid "Hold {}, talk, let go. kyrr saves and names the recording by itself."
+msgstr "Halte {}, sprich, lass los. kyrr speichert und benennt die Aufnahme selbst."
 
 msgid "Stop"
 msgstr "Stopp"

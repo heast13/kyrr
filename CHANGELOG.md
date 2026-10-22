@@ -8,7 +8,8 @@
   Enter, Escape, arrows and the other modifiers are refused with a
   sentence, and so is the key the other feature already has (no silent
   swap). While a field waits, kyrr takes no key. Voice memos get Hold or
-  Tap like dictation (Tap stays the standard). Where only a press arrives
+  Tap like dictation (Tap stays the standard); the main page card says
+  which. Where only a press arrives
   (GNOME before 48, niri, an own command) memos are tap only. Linux:
   `kyrr --memo-start` and `kyrr --memo-stop` for held memo keys in
   Hyprland, sway and river binds. Old settings keep working; "none" for
@@ -46,8 +47,8 @@
   Flatpak: only `xdg-documents/kyrr` is opened. GNOME before 48 gets a
   second custom shortcut; Hyprland, sway, river and niri a second line in
   kyrr's block. A recording under 3 s (a key pressed by accident) is not
-  kept; the pill says so. On Windows the memo key also works while kyrr's
-  own window has the focus.
+  kept; the pill and, for 5 s, the card say "Too short". On Windows the
+  memo key also works while kyrr's own window has the focus.
 - Dictation, words in the pill: fewer wrong and missing words. A word shows
   once 1.2 s of the recording followed it (was 0.8 s), and after a pause
   the next look starts 1.5 s before where the last one ended (was 0.8 s), so

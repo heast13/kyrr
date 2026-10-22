@@ -1962,6 +1962,8 @@ component Chip inherits Rectangle {
 
 // The voice memo on the main page: a switch, how it works, and the buttons.
 component RecordingCard inherits Card {
+    // The memo key is held while it records, as chosen under the gear.
+    property <bool> hold: !AppState.memo-toggle && AppState.memo-can-hold;
     RowHead {
         title: @tr("Voice memo");
         gear-label: AppState.memos-enabled ? @tr("Settings: {}", @tr("Voice memo")) : "";
@@ -1971,8 +1973,11 @@ component RecordingCard inherits Card {
     }
     Caption {
         text: !AppState.memos-enabled ? @tr("Off. Your recordings stay where they are.")
-            : AppState.memo-recording ? (AppState.memo-key-name != "" ? @tr("Recording. {} or the button ends it.", AppState.memo-key-name) : @tr("Recording. The button ends it."))
+            : AppState.memo-recording ? (AppState.memo-key-name == "" ? @tr("Recording. The button ends it.")
+                : root.hold ? @tr("Recording. Let go of {} or press the button to end it.", AppState.memo-key-name)
+                : @tr("Recording. {} or the button ends it.", AppState.memo-key-name))
             : AppState.memo-key-name == "" ? @tr("Record under Recordings or in the tray. kyrr saves and names the recording by itself.")
+            : root.hold ? @tr("Hold {}, talk, let go. kyrr saves and names the recording by itself.", AppState.memo-key-name)
             : @tr("Tap {}, talk, tap again. kyrr saves and names the recording by itself.", AppState.memo-key-name);
     }
     if AppState.memos-enabled: HorizontalLayout {
