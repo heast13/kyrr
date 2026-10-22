@@ -1356,9 +1356,6 @@ msgstr "Tippe {}, sprich, tippe nochmal. kyrr speichert und benennt die Aufnahme
 msgid "Stop"
 msgstr "Stopp"
 
-msgid "Recordings ({})"
-msgstr "Aufzeichnungen ({})"
-
 msgid "Play"
 msgstr "Abspielen"
 

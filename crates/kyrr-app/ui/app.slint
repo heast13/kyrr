@@ -1890,7 +1890,7 @@ component RecordingCard inherits Card {
         }
         Rectangle { }
         Button {
-            text: @tr("Recordings ({})", AppState.memo-count);
+            text: @tr("Recordings");
             horizontal-stretch: 0;
             clicked => { AppState.memo-open-list(); }
         }
