@@ -35,7 +35,7 @@ What it does:
   Polish, Portuguese and others), transcribed on your PC. Say "new line" or
   "neue Zeile" for a line break. While you dictate, a small wave at the
   bottom of the screen shows that kyrr is listening, with the words heard so
-  far (with Best quality under Effort in Setup; Lean shows them once you are done), and then that it is writing.
+  far (switch "Live text" off in Setup), and then that it is writing.
 - **Voice memos.** Tap F8, talk, tap F8 again: kyrr saves the recording
   as a small audio file in Documents/kyrr and names it after its first
   words. Play, rename, show in the folder or delete them in the list; one

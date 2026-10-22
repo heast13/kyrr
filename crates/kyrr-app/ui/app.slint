@@ -203,6 +203,7 @@ export global AppState {
     callback move-to-default();
     callback key-changed(int);
     callback key-toggle-changed(bool);
+    callback live-words-toggled(bool);
     callback effort-changed(int);
     callback open-licenses();
     callback check-updates();
@@ -1525,6 +1526,19 @@ component GeneralSettings inherits Card {
     Hint {
         text: AppState.language-index == 2 ? @tr("Multilingual: French, Spanish, Italian, Dutch, Polish, Portuguese and more. kyrr notices the language by itself. German and English can be a bit less precise, and it needs its own download.")
             : @tr("Also the language dictation listens for.");
+    }
+    Separator { }
+    HorizontalLayout {
+        Caption { text: @tr("Live text"); vertical-alignment: center; }
+        Rectangle { }
+        Switch {
+            checked <=> AppState.live-words;
+            toggled => { AppState.live-words-toggled(self.checked); }
+        }
+    }
+    Hint {
+        text: AppState.live-words ? @tr("The display at the bottom of the screen shows what kyrr hears as you speak.")
+            : @tr("Off. The display shows only the bars; the text comes when you are done.");
     }
     Separator { }
     HorizontalLayout {
