@@ -53,6 +53,9 @@ export global AppState {
     in property <string> move-to;
     in property <bool> move-unplugged;
 
+    // The window is up (not hidden in the tray): what only it shows stops
+    // moving while it is away.
+    in property <bool> window-shown;
     // Live: level and the before/after probe
     in property <bool> mic-active;
     // The microphone is in use but delivers nothing at all: muted, most likely.
@@ -498,13 +501,15 @@ component Meter inherits Rectangle {
 component Pulse inherits Rectangle {
     in property <bool> working;
     in property <bool> waiting;
+    // Nobody sees it while the window is hidden: no ticks then.
+    in property <bool> shown;
     property <bool> moving: root.working || root.waiting;
     // Sways so far (1 = one full sway).
     property <float> phase: 0;
     property <duration> last-tick;
     Timer {
         interval: root.working ? 33ms : 66ms;
-        running: root.moving;
+        running: root.moving && root.shown;
         triggered => {
             // A tick that comes much too late counts as at most a short step.
             root.phase = mod(root.phase + min((animation-tick() - root.last-tick) / 1ms, 100) / root.period, 1);
@@ -513,6 +518,7 @@ component Pulse inherits Rectangle {
     }
     // The clock restarts with the movement, so a pause is not counted.
     changed moving => { root.last-tick = animation-tick(); }
+    changed shown => { root.last-tick = animation-tick(); }
     // Milliseconds per sway; slow on purpose, this is kyrr after all.
     property <float> period: root.working ? 2200 : 4500;
     property <float> depth: root.working ? 1 : 0.3;
@@ -839,6 +845,7 @@ component StatusLine inherits HorizontalLayout {
     Pulse {
         working: root.working;
         waiting: root.waiting;
+        shown: AppState.window-shown;
     }
     Rectangle { }
 }
