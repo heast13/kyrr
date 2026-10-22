@@ -9,7 +9,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use kyrr_common::monitor::PROBE_SECONDS;
 use kyrr_common::{FilterSettings, TOO_SLOW};
@@ -23,6 +23,9 @@ use crate::platform::{Levels, Take};
 /// split by the filter.
 const MAX_BLOCK: usize = 8192;
 const PROBE_FRAMES: usize = PROBE_SECONDS as usize * RATE as usize;
+/// No audio for this long: nobody recorded from "kyrr" in between, and the
+/// next block starts a new recording.
+const NEW_RECORDING: Duration = Duration::from_millis(500);
 
 /// What the audio thread and the app share.
 struct Shared {
@@ -85,6 +88,8 @@ struct Chain {
     /// left out as too slow for this computer.
     load: Load,
     slow: bool,
+    /// When the last block came.
+    last: Option<Instant>,
 }
 
 impl Chain {
@@ -97,6 +102,22 @@ impl Chain {
         }
         self.before = decay(self.before, peak(buf));
 
+        // A new recording starts afresh, as each one is a new stream on
+        // Windows. The voice may come from somewhere else now (the
+        // microphone moved): the automatic level takes a fresh look, and the
+        // noise filter, which still expects the last room and level, learns
+        // anew. It does that within a word; holding on to the old state, it
+        // would take seconds and drop quiet words meanwhile. A stall of the
+        // audio in the middle of a recording looks the same and costs only
+        // that fresh start.
+        let now = Instant::now();
+        if self.last.is_some_and(|last| now.duration_since(last) > NEW_RECORDING) {
+            self.voice.reset();
+            if let Some(filter) = self.filter.as_mut() {
+                filter.reset();
+            }
+        }
+        self.last = Some(now);
         self.voice.set(&s.voice);
         self.voice.pre(buf);
         if let Some(filter) = self.filter.as_mut().filter(|_| !self.slow) {
@@ -230,6 +251,7 @@ impl Engine {
             after: 0.0,
             load: Load::default(),
             slow: false,
+            last: None,
         };
         let mic = VirtualMic::start(
             microphone,

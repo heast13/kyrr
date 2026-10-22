@@ -1,11 +1,14 @@
 //! kyrr-voice: shapes the voice once the noise is gone. The chain follows
 //! Omavoice DPDFNet: a low cut before the noise filter, then the sound
 //! (three EQ bands), a de-esser, a compressor and a limiter. kyrr adds pop
-//! protection next to the low cut and an automatic level before the
-//! de-esser, so the de-esser and compressor always see a voice at the level
-//! their thresholds were made for, and a distance compensation before that,
-//! which only acts when the microphone is far from the voice (see
-//! [`distance`]).
+//! protection and an automatic level next to the low cut, and a distance
+//! compensation after the noise filter, which only acts when the microphone
+//! is far from the voice (see [`distance`]). The level comes before the
+//! noise filter: the filter learns how loud the voice usually is, and a
+//! voice far below that (the microphone moved away) sounds like noise to it
+//! and is taken out for seconds. Levelled, it always gets the voice it
+//! knows, and the de-esser and compressor get the level their thresholds
+//! were made for.
 //!
 //! [`Voice`] works on interleaved frames in place. After construction it
 //! never allocates and takes new settings between blocks, so it can run on
@@ -78,8 +81,8 @@ const POP_RUMBLE_MARGIN_DB: f64 = 6.0;
 const POP_RING_SLACK: usize = 16384;
 
 /// Automatic level: measures the voice in 10 ms frames, only while
-/// someone speaks, and moves the gain slowly towards `LEVEL_TARGET_DB`.
-/// Pauses, breaths and short clicks leave the gain alone.
+/// someone speaks, and moves the gain towards `LEVEL_TARGET_DB`. Pauses,
+/// breaths and short clicks leave the gain alone.
 const LEVEL_FRAME_MS: f64 = 10.0;
 /// Where speech is brought to: mean power of the spoken frames (dBFS).
 const LEVEL_TARGET_DB: f64 = -23.0;
@@ -103,10 +106,22 @@ const LEVEL_DIGITAL_SILENCE_DB: f64 = -100.0;
 /// The speech level averages over about this much speech; the gain waits
 /// for `LEVEL_FIRST_MS` of speech before it moves the first time.
 const LEVEL_AVERAGE_MS: f64 = 3000.0;
-const LEVEL_FIRST_MS: f64 = 500.0;
-/// How fast the gain may move: up gently, down quicker.
-const LEVEL_UP_DB_PER_S: f64 = 5.0;
-const LEVEL_DOWN_DB_PER_S: f64 = 10.0;
+const LEVEL_FIRST_MS: f64 = 250.0;
+/// Each stream starts with a fresh look: the first `LEVEL_LOOK_MS` of
+/// speech are measured on their own while the gain holds. Off by more than
+/// `LEVEL_LOOK_DB` from what was learned (the microphone was moved, another
+/// one plugged in), the level starts over from that look.
+const LEVEL_LOOK_MS: f64 = 250.0;
+const LEVEL_LOOK_DB: f64 = 4.0;
+/// How fast the gain moves: close to where it should be, gently (up
+/// slower than down), so it never pumps with the voice. Further off it
+/// closes the rest of the gap with `LEVEL_CATCH_MS` as time constant: a
+/// big change is done within about half a second of speech, not crept up
+/// on for seconds.
+const LEVEL_UP_DB_PER_S: f64 = 3.0;
+const LEVEL_DOWN_DB_PER_S: f64 = 6.0;
+const LEVEL_CLOSE_DB: f64 = 2.0;
+const LEVEL_CATCH_MS: f64 = 150.0;
 /// Smooths the gain between frames and when the switch flips.
 const LEVEL_SMOOTH_MS: f64 = 100.0;
 
@@ -383,8 +398,15 @@ struct Level {
     heard: usize,
     average_frames: f64,
     first_frames: usize,
+    /// The fresh look of this stream: power summed so far and frames to go
+    /// (0 once it is done).
+    look: f64,
+    look_left: usize,
+    look_frames: usize,
     up_db: f64,
     down_db: f64,
+    /// Share of the gap beyond `LEVEL_CLOSE_DB` closed per frame.
+    catch: f64,
     gain_db: f64,
     /// The gain applied right now (linear), smoothed per sample.
     applied: f64,
@@ -411,8 +433,12 @@ impl Level {
             heard: 0,
             average_frames: (LEVEL_AVERAGE_MS / 1000.0 * frames_per_s).max(1.0),
             first_frames: (LEVEL_FIRST_MS / 1000.0 * frames_per_s).ceil() as usize,
+            look: 0.0,
+            look_left: 0,
+            look_frames: (LEVEL_LOOK_MS / 1000.0 * frames_per_s).ceil() as usize,
             up_db: LEVEL_UP_DB_PER_S / frames_per_s,
             down_db: LEVEL_DOWN_DB_PER_S / frames_per_s,
+            catch: 1.0 - (-1000.0 / (LEVEL_CATCH_MS * frames_per_s)).exp(),
             gain_db: 0.0,
             applied: 1.0,
             smooth: smoothing(rate, LEVEL_SMOOTH_MS),
@@ -420,7 +446,7 @@ impl Level {
     }
 
     /// Starts from a gain learned before, as if the voice had been heard at
-    /// the level that gain fits.
+    /// the level that gain fits, and takes a fresh look.
     fn resume(&mut self, gain_db: f64) {
         if !gain_db.is_finite() {
             return;
@@ -428,6 +454,7 @@ impl Level {
         self.gain_db = gain_db.clamp(-LEVEL_MAX_CUT_DB, LEVEL_MAX_BOOST_DB);
         self.speech = 10f64.powf((LEVEL_TARGET_DB - self.gain_db) / 10.0);
         self.heard = self.first_frames;
+        self.reset();
     }
 
     /// Takes the power of one sample frame (mean over channels).
@@ -487,6 +514,21 @@ impl Level {
 
     /// One frame of speech: update its level and move the gain a step.
     fn learn(&mut self, p: f64) {
+        if self.look_left > 0 && self.heard >= self.first_frames {
+            self.look += p;
+            self.look_left -= 1;
+            if self.look_left > 0 {
+                return;
+            }
+            let look = self.look / self.look_frames as f64;
+            let off_db = 10.0 * ((look + 1e-20) / (self.speech + 1e-20)).log10();
+            if off_db.abs() > LEVEL_LOOK_DB {
+                // Somewhere else now: the look is all that is known, and
+                // the next frames refine it quickly.
+                self.speech = look;
+                self.heard = self.look_frames.max(self.first_frames);
+            }
+        }
         self.heard = self.heard.saturating_add(1);
         // A plain mean at first, then a moving one.
         let w = (1.0 / self.heard as f64).max(1.0 / self.average_frames);
@@ -496,14 +538,25 @@ impl Level {
         }
         let level_db = 10.0 * (self.speech + 1e-20).log10();
         let want = (LEVEL_TARGET_DB - level_db).clamp(-LEVEL_MAX_CUT_DB, LEVEL_MAX_BOOST_DB);
-        self.gain_db += (want - self.gain_db).clamp(-self.down_db, self.up_db);
+        let gap = want - self.gain_db;
+        let far = (gap.abs() - LEVEL_CLOSE_DB).max(0.0) * self.catch;
+        let step = if gap > 0.0 { self.up_db } else { self.down_db } + far;
+        self.gain_db += gap.clamp(-step, step);
     }
 
-    /// Forgets the frame in progress (the stream jumped).
+    /// Forgets the frame in progress (the stream jumped) and takes a fresh
+    /// look at the next speech.
     fn reset(&mut self) {
         self.sum = 0.0;
         self.filled = 0;
         self.run_len = 0;
+        self.look = 0.0;
+        // Nothing learned yet: the plain mean at the start is a look.
+        self.look_left = if self.heard >= self.first_frames {
+            self.look_frames
+        } else {
+            0
+        };
     }
 }
 
@@ -706,7 +759,8 @@ impl Voice {
     }
 
     /// Starts the automatic level from a gain an earlier stream learned, so
-    /// a new call does not begin at the microphone's raw level.
+    /// a new call does not begin at the microphone's raw level. It still
+    /// takes a fresh look at the first speech, in case the voice moved.
     pub fn resume_level(&mut self, gain_db: f64) {
         self.level.resume(gain_db);
     }
@@ -736,7 +790,8 @@ impl Voice {
     }
 
     /// Clears all filter and dynamics state. The automatic level keeps
-    /// what it learned about the voice.
+    /// what it learned about the voice and takes a fresh look at the next
+    /// speech.
     pub fn reset(&mut self) {
         self.state.fill(Channel::default());
         self.deess_env = 0.0;
@@ -755,9 +810,10 @@ impl Voice {
         self.limit_gain = 1.0;
     }
 
-    /// The low cut, before the noise filter: rumble would only cost the
-    /// noise filter effort. Pop protection listens here, on the raw
-    /// microphone, and turns down in [`Voice::post`].
+    /// The low cut and the automatic level, before the noise filter: rumble
+    /// would only cost the noise filter effort, and the filter works best
+    /// with the voice at the level it knows. Pop protection listens here, on
+    /// the raw microphone, and turns down in [`Voice::post`].
     pub fn pre(&mut self, buf: &mut [f32]) {
         if !self.enabled() {
             return;
@@ -819,15 +875,36 @@ impl Voice {
             self.pop_ring[(self.pop_written % len as u64) as usize] = wanted as f32;
             self.pop_written += 1;
 
-            for (x, v) in frame.iter_mut().zip(low_cut_buf.iter()) {
-                *x = *v as f32;
+            // Automatic level: measured before its own gain, so it learns
+            // the voice as it comes in. After the low cut, so rumble does
+            // not count as voice.
+            if self.auto_level {
+                let y = &low_cut_buf[..n];
+                self.level.feed(y.iter().map(|v| v * v).sum::<f64>() / n as f64);
             }
-            // Channels beyond the shaped ones get the low cut only.
-            if let Some(c) = &self.low_cut {
-                for (x, st) in frame.iter_mut().zip(self.state.iter_mut()).skip(n) {
-                    let v = if x.is_finite() { *x as f64 } else { 0.0 };
-                    *x = st.low_cut.run(c, v) as f32;
-                }
+            let want = if self.auto_level {
+                db_to_gain(self.level.gain_db)
+            } else {
+                1.0
+            };
+            self.level.applied = self.level.smooth * self.level.applied + (1.0 - self.level.smooth) * want;
+            let level = self.level.applied;
+
+            // Not clamped: a loud start while the gain is still high (the
+            // fresh look) may go over full scale here for a moment. The
+            // noise filter takes that in its stride, the limiter after it
+            // catches it cleanly, where a clamp here would crackle.
+            for (x, v) in frame.iter_mut().zip(low_cut_buf.iter()) {
+                *x = (*v * level) as f32;
+            }
+            // Channels beyond the shaped ones get the low cut and the level.
+            for (x, st) in frame.iter_mut().zip(self.state.iter_mut()).skip(n) {
+                let v = if x.is_finite() { *x as f64 } else { 0.0 };
+                let v = match &self.low_cut {
+                    Some(c) => st.low_cut.run(c, v),
+                    None => v,
+                };
+                *x = (v * level) as f32;
             }
         }
     }
@@ -845,15 +922,15 @@ impl Voice {
         self.pop_ring[(at % len) as usize] as f64
     }
 
-    /// Sound, pop protection, distance compensation, automatic level,
-    /// de-esser, compressor and limiter, after the noise filter.
+    /// Sound, pop protection, distance compensation, de-esser, compressor
+    /// and limiter, after the noise filter.
     pub fn post(&mut self, buf: &mut [f32]) {
         if !self.enabled() {
             return;
         }
         let ch = self.channels;
         // At most 8 channels are shaped together on the stack; more than
-        // that never reaches a microphone APO, the rest pass unchanged.
+        // that never reaches a microphone APO, the rest only get the gain.
         let mut frame_buf = [0f64; 8];
         let n = ch.min(frame_buf.len());
         for frame in buf.chunks_exact_mut(ch) {
@@ -884,28 +961,9 @@ impl Voice {
                 *out = v;
             }
 
-            // Far from the microphone: less echo before the automatic level
-            // lifts the voice and the room with it. Fades out when switched
+            // Far from the microphone: less echo. Fades out when switched
             // off; close to the microphone it leaves the audio alone.
             self.compensation.run(y, self.distance && self.room.far());
-
-            // Automatic level: measured before its own gain, so it learns
-            // the voice as it comes in.
-            if self.auto_level {
-                self.level.feed(y.iter().map(|v| v * v).sum::<f64>() / n as f64);
-            }
-            let want = if self.auto_level {
-                db_to_gain(self.level.gain_db)
-            } else {
-                1.0
-            };
-            self.level.applied = self.level.smooth * self.level.applied + (1.0 - self.level.smooth) * want;
-            let level = self.level.applied;
-            if level != 1.0 {
-                for v in y.iter_mut() {
-                    *v *= level;
-                }
-            }
 
             let mut key_peak = 0f64;
             if self.deess.is_some() {
@@ -977,10 +1035,10 @@ impl Voice {
                 *x = (v * gain).clamp(-1.0, 1.0) as f32;
             }
             // Channels beyond the shaped ones keep their sound but get the
-            // same level, and never NaN or clipping.
+            // same gain, and never NaN or clipping.
             for x in frame.iter_mut().skip(n) {
                 let v = if x.is_finite() { *x as f64 } else { 0.0 };
-                *x = (v * level * gain).clamp(-1.0, 1.0) as f32;
+                *x = (v * gain).clamp(-1.0, 1.0) as f32;
             }
         }
     }
@@ -1394,6 +1452,42 @@ mod tests {
             (rms_db(&first) - LEVEL_TARGET_DB).abs() < 3.0,
             "{:.1} dBFS",
             rms_db(&first)
+        );
+    }
+
+    #[test]
+    fn automatic_level_catches_a_moved_microphone_within_a_second() {
+        let fresh = |amplitude: f64, seconds: f64| {
+            let mut voice = Voice::new(RATE, 1);
+            voice.set(&settings(|s| s.auto_level = true));
+            through(&mut voice, &voice_like(amplitude, seconds), 0);
+            voice.level_db()
+        };
+        let close = fresh(0.1, 10.0);
+        let far = fresh(0.01, 15.0);
+        assert!(far - close > 15.0, "close {close:.1} dB, far {far:.1} dB");
+
+        // The next recording, 20 dB quieter: the gain is there within the
+        // first second of speech, not crept up on for seconds.
+        let mut voice = Voice::new(RATE, 1);
+        voice.set(&settings(|s| s.auto_level = true));
+        voice.resume_level(close);
+        through(&mut voice, &voice_like(0.01, 1.5), 0);
+        assert!(
+            (voice.level_db() - far).abs() < 3.0,
+            "{:.1} dB, wants {far:.1} dB",
+            voice.level_db()
+        );
+
+        // The same voice again: the fresh look finds nothing to change.
+        let mut voice = Voice::new(RATE, 1);
+        voice.set(&settings(|s| s.auto_level = true));
+        voice.resume_level(far);
+        through(&mut voice, &voice_like(0.01, 3.0), 0);
+        assert!(
+            (voice.level_db() - far).abs() < 1.0,
+            "{:.1} dB, was {far:.1} dB",
+            voice.level_db()
         );
     }
 
