@@ -3,6 +3,7 @@
 //! part can use it without pulling in platform code; the one exception is
 //! the dictation wave, drawn here in plain Rust for both systems.
 
+pub mod keys;
 pub mod mic_move;
 pub mod wave;
 
