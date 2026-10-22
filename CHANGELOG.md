@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (2026-10-21)
 
 - Voice memos: F8 (F9 or Pause when dictation has F8; switchable, or
   none) starts and ends a recording, also from the tray (and on Linux
@@ -85,6 +85,59 @@
 - AUR: `kyrr-bin` at the current version, built and checked on Arch for
   every change to the package, and pushed to the AUR after each release once the key is
   set up.
+- Setup in three steps (Windows and Linux alike): microphone, then
+  language and dictation model (with the key and typing questions on
+  Linux), then the performance setting.
+- Effort setting, "Lean" or "Best quality" (Settings, Simple; asked in the
+  setup): Lean is the small noise model and the words after you stop
+  talking, Best quality the large model and words while you talk. The first
+  time the dictation model loads, kyrr times one look; a slow computer (over
+  0.4 s for 4 s of audio, or no AVX2) gets a suggestion for Lean, once.
+  Lean dictations end after 2 minutes, others after 15; at the limit kyrr
+  types what it heard instead of dropping the rest, and the wave turns
+  yellow (30 s left) and red (10 s left). Text heard while the dictation key
+  is still down waits for its release (at most 3 s).
+- Live words: placed by the model's own word times; a look starts 1.5 s
+  before the last word shown, a word shows once 0.8 s of recording followed
+  it or two looks agree. On a computer three times slower the words show
+  after about 2.4 s instead of 6 s. A computer needing over 2.5 s per look
+  stops showing words for that dictation.
+- Status line: 20 phrases per state, picked at random, never the same one
+  twice in a row; 14 grumbles in the pill after a dictation that heard
+  nothing. 12 px hints, the tray menu uses the card titles.
+- Performance: pieces of a long dictation are recognised while the key is
+  held (2 minutes of speech: 8.3 s wait after the key before, 0.9 s now);
+  ONNX Runtime without a memory arena and without spinning threads (peak RAM
+  1.92 to 1.59 GB, about 17 % less CPU for the final recognition); the noise
+  filter's int8 kernels also come as AVX-VNNI and AVX-512 VNNI builds, bit
+  for bit like AVX2 (Quality 29 % to 20 % of one core).
+- Stability: a model download that stalls (60 s without data) is asked again
+  from where it broke off, and a cancel stops at once; a damaged model is
+  deleted and fetched again by Retry; a language change waits until a
+  dictation is typed; one update download at a time, written to a .part
+  file first; `filter.json` is written atomically and a broken
+  `config.json` no longer resets everything; Linux: kyrr sets the virtual
+  microphone up again after a PipeWire restart, waits for PipeWire at the
+  start, and a second start at the same moment hands over; the default
+  microphone is given back correctly even after a crash; Windows: pasting
+  and the audio filter's setup handle more edge cases. Voice shaping: the
+  filters no longer slow down after long silences and the low cut no longer
+  clicks when switched on.
+- Linux: the window is drawn by the software renderer only (the OpenGL
+  renderer crashed at start on Wayland without libwayland-egl and kept over
+  100 MB of RAM). The AppImage and the tarball are a third smaller (69 to
+  46 MB: the noise models without their `.onnx` files). An AppImage on a
+  system with a too old glibc says so in a dialog.
+- Security: downloads and the update check are HTTPS only, redirects
+  included; newer root certificates (RUSTSEC-2026-0381); third-party CI
+  actions pinned to commits.
+- Keyboard and screen reader access for the remaining click-only controls,
+  better contrast for small notes.
+- Windows: the README and the website say that dictation does not work while
+  a window running as administrator is in front (Windows hides the keyboard
+  from normal programs there).
+- Release: release notes start with the plain summary from
+  NEWS.md and fold the technical section away.
 
 ## 0.5.8 (2026-10-20)
 
