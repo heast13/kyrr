@@ -23,6 +23,9 @@ pub struct Memo {
     /// From the name, else when the file was last written.
     pub when: NaiveDateTime,
     pub seconds: f64,
+    /// When the file was last written (seconds since 1970; 0 unknown): a
+    /// memo finished after the list was last looked at is new.
+    pub saved: u64,
     /// Its text, when it has one.
     pub text: Option<Vec<Paragraph>>,
 }
@@ -120,7 +123,13 @@ pub fn list(dir: &Path) -> Vec<Memo> {
                     (chrono::DateTime::<Local>::from(modified).naive_local(), stem)
                 }
             };
+            let saved = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map_or(0, |d| d.as_secs());
             Some(Memo {
+                saved,
                 seconds: opusfile::seconds(&path).unwrap_or(0.0),
                 text: read_text(&path),
                 path,
@@ -225,14 +234,41 @@ pub fn clock(seconds: u32) -> String {
     }
 }
 
+/// When the memo at `path` was started, from its name.
+pub fn started(path: &Path) -> Option<NaiveDateTime> {
+    let stem = path.file_stem()?.to_string_lossy().into_owned();
+    parse(&stem).map(|(when, _)| when)
+}
+
+/// "14:06": the time of day a paragraph is said, `seconds` into a memo that
+/// started at `start`.
+pub fn time_of_day(start: NaiveDateTime, seconds: u32) -> String {
+    (start + chrono::Duration::seconds(i64::from(seconds)))
+        .format("%H:%M")
+        .to_string()
+}
+
 /// Writes the text of the memo at `path`: each paragraph with where it
-/// starts, a blank line between them. Paragraphs without words are left
-/// out. Written whole or not at all.
+/// starts (and the time of day, when the name says when the memo began), a
+/// blank line between them. Paragraphs without words are left out. Written
+/// whole or not at all.
 pub fn write_text(path: &Path, paragraphs: &[Paragraph]) -> io::Result<PathBuf> {
+    let start = started(path);
     let body: Vec<String> = paragraphs
         .iter()
         .filter(|p| !p.text.trim().is_empty())
-        .map(|p| format!("[{}] {}", clock(p.seconds), p.text.trim()))
+        .map(|p| match (p.seconds, start) {
+            (u32::MAX, _) => p.text.trim().to_string(),
+            (seconds, Some(start)) => {
+                format!(
+                    "[{} · {}] {}",
+                    clock(seconds),
+                    time_of_day(start, seconds),
+                    p.text.trim()
+                )
+            }
+            (seconds, None) => format!("[{}] {}", clock(seconds), p.text.trim()),
+        })
         .collect();
     let to = text_path(path);
     let part = to.with_extension("txt.part");
@@ -257,7 +293,10 @@ fn paragraphs(text: &str) -> Vec<Paragraph> {
         .map(|p| {
             let timed = p.strip_prefix('[').and_then(|rest| {
                 let (time, text) = rest.split_once(']')?;
-                Some((parse_clock(time)?, text.trim()))
+                // "1:30 · 14:06": the position counts, the time of day is
+                // worked out again.
+                let position = time.split('·').next()?.trim();
+                Some((parse_clock(position)?, text.trim()))
             });
             match timed {
                 Some((seconds, text)) => Paragraph {
@@ -270,6 +309,7 @@ fn paragraphs(text: &str) -> Vec<Paragraph> {
                 },
             }
         })
+        .filter(|p| !p.text.is_empty())
         .collect()
 }
 
@@ -289,6 +329,160 @@ pub fn plain(paragraphs: &[Paragraph]) -> String {
         .map(|p| p.text.as_str())
         .collect::<Vec<_>>()
         .join("\n\n")
+}
+
+/// What stands in front of each paragraph in the text field.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Stamps {
+    None,
+    /// How far into the memo: `[1:30]`.
+    Position,
+    /// When it was said: `[14:06]`.
+    TimeOfDay,
+}
+
+impl Stamps {
+    pub fn from_index(i: i32) -> Stamps {
+        match i {
+            1 => Stamps::Position,
+            2 => Stamps::TimeOfDay,
+            _ => Stamps::None,
+        }
+    }
+}
+
+/// The text field's content: the paragraphs, a blank line between them,
+/// each with the stamp asked for. Without a start time the time of day
+/// falls back to the position.
+pub fn field(paragraphs: &[Paragraph], stamps: Stamps, start: Option<NaiveDateTime>) -> String {
+    paragraphs
+        .iter()
+        .map(|p| match (stamps, p.seconds, start) {
+            (Stamps::None, _, _) | (_, u32::MAX, _) => p.text.clone(),
+            (Stamps::TimeOfDay, seconds, Some(start)) => format!("[{}] {}", time_of_day(start, seconds), p.text),
+            (_, seconds, _) => format!("[{}] {}", clock(seconds), p.text),
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+/// `[1:30] text` or `[14:06] text` without the bracket: the stamp the field
+/// shows, only when it looks like one.
+fn without_stamp(block: &str) -> &str {
+    let Some(rest) = block.strip_prefix('[') else {
+        return block;
+    };
+    match rest.split_once(']') {
+        Some((stamp, text))
+            if stamp.contains(':') && stamp.chars().all(|c| c.is_ascii_digit() || ":· ".contains(c)) =>
+        {
+            text.trim_start()
+        }
+        _ => block,
+    }
+}
+
+/// The text with the stamps the field shows taken off the paragraphs, for
+/// the clipboard. A line is a paragraph's start only after a blank line (or
+/// at the start): a `[1:30]` typed into the middle of a sentence stays.
+pub fn without_stamps(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut at_start = true;
+    for (i, line) in text.split('\n').enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        out.push_str(if at_start { without_stamp(line) } else { line });
+        at_start = line.trim().is_empty();
+    }
+    out
+}
+
+/// The paragraphs of the text field as byte ranges: runs of lines between
+/// blank lines.
+fn blocks(field: &str) -> Vec<std::ops::Range<usize>> {
+    let mut found = Vec::new();
+    let mut open: Option<(usize, usize)> = None;
+    let mut offset = 0;
+    for line in field.split_inclusive('\n') {
+        let end = offset + line.trim_end_matches(['\n', '\r']).len();
+        if line.trim().is_empty() {
+            if let Some((from, to)) = open.take() {
+                found.push(from..to);
+            }
+        } else {
+            let from = open.map_or(offset + (line.len() - line.trim_start().len()), |(from, _)| from);
+            open = Some((from, end));
+        }
+        offset += line.len();
+    }
+    if let Some((from, to)) = open {
+        found.push(from..to);
+    }
+    found
+}
+
+/// The paragraphs after the user edited the field. `old` are the ones before:
+/// a paragraph keeps the position it started at. Same number of paragraphs:
+/// each keeps its own. A different number (one split, one joined, one new):
+/// a paragraph whose first words match an old one has that one's position
+/// (a split keeps it for both halves, since the second then has none to
+/// match and takes the one before), else the position of the paragraph
+/// before it.
+pub fn edited(old: &[Paragraph], field: &str) -> Vec<Paragraph> {
+    let texts: Vec<&str> = blocks(field)
+        .into_iter()
+        .map(|r| without_stamp(field[r].trim()).trim())
+        .filter(|t| !t.is_empty())
+        .collect();
+    let same = texts.len() == old.len();
+    let mut next = 0;
+    let mut last = old.first().map_or(u32::MAX, |p| p.seconds);
+    texts
+        .iter()
+        .enumerate()
+        .map(|(i, text)| {
+            let seconds = if same {
+                old[i].seconds
+            } else {
+                match (next..old.len()).find(|&j| same_start(&old[j].text, text)) {
+                    Some(j) => {
+                        next = j + 1;
+                        old[j].seconds
+                    }
+                    None => last,
+                }
+            };
+            last = seconds;
+            Paragraph {
+                seconds,
+                text: (*text).to_string(),
+            }
+        })
+        .collect()
+}
+
+/// Whether two paragraphs begin alike: their first twelve letters, or all
+/// of the shorter one.
+fn same_start(a: &str, b: &str) -> bool {
+    let common = a.chars().zip(b.chars()).take_while(|(x, y)| x == y).count();
+    common > 0 && common >= a.chars().count().min(b.chars().count()).min(12)
+}
+
+/// Where in the memo the paragraph with the cursor at byte `cursor` of the
+/// field starts, when that is known.
+pub fn seconds_at(old: &[Paragraph], field: &str, cursor: usize) -> Option<u32> {
+    let blocks = blocks(field);
+    let index = blocks.iter().rposition(|b| b.start <= cursor).unwrap_or(0);
+    // The same paragraphs `edited` makes, one for each block with words.
+    let paragraphs = edited(old, field);
+    let at = blocks
+        .iter()
+        .take(index + 1)
+        .filter(|b| !without_stamp(field[(*b).clone()].trim()).trim().is_empty())
+        .count()
+        .saturating_sub(1);
+    paragraphs.get(at).map(|p| p.seconds).filter(|&s| s != u32::MAX)
 }
 
 /// Opens `path` (a folder, or a memo's text) with the app the system has
@@ -427,7 +621,7 @@ mod tests {
         ];
         write_text(&memo, &written_out).unwrap();
         let written = std::fs::read_to_string(text_path(&memo)).unwrap();
-        assert_eq!(written, "[0:00] Erster Absatz.\n\n[1:02:05] Später.\n");
+        assert_eq!(written, "[0:00 · 18:05] Erster Absatz.\n\n[1:02:05 · 19:07] Später.\n");
         let back = read_text(&memo).unwrap();
         assert_eq!(back, vec![written_out[0].clone(), written_out[2].clone()]);
         assert_eq!(plain(&back), "Erster Absatz.\n\nSpäter.");
@@ -445,5 +639,97 @@ mod tests {
             ]
         );
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn para(seconds: u32, text: &str) -> Paragraph {
+        Paragraph {
+            seconds,
+            text: text.into(),
+        }
+    }
+
+    #[test]
+    fn old_and_new_stamps_both_read() {
+        assert_eq!(
+            paragraphs("[0:05] alt\n\n[1:30 · 14:06] neu\n\n[2:00 · 14:07]   \n"),
+            vec![para(5, "alt"), para(90, "neu")]
+        );
+    }
+
+    #[test]
+    fn the_field_shows_the_stamp_asked_for() {
+        let start = NaiveDateTime::parse_from_str("2026-10-21 21-40", STAMP).unwrap();
+        let text = vec![para(0, "Eins."), para(90, "Zwei."), para(u32::MAX, "Drei.")];
+        assert_eq!(field(&text, Stamps::None, Some(start)), "Eins.\n\nZwei.\n\nDrei.");
+        assert_eq!(
+            field(&text, Stamps::Position, Some(start)),
+            "[0:00] Eins.\n\n[1:30] Zwei.\n\nDrei."
+        );
+        assert_eq!(
+            field(&text, Stamps::TimeOfDay, Some(start)),
+            "[21:40] Eins.\n\n[21:41] Zwei.\n\nDrei."
+        );
+        // No start to count from: the position instead.
+        assert_eq!(
+            field(&text, Stamps::TimeOfDay, None),
+            "[0:00] Eins.\n\n[1:30] Zwei.\n\nDrei."
+        );
+        // Past midnight it goes round.
+        let late = NaiveDateTime::parse_from_str("2026-10-21 23-50", STAMP).unwrap();
+        assert_eq!(time_of_day(late, 1200), "00:10");
+    }
+
+    #[test]
+    fn stamps_come_off_for_the_clipboard() {
+        assert_eq!(
+            without_stamps("[0:00] Eins.\n\n[21:41] Zwei [1:30] mitten.\nnoch eine Zeile\n\n[x] bleibt"),
+            "Eins.\n\nZwei [1:30] mitten.\nnoch eine Zeile\n\n[x] bleibt"
+        );
+        // A selection that begins inside a paragraph has no stamp to lose.
+        assert_eq!(without_stamps("ganz mitten drin"), "ganz mitten drin");
+        // A number in brackets is a note of the user's, not a stamp.
+        assert_eq!(without_stamps("[1] Punkt eins"), "[1] Punkt eins");
+    }
+
+    #[test]
+    fn edits_keep_where_a_paragraph_starts() {
+        let old = vec![para(0, "Eins hier."), para(34, "Zwei dort."), para(72, "Drei da.")];
+        // Words changed, same number: each keeps its place.
+        assert_eq!(
+            edited(&old, "Eins hier!\n\n[0:34] Zwei, dort.\n\nDrei da."),
+            vec![para(0, "Eins hier!"), para(34, "Zwei, dort."), para(72, "Drei da.")]
+        );
+        // One paragraph split in two: the second half takes the place of the first.
+        assert_eq!(
+            edited(&old, "Eins hier.\n\nNoch was.\n\nZwei dort.\n\nDrei da."),
+            vec![
+                para(0, "Eins hier."),
+                para(0, "Noch was."),
+                para(34, "Zwei dort."),
+                para(72, "Drei da.")
+            ]
+        );
+        // Two joined: the first one's place.
+        assert_eq!(
+            edited(&old, "Eins hier. Zwei dort.\n\nDrei da."),
+            vec![para(0, "Eins hier. Zwei dort."), para(72, "Drei da.")]
+        );
+        // All gone: nothing; a text with no paragraphs before gets no places.
+        assert!(edited(&old, "  \n\n").is_empty());
+        assert_eq!(edited(&[], "Von Hand."), vec![para(u32::MAX, "Von Hand.")]);
+    }
+
+    #[test]
+    fn the_cursor_picks_a_paragraph() {
+        let old = vec![para(0, "Eins hier."), para(34, "Zwei dort."), para(72, "Drei da.")];
+        let field = "[0:00] Eins hier.\n\n[0:34] Zwei dort.\n\n[1:12] Drei da.";
+        assert_eq!(seconds_at(&old, field, 0), Some(0));
+        assert_eq!(seconds_at(&old, field, 10), Some(0));
+        let second = field.find("[0:34]").unwrap();
+        assert_eq!(seconds_at(&old, field, second + 3), Some(34));
+        // On the blank line between: the paragraph before.
+        assert_eq!(seconds_at(&old, field, second - 1), Some(0));
+        assert_eq!(seconds_at(&old, field, field.len()), Some(72));
+        assert_eq!(seconds_at(&[para(u32::MAX, "Hand.")], "Hand.", 2), None);
     }
 }

@@ -49,6 +49,23 @@ pub struct Config {
     pub memo_toggle: bool,
     /// Every new memo gets its text right away, not just on a click.
     pub memo_text_auto: bool,
+    /// What the memo text field shows before each paragraph: 0 nothing,
+    /// 1 how far into the memo, 2 the time of day.
+    pub memo_stamps: u8,
+    /// When the user last looked at the memo list, in seconds since 1970;
+    /// memos newer than that are "new" (the dot on the main page). 0: never
+    /// set, kyrr takes the first start as the moment.
+    pub memos_seen: u64,
+    /// Holding the memo key became the standard in 0.6.1: a settings file
+    /// without this (from 0.6.0, where "tap" was only the standard) gets
+    /// "hold" once; after that the user's own choice stays.
+    #[serde(default = "never")]
+    pub memo_hold_default: bool,
+}
+
+/// A setting that an older settings file does not have yet.
+fn never() -> bool {
+    false
 }
 
 /// The language setting for dictation in many languages.
@@ -71,8 +88,11 @@ impl Default for Config {
             last_run_version: String::new(),
             memos: true,
             memo_key: keys::MEMO_DEFAULT,
-            memo_toggle: true,
+            memo_toggle: false,
             memo_text_auto: false,
+            memo_stamps: 0,
+            memos_seen: 0,
+            memo_hold_default: true,
         }
     }
 }
@@ -94,7 +114,11 @@ impl Config {
                 return Config::default();
             }
         };
-        let (config, whole) = parse(&bytes);
+        let (mut config, whole) = parse(&bytes);
+        if !config.memo_hold_default {
+            config.memo_toggle = false;
+            config.memo_hold_default = true;
+        }
         if !whole {
             eprintln!("kyrr: {} does not read fully; kept as config.json.bak", path.display());
             let _ = std::fs::copy(path, path.with_extension("json.bak"));
@@ -334,6 +358,27 @@ mod tests {
         };
         assert_eq!(config.dictation_key(), keys::F9);
         assert_eq!(config.memo_key(), keys::F8);
+    }
+
+    #[test]
+    fn holding_the_memo_key_is_the_standard_once() {
+        let dir = std::env::temp_dir().join(format!("kyrr-config-hold-{}", std::process::id()));
+        let path = dir.join("config.json");
+        std::fs::create_dir_all(&dir).unwrap();
+        // 0.6.0 saved "tap" without anyone choosing it.
+        std::fs::write(&path, br#"{"memo_toggle": true}"#).unwrap();
+        let config = Config::load_from(&path);
+        assert!(!config.memo_toggle && config.memo_hold_default);
+        // From then on the user's choice stays.
+        Config {
+            memo_toggle: true,
+            ..config
+        }
+        .save_to(&path);
+        assert!(Config::load_from(&path).memo_toggle);
+        // A new install holds, too.
+        assert!(!Config::default().memo_toggle);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

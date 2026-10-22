@@ -1449,8 +1449,26 @@ msgstr "Als Textdatei öffnen"
 msgid "Nothing understood in there. Was it quiet?"
 msgstr "Da war nichts zu verstehen. War es still?"
 
-msgid "Click a time to listen from there."
-msgstr "Klick auf eine Zeit spielt ab dort ab."
+msgid "Times"
+msgstr "Zeiten"
+
+msgid "Position"
+msgstr "Position"
+
+msgid "Time of day"
+msgstr "Uhrzeit"
+
+msgid "Saved"
+msgstr "Gespeichert"
+
+msgid "Saving …"
+msgstr "Speichert …"
+
+msgid "Play from here"
+msgstr "Ab hier abspielen"
+
+msgid "Select and copy: the times stay behind. What you type is saved by itself."
+msgstr "Markieren und kopieren: Die Zeiten bleiben draußen. Was du tippst, wird von selbst gespeichert."
 
 msgid "Set key"
 msgstr "Taste festlegen"

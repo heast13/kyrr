@@ -28,13 +28,6 @@ export struct MemoItem {
     text-left: string,
 }
 
-// A paragraph of a memo's text: where it starts and what was said.
-export struct MemoParagraph {
-    time: string,
-    seconds: int,
-    text: string,
-}
-
 export global AppState {
     // Noise removal
     in-out property <bool> filter-enabled: true;
@@ -234,7 +227,7 @@ export global AppState {
     in property <string> memo-key-label: "F8";
     // Another shortcut of the user's has the memo key; "" for none.
     in property <string> memo-key-note;
-    in property <bool> memo-toggle: true;     // tap to start and stop instead of holding
+    in property <bool> memo-toggle: false;     // tap to start and stop instead of holding
     // The key's release is reported (not on GNOME 46 and 47, niri).
     in property <bool> memo-can-hold: true;
     in property <bool> memo-recording;
@@ -257,15 +250,28 @@ export global AppState {
     in property <int> memo-sheet-index: -1;
     in property <string> memo-sheet-title;
     in property <string> memo-sheet-when;
-    in property <[MemoParagraph]> memo-sheet-paragraphs;
+    // The text field: the paragraphs, each with the stamp asked for.
+    in-out property <string> memo-sheet-text;
+    // What goes before each paragraph: 0 nothing, 1 how far into the memo,
+    // 2 the time of day.
+    in-out property <int> memo-sheet-stamps;
+    // Every change is on disk.
+    in property <bool> memo-sheet-saved: true;
     in-out property <bool> memo-copied;
+    // A recording the user has not looked at yet: the dot on the main page.
+    in property <bool> memo-new;
     callback memos-toggled(bool);
     callback memo-toggle-changed(bool);
     callback memo-auto-text-toggled(bool);
     callback memo-record();
     callback memo-open-list();
     callback memo-play(int);
-    callback memo-play-from(int, int); // memo, seconds
+    // Plays from the paragraph at this place of the text field (a byte offset).
+    callback memo-play-here(int);
+    // Where that paragraph starts, as 1:30; "" when it has no time.
+    pure callback memo-here-label(string, int) -> string;
+    callback memo-sheet-edited(string);
+    callback memo-sheet-stamps-changed(int);
     callback memo-show(int);
     callback memo-delete(int);
     callback memo-rename(int, string);
@@ -273,7 +279,8 @@ export global AppState {
     callback memo-cancel-text(int);
     callback memo-show-text(int);
     callback memo-close-text();
-    callback memo-copy-text();
+    // The selection (byte offsets), or all when they are the same.
+    callback memo-copy-text(int, int);
     callback memo-open-text();
     callback memo-search(string);
     callback memo-open-folder();
@@ -2018,6 +2025,20 @@ component RecordingCard inherits Card {
             clicked => { AppState.memo-record(); }
         }
         Rectangle { }
+        // A recording not looked at yet, as on a phone: the dot goes when
+        // the list was opened.
+        if AppState.memo-new: VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 0;
+            Rectangle {
+                width: 10px;
+                height: 10px;
+                border-radius: 5px;
+                background: Palette.accent-background;
+                accessible-role: text;
+                accessible-label: @tr("New recording");
+            }
+        }
         Button {
             text: @tr("Recordings");
             horizontal-stretch: 0;
@@ -2323,27 +2344,21 @@ component RecordingSettings inherits Card {
     Hint { text: @tr("About 11 MB per hour, everything stays on your computer. Only record conversations when everyone agrees."); }
 }
 
-// A memo's text, big: it slides up over the list and back down.
+// A memo's text, big: it slides up over the list and back down. One text
+// field: it scrolls, takes a selection, and what is typed is saved.
 component TranscriptSheet inherits Rectangle {
     in property <bool> open;
     background: Palette.background;
     // Clicks stay here, not in the list below.
     TouchArea { }
-    keys := FocusScope {
-        key-pressed(event) => {
-            if (event.text == Key.Escape) {
-                AppState.memo-close-text();
-                return accept;
-            }
-            return reject;
-        }
-    }
     changed open => {
         if (self.open) {
-            keys.focus();
+            input.focus();
         }
     }
     property <bool> playing: AppState.memo-playing == AppState.memo-sheet-index && AppState.memo-sheet-index >= 0;
+    // Where the paragraph at the cursor starts ("" when it has no time).
+    property <string> here: AppState.memo-here-label(AppState.memo-sheet-text, input.cursor-position-byte-offset);
     VerticalLayout {
         padding: 18px;
         spacing: 10px;
@@ -2358,7 +2373,7 @@ component TranscriptSheet inherits Rectangle {
             Button {
                 text: AppState.memo-copied ? "✓ " + @tr("Copied") : @tr("Copy");
                 horizontal-stretch: 0;
-                clicked => { AppState.memo-copy-text(); }
+                clicked => { AppState.memo-copy-text(input.cursor-position-byte-offset, input.anchor-position-byte-offset); }
             }
             Button {
                 text: @tr("Open as text file");
@@ -2389,42 +2404,105 @@ component TranscriptSheet inherits Rectangle {
                 }
             }
         }
+        HorizontalLayout {
+            spacing: 8px;
+            Text {
+                text: @tr("Times");
+                font-size: 12px;
+                color: Palette.foreground.with-alpha(0.65);
+                vertical-alignment: center;
+                horizontal-stretch: 0;
+            }
+            Segmented {
+                options: [@tr("Off"), @tr("Position"), @tr("Time of day")];
+                selected <=> AppState.memo-sheet-stamps;
+                changed(i) => { AppState.memo-sheet-stamps-changed(i); }
+                horizontal-stretch: 0;
+                min-width: 230px;
+            }
+            Rectangle { }
+            Text {
+                text: AppState.memo-sheet-saved ? "✓ " + @tr("Saved") : @tr("Saving …");
+                font-size: 12px;
+                color: Palette.foreground.with-alpha(0.65);
+                vertical-alignment: center;
+                horizontal-stretch: 0;
+            }
+        }
         Rectangle {
             background: Palette.alternate-background;
             border-radius: 10px;
-            ScrollView {
-                VerticalLayout {
-                    alignment: start;
-                    width: parent.visible-width;
-                    padding: 14px;
-                    spacing: 14px;
-                    for paragraph in AppState.memo-sheet-paragraphs: HorizontalLayout {
-                        spacing: 10px;
-                        Text {
-                            text: paragraph.time;
-                            width: 50px;
-                            font-size: 12px;
-                            color: Palette.accent-background;
-                            vertical-alignment: top;
-                            TouchArea {
-                                enabled: paragraph.seconds >= 0;
-                                mouse-cursor: pointer;
-                                clicked => { AppState.memo-play-from(AppState.memo-sheet-index, paragraph.seconds); }
-                            }
+            border-width: input.has-focus ? 2px : 0px;
+            border-color: Palette.accent-background;
+            vertical-stretch: 1;
+            scroll := ScrollView {
+                x: 12px;
+                y: 12px;
+                width: parent.width - 24px;
+                height: parent.height - 24px;
+                content-width: self.visible-width;
+                content-height: max(self.visible-height, input.preferred-height);
+                input := TextInput {
+                    text <=> AppState.memo-sheet-text;
+                    single-line: false;
+                    wrap: word-wrap;
+                    font-size: 15px;
+                    color: Palette.foreground;
+                    selection-background-color: Palette.accent-background;
+                    selection-foreground-color: Palette.accent-foreground;
+                    page-height: scroll.visible-height;
+                    accessible-label: AppState.memo-sheet-title;
+                    edited => { AppState.memo-sheet-edited(self.text); }
+                    key-pressed(event) => {
+                        if (event.text == Key.Escape) {
+                            AppState.memo-close-text();
+                            return accept;
                         }
-                        Text {
-                            text: paragraph.text;
-                            font-size: 14px;
-                            wrap: word-wrap;
+                        // The stamps never go onto the clipboard.
+                        if (event.modifiers.control && (event.text == "c" || event.text == "C")
+                            && self.cursor-position-byte-offset != self.anchor-position-byte-offset) {
+                            AppState.memo-copy-text(self.cursor-position-byte-offset, self.anchor-position-byte-offset);
+                            return accept;
                         }
+                        return reject;
                     }
-                    if AppState.memo-sheet-paragraphs.length == 0: Caption {
-                        text: @tr("Nothing understood in there. Was it quiet?");
+                    // Keeps the cursor in view while typing and moving.
+                    cursor-position-changed(cpos) => {
+                        if (cpos.y + scroll.content-y < 0px) {
+                            scroll.content-y = min(0px, -cpos.y);
+                        } else if (cpos.y + scroll.content-y > scroll.visible-height - 24px) {
+                            scroll.content-y = min(0px, max(scroll.visible-height - self.height, scroll.visible-height - cpos.y - 24px));
+                        }
                     }
                 }
             }
+            if AppState.memo-sheet-text == "": Caption {
+                x: 14px;
+                y: 14px;
+                width: parent.width - 28px;
+                text: @tr("Nothing understood in there. Was it quiet?");
+            }
         }
-        Hint { text: @tr("Click a time to listen from there."); horizontal-alignment: center; }
+        HorizontalLayout {
+            spacing: 10px;
+            Button {
+                text: root.playing ? "■ " + @tr("Stop") : "▶ " + @tr("Play from here") + (root.here != "" ? " (" + root.here + ")" : "");
+                primary: true;
+                enabled: root.playing || root.here != "";
+                horizontal-stretch: 0;
+                clicked => {
+                    if (root.playing) {
+                        AppState.memo-play(AppState.memo-sheet-index);
+                    } else {
+                        AppState.memo-play-here(input.cursor-position-byte-offset);
+                    }
+                }
+            }
+            Hint {
+                text: @tr("Select and copy: the times stay behind. What you type is saved by itself.");
+                vertical-alignment: center;
+            }
+        }
     }
 }
 
@@ -2437,8 +2515,9 @@ export component MainWindow inherits Window {
     // The window came up (from the tray, at start); the app starts the meter.
     callback shown();
     changed content-height => { root.content-height-changed(); }
-    // One column, 380 px, on every page.
-    out property <length> page-width: 380px;
+    // One column, 380 px, on every page; the recordings are wider, so a
+    // text reads comfortably.
+    out property <length> page-width: memos-page ? 520px : 380px;
     title: "kyrr";
     icon: @image-url("icons/kyrr-256.png");
     preferred-width: page-width;

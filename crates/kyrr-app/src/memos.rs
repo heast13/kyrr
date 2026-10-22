@@ -13,14 +13,14 @@ use std::time::Duration;
 use chrono::{Local, NaiveDateTime};
 use kyrr_common::wave::{Mode, Overlay};
 use kyrr_dictate::Language;
-use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel, Weak};
+use slint::{ComponentHandle, Model, ModelRc, VecModel, Weak};
 
 use crate::dictation::{Command, Job, Text};
-use crate::memo::library::{self, Memo, Paragraph};
+use crate::memo::library::{self, Memo, Stamps};
 use crate::memo::player::Player;
 use crate::memo::recorder::{Ending, Recording};
 use crate::memo::title;
-use crate::{AppState, MainWindow, MemoItem, MemoParagraph};
+use crate::{AppState, MainWindow, MemoItem};
 
 /// Shorter memos are a key pressed twice by accident: not kept.
 const SHORTEST: f64 = 3.0;
@@ -30,6 +30,11 @@ const TICK: Duration = Duration::from_millis(200);
 const COPIED: Duration = Duration::from_secs(2);
 /// How long a short note under the card ("Too short") stays.
 const BRIEF: Duration = Duration::from_secs(5);
+/// How long after the last key typed in a text it is saved.
+const SAVE_AFTER: Duration = Duration::from_millis(700);
+
+/// Told when the list was looked at (seconds since 1970).
+type SeenHook = Box<dyn Fn(u64)>;
 
 pub struct Memos {
     window: Weak<MainWindow>,
@@ -62,9 +67,18 @@ pub struct Memos {
     texts: RefCell<HashMap<PathBuf, Text>>,
     /// The memo whose text is open big.
     sheet: RefCell<Option<PathBuf>>,
+    /// The text field holds changes that are not on disk yet.
+    dirty: Cell<bool>,
+    /// What the text field shows before each paragraph.
+    stamps: Cell<Stamps>,
+    /// When the list was last looked at (seconds since 1970); memos made
+    /// after that are new.
+    seen: Cell<u64>,
+    on_seen: RefCell<Option<SeenHook>>,
     timer: slint::Timer,
     copied: slint::Timer,
     brief: slint::Timer,
+    saving: slint::Timer,
 }
 
 thread_local! {
@@ -107,9 +121,14 @@ impl Memos {
             auto_named: RefCell::new(HashSet::new()),
             texts: RefCell::new(HashMap::new()),
             sheet: RefCell::new(None),
+            dirty: Cell::new(false),
+            stamps: Cell::new(Stamps::None),
+            seen: Cell::new(0),
+            on_seen: RefCell::new(None),
             timer: slint::Timer::default(),
             copied: slint::Timer::default(),
             brief: slint::Timer::default(),
+            saving: slint::Timer::default(),
         });
         MEMOS.set(Some(Rc::clone(&memos)));
         window
@@ -150,6 +169,43 @@ impl Memos {
 
     pub fn set_auto_text(&self, on: bool) {
         self.auto_text.set(on);
+    }
+
+    /// What the text field shows before each paragraph (0, 1 or 2, as
+    /// saved in the settings).
+    pub fn set_stamps(&self, index: i32) {
+        self.stamps.set(Stamps::from_index(index));
+        if let Some(w) = self.window.upgrade() {
+            w.global::<AppState>().set_memo_sheet_stamps(index.clamp(0, 2));
+        }
+    }
+
+    /// The choice in the text view: saves what was typed, then shows the
+    /// text with the other stamps.
+    pub fn stamps_changed(&self, index: i32) {
+        self.flush();
+        self.set_stamps(index);
+        self.show_sheet();
+    }
+
+    /// When the list was last looked at; `on_seen` hears each new moment so
+    /// it can be kept.
+    pub fn set_seen(&self, seconds: u64, on_seen: impl Fn(u64) + 'static) {
+        self.seen.set(seconds);
+        *self.on_seen.borrow_mut() = Some(Box::new(on_seen));
+        self.show_list();
+    }
+
+    /// The user looks at the list: nothing is new any more.
+    pub fn mark_seen(&self) {
+        let now = Local::now().timestamp().max(0) as u64;
+        self.seen.set(now);
+        if let Some(hook) = self.on_seen.borrow().as_ref() {
+            hook(now);
+        }
+        if let Some(w) = self.window.upgrade() {
+            w.global::<AppState>().set_memo_new(false);
+        }
     }
 
     /// Whether texts can be written: the speech model is on the computer.
@@ -204,14 +260,32 @@ impl Memos {
         };
         state.on_memo_record(with0(|m| m.toggle()));
         state.on_memo_close_text(with0(|m| m.close_text()));
-        state.on_memo_copy_text(with0(|m| m.copy_text()));
         state.on_memo_open_text(with0(|m| m.open_text()));
         state.on_memo_open_folder(with0(|m| m.open_folder()));
         let weak = Rc::downgrade(self);
-        state.on_memo_play_from(move |i, seconds| {
+        state.on_memo_copy_text(move |a, b| {
             if let Some(m) = weak.upgrade() {
-                m.play(i, Some(seconds.max(0) as f64));
+                m.copy_text(a, b);
             }
+        });
+        let weak = Rc::downgrade(self);
+        state.on_memo_play_here(move |cursor| {
+            if let Some(m) = weak.upgrade() {
+                m.play_here(cursor);
+            }
+        });
+        let weak = Rc::downgrade(self);
+        state.on_memo_sheet_edited(move |_| {
+            if let Some(m) = weak.upgrade() {
+                m.sheet_edited();
+            }
+        });
+        let weak = Rc::downgrade(self);
+        state.on_memo_here_label(move |text, cursor| {
+            weak.upgrade()
+                .map(|m| m.here_label(&text, cursor))
+                .unwrap_or_default()
+                .into()
         });
         let weak = Rc::downgrade(self);
         state.on_memo_rename(move |i, title| {
@@ -261,6 +335,14 @@ impl Memos {
         let mut all = library::list(&self.dir);
         all.retain(|m| Some(&m.path) != recording.as_ref());
         *self.all.borrow_mut() = all;
+        // Looking at the list as it changes: what comes in is seen.
+        if self
+            .window
+            .upgrade()
+            .is_some_and(|w| w.global::<AppState>().get_page() == 6)
+        {
+            self.mark_seen();
+        }
         self.show_list();
     }
 
@@ -321,6 +403,7 @@ impl Memos {
         state.set_memo_editing(index_of(&editing));
         state.set_memo_confirm(index_of(&confirm));
         state.set_memo_count(all.len() as i32);
+        state.set_memo_new(state.get_page() != 6 && all.iter().any(|m| m.saved > self.seen.get()));
         // The same rows: changed in place, so a row being edited keeps what
         // was typed into it.
         if same_rows && self.rows.row_count() == items.len() {
@@ -546,13 +629,16 @@ impl Memos {
     }
 
     fn play(self: &Rc<Self>, index: i32, from: Option<f64>) {
-        let Some(path) = self.path(index) else {
-            return;
-        };
+        if let Some(path) = self.path(index) {
+            self.play_path(&path, from);
+        }
+    }
+
+    fn play_path(self: &Rc<Self>, path: &Path, from: Option<f64>) {
         let same = self.player.borrow().as_ref().is_some_and(|p| p.path() == path);
         self.player.borrow_mut().take();
         if !same || from.is_some() {
-            *self.player.borrow_mut() = Some(Player::start(&path, from.unwrap_or(0.0)));
+            *self.player.borrow_mut() = Some(Player::start(path, from.unwrap_or(0.0)));
             let weak = Rc::downgrade(self);
             if !self.timer.running() {
                 self.timer.start(slint::TimerMode::Repeated, TICK, move || {
@@ -589,6 +675,11 @@ impl Memos {
         let _ = self.worker.send(Command::CancelText(path.clone()));
         self.texts.borrow_mut().remove(&path);
         self.auto_named.borrow_mut().remove(&path);
+        // Nothing typed into its text is saved after it is gone.
+        if self.sheet.borrow().as_ref() == Some(&path) {
+            self.saving.stop();
+            self.dirty.set(false);
+        }
         if let Err(e) = library::delete(&path) {
             eprintln!("kyrr: memo: deleting {}: {e}", path.display());
             self.tell(&self.say("Konnte die Aufnahme nicht löschen.", "Could not delete the recording."));
@@ -725,6 +816,9 @@ impl Memos {
         let Some(path) = self.path(index) else {
             return;
         };
+        // What could not be saved for the memo before is given up here.
+        self.flush();
+        self.dirty.set(false);
         *self.sheet.borrow_mut() = Some(path);
         self.show_sheet();
         let Some(w) = self.window.upgrade() else {
@@ -745,24 +839,20 @@ impl Memos {
         let Some(memo) = sheet.as_ref().and_then(|p| all.iter().find(|m| &m.path == p)) else {
             return;
         };
-        let paragraphs: Vec<MemoParagraph> = memo
-            .text
-            .as_deref()
-            .unwrap_or_default()
-            .iter()
-            .map(|p| MemoParagraph {
-                time: if p.seconds == u32::MAX {
-                    SharedString::new()
-                } else {
-                    library::clock(p.seconds).into()
-                },
-                seconds: if p.seconds == u32::MAX { -1 } else { p.seconds as i32 },
-                text: p.text.as_str().into(),
-            })
-            .collect();
+        // Typed text that is not saved yet stays as it is.
+        if !self.dirty.get() {
+            let field = library::field(
+                memo.text.as_deref().unwrap_or_default(),
+                self.stamps.get(),
+                library::started(&memo.path),
+            );
+            if state.get_memo_sheet_text() != field.as_str() {
+                state.set_memo_sheet_text(field.into());
+            }
+            state.set_memo_sheet_saved(true);
+        }
         state.set_memo_sheet_title(memo.title.as_str().into());
         state.set_memo_sheet_when(self.when(memo).into());
-        state.set_memo_sheet_paragraphs(ModelRc::new(VecModel::from(paragraphs)));
         state.set_memo_copied(false);
         drop(all);
         drop(sheet);
@@ -770,29 +860,118 @@ impl Memos {
     }
 
     fn close_text(&self) {
+        self.flush();
         if let Some(w) = self.window.upgrade() {
             w.global::<AppState>().set_memo_sheet_open(false);
             crate::fit_sheet(&w, false);
         }
     }
 
-    fn sheet_text(&self) -> Option<(PathBuf, Vec<Paragraph>)> {
-        let sheet = self.sheet.borrow().clone()?;
-        let all = self.all.borrow();
-        let memo = all.iter().find(|m| m.path == sheet)?;
-        Some((sheet, memo.text.clone()?))
+    /// The text field changed: saved a moment after the last key.
+    fn sheet_edited(self: &Rc<Self>) {
+        self.dirty.set(true);
+        if let Some(w) = self.window.upgrade() {
+            w.global::<AppState>().set_memo_sheet_saved(false);
+        }
+        let weak = Rc::downgrade(self);
+        self.saving.start(slint::TimerMode::SingleShot, SAVE_AFTER, move || {
+            if let Some(m) = weak.upgrade() {
+                m.flush();
+            }
+        });
     }
 
-    fn copy_text(&self) {
-        let Some((_, paragraphs)) = self.sheet_text() else {
-            return;
-        };
-        if !crate::platform::copy_to_clipboard(&library::plain(&paragraphs)) {
+    /// Writes what was typed into the text field to the memo's text file.
+    pub fn flush(&self) {
+        self.saving.stop();
+        if !self.dirty.get() {
             return;
         }
         let Some(w) = self.window.upgrade() else {
             return;
         };
+        let state = w.global::<AppState>();
+        let Some(path) = self.sheet.borrow().clone() else {
+            self.dirty.set(false);
+            return;
+        };
+        let old = self.paragraphs_of(&path);
+        let paragraphs = library::edited(&old, state.get_memo_sheet_text().as_str());
+        match library::write_text(&path, &paragraphs) {
+            Ok(_) => {
+                self.dirty.set(false);
+                if let Some(memo) = self.all.borrow_mut().iter_mut().find(|m| m.path == path) {
+                    memo.text = Some(paragraphs);
+                }
+                state.set_memo_sheet_saved(true);
+                // The search finds what was typed.
+                self.show_list();
+            }
+            Err(e) => {
+                eprintln!("kyrr: memo: saving the text of {}: {e}", path.display());
+                self.tell_briefly(&self.say("Konnte den Text nicht speichern.", "Could not save the text."));
+            }
+        }
+    }
+
+    /// The paragraphs of the memo at `path` as last read or saved.
+    fn paragraphs_of(&self, path: &Path) -> Vec<library::Paragraph> {
+        self.all
+            .borrow()
+            .iter()
+            .find(|m| m.path == path)
+            .and_then(|m| m.text.clone())
+            .unwrap_or_default()
+    }
+
+    /// Where the paragraph at `cursor` in `text` starts, as "1:30"; "" when
+    /// it has no time (or the text view is not open).
+    fn here_label(&self, text: &str, cursor: i32) -> String {
+        let Ok(sheet) = self.sheet.try_borrow() else {
+            return String::new();
+        };
+        let (Some(path), Ok(all)) = (sheet.as_ref(), self.all.try_borrow()) else {
+            return String::new();
+        };
+        let old = all.iter().find(|m| &m.path == path).and_then(|m| m.text.as_deref());
+        usize::try_from(cursor)
+            .ok()
+            .and_then(|cursor| library::seconds_at(old.unwrap_or_default(), text, cursor))
+            .map(library::clock)
+            .unwrap_or_default()
+    }
+
+    /// Plays the memo from the paragraph at the cursor of the text field.
+    fn play_here(self: &Rc<Self>, cursor: i32) {
+        let (Some(w), Some(path)) = (self.window.upgrade(), self.sheet.borrow().clone()) else {
+            return;
+        };
+        let text = w.global::<AppState>().get_memo_sheet_text();
+        let seconds = usize::try_from(cursor)
+            .ok()
+            .and_then(|cursor| library::seconds_at(&self.paragraphs_of(&path), &text, cursor));
+        if let Some(seconds) = seconds {
+            self.play_path(&path, Some(f64::from(seconds)));
+        }
+    }
+
+    /// The selection of the text field, or all of it, without the stamps,
+    /// onto the clipboard.
+    fn copy_text(&self, a: i32, b: i32) {
+        let Some(w) = self.window.upgrade() else {
+            return;
+        };
+        let field = w.global::<AppState>().get_memo_sheet_text();
+        let (from, to) = (a.min(b), a.max(b));
+        let selected = usize::try_from(from)
+            .ok()
+            .zip(usize::try_from(to).ok())
+            .filter(|(from, to)| from < to)
+            .and_then(|(from, to)| field.get(from..to));
+        let text = library::without_stamps(selected.unwrap_or(&field));
+        if text.trim().is_empty() || !crate::platform::copy_to_clipboard(&text) {
+            return;
+        }
         w.global::<AppState>().set_memo_copied(true);
         let weak = self.window.clone();
         self.copied.start(slint::TimerMode::SingleShot, COPIED, move || {
@@ -803,7 +982,9 @@ impl Memos {
     }
 
     fn open_text(&self) {
-        if let Some((path, _)) = self.sheet_text() {
+        // The file as the field has it.
+        self.flush();
+        if let Some(path) = self.sheet.borrow().clone() {
             let text = library::text_path(&path);
             std::thread::spawn(move || library::open(&text));
         }
@@ -811,6 +992,7 @@ impl Memos {
 
     /// Before quitting: the memo being recorded is closed properly.
     pub fn finish(&self) {
+        self.flush();
         if let Some(recording) = self.recording.borrow_mut().take() {
             recording.finish();
         }
