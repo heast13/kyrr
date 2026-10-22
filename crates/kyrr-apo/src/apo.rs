@@ -10,10 +10,10 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, TryLockError};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use kyrr_common::{endpoint, status, APO_CLSID, APO_NAME, REG_ENDPOINTS, REG_STATUS};
-use kyrr_denoise::{Mode, Model, VoiceFilter};
+use kyrr_denoise::{Load, Mode, Model, VoiceFilter};
 use kyrr_voice::Voice;
 use windows::core::{Ref, Result, GUID, HRESULT};
 use windows::Win32::Foundation::{E_FAIL, E_INVALIDARG, E_POINTER};
@@ -58,6 +58,8 @@ struct State {
     filter: Option<VoiceFilter>,
     /// Set while locked for processing; runs even when the filter failed.
     voice: Option<Voice>,
+    /// How much of the audio's time the filter takes (see `Swap::too_slow`).
+    load: Load,
     /// The before/after probe this instance is recording.
     probe: Option<Probe>,
     locked: bool,
@@ -444,6 +446,7 @@ impl IAudioProcessingObjectConfiguration_Impl for Object {
             voice.set_delay(st.filter.as_ref().map_or(0, VoiceFilter::latency_frames), max_frames);
             voice.resume_level(f32::from_bits(LEVEL_DB.load(Ordering::Relaxed)) as f64);
             st.voice = Some(voice);
+            st.load = Load::default();
             st.probe = None;
             // Create the shared monitor here, not on the audio thread.
             let _ = monitor();
@@ -546,7 +549,9 @@ impl KyrrApo {
             let buf = unsafe { std::slice::from_raw_parts_mut(output.pBuffer as *mut f32, frames * channels) };
             let s = live().get();
             let st = &mut *st;
-            self.swap.take(&mut st.filter);
+            if self.swap.take(&mut st.filter) {
+                st.load = Load::default();
+            }
             let monitor = monitor();
             if let Some(m) = monitor {
                 if st.probe.is_none() {
@@ -562,10 +567,15 @@ impl KyrrApo {
                 voice.set(&s.voice);
                 voice.pre(buf);
             }
-            if let Some(filter) = st.filter.as_mut() {
+            if let Some(filter) = st.filter.as_mut().filter(|_| !self.swap.too_slow()) {
                 filter.set_mode(if s.enabled { Mode::Process } else { Mode::Bypass });
                 filter.set_limit_db(s.limit_db as f32);
+                let started = Instant::now();
                 filter.process_in_place(buf);
+                // Left out from then on: the microphone would stutter.
+                if st.load.add(started.elapsed(), frames, st.rate) {
+                    self.swap.set_too_slow();
+                }
             }
             if let Some(voice) = st.voice.as_mut() {
                 voice.post(buf);

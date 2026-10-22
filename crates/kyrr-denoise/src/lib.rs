@@ -11,6 +11,7 @@
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler};
@@ -33,6 +34,44 @@ pub const MAX_LIMIT_DB: f32 = 100.0;
 /// Stack for the loader thread: creating an ONNX Runtime session needs more
 /// than the 128 KB some audio threads have.
 const LOADER_STACK: usize = 8 * 1024 * 1024;
+
+/// The filter's work is weighed over this much audio...
+const LOAD_WINDOW: Duration = Duration::from_millis(100);
+/// ...and is too much for the computer once it takes this share of the
+/// audio's own time: the audio thread falls behind, the microphone
+/// stutters, and on Linux a real-time thread that never gets to rest is
+/// ended by the system, with the program.
+const TOO_SLOW: f64 = 0.9;
+
+/// How much of the audio's own time the filter takes, to tell a computer
+/// that is too slow for a model within a tenth of a second. Never
+/// allocates, for the audio thread.
+#[derive(Default)]
+pub struct Load {
+    busy: Duration,
+    heard: Duration,
+    /// Past the first block of a new filter, whose caches are cold.
+    warm: bool,
+}
+
+impl Load {
+    /// Adds a block of `frames` at `rate` that the filter took `took` for.
+    /// True when the window it completes was too much.
+    pub fn add(&mut self, took: Duration, frames: usize, rate: u32) -> bool {
+        if !std::mem::replace(&mut self.warm, true) || rate == 0 {
+            return false;
+        }
+        self.busy += took;
+        self.heard += Duration::from_secs_f64(frames as f64 / rate as f64);
+        if self.heard < LOAD_WINDOW {
+            return false;
+        }
+        let too_slow = self.busy.as_secs_f64() > self.heard.as_secs_f64() * TOO_SLOW;
+        self.busy = Duration::ZERO;
+        self.heard = Duration::ZERO;
+        too_slow
+    }
+}
 
 /// The two DPDFNet models shipped with kyrr.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -378,5 +417,40 @@ impl VoiceFilter {
             // Never hand NaN/Inf on; restart the engine from a clean state.
             self.reset();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A block of 1024 frames at 48 kHz is about 21 ms of audio.
+    const BLOCK: usize = 1024;
+    const RATE: u32 = 48_000;
+
+    /// Blocks that each take `share` of their own time; true if any was
+    /// too much.
+    fn feed(load: &mut Load, share: f64, blocks: usize) -> bool {
+        let audio = BLOCK as f64 / RATE as f64;
+        (0..blocks)
+            .map(|_| load.add(Duration::from_secs_f64(audio * share), BLOCK, RATE))
+            .fold(false, |a, b| a | b)
+    }
+
+    #[test]
+    fn a_filter_that_keeps_up_is_fine() {
+        assert!(!feed(&mut Load::default(), 0.6, 500));
+    }
+
+    #[test]
+    fn a_filter_slower_than_the_audio_shows_within_a_window() {
+        assert!(feed(&mut Load::default(), 1.1, 7));
+    }
+
+    #[test]
+    fn a_slow_first_block_after_loading_does_not_count() {
+        let mut load = Load::default();
+        assert!(!load.add(Duration::from_millis(500), BLOCK, RATE));
+        assert!(!feed(&mut load, 0.5, 10));
     }
 }

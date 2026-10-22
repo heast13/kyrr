@@ -88,7 +88,7 @@ const PEN_AHEAD: f32 = 24.0;
 /// A replaced word fades out over this long.
 const LEAVE: f32 = 0.25;
 /// How long a note stays after the dictation ended, seconds.
-const NOTE_HOLD: f32 = 1.6;
+const NOTE_HOLD: f32 = 3.2;
 
 /// The bars slowly turn yellow from this many seconds before the
 /// dictation's limit, and then red; each over its own stretch of seconds,
@@ -1234,7 +1234,7 @@ mod tests {
         wave.set_mode(Mode::Writing);
         wave.set_note("Nichts gehört".into());
         wave.set_mode(Mode::Hidden);
-        run_for(&mut wave, 1.0);
+        run_for(&mut wave, 3.0);
         assert!(wave.alpha > 0.99 && wave.words.len() == 1, "alpha {}", wave.alpha);
         run_for(&mut wave, 1.5);
         assert!(!wave.visible());

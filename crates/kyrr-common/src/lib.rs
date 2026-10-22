@@ -64,6 +64,11 @@ pub mod filter {
     pub const VOICE_DISTANCE_OFF: &str = "VoiceDistanceOff";
 }
 
+/// The start of the filter's state while its noise model is too slow for
+/// the computer and left out (see `kyrr_denoise::Load`); the app then
+/// switches to the light model.
+pub const TOO_SLOW: &str = "passthrough: too slow";
+
 /// Value names below [`REG_STATUS`].
 pub mod status {
     /// "running", "passthrough: <reason>" or "error: <reason>".
