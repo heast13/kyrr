@@ -63,7 +63,7 @@ RUNTIME = (
 )
 # Only the native engine's weights: the .onnx files would only be read by
 # ONNX Runtime, which the AppImage and the tarball do not have (sherpa-onnx
-# links it in statically). The Flatpak keeps them for its fallback.
+# links it in statically).
 MODELS = [
     "dpdfnet8_48khz_hr.weights.f32",
     "dpdfnet2_48khz_hr.weights.f32",
@@ -254,7 +254,7 @@ def make_appimage(root: Path, work: Path, dest: Path) -> None:
             sys.exit(f"{notice} not found (install {package})")
         copy(notice, licenses / f"{package}.txt")
     dest.unlink(missing_ok=True)
-    # --no-appstream: the metainfo is validated with the Flathub/AppStream tools.
+    # --no-appstream: the metainfo is validated with the AppStream tools.
     subprocess.run([str(appimagetool), "--no-appstream", f"--runtime-file={runtime}", str(appdir), str(dest)], check=True, env=env)
     dest.chmod(0o755)
 

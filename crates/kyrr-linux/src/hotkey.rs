@@ -341,8 +341,8 @@ fn start_portal(description: String, ask_now: bool) -> Result<(), String> {
 }
 
 async fn portal(ready: mpsc::Sender<Result<(), String>>, description: String, ask_now: bool) {
-    // Outside Flatpak the portal cannot tell which app this is; it matters
-    // for the shortcut's name in the compositor. Older portals lack the call.
+    // The portal cannot tell which app this is; it matters for the
+    // shortcut's name in the compositor. Older portals lack the call.
     // The portal finds the app by its launcher; one an AppImage has just
     // written may take the portal a moment to notice.
     if let Ok(id) = ashpd::AppID::try_from(APP_ID) {

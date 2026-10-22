@@ -26,7 +26,7 @@ impl Keyboard {
 
     async fn start() -> Result<Keyboard, Error> {
         // A host app has no identity of its own for the portal; without one
-        // the permission could not be remembered. Not needed in Flatpak.
+        // the permission could not be remembered.
         if let Ok(id) = AppID::try_from(APP_ID) {
             let _ = ashpd::register_host_app(id).await;
         }

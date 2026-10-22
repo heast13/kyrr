@@ -72,4 +72,4 @@ SHA-256 before use. `Denoiser::from_file_with` (`src/denoiser.rs`) then
 returns the native engine's reason instead of trying ONNX Runtime on a
 file that is not there; the README notes it. kyrr's AppImage and tarball,
 which have no ONNX Runtime, ship only the `.weights.f32` files (about 25 MB
-less); the Flatpak keeps the `.onnx` files for its ONNX Runtime fallback.
+less).

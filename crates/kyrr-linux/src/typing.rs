@@ -9,8 +9,7 @@
 //!
 //! The first backend that works is remembered:
 //! 1. the Wayland virtual keyboard protocol (Hyprland, Sway and other wlroots
-//!    compositors, no dialog; in a Flatpak through the compositor's own
-//!    socket, see [`crate::display`]),
+//!    compositors, no dialog),
 //! 2. the XDG RemoteDesktop portal (GNOME, KDE), which asks once and then
 //!    remembers the answer through a restore token,
 //! 3. X11 XTest, when there is no Wayland session.

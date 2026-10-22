@@ -66,10 +66,8 @@ fn documents() -> PathBuf {
 #[cfg(not(windows))]
 fn documents() -> PathBuf {
     let home = home();
-    // The Flatpak sees the user's own settings file in its config folder.
     let configs = [
         std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from),
-        std::env::var_os("HOST_XDG_CONFIG_HOME").map(PathBuf::from),
         Some(home.join(".config")),
     ];
     configs
