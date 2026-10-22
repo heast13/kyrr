@@ -193,7 +193,9 @@ pub fn rename(path: &Path, title: &str) -> io::Result<PathBuf> {
     std::fs::rename(path, &to)?;
     let text = text_path(path);
     if text.exists() {
-        let _ = std::fs::rename(&text, text_path(&to));
+        if let Err(e) = std::fs::rename(&text, text_path(&to)) {
+            eprintln!("kyrr: memo: moving the text of {}: {e}", path.display());
+        }
     }
     Ok(to)
 }
