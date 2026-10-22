@@ -39,7 +39,6 @@ export global AppState {
     // Noise removal
     in-out property <bool> filter-enabled: true;
     in-out property <int> strength-index: 1; // 0 gentle, 1 medium, 2 strong
-    in-out property <int> model-index;       // 0 thorough (large), 1 lean (small)
     in property <bool> model-switching;
     // The filter fell back to ONNX Runtime: the CPU lacks AVX2, Lean suits it.
     in property <bool> old-cpu;
@@ -152,7 +151,7 @@ export global AppState {
     in property <string> error-text;
     in property <string> version;
 
-    // 0 is the main view, 1 the global settings, then the settings of each
+    // 0 is the main view, 1 the setup, then the settings of each
     // card: 2 noise, 3 voice, 4 dictation, 5 voice memos; 6 the voice memos
     // themselves.
     in-out property <int> page;

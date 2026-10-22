@@ -53,7 +53,7 @@ What it does:
   <img src="docs/screenshots/main.png" width="380" alt="kyrr's window: noise filter, improve voice and dictation, each with one switch and a gear for its settings">
 </p>
 <p align="center">
-  <img src="docs/screenshots/settings.png" width="900" alt="The settings pages that the gears open: noise (filter strength, level check with before/after test and listening), voice in its advanced view (sound with sliders, compressor, S sounds, low cut, pop protection, distance compensation, automatic volume) and dictation (key and how it works)">
+  <img src="docs/screenshots/settings.png" width="900" alt="The settings pages that the gears open: noise (filter strength, level check with before/after test and listening), voice (sound with sliders, compressor, S sounds, low cut, pop protection, distance compensation, automatic volume) and dictation (key and how it works)">
 </p>
 
 Status: young and in active development.

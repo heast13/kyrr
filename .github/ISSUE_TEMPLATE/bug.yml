@@ -22,7 +22,7 @@ body:
     id: version
     attributes:
       label: kyrr version
-      description: At the bottom of the Global settings page.
+      description: At the bottom of the Setup page.
       placeholder: "0.5.8"
   - type: input
     id: microphone

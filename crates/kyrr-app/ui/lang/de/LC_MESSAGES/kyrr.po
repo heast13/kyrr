@@ -128,9 +128,6 @@ msgstr "Mittel"
 msgid "Strong"
 msgstr "Stark"
 
-msgid "Model"
-msgstr "Modell"
-
 msgid "Lean"
 msgstr "Sparsam"
 
