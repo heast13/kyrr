@@ -1195,13 +1195,21 @@ mod imp {
             || {
                 let before = binds::bound_keys(compositor, base);
                 let outcome = binds::ensure(compositor, base, keys);
-                *MEMO_BLOCKED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = keys
+                let blocked = keys
                     .memo
                     .iter()
                     .find(|memo| binds::claimed(compositor, base, memo))
                     .cloned();
-                if matches!(outcome, binds::Outcome::Bound { written: true, .. }) && !flatpak() {
-                    let lines = binds::target(compositor, base).map(|t| binds::lines(t.syntax, keys));
+                *MEMO_BLOCKED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = blocked.clone();
+                let taken = matches!(outcome, binds::Outcome::Taken { .. });
+                if (taken || matches!(outcome, binds::Outcome::Bound { written: true, .. })) && !flatpak() {
+                    // What `ensure` wrote: a key of the user's is not kyrr's.
+                    let live = binds::Keys {
+                        memo: keys.memo.clone().filter(|m| blocked.as_ref() != Some(m)),
+                        dictation: !taken,
+                        ..keys.clone()
+                    };
+                    let lines = binds::target(compositor, base).map(|t| binds::lines(t.syntax, &live));
                     let now = binds::bound_keys(compositor, base);
                     std::thread::spawn(move || reload(compositor, before, &now, lines));
                 }

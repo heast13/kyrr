@@ -1191,8 +1191,22 @@ mod tests {
         assert_eq!(bound_keys(hypr, &base), ["F8"]);
         assert!(!claimed(hypr, &base, "F8"));
         assert!(claimed(hypr, &base, "F9"));
-        // The other way round, and both taken: nothing of kyrr's stays.
+        // Both taken later on: nothing of kyrr's stays, the user's lines do.
         std::fs::write(&main, "bind = , F9, exec, a\nbind = , F8, exec, b\n").unwrap();
+        assert!(matches!(ensure(hypr, &base, &keys), Outcome::Taken { .. }));
+        assert!(bound_keys(hypr, &base).is_empty());
+        assert!(std::fs::read_to_string(&main).unwrap().contains("bind = , F8, exec, b"));
+        // With a block there already, the user's bind arrives afterwards.
+        std::fs::write(&main, "monitor = , preferred\n").unwrap();
+        assert!(matches!(ensure(hypr, &base, &keys), Outcome::Bound { .. }));
+        assert_eq!(bound_keys(hypr, &base), ["F9", "F8"]);
+        let mut text = std::fs::read_to_string(&main).unwrap();
+        text = text.replace(
+            "unbind = , F9\nbind = , F9, global",
+            "unbind = , F7\nbind = , F7, global",
+        );
+        text.push_str("bind = , F9, exec, a\nbind = , F8, exec, b\n");
+        std::fs::write(&main, text).unwrap();
         assert!(matches!(ensure(hypr, &base, &keys), Outcome::Taken { .. }));
         assert!(bound_keys(hypr, &base).is_empty());
         let _ = std::fs::remove_dir_all(base);

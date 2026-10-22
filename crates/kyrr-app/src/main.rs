@@ -1535,6 +1535,11 @@ impl App {
             state.set_memo_key_note(text(language, "memo key taken").replace("{}", &label).into());
         } else {
             state.set_memo_key_note("".into());
+            let name = keys::label(memo_key_now(&self.config.borrow()), language == Language::German);
+            state.set_memo_key_name(name.as_str().into());
+            if let Some(t) = tray() {
+                t.set_memo_key_name(name.into());
+            }
         }
         let fixed = matches!(note, KeyNote::Desktop(_) | KeyNote::Unbound);
         let unbound = matches!(note, KeyNote::Unbound);
