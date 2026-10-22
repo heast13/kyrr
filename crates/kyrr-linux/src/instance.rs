@@ -25,6 +25,8 @@ const DICTATE: &[u8] = b"dictate";
 const DICTATE_START: &[u8] = b"dictate-start";
 const DICTATE_STOP: &[u8] = b"dictate-stop";
 const MEMO: &[u8] = b"memo";
+const MEMO_START: &[u8] = b"memo-start";
+const MEMO_STOP: &[u8] = b"memo-stop";
 /// A start at sign-in while kyrr already runs (the session's autostart and
 /// the compositor's both started it): nothing to do.
 const BACKGROUND: &[u8] = b"background";
@@ -48,7 +50,7 @@ fn socket_path() -> PathBuf {
 /// `args` are the program's arguments; `--dictate` asks the running kyrr to
 /// toggle dictation, `--dictate-start` and `--dictate-stop` to start and end
 /// it (for a key's press and release), `--memo` to start or end a voice
-/// memo; `--replace` ends the running kyrr
+/// memo, `--memo-start` and `--memo-stop` to start and end one (the same); `--replace` ends the running kyrr
 /// the way quitting does and takes its place.
 pub fn claim(args: &[String]) -> Instance {
     claim_at(socket_path(), args)
@@ -62,6 +64,10 @@ fn claim_at(path: PathBuf, args: &[String]) -> Instance {
         DICTATE_START
     } else if has("--dictate-stop") {
         DICTATE_STOP
+    } else if has("--memo-start") {
+        MEMO_START
+    } else if has("--memo-stop") {
+        MEMO_STOP
     } else if has("--memo") {
         MEMO
     } else if has("--background") {
@@ -181,6 +187,8 @@ fn serve(listener: UnixListener, show: mpsc::Sender<()>) {
             DICTATE_START => crate::hotkey::remote_press(),
             DICTATE_STOP => crate::hotkey::remote_release(),
             MEMO => crate::hotkey::memo_press(),
+            MEMO_START => crate::hotkey::memo_remote_start(),
+            MEMO_STOP => crate::hotkey::memo_up(),
             BACKGROUND => {}
             _ => {
                 if show.send(()).is_err() {

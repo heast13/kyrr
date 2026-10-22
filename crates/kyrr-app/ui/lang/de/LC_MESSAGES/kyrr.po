@@ -1011,9 +1011,6 @@ msgstr "Aus. {} tut nichts."
 msgid "Repair"
 msgstr "Reparieren"
 
-msgid "Right Ctrl"
-msgstr "Strg rechts"
-
 msgid "Say “new line” or “new paragraph” for line breaks."
 msgstr "Sag „neue Zeile“ oder „neuer Absatz“ für Zeilenumbrüche."
 
@@ -1416,12 +1413,6 @@ msgstr "Noch nichts gesagt. Der Ordner wartet."
 msgid "Nothing found. Maybe said differently?"
 msgstr "Nichts gefunden. Vielleicht anders gesagt?"
 
-msgid "None"
-msgstr "Keine"
-
-msgid "No key: record with the button and in the tray."
-msgstr "Keine Taste: Aufnehmen per Knopf unter Aufzeichnungen und im Tray."
-
 msgid "Tap once to start, once more to stop. Dictation keeps {}."
 msgstr "Einmal tippen startet, nochmal tippen beendet. Diktieren bleibt auf {}."
 
@@ -1454,3 +1445,18 @@ msgstr "Da war nichts zu verstehen. War es still?"
 
 msgid "Click a time to listen from there."
 msgstr "Klick auf eine Zeit spielt ab dort ab."
+
+msgid "Set key"
+msgstr "Taste festlegen"
+
+msgid "Press a key …"
+msgstr "Taste drücken …"
+
+msgid "{} · change"
+msgstr "{} · ändern"
+
+msgid "Hold while you talk, let go when you are done. Dictation keeps {}."
+msgstr "Halten, solange du redest, loslassen, wenn du fertig bist. Diktieren bleibt auf {}."
+
+msgid "Your desktop sets this key, now {}."
+msgstr "Diese Taste legt dein Desktop fest, gerade {}."

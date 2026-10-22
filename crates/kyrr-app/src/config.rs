@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
+use kyrr_common::keys;
 use kyrr_dictate::Language;
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +17,8 @@ pub struct Config {
     pub dictation: bool,
     /// First-run setup finished.
     pub setup_done: bool,
-    /// The dictation key, see [`DICTATION_KEYS`].
+    /// The dictation key, a Windows virtual-key code (see `kyrr_common::keys`
+    /// for the ones kyrr offers); [`Config::dictation_key`] says what counts.
     pub dictation_key: u32,
     /// Tap once to start and once to stop, instead of holding the key.
     pub dictation_toggle: bool,
@@ -40,8 +42,11 @@ pub struct Config {
     pub last_run_version: String,
     /// Voice memos: the card on the main page, the key and the tray entry.
     pub memos: bool,
-    /// The voice memo key, see [`MEMO_KEYS`]; 0 for none.
+    /// The voice memo key as a virtual-key code; [`Config::memo_key`] says
+    /// what counts.
     pub memo_key: u32,
+    /// Tap once to start a memo and once to stop it, instead of holding the key.
+    pub memo_toggle: bool,
     /// Every new memo gets its text right away, not just on a click.
     pub memo_text_auto: bool,
 }
@@ -49,21 +54,13 @@ pub struct Config {
 /// The language setting for dictation in many languages.
 pub const MULTI: &str = "multi";
 
-/// Keys dictation can use, as Windows virtual-key codes: F8, F9, Pause and
-/// right Ctrl. The index is what the settings page shows.
-pub const DICTATION_KEYS: [u32; 4] = [0x77, 0x78, 0x13, 0xA3];
-
-/// Keys a voice memo can use: F8, F9, Pause, and none (only the button and
-/// the tray).
-pub const MEMO_KEYS: [u32; 4] = [0x77, 0x78, 0x13, 0];
-
 impl Default for Config {
     fn default() -> Self {
         Config {
             language: system_language().code().into(),
             dictation: true,
             setup_done: false,
-            dictation_key: DICTATION_KEYS[1],
+            dictation_key: keys::DICTATION_DEFAULT,
             dictation_toggle: false,
             dictation_live: true,
             lean_suggested: false,
@@ -73,7 +70,8 @@ impl Default for Config {
             pinned_default: String::new(),
             last_run_version: String::new(),
             memos: true,
-            memo_key: MEMO_KEYS[0],
+            memo_key: keys::MEMO_DEFAULT,
+            memo_toggle: true,
             memo_text_auto: false,
         }
     }
@@ -124,18 +122,41 @@ impl Config {
         Language::from_code(&self.language).unwrap_or(Language::English)
     }
 
+    /// The dictation key as it works: one kyrr offers, else the standard.
+    pub fn dictation_key(&self) -> u32 {
+        if keys::allowed(self.dictation_key) {
+            self.dictation_key
+        } else {
+            keys::DICTATION_DEFAULT
+        }
+    }
+
     /// The voice memo key as it works: never dictation's, which goes first
-    /// (the next free one then); 0 for none, also while memos are off.
+    /// (the next free one then); 0 while memos are off.
     pub fn memo_key(&self) -> u32 {
-        if !self.memos || self.memo_key == 0 {
-            return 0;
+        if self.memos {
+            self.memo_key_choice()
+        } else {
+            0
         }
-        if self.memo_key != self.dictation_key {
-            return self.memo_key;
+    }
+
+    /// The voice memo key whether memos are on or not. A key kyrr does not
+    /// offer (0, what "none" was in the unreleased 0.6.0 builds) is the
+    /// standard.
+    pub fn memo_key_choice(&self) -> u32 {
+        let dictation = self.dictation_key();
+        let wanted = if keys::allowed(self.memo_key) {
+            self.memo_key
+        } else {
+            keys::MEMO_DEFAULT
+        };
+        if wanted != dictation {
+            return wanted;
         }
-        MEMO_KEYS
+        [keys::MEMO_DEFAULT, keys::DICTATION_DEFAULT, keys::PAUSE]
             .into_iter()
-            .find(|&k| k != 0 && k != self.dictation_key)
+            .find(|&k| k != dictation)
             .unwrap_or(0)
     }
 
@@ -283,22 +304,48 @@ mod tests {
     #[test]
     fn the_memo_key_is_never_dictations() {
         let config = Config::default();
-        assert_eq!(config.memo_key(), 0x77);
+        assert_eq!(config.dictation_key(), keys::F9);
+        assert_eq!(config.memo_key(), keys::F8);
         let config = Config {
-            dictation_key: 0x77,
+            dictation_key: keys::F8,
             ..Config::default()
         };
-        assert_eq!(config.memo_key(), 0x78);
+        assert_eq!(config.memo_key(), keys::F9);
         let config = Config {
-            memo_key: 0,
+            dictation_key: keys::F8,
+            memo_key: keys::F9,
             ..Config::default()
         };
-        assert_eq!(config.memo_key(), 0);
+        assert_eq!(config.memo_key(), keys::F9);
         let config = Config {
             memos: false,
             ..Config::default()
         };
         assert_eq!(config.memo_key(), 0);
+    }
+
+    #[test]
+    fn keys_kyrr_does_not_offer_fall_back_to_the_standard() {
+        // 0 was "none" for the memo key; 0x41 is the letter A.
+        let config = Config {
+            memo_key: 0,
+            dictation_key: 0x41,
+            ..Config::default()
+        };
+        assert_eq!(config.dictation_key(), keys::F9);
+        assert_eq!(config.memo_key(), keys::F8);
+    }
+
+    #[test]
+    fn keys_of_older_versions_stay() {
+        // F8, F9, Pause and right Ctrl were the choices up to 0.5.8.
+        for vk in [0x77, 0x78, 0x13, 0xA3] {
+            let config = Config {
+                dictation_key: vk,
+                ..Config::default()
+            };
+            assert_eq!(config.dictation_key(), vk);
+        }
     }
 
     #[test]
@@ -308,7 +355,7 @@ mod tests {
         let config = Config {
             language: "de".into(),
             setup_done: true,
-            dictation_key: DICTATION_KEYS[2],
+            dictation_key: keys::PAUSE,
             update_checked: 123,
             ..Config::default()
         };

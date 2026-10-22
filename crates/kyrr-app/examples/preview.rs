@@ -298,6 +298,40 @@ fn main() {
     state.set_page(5);
     ui.set_memo_folder(if lang == "de" { "Dokumente" } else { "Documents" }.into());
     render(&window, &ui, &format!("{out}/recordings-settings-{lang}.rgba"));
+    // The key fields: standard, waiting for a key, one of one's own, refused.
+    state.set_memo_key_label("F8".into());
+    for (name, page, capture, custom, refusal) in [
+        ("keys-standard", 4, 0, false, ""),
+        ("keys-listening", 4, 1, false, ""),
+        ("keys-custom", 4, 0, true, ""),
+        (
+            "keys-refused",
+            5,
+            0,
+            false,
+            if lang == "de" {
+                "F9 ist schon fürs Diktieren belegt."
+            } else {
+                "F9 is already used for dictation."
+            },
+        ),
+        ("keys-listening-rec", 5, 2, false, ""),
+    ] {
+        state.set_page(page);
+        state.set_key_capture(capture);
+        state.set_key_custom(custom);
+        state.set_memo_key_custom(custom);
+        state.set_key_name(if custom { "Pause" } else { "F9" }.into());
+        state.set_memo_key_label(if custom { "Pause" } else { "F8" }.into());
+        state.set_key_refusal(refusal.into());
+        render(&window, &ui, &format!("{out}/{name}-{lang}.rgba"));
+    }
+    state.set_key_capture(0);
+    state.set_key_custom(false);
+    state.set_memo_key_custom(false);
+    state.set_key_refusal("".into());
+    state.set_key_name("F9".into());
+    state.set_memo_key_label("F8".into());
     state.set_page(2);
     // Listening to yourself: the button turns red.
     state.set_listening(true);

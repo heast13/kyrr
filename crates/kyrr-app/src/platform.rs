@@ -211,33 +211,29 @@ mod imp {
     }
 
     /// Windows does not run the key hook for keys that reach kyrr's own
-    /// window, so the window passes the dictation and memo keys on to it.
-    pub fn keys_in_window(window: &slint::Window) {
-        use slint::winit_030::winit::event::{ElementState, WindowEvent};
-        use slint::winit_030::winit::keyboard::{KeyCode, PhysicalKey};
-        use slint::winit_030::{EventResult, WinitWindowAccessor};
-        window.on_winit_window_event(|_, event| {
-            // Not the synthetic presses and releases winit makes up when the
-            // window gains or loses focus with a key down.
-            if let WindowEvent::KeyboardInput {
-                event,
-                is_synthetic: false,
-                ..
-            } = event
-            {
-                let vk = match event.physical_key {
-                    PhysicalKey::Code(KeyCode::F8) => 0x77,
-                    PhysicalKey::Code(KeyCode::F9) => 0x78,
-                    PhysicalKey::Code(KeyCode::Pause) => 0x13,
-                    PhysicalKey::Code(KeyCode::ControlRight) => 0xA3,
-                    _ => return EventResult::Propagate,
-                };
-                if hotkey::window_key(vk, event.state == ElementState::Pressed) {
-                    return EventResult::PreventDefault;
-                }
-            }
-            EventResult::Propagate
-        });
+    /// windows, so they pass the keys on (see `keycapture::install`). True
+    /// when kyrr takes the key.
+    pub fn window_key(vk: u32, down: bool) -> bool {
+        hotkey::window_key(vk, down)
+    }
+
+    /// A key field in the settings waits for a key: the hook lets keys
+    /// through, so the window sees them.
+    pub fn set_capture(on: bool) {
+        hotkey::set_capture(on);
+    }
+
+    /// The hook reports the release either way; the app decides.
+    pub fn set_memo_hold(_: bool) {}
+
+    /// The hook sees every key up.
+    pub fn memo_can_hold() -> bool {
+        true
+    }
+
+    /// No other program has the memo key (the hook comes first).
+    pub fn memo_key_blocked() -> Option<String> {
+        None
     }
 
     /// Shows the license notices that ship in the install folder.
@@ -862,8 +858,46 @@ mod imp {
         kyrr_linux::hotkey::set_memo_key(vk, description);
     }
 
-    /// The desktop's shortcuts work in kyrr's window too.
-    pub fn keys_in_window(_: &slint::Window) {}
+    /// The desktop's shortcuts work in kyrr's windows too.
+    pub fn window_key(_: u32, _: bool) -> bool {
+        false
+    }
+
+    /// A key field in the settings waits for a key: kyrr lets go of its keys
+    /// where it grabs them itself, so the window sees them.
+    pub fn set_capture(on: bool) {
+        kyrr_linux::hotkey::set_capture(on);
+    }
+
+    /// The memo key is held, not tapped; where the desktop can tell, it
+    /// reports the release.
+    pub fn set_memo_hold(hold: bool) {
+        MEMO_HOLD.store(hold, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    static MEMO_HOLD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+    /// Whether the memo key's release reaches kyrr here, so it can be held:
+    /// not with a GNOME 46 or 47 shortcut, niri or a command the user binds,
+    /// whatever dictation does.
+    pub fn memo_can_hold() -> bool {
+        use kyrr_linux::hotkey::{self, Backend};
+        match hotkey::backend() {
+            Backend::X11 | Backend::Portal => true,
+            Backend::None => Compositor::detect().is_some_and(Compositor::holds),
+        }
+    }
+
+    /// The memo key, when another bind or shortcut of the user's has it and
+    /// kyrr leaves it alone: then there is no memo key.
+    pub fn memo_key_blocked() -> Option<String> {
+        MEMO_BLOCKED
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    static MEMO_BLOCKED: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
     /// `description` names the shortcut in the desktop's dialog and settings.
     /// Before the setup is done, GNOME and KDE are asked for the key only
@@ -1049,8 +1083,10 @@ mod imp {
 
     fn compositor_note(compositor: Compositor, portal: bool) -> KeyNote {
         let keys = binds::Keys {
-            key: kyrr_linux::hotkey::key_name().to_string(),
-            memo: kyrr_linux::hotkey::memo_key_name().map(str::to_string),
+            key: kyrr_linux::hotkey::key_name(),
+            memo: kyrr_linux::hotkey::memo_key_name(),
+            dictation: true,
+            memo_hold: MEMO_HOLD.load(std::sync::atomic::Ordering::Relaxed) && compositor.holds(),
             portal,
             program: program(),
             link: flatpak(),
@@ -1090,16 +1126,17 @@ mod imp {
 
     /// GNOME before 48 on Wayland: kyrr adds a custom shortcut of GNOME's.
     fn gnome_note() -> KeyNote {
-        let key = kyrr_linux::hotkey::key_name().to_string();
+        let key = kyrr_linux::hotkey::key_name();
         let command = binds::command(&program(), "--dictate");
-        let memo = kyrr_linux::hotkey::memo_key_name().map(str::to_string);
+        let memo = kyrr_linux::hotkey::memo_key_name();
         // The memo key has no note of its own on the main page: the log.
         match memo_outcome(memo.clone(), binds::command(&program(), "--memo")) {
             Some(gnome::Outcome::Taken { name }) => {
-                eprintln!("kyrr: the voice memo key {memo:?} is taken by GNOME's shortcut \"{name}\"")
+                eprintln!("kyrr: the voice memo key {memo:?} is taken by GNOME's shortcut \"{name}\"");
+                *MEMO_BLOCKED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = memo.clone();
             }
             Some(gnome::Outcome::Failed) => eprintln!("kyrr: could not add GNOME's shortcut for the voice memo key"),
-            _ => {}
+            _ => *MEMO_BLOCKED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = None,
         }
         let Some(outcome) = gnome_outcome(&key, &command) else {
             return KeyNote::None;
@@ -1158,8 +1195,21 @@ mod imp {
             || {
                 let before = binds::bound_keys(compositor, base);
                 let outcome = binds::ensure(compositor, base, keys);
-                if matches!(outcome, binds::Outcome::Bound { written: true, .. }) && !flatpak() {
-                    let lines = binds::target(compositor, base).map(|t| binds::lines(t.syntax, keys));
+                let blocked = keys
+                    .memo
+                    .iter()
+                    .find(|memo| binds::claimed(compositor, base, memo))
+                    .cloned();
+                *MEMO_BLOCKED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = blocked.clone();
+                let taken = matches!(outcome, binds::Outcome::Taken { .. });
+                if (taken || matches!(outcome, binds::Outcome::Bound { written: true, .. })) && !flatpak() {
+                    // What `ensure` wrote: a key of the user's is not kyrr's.
+                    let live = binds::Keys {
+                        memo: keys.memo.clone().filter(|m| blocked.as_ref() != Some(m)),
+                        dictation: !taken,
+                        ..keys.clone()
+                    };
+                    let lines = binds::target(compositor, base).map(|t| binds::lines(t.syntax, &live));
                     let now = binds::bound_keys(compositor, base);
                     std::thread::spawn(move || reload(compositor, before, &now, lines));
                 }
@@ -1180,7 +1230,10 @@ mod imp {
             Compositor::Sway => run("swaymsg", &["reload"]),
             Compositor::Niri => {}
             Compositor::River => {
-                for old in before.iter().filter(|old| !now.contains(old)) {
+                // Every key of the block first, press and release alike: a
+                // key that went from tap to hold (or back) keeps its old map
+                // otherwise.
+                for old in before.iter().chain(now) {
                     run("riverctl", &["unmap", "normal", "None", old]);
                     run("riverctl", &["unmap", "-release", "normal", "None", old]);
                 }

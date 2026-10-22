@@ -5,7 +5,8 @@
 //! Shift+F9 in Visual Studio).
 //!
 //! A second key (F8 unless the user picks another) starts and ends a voice
-//! memo: a press, no release.
+//! memo: its press and release are reported, the app decides whether they
+//! mean tap or hold.
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{mpsc, OnceLock};
@@ -24,8 +25,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
 pub enum KeyEvent {
     Pressed,
     Released,
-    /// The voice memo key was pressed.
-    Memo,
+    /// The voice memo key went down.
+    MemoPressed,
+    /// The voice memo key came up.
+    MemoReleased,
 }
 
 static KEY: AtomicU32 = AtomicU32::new(VK_F9.0 as u32);
@@ -43,6 +46,9 @@ fn modifier_held(key: u32) -> bool {
     (!ctrl_key && down(VK_CONTROL)) || down(VK_MENU) || down(VK_SHIFT) || down(VK_LWIN) || down(VK_RWIN)
 }
 static ACTIVE: AtomicBool = AtomicBool::new(false);
+/// A key field in the settings waits for a key: the hook lets every key
+/// through, so kyrr's window sees it.
+static CAPTURING: AtomicBool = AtomicBool::new(false);
 static HELD: AtomicBool = AtomicBool::new(false);
 /// The voice memo key; 0 for none.
 static MEMO_KEY: AtomicU32 = AtomicU32::new(0);
@@ -55,6 +61,34 @@ pub fn set_memo_key(vk: u32) {
 }
 static SENDER: OnceLock<mpsc::Sender<KeyEvent>> = OnceLock::new();
 
+/// While a key field waits for a key, the keys are not taken: the window
+/// gets them, and no dictation or memo starts.
+pub fn set_capture(on: bool) {
+    // A key still down would lose its release to the window.
+    if on {
+        if HELD.swap(false, Ordering::Relaxed) {
+            if let Some(tx) = SENDER.get() {
+                let _ = tx.send(KeyEvent::Released);
+            }
+        }
+        if MEMO_HELD.swap(false, Ordering::Relaxed) {
+            send_memo(false);
+        }
+    }
+    CAPTURING.store(on, Ordering::Relaxed);
+}
+
+/// Reports the memo key going down or up.
+fn send_memo(pressed: bool) {
+    if let Some(tx) = SENDER.get() {
+        let _ = tx.send(if pressed {
+            KeyEvent::MemoPressed
+        } else {
+            KeyEvent::MemoReleased
+        });
+    }
+}
+
 /// Whether the key is captured. When inactive, the key reaches apps normally.
 pub fn set_active(active: bool) {
     ACTIVE.store(active, Ordering::Relaxed);
@@ -63,19 +97,22 @@ pub fn set_active(active: bool) {
 /// What a key event does. True when kyrr takes it and the app it was meant
 /// for does not see it.
 fn process(vk: u32, down: bool, up: bool, injected: bool) -> bool {
+    // A key field in the settings waits for a key: it is the window's.
+    if CAPTURING.load(Ordering::Relaxed) {
+        return false;
+    }
     let key = KEY.load(Ordering::Relaxed);
     let ours = vk == key && !injected;
     let memo = MEMO_KEY.load(Ordering::Relaxed);
     if memo != 0 && vk == memo && !injected {
         if up && MEMO_HELD.swap(false, Ordering::Relaxed) {
+            send_memo(false);
             return true;
         }
         if down && (MEMO_HELD.load(Ordering::Relaxed) || !modifier_held(memo)) {
             // Auto-repeat while it is held is one press.
             if !MEMO_HELD.swap(true, Ordering::Relaxed) {
-                if let Some(tx) = SENDER.get() {
-                    let _ = tx.send(KeyEvent::Memo);
-                }
+                send_memo(true);
             }
             return true;
         }

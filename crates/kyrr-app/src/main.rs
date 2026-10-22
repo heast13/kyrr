@@ -13,6 +13,7 @@ mod dictation;
 #[cfg(target_os = "linux")]
 mod engine;
 mod follow;
+mod keycapture;
 mod listen;
 mod memo;
 mod memos;
@@ -28,6 +29,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
+use kyrr_common::keys;
 use kyrr_common::wave::{Mode, Overlay};
 use kyrr_common::{Amount, FilterSettings, Look, VoiceSettings};
 use kyrr_dictate::Language;
@@ -81,7 +83,13 @@ fn main() {
     let background = args.iter().any(|a| {
         matches!(
             a.as_str(),
-            "--background" | "--dictate" | "--dictate-start" | "--dictate-stop" | "--memo"
+            "--background"
+                | "--dictate"
+                | "--dictate-start"
+                | "--dictate-stop"
+                | "--memo"
+                | "--memo-start"
+                | "--memo-stop"
         )
     });
     if let Err(e) = run(background, show_requests) {
@@ -100,7 +108,16 @@ fn text(language: Language, english: &str) -> String {
         "disconnected" => "nicht angeschlossen",
         "probe failed" => "Der Test hat nicht geklappt. Sind Lautsprecher oder Kopfhörer angeschlossen?",
         "listen failed" => "Mithören hat nicht geklappt. Sind Mikrofon und Kopfhörer angeschlossen?",
-        "right ctrl" => "Strg rechts",
+        "typing key" => "Diese Taste braucht jedes Programm. Nimm eine F-Taste, Pause oder Strg rechts.",
+        "memo key taken" => {
+            "{} gehört schon einem anderen Kurzbefehl, die Aufzeichnung hat darum keine Taste. Such dir eine andere."
+        }
+        "taken by voice memos" => "{} ist schon für die Sprachaufzeichnung belegt.",
+        "taken by dictation" => "{} ist schon fürs Diktieren belegt.",
+        "right ctrl busy" => {
+            "Mit Strg rechts gehen Tastenkürzel in anderen Programmen nicht mehr, und jedes Mal startet kyrr."
+        }
+        "busy key" => "{} nutzen viele Programme selbst. kyrr nimmt sie ihnen weg, solange es läuft.",
         other => other,
     };
     let english = match english {
@@ -109,7 +126,12 @@ fn text(language: Language, english: &str) -> String {
         "disconnected" => "disconnected",
         "probe failed" => "The test did not work. Are your speakers or headphones plugged in?",
         "listen failed" => "Listening did not work. Are your microphone and headphones plugged in?",
-        "right ctrl" => "Right Ctrl",
+        "typing key" => "Every program needs that key. Take an F key, Pause or Right Ctrl.",
+        "memo key taken" => "Another shortcut already has {}, so recordings have no key. Pick another.",
+        "taken by voice memos" => "{} is already used for voice memos.",
+        "taken by dictation" => "{} is already used for dictation.",
+        "right ctrl busy" => "With Right Ctrl, shortcuts in other programs stop working, and kyrr starts every time.",
+        "busy key" => "Many programs use {} themselves. kyrr takes it from them while it runs.",
         other => other,
     };
     match language {
@@ -608,6 +630,8 @@ struct App {
     news_window: RefCell<Option<NewsWindow>>,
     /// Tap mode for the dictation key, read by the key thread.
     key_toggle: Arc<AtomicBool>,
+    /// Voice memo key: tap to start and stop (else hold).
+    memo_toggle: Arc<AtomicBool>,
     /// Key presses counted when the key was set up, to see it pressed since.
     presses_at_bound: Cell<Option<u32>>,
     microphones: RefCell<Vec<Microphone>>,
@@ -1270,7 +1294,7 @@ impl App {
                 let _ = win.hide();
             }
         });
-        platform::keys_in_window(win.window());
+        keycapture::install(win.window(), None);
         if win.show().is_ok() {
             *self.news_window.borrow_mut() = Some(win);
         }
@@ -1330,28 +1354,19 @@ impl App {
     /// The dictation key and mode, from the settings: to the hook, the
     /// window and the tray.
     fn apply_key(&self) {
-        let (index, toggle) = {
+        let (key, toggle) = {
             let config = self.config.borrow();
-            let index = config::DICTATION_KEYS
-                .iter()
-                .position(|&k| k == config.dictation_key)
-                .unwrap_or(1);
-            (index, config.dictation_toggle)
+            (config.dictation_key(), config.dictation_toggle)
         };
         platform::set_key_wanted(self.config.borrow().dictation);
-        platform::set_hotkey_key(config::DICTATION_KEYS[index]);
+        platform::set_hotkey_key(key);
         self.key_toggle.store(toggle, Ordering::Relaxed);
-        let name = match index {
-            0 => "F8".to_string(),
-            1 => "F9".to_string(),
-            2 => "Pause".to_string(),
-            _ => text(self.language(), "right ctrl"),
-        };
+        let name = keys::label(key, self.language() == Language::German);
         if let Some(w) = self.window.upgrade() {
             let state = w.global::<AppState>();
-            state.set_key_index(index as i32);
             state.set_key_toggle(toggle);
             state.set_key_name(name.as_str().into());
+            state.set_key_custom(key != keys::DICTATION_DEFAULT);
         }
         if let Some(t) = tray() {
             t.set_key_name(name.into());
@@ -1360,37 +1375,113 @@ impl App {
         self.apply_memo_key();
     }
 
-    /// The voice memo key: never dictation's (see `Config::memo_key`).
+    /// The voice memo key and mode: never dictation's (see
+    /// `Config::memo_key`).
     fn apply_memo_key(&self) {
-        let (key, chosen, taken) = {
+        let (key, choice, toggle) = {
             let config = self.config.borrow();
-            let taken = config::MEMO_KEYS.iter().position(|&k| k == config.dictation_key);
-            let key = memo_key_now(&config);
-            let chosen = if config.memo_key == 0 { 0 } else { config.memo_key() };
-            (key, chosen, taken)
+            (memo_key_now(&config), config.memo_key_choice(), config.memo_toggle)
         };
         let description = match self.language() {
             Language::German => MEMO_DESCRIPTION.0,
             Language::English => MEMO_DESCRIPTION.1,
         };
         platform::set_memo_key(key, description);
-        let index = config::MEMO_KEYS.iter().position(|&k| k == chosen).unwrap_or(3);
-        let name = match key {
-            0x77 => "F8",
-            0x78 => "F9",
-            0x13 => "Pause",
-            _ => "",
-        };
+        platform::set_memo_hold(!toggle);
+        let german = self.language() == Language::German;
+        // "" while the key is not taken (memos off, Windows before the setup).
+        let name = keys::label(key, german);
+        let label = keys::label(choice, german);
         if let Some(w) = self.window.upgrade() {
             let state = w.global::<AppState>();
-            state.set_memo_key_index(index as i32);
-            state.set_memo_taken_index(taken.map_or(-1, |t| t as i32));
-            state.set_memo_key_name(name.into());
+            state.set_memo_toggle(toggle);
+            state.set_memo_key_custom(choice != keys::MEMO_DEFAULT);
+            state.set_memo_key_label(label.into());
+            state.set_memo_key_name(name.as_str().into());
         }
         if let Some(t) = tray() {
             t.set_memo_key_name(name.into());
         }
         self.refresh_key_note();
+    }
+
+    /// A key field starts waiting for a key (`slot` 1 dictation, 2 voice
+    /// memos), or stops (0).
+    fn capture(&self, slot: i32) {
+        keycapture::set_capturing(slot != 0);
+        platform::set_capture(slot != 0);
+        if let Some(w) = self.window.upgrade() {
+            let state = w.global::<AppState>();
+            state.set_key_capture(slot);
+            state.set_key_refusal("".into());
+            state.set_key_warning("".into());
+        }
+    }
+
+    /// A key field heard something: take the key, or say why not.
+    fn key_heard(&self, heard: keycapture::Captured) {
+        let Some(w) = self.window.upgrade() else {
+            return;
+        };
+        let slot = w.global::<AppState>().get_key_capture();
+        if slot == 0 {
+            return;
+        }
+        match heard {
+            keycapture::Captured::Cancelled => self.capture(0),
+            keycapture::Captured::Refused => {
+                self.capture(0);
+                let message = text(self.language(), "typing key");
+                w.global::<AppState>().set_key_refusal(message.into());
+            }
+            keycapture::Captured::Key(vk) => self.set_key(slot, vk),
+        }
+    }
+
+    /// Takes `vk` as the key of `slot` (1 dictation, 2 voice memos) unless the
+    /// other one has it.
+    fn set_key(&self, slot: i32, vk: u32) {
+        self.capture(0);
+        let language = self.language();
+        let german = language == Language::German;
+        let label = keys::label(vk, german);
+        let (other, taken) = {
+            let config = self.config.borrow();
+            match slot {
+                1 => (config.memo_key(), "taken by voice memos"),
+                _ => (config.dictation_key(), "taken by dictation"),
+            }
+        };
+        let (mut refusal, mut warning) = (String::new(), String::new());
+        if vk == other {
+            refusal = text(language, taken).replace("{}", &label);
+        } else {
+            {
+                let mut config = self.config.borrow_mut();
+                match slot {
+                    1 => config.dictation_key = vk,
+                    _ => config.memo_key = vk,
+                }
+                config.save();
+            }
+            if vk == keys::RIGHT_CTRL {
+                warning = text(language, "right ctrl busy");
+            } else if keys::busy(vk) {
+                warning = text(language, "busy key").replace("{}", &label);
+            }
+            match slot {
+                1 => self.apply_key(),
+                _ => {
+                    self.apply_memo_key();
+                    platform::bind_key_again();
+                }
+            }
+        }
+        if let Some(w) = self.window.upgrade() {
+            let state = w.global::<AppState>();
+            state.set_key_refusal(refusal.into());
+            state.set_key_warning(warning.into());
+        }
     }
 
     /// Voice memos on or off: the card stays, its key and tray entry go.
@@ -1425,6 +1516,31 @@ impl App {
         let state = w.global::<AppState>();
         let language = self.language();
         let note = platform::key_note();
+        // A key that only reports its press (GNOME 46 and 47, niri, a command
+        // the user binds) cannot be held: each press toggles, whatever the
+        // setting says.
+        let can_hold = platform::memo_can_hold();
+        self.memo_toggle
+            .store(self.config.borrow().memo_toggle || !can_hold, Ordering::Relaxed);
+        state.set_memo_can_hold(can_hold);
+        // Another bind of the user's has the memo key: it does not work, and
+        // the settings say so.
+        let blocked = platform::memo_key_blocked();
+        if blocked.is_some() {
+            state.set_memo_key_name("".into());
+            if let Some(t) = tray() {
+                t.set_memo_key_name("".into());
+            }
+            let label = keys::label(self.config.borrow().memo_key_choice(), language == Language::German);
+            state.set_memo_key_note(text(language, "memo key taken").replace("{}", &label).into());
+        } else {
+            state.set_memo_key_note("".into());
+            let name = keys::label(memo_key_now(&self.config.borrow()), language == Language::German);
+            state.set_memo_key_name(name.as_str().into());
+            if let Some(t) = tray() {
+                t.set_memo_key_name(name.into());
+            }
+        }
         let fixed = matches!(note, KeyNote::Desktop(_) | KeyNote::Unbound);
         let unbound = matches!(note, KeyNote::Unbound);
         let german = language == Language::German;
@@ -1635,12 +1751,12 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     #[cfg(target_os = "linux")]
     let _ = slint::set_xdg_app_id("io.github.heast13.kyrr");
     let _ = slint::select_bundled_translation(language.code());
-    platform::keys_in_window(window.window());
 
     // Dictation worker, reporting back on the UI thread. Whether it records
     // is also kept here, for the tap-to-toggle key.
     let recording = Arc::new(AtomicBool::new(false));
     let key_toggle = Arc::new(AtomicBool::new(false));
+    let memo_toggle = Arc::new(AtomicBool::new(config.memo_toggle));
     let weak = window.as_weak();
     let recording_flag = Arc::clone(&recording);
     // A voice memo records: dictation waits, and the wave is the memo's.
@@ -1725,7 +1841,8 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         Language::English => "kyrr: Dictate (hold the key)",
     };
     // Both keys before the start: the desktop's dialog asks for them at once.
-    platform::set_hotkey_key(config.dictation_key);
+    platform::set_hotkey_key(config.dictation_key());
+    platform::set_memo_hold(!config.memo_toggle);
     let memo_description = match language {
         Language::German => MEMO_DESCRIPTION.0,
         Language::English => MEMO_DESCRIPTION.1,
@@ -1734,22 +1851,42 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     if let Some(keys) = platform::start_hotkey(description, config.setup_done) {
         let worker = worker.clone();
         let (recording, key_toggle) = (Arc::clone(&recording), Arc::clone(&key_toggle));
-        let memo_active = Arc::clone(&memo_active);
+        let (memo_active, memo_toggle) = (Arc::clone(&memo_active), Arc::clone(&memo_toggle));
         std::thread::spawn(move || {
             // The dictation key is down and its press went to the worker,
             // which may not be recording yet: its release goes too.
             let mut held = false;
+            // A memo the key started while held: its release ends it.
+            let mut memo_held = false;
             while let Ok(key) = keys.recv() {
-                if key == platform::KeyEvent::Memo {
-                    // Not in the middle of a dictation.
-                    if !held && !recording.load(Ordering::Relaxed) {
-                        let _ = slint::invoke_from_event_loop(|| {
-                            if let Some(m) = memos::memos() {
-                                m.toggle();
-                            }
-                        });
+                match key {
+                    platform::KeyEvent::MemoPressed => {
+                        // Not in the middle of a dictation.
+                        if !held && !recording.load(Ordering::Relaxed) {
+                            // Held, a press starts a memo and the release
+                            // ends it; one that records already (started
+                            // by the button, or by a key that cannot tell
+                            // its release) ends with the press.
+                            memo_held = !memo_toggle.load(Ordering::Relaxed) && !memo_active.load(Ordering::Relaxed);
+                            let _ = slint::invoke_from_event_loop(|| {
+                                if let Some(m) = memos::memos() {
+                                    m.toggle();
+                                }
+                            });
+                        }
+                        continue;
                     }
-                    continue;
+                    platform::KeyEvent::MemoReleased => {
+                        if std::mem::take(&mut memo_held) {
+                            let _ = slint::invoke_from_event_loop(|| {
+                                if let Some(m) = memos::memos() {
+                                    m.end();
+                                }
+                            });
+                        }
+                        continue;
+                    }
+                    _ => {}
                 }
                 let down = matches!(key, platform::KeyEvent::Pressed);
                 // While a memo records, the dictation key does nothing.
@@ -1768,7 +1905,8 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                         Command::KeyUp(Instant::now())
                     }
                     (platform::KeyEvent::Pressed, true) => Command::KeyDown(Instant::now(), true),
-                    (platform::KeyEvent::Released, true) | (platform::KeyEvent::Memo, _) => continue,
+                    (platform::KeyEvent::Released, true)
+                    | (platform::KeyEvent::MemoPressed | platform::KeyEvent::MemoReleased, _) => continue,
                 };
                 if worker.send(cmd).is_err() {
                     break;
@@ -1796,6 +1934,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         listening: RefCell::new(None),
         news_window: RefCell::new(None),
         key_toggle,
+        memo_toggle,
         presses_at_bound: Cell::new(None),
         microphones: RefCell::new(Vec::new()),
         pipewire: Cell::new(PipewireStep::Offer),
@@ -1833,6 +1972,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_live_words(app.config.borrow().dictation_live);
     app.show_effort();
     app.apply_key();
+    keycapture::install(window.window(), {
+        let app = Rc::clone(&app);
+        Some(Box::new(move |heard| app.key_heard(heard)))
+    });
     state.set_memos_enabled(app.config.borrow().memos);
     state.set_memo_auto_text(app.config.borrow().memo_text_auto);
     tray.set_memos_enabled(app.config.borrow().memos);
@@ -1993,31 +2136,36 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             }
         }
     });
-    state.on_key_changed({
+    state.on_capture_key({
         let app = Rc::clone(&app);
-        move |i| {
-            {
-                let mut config = app.config.borrow_mut();
-                config.dictation_key = config::DICTATION_KEYS[(i.max(0) as usize).min(3)];
-                config.save();
-            }
-            app.apply_key();
+        move |slot| app.capture(slot)
+    });
+    state.on_key_reset({
+        let app = Rc::clone(&app);
+        move |slot| {
+            app.set_key(
+                slot,
+                if slot == 1 {
+                    keys::DICTATION_DEFAULT
+                } else {
+                    keys::MEMO_DEFAULT
+                },
+            )
         }
     });
     state.on_memos_toggled({
         let app = Rc::clone(&app);
         move |on| app.set_memos(on)
     });
-    state.on_memo_key_changed({
+    state.on_memo_toggle_changed({
         let app = Rc::clone(&app);
-        move |i| {
+        move |on| {
             {
                 let mut config = app.config.borrow_mut();
-                config.memo_key = config::MEMO_KEYS[(i.max(0) as usize).min(3)];
+                config.memo_toggle = on;
                 config.save();
             }
             app.apply_memo_key();
-            platform::bind_key_again();
         }
     });
     state.on_memo_auto_text_toggled({
@@ -2143,7 +2291,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     });
     state.on_page_changed({
         let weak = window.as_weak();
+        let app = Rc::clone(&app);
         move || {
+            // A key field that waited is gone with its page.
+            app.capture(0);
             if let Some(w) = weak.upgrade() {
                 w.invoke_reset_scroll();
             }

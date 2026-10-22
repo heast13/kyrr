@@ -29,7 +29,7 @@ What it does:
   and a cut for low rumble.
 - **Automatic volume.** Brings your voice to the same level however loud
   your microphone is set.
-- **Dictation.** Hold F9 (or F8, Pause, right Ctrl; or tap to start and
+- **Dictation.** Hold F9 (or a key of your own; or tap to start and
   stop), speak, release. The text appears where your cursor is. German,
   English and more European languages (French, Spanish, Italian, Dutch,
   Polish, Portuguese and others), transcribed on your PC. Say "new line" or
@@ -267,8 +267,9 @@ of after a quarter of an hour without dictation:
 On Windows dictation does nothing while a window running as administrator is
 in front: Windows keeps normal programs from seeing the keyboard there.
 
-**Voice memos.** The memo key (F8; F9 or Pause if dictation has F8, or none)
-starts and ends a recording, as does the tray menu. kyrr records the
+**Voice memos.** The memo key (F8, or a key of your own; tap it to start and
+again to end, or hold it, as you like) starts and ends a recording, as does the
+tray menu. kyrr records the
 microphone as dictation hears it (with the noise filter when it is on) as Opus (mono,
 24 kbit/s, about 11 MB an hour) for up to four hours, into `Documents/kyrr`
 (the folder Windows or your desktop calls Documents, wherever it is). The
@@ -285,6 +286,19 @@ On Linux the memo key is set up like the dictation key: GNOME 48 and KDE
 ask for both keys in one dialog, GNOME 46 and 47 get a second custom
 shortcut, and on Hyprland, sway, river and niri the key goes into kyrr's
 block in the config.
+
+**Keys.** Dictation (F9) and voice memos (F8) each have a field "Set key" next
+to the standard key: click in, press a key, done. One key each, never the
+same for both. Offered are F1 to F24, Pause, Scroll Lock, the menu key and
+right Ctrl; keys programs need for typing (letters, Space, Enter, arrows,
+Shift, Alt, left Ctrl, Windows) are turned down. kyrr takes the key from
+every program while it runs, except with Ctrl, Alt, Shift or Windows held;
+that is why F5, F11 and the like come with a warning, and why right Ctrl
+costs the shortcuts that use it. Where the desktop owns the key (GNOME 48
+and KDE) the field is replaced by a button to the desktop's own shortcut
+settings. Holding works wherever the desktop reports the release: not on
+GNOME 46 and 47 (a custom shortcut only reports the press) and not on niri,
+where each press toggles instead.
 
 ## Privacy
 
