@@ -39,12 +39,7 @@ fn socket_path() -> PathBuf {
         let uid = rustix::process::getuid().as_raw();
         return std::env::temp_dir().join(format!("kyrr-{uid}.sock"));
     };
-    // In a Flatpak the runtime folder is each start's own; this one below it
-    // is shared by all starts of the app.
-    match std::env::var("FLATPAK_ID") {
-        Ok(id) => dir.join("app").join(id).join("kyrr.sock"),
-        Err(_) => dir.join("kyrr.sock"),
-    }
+    dir.join("kyrr.sock")
 }
 
 /// `args` are the program's arguments; `--dictate` asks the running kyrr to
@@ -114,13 +109,8 @@ fn claim_at(path: PathBuf, args: &[String]) -> Instance {
 /// Ends the kyrr that listens on `path` with SIGTERM (it gives the default
 /// microphone back, see signals) and waits until it has gone. Whoever
 /// listens is asked by the system, not by name; only a process called kyrr
-/// is touched. Inside a Flatpak the process ids differ from the ones the
-/// system reports for the socket, and Flatpak updates its own kyrr, so
-/// nothing is done there.
+/// is touched.
 fn end_running(path: &std::path::Path) {
-    if std::env::var_os("FLATPAK_ID").is_some() {
-        return;
-    }
     let Ok(mut stream) = UnixStream::connect(path) else {
         return;
     };

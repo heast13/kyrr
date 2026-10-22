@@ -197,10 +197,6 @@ mod imp {
         typing::copy_to_clipboard(text)
     }
 
-    pub fn typing_blocked_by_sandbox() -> bool {
-        false
-    }
-
     pub fn set_hotkey_key(vk: u32) {
         hotkey::set_key(vk);
     }
@@ -455,9 +451,6 @@ mod imp {
         filter: BTreeMap<String, u32>,
         /// Lets the keyboard portal type without asking again.
         portal_token: Option<String>,
-        /// In a Flatpak: the Background portal starts kyrr at login. The
-        /// portal's own record is out of the sandbox's reach.
-        autostart: bool,
         /// The system's default microphone from before "kyrr" (PipeWire's
         /// metadata JSON). After a crash the system still names "kyrr" as
         /// its default; this is what quitting gives it back to then.
@@ -601,8 +594,7 @@ mod imp {
     }
 
     /// Whether the microphone (node name) is muted in the sound settings,
-    /// asked of WirePlumber's `wpctl`; `None` where that is out of reach
-    /// (the Flatpak sandbox) or the filter does not run.
+    /// asked of WirePlumber's `wpctl`; `None` where the filter does not run.
     pub fn microphone_muted(name: &str) -> Option<bool> {
         let id = mic_node(name)?;
         let mut wpctl = std::process::Command::new("wpctl");
@@ -652,9 +644,6 @@ mod imp {
     }
 
     fn mic_node(name: &str) -> Option<u32> {
-        if flatpak() {
-            return None;
-        }
         match &state().filter {
             Filter::On(engine) => engine.node_id(name),
             _ => None,
@@ -806,9 +795,7 @@ mod imp {
     }
 
     /// Whether the desktop shows kyrr's tray icon: a tray host is on the
-    /// bus. In a Flatpak the manifest lets kyrr talk to the watcher and own
-    /// its icon's name, so it is asked there like anywhere else; without
-    /// those rights the sandbox hides the watcher and this stays false.
+    /// bus.
     pub fn has_tray() -> bool {
         kyrr_linux::tray::available()
     }
@@ -840,15 +827,6 @@ mod imp {
 
     pub fn copy_to_clipboard(text: &str) -> bool {
         kyrr_linux::typing::copy_to_clipboard(text)
-    }
-
-    /// Typing failed in a Flatpak on a desktop without the RemoteDesktop
-    /// portal and without kyrr's link to the compositor: the sandbox is the
-    /// reason, which the message can name. On GNOME and KDE a "no" in the
-    /// portal's dialog is the likely reason, and the AppImage would ask the
-    /// same.
-    pub fn typing_blocked_by_sandbox() -> bool {
-        flatpak() && desktop() == Desktop::Other
     }
 
     pub fn set_hotkey_key(vk: u32) {
@@ -949,18 +927,17 @@ mod imp {
     }
 
     /// Opens the page of the desktop's settings where kyrr's key is changed.
-    /// False where kyrr cannot open it (Flatpak, other desktops).
+    /// False where kyrr cannot open it (other desktops).
     pub fn open_key_settings() -> bool {
         let command: &[&str] = match desktop() {
             Desktop::Gnome => &["gnome-control-center", "applications", "io.github.heast13.kyrr"],
             Desktop::Kde => &["systemsettings", "kcm_keys"],
             Desktop::Other => return false,
         };
-        !flatpak()
-            && std::process::Command::new(command[0])
-                .args(&command[1..])
-                .spawn()
-                .is_ok()
+        std::process::Command::new(command[0])
+            .args(&command[1..])
+            .spawn()
+            .is_ok()
     }
 
     /// Whether [`open_key_settings`] can work, to offer it at all.
@@ -970,9 +947,7 @@ mod imp {
             Desktop::Kde => "systemsettings",
             Desktop::Other => return false,
         };
-        !flatpak()
-            && std::env::var_os("PATH")
-                .is_some_and(|path| std::env::split_paths(&path).any(|dir| dir.join(program).is_file()))
+        std::env::var_os("PATH").is_some_and(|path| std::env::split_paths(&path).any(|dir| dir.join(program).is_file()))
     }
 
     /// Whether the first dictation will bring up the desktop's "Remote
@@ -1001,9 +976,6 @@ mod imp {
     /// it also puts kyrr in the app menu. Rewritten when the AppImage moves,
     /// and hidden by the menu once the file is gone (TryExec).
     fn integrate_appimage() {
-        if flatpak() {
-            return;
-        }
         let (Some(appimage), Some(appdir)) = (std::env::var_os("APPIMAGE"), std::env::var_os("APPDIR")) else {
             return;
         };
@@ -1085,7 +1057,7 @@ mod imp {
         }
         match backend {
             Backend::Portal => KeyNote::Desktop(desktop()),
-            _ if desktop() == Desktop::Gnome && !flatpak() => gnome_note(),
+            _ if desktop() == Desktop::Gnome => gnome_note(),
             _ => KeyNote::Command(dictate_command("--dictate")),
         }
     }
@@ -1098,7 +1070,6 @@ mod imp {
             memo_hold: MEMO_HOLD.load(std::sync::atomic::Ordering::Relaxed) && compositor.holds(),
             portal,
             program: program(),
-            link: flatpak(),
         };
         let base = binds::config_home();
         // Dictation is off: nothing to say about its key.
@@ -1211,7 +1182,7 @@ mod imp {
                     .cloned();
                 *MEMO_BLOCKED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = blocked.clone();
                 let taken = matches!(outcome, binds::Outcome::Taken { .. });
-                if (taken || matches!(outcome, binds::Outcome::Bound { written: true, .. })) && !flatpak() {
+                if taken || matches!(outcome, binds::Outcome::Bound { written: true, .. }) {
                     // What `ensure` wrote: a key of the user's is not kyrr's.
                     let live = binds::Keys {
                         memo: keys.memo.clone().filter(|m| blocked.as_ref() != Some(m)),
@@ -1269,12 +1240,9 @@ mod imp {
         )
     }
 
-    /// How this kyrr is started: through Flatpak, the AppImage's path, or the
-    /// program's own; the flag goes after it.
+    /// How this kyrr is started: the AppImage's path or the program's own;
+    /// the flag goes after it.
     fn program() -> Vec<String> {
-        if let Ok(id) = std::env::var("FLATPAK_ID") {
-            return vec!["flatpak".into(), "run".into(), id];
-        }
         let program = std::env::var_os("APPIMAGE")
             .map(PathBuf::from)
             .or_else(|| std::env::current_exe().ok())
@@ -1309,12 +1277,8 @@ mod imp {
     /// One line about this computer for a problem report: the distribution,
     /// the desktop and how kyrr is installed.
     pub fn system_info() -> String {
-        // In the Flatpak, /etc/os-release is the runtime's; the host's is here.
-        let host = flatpak()
-            .then(|| std::fs::read_to_string("/run/host/os-release").ok())
-            .flatten();
-        let distro = host
-            .or_else(|| std::fs::read_to_string("/etc/os-release").ok())
+        let distro = std::fs::read_to_string("/etc/os-release")
+            .ok()
             .and_then(|text| {
                 text.lines()
                     .find_map(|l| l.strip_prefix("PRETTY_NAME="))
@@ -1327,9 +1291,7 @@ mod imp {
                 parts.push(desktop);
             }
         }
-        if flatpak() {
-            parts.push("Flatpak".into());
-        } else if std::env::var_os("APPIMAGE").is_some() {
+        if std::env::var_os("APPIMAGE").is_some() {
             parts.push("AppImage".into());
         }
         parts.join(", ")
@@ -1369,14 +1331,7 @@ mod imp {
         out
     }
 
-    fn flatpak() -> bool {
-        std::env::var_os("FLATPAK_ID").is_some()
-    }
-
     pub fn autostart_enabled() -> bool {
-        if flatpak() {
-            return state().saved.autostart;
-        }
         std::fs::read_to_string(autostart_file()).is_ok_and(|entry| !autostart_switched_off(&entry))
     }
 
@@ -1399,26 +1354,8 @@ mod imp {
 
     pub fn set_autostart(on: bool) {
         // Tiling compositors without XDG autostart start what their config
-        // says; a Flatpak may write there too, its desktop often has no
-        // Background portal (Hyprland). A start from both is harmless.
+        // says. A start from both is harmless.
         start_in_compositor(on);
-        if flatpak() {
-            // Taken as asked; the desktop may ask the user first, and its
-            // answer lands in the settings the next time they are shown.
-            {
-                let mut s = state();
-                s.saved.autostart = on;
-                s.saved.save();
-            }
-            std::thread::spawn(move || {
-                if let Ok(enabled) = kyrr_linux::background::request_autostart(on) {
-                    let mut s = state();
-                    s.saved.autostart = enabled;
-                    s.saved.save();
-                }
-            });
-            return;
-        }
         let file = autostart_file();
         if !on {
             if std::fs::remove_file(file).is_ok() {
@@ -1498,7 +1435,7 @@ mod imp {
 
     /// How PipeWire gets onto this system: whether kyrr can do it after the
     /// system's password prompt, and the command for a terminal. `None` where
-    /// kyrr does not know (a Flatpak, a read-only system).
+    /// kyrr does not know (a read-only system).
     pub fn pipewire_plan() -> Option<(bool, String)> {
         use kyrr_linux::pipewire_setup as setup;
         setup::plan().map(|p| (setup::can_ask(), p.shown))

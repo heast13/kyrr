@@ -374,8 +374,8 @@ fn run(
     pw::init();
     let mainloop = pw::main_loop::MainLoopRc::new(None).map_err(|e| e.to_string())?;
     let context = pw::context::ContextRc::new(&mainloop, None).map_err(|e| e.to_string())?;
-    // WirePlumber lets a sandboxed (Flatpak) client change the default
-    // microphone only when it says it manages audio, as EasyEffects does.
+    // Says it manages audio, as EasyEffects does, so WirePlumber lets it
+    // change the default microphone.
     let core = context
         .connect_rc(Some(properties! { *pw::keys::MEDIA_CATEGORY => "Manager" }))
         .map_err(|_| "PipeWire is not running".to_string())?;

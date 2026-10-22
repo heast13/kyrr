@@ -2,8 +2,7 @@ name: release
 
 # Builds the Windows installer and the Linux AppImage and tarball on every
 # push to main (as artifacts) and for tags v* as one draft release, which the
-# last job creates once all are built. The Flatpak is not part of a release
-# until it is on Flathub; flatpak.yml builds it on its own.
+# last job creates once all are built.
 #
 # Tags are code signed through SignPath (free for open source, certificate by
 # SignPath Foundation) once the repository variable SIGNPATH_ORGANIZATION_ID

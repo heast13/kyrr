@@ -28,11 +28,6 @@ rubato = "5"
 audioadapter-buffers = "5.1"
 hound = "3.5"
 
-# Slint's tray without a well-known D-Bus name inside a Flatpak, until a Slint
-# release does that itself. See vendor/ksni/PATCHES.md.
-[patch.crates-io]
-ksni = { path = "vendor/ksni" }
-
 [profile.release]
 lto = "thin"
 codegen-units = 1

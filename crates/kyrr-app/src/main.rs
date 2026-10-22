@@ -1289,7 +1289,7 @@ impl App {
                         state.set_update_dismissed(version == dismissed);
                         state.set_update_version(version.as_str().into());
                         // The installer is Windows'; elsewhere kyrr is updated
-                        // where it came from (Flathub, AUR, a new AppImage).
+                        // where it came from (AUR, a new AppImage).
                         let installer = installer.filter(|_| cfg!(windows));
                         state.set_update_installable(installer.is_some());
                         state.set_update_has_news(news.is_some());
