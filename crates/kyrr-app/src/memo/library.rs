@@ -156,9 +156,19 @@ pub fn free_path(dir: &Path, when: NaiveDateTime, title: &str) -> PathBuf {
 }
 
 /// [`free_path`], where the name of the memo `own` counts as free: renamed
-/// to what it already is in another case or number, it stays.
+/// to what it already is in another case or number, it stays. Only Windows
+/// sees two names that differ in case as one file; on Linux the other one
+/// is another memo.
 fn free_path_for(dir: &Path, when: NaiveDateTime, title: &str, own: Option<&Path>) -> PathBuf {
-    let own = own.map(|p| p.to_string_lossy().to_lowercase());
+    let fold = |p: &Path| {
+        let name = p.to_string_lossy();
+        if cfg!(windows) {
+            name.to_lowercase()
+        } else {
+            name.into_owned()
+        }
+    };
+    let own = own.map(fold);
     let title = title::clean(title);
     let base = format!("{} {title}", when.format(STAMP));
     let base = base.trim_end();
@@ -167,10 +177,7 @@ fn free_path_for(dir: &Path, when: NaiveDateTime, title: &str, own: Option<&Path
             1 => dir.join(format!("{base}.opus")),
             n => dir.join(format!("{base} ({n}).opus")),
         })
-        .find(|p| {
-            own.as_deref() == Some(p.to_string_lossy().to_lowercase().as_str())
-                || (!p.exists() && !text_path(p).exists())
-        })
+        .find(|p| own.as_deref() == Some(fold(p).as_str()) || (!p.exists() && !text_path(p).exists()))
         .expect("a free name")
 }
 
@@ -576,6 +583,18 @@ mod tests {
         std::fs::write(&other, b"x").unwrap();
         assert_eq!(rename(&other, "Wochenmarkt").unwrap(), other);
         delete(&other).unwrap();
+        // Only the case differs from another memo's name: on Linux that is
+        // another file, which stays as it is.
+        #[cfg(not(windows))]
+        {
+            let lower = free_path(&dir, when, "wochenmarkt");
+            std::fs::write(&lower, b"other").unwrap();
+            let moved = rename(&renamed, "wochenmarkt").unwrap();
+            assert_eq!(moved.file_name().unwrap(), "2026-10-21 18-05 wochenmarkt (2).opus");
+            assert_eq!(std::fs::read(&lower).unwrap(), b"other");
+            assert_eq!(rename(&moved, "Wochenmarkt").unwrap(), renamed);
+            delete(&lower).unwrap();
+        }
 
         delete(&renamed).unwrap();
         assert!(!renamed.exists() && !text_path(&renamed).exists());
