@@ -43,9 +43,8 @@
   <url type="bugtracker">https://github.com/heast13/kyrr/issues</url>
   <url type="vcs-browser">https://github.com/heast13/kyrr</url>
   <screenshots>
-    <!-- Flathub wants the images from a tag or commit, not a branch. A commit
-         that has the files (flathub.py accepts it or the release's tag); when
-         the screenshots change, point it at the new commit. -->
+    <!-- The images come from a tag or commit, not a branch. A commit that has
+         the files; when the screenshots change, point it at the new commit. -->
     <screenshot type="default">
       <caption>Noise filter, voice and dictation, each with one switch</caption>
       <image>https://raw.githubusercontent.com/heast13/kyrr/ab8dd4c1290bff1da9540b84337da8a0931e0a77/docs/screenshots/main.png</image>

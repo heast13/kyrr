@@ -16,7 +16,7 @@ pipewire = { version = "0.10", features = ["v1_0_0"] }
 # Desktop portals (global shortcut, keyboard input, background, light or dark
 # system, opening voice memos and their folder) on the same zbus and async-io
 # as the tray icon.
-ashpd = { version = "0.13", default-features = false, features = ["async-io", "global_shortcuts", "remote_desktop", "screencast", "background", "settings", "open_uri"] }
+ashpd = { version = "0.13", default-features = false, features = ["async-io", "global_shortcuts", "remote_desktop", "screencast", "settings", "open_uri"] }
 futures-lite = "2"
 # Asking the portal thread to bind the shortcut again.
 async-channel = "2"

@@ -4,7 +4,6 @@
 
 #![cfg(target_os = "linux")]
 
-pub mod background;
 pub mod binds;
 pub mod display;
 pub mod files;

@@ -7,7 +7,6 @@
 //! manager, which bring PipeWire itself; installing them takes PulseAudio
 //! off (apt and zypper by their conflicts, dnf with `--allowerasing`,
 //! pacman with `--ask 4`, its "remove the conflicting package" answer).
-//! In a Flatpak the system is out of reach: kyrr only says what to install.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -37,11 +36,10 @@ pub struct Plan {
     pub shown: String,
 }
 
-/// The way to install PipeWire here, `None` in a Flatpak, on systems kyrr
-/// does not know or whose system files are read-only (Silverblue and the
-/// like).
+/// The way to install PipeWire here, `None` on systems kyrr does not know or
+/// whose system files are read-only (Silverblue and the like).
 pub fn plan() -> Option<Plan> {
-    if std::env::var_os("FLATPAK_ID").is_some() || Path::new("/run/ostree-booted").exists() {
+    if Path::new("/run/ostree-booted").exists() {
         return None;
     }
     // Full paths: pkexec looks bare names up on the caller's PATH.

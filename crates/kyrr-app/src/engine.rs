@@ -415,26 +415,17 @@ fn model_for(light: bool) -> Model {
 }
 
 fn build_filter(assets: &Path, model: Model) -> Result<(VoiceFilter, String), String> {
-    let denoiser = kyrr_denoise::load(assets, model, onnx_runtime().as_deref())?;
+    let denoiser = kyrr_denoise::load(assets, model, None)?;
     let label = format!("{}, {}", denoiser.engine(), model.label());
     let filter = VoiceFilter::new(denoiser, RATE, 1, MAX_BLOCK)?;
     Ok((filter, label))
-}
-
-/// ONNX Runtime as a shared library next to the program, as in the Flatpak
-/// (`/app/lib`, for dictation): the filter's engine on CPUs without
-/// AVX2/FMA. The AppImage and the tarball link it statically into sherpa-onnx
-/// and have none to offer.
-fn onnx_runtime() -> Option<PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    Some(exe.parent()?.join("../lib/libonnxruntime.so.1")).filter(|p| p.is_file())
 }
 
 /// Where the noise models are: `$KYRR_ASSETS`, else `../share/kyrr` next to
 /// the program (packages, AppImage), else the program's own folder, else the
 /// repository's `assets/` (development builds). Recognised by the packed
 /// weights: the AppImage and the tarball leave out the `.onnx` files, which
-/// only ONNX Runtime reads (the Flatpak keeps them for `onnx_runtime()`).
+/// only ONNX Runtime reads.
 fn assets_dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("KYRR_ASSETS") {
         return PathBuf::from(dir);
