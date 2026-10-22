@@ -1484,3 +1484,18 @@ msgstr "Halten, solange du redest, loslassen, wenn du fertig bist. Diktieren ble
 
 msgid "Your desktop sets this key, now {}."
 msgstr "Diese Taste legt dein Desktop fest, gerade {}."
+
+msgid "Overload protection"
+msgstr "Überlastschutz"
+
+msgid "If the computer cannot keep up, kyrr switches to Lean by itself."
+msgstr "Kommt der Rechner nicht mit, wechselt kyrr selbst auf Sparsam."
+
+msgid "Off: if the computer cannot keep up, noise removal pauses now and then."
+msgstr "Aus: Kommt der Rechner nicht mit, setzt die Geräuschunterdrückung ab und zu aus."
+
+msgid "The computer could not keep up: now Lean."
+msgstr "Rechner kam nicht mit: jetzt Sparsam."
+
+msgid "The computer cannot keep up: noise removal pauses now and then."
+msgstr "Rechner kommt nicht mit: Geräuschunterdrückung setzt ab und zu aus."

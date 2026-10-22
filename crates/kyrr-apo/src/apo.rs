@@ -567,12 +567,19 @@ impl KyrrApo {
                 voice.set(&s.voice);
                 voice.pre(buf);
             }
+            // Left out a while: tried again, from a clean start.
+            if self.swap.too_slow() && st.load.rest(frames, st.rate) {
+                if let Some(filter) = st.filter.as_mut() {
+                    filter.reset();
+                }
+                self.swap.try_again();
+            }
             if let Some(filter) = st.filter.as_mut().filter(|_| !self.swap.too_slow()) {
                 filter.set_mode(if s.enabled { Mode::Process } else { Mode::Bypass });
                 filter.set_limit_db(s.limit_db as f32);
                 let started = Instant::now();
                 filter.process_in_place(buf);
-                // Left out from then on: the microphone would stutter.
+                // Left out for a while: the microphone would stutter.
                 if st.load.add(started.elapsed(), frames, st.rate) {
                     self.swap.set_too_slow();
                 }

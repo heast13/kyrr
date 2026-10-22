@@ -120,6 +120,13 @@ impl Swap {
         self.too_slow.store(true, Ordering::Release);
     }
 
+    /// On the audio thread: the filter left out is tried again; a second
+    /// time too slow is told again.
+    pub fn try_again(&self) {
+        self.too_slow.store(false, Ordering::Release);
+        self.reported.store(false, Ordering::Release);
+    }
+
     pub fn unlocked(&self) {
         self.generation.fetch_add(1, Ordering::AcqRel);
         if let Ok(mut f) = self.format.lock() {

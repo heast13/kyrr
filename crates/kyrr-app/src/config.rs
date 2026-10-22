@@ -28,6 +28,9 @@ pub struct Config {
     /// 0.5.8 only the small noise model); never again, so the user's later
     /// choice holds.
     pub lean_suggested: bool,
+    /// A computer that cannot keep up with the best noise model switches to
+    /// the lean setting by itself; off, the filter only pauses a while.
+    pub auto_lean: bool,
     /// Ask GitHub once a day whether there is a newer kyrr.
     pub update_check: bool,
     /// When kyrr last asked, in seconds since 1970.
@@ -81,6 +84,7 @@ impl Default for Config {
             dictation_toggle: false,
             dictation_live: true,
             lean_suggested: false,
+            auto_lean: true,
             update_check: true,
             update_checked: 0,
             update_dismissed: String::new(),

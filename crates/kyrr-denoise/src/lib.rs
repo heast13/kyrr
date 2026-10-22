@@ -46,6 +46,11 @@ const LOAD_WINDOW: Duration = Duration::from_millis(100);
 const TOO_SLOW: f64 = 0.9;
 /// A window this far behind is too much at once.
 const FAR_TOO_SLOW: f64 = 1.5;
+/// A filter left out is tried again after this much audio, then after twice
+/// as much each time, up to [`REST_LONGEST`]: the computer may have been
+/// busy with something else for a while.
+const REST_FIRST: Duration = Duration::from_secs(30);
+const REST_LONGEST: Duration = Duration::from_secs(300);
 
 /// How much of the audio's own time the filter takes, to tell a computer
 /// that is too slow for a model within a fifth of a second. Never
@@ -58,6 +63,10 @@ pub struct Load {
     warm: bool,
     /// The window before was too much.
     behind: bool,
+    /// Audio passed by while the filter was left out, and how often it was
+    /// tried again.
+    rested: Duration,
+    rests: u32,
 }
 
 impl Load {
@@ -79,6 +88,35 @@ impl Load {
         let too_slow = share > FAR_TOO_SLOW || (behind && self.behind);
         self.behind = behind;
         too_slow
+    }
+
+    /// After a pause in the audio: the next block is slow again and does
+    /// not count. How often the filter was left out stays.
+    pub fn restart(&mut self) {
+        *self = Load {
+            rested: self.rested,
+            rests: self.rests,
+            ..Load::default()
+        };
+    }
+
+    /// Adds a block of `frames` at `rate` that went by while the filter was
+    /// left out. True when it is time to try it again; it is then weighed
+    /// afresh, its first block not counting.
+    pub fn rest(&mut self, frames: usize, rate: u32) -> bool {
+        if rate == 0 {
+            return false;
+        }
+        self.rested += Duration::from_secs_f64(frames as f64 / rate as f64);
+        let due = REST_FIRST.saturating_mul(1 << self.rests.min(4)).min(REST_LONGEST);
+        if self.rested < due {
+            return false;
+        }
+        *self = Load {
+            rests: self.rests + 1,
+            ..Load::default()
+        };
+        true
     }
 }
 
@@ -458,6 +496,24 @@ mod tests {
         assert!(feed(&mut Load::default(), 0.95, 11));
         // Far behind: at once.
         assert!(feed(&mut Load::default(), 2.0, 7));
+    }
+
+    #[test]
+    fn a_filter_left_out_is_tried_again_less_often_each_time() {
+        let mut load = Load::default();
+        let block = |load: &mut Load| load.rest(BLOCK, RATE);
+        // Blocks of about 21 ms until it is due.
+        let mut waits = Vec::new();
+        for _ in 0..6 {
+            let mut blocks = 1;
+            while !block(&mut load) {
+                blocks += 1;
+            }
+            waits.push((blocks as f64 * BLOCK as f64 / RATE as f64).round() as u32);
+            // Tried again: weighed afresh, the first block free.
+            assert!(!load.add(Duration::from_millis(500), BLOCK, RATE));
+        }
+        assert_eq!(waits, [30, 60, 120, 240, 300, 300]);
     }
 
     #[test]

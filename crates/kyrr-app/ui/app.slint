@@ -13,6 +13,8 @@ export enum ProbeState { idle, recording, before, after }
 // downloading and installing: "Update now" at work; download-failed
 // offers it again, and the download page.
 export enum UpdateState { idle, checking, current, available, failed, downloading, installing, download-failed }
+// What the main page says about a computer that could not keep up with the noise model.
+export enum OverloadNote { none, switched, pauses }
 
 // One voice memo in the list. text-state: 0 none, 1 waiting for its turn,
 // 2 being written, 3 written, 4 failed.
@@ -35,6 +37,10 @@ export global AppState {
     in property <bool> model-switching;
     // The filter fell back to ONNX Runtime: the CPU lacks AVX2, Lean suits it.
     in property <bool> old-cpu;
+    // The computer could not keep up with the noise model (see OverloadNote).
+    in-out property <OverloadNote> overload-note;
+    // Switch to Lean by itself then.
+    in-out property <bool> auto-lean: true;
     // Lean and best quality set the noise model and the words while you
     // talk at once: 0 lean, 1 best quality, 2 a mix of the two.
     in-out property <int> effort-index: 1;
@@ -209,6 +215,7 @@ export global AppState {
     callback move-to-default();
     callback key-toggle-changed(bool);
     callback live-words-toggled(bool);
+    callback auto-lean-toggled(bool);
     callback effort-changed(int);
     callback open-licenses();
     callback check-updates();
@@ -1274,6 +1281,62 @@ component EffortOption inherits Rectangle {
     }
 }
 
+// A short note on the main page that stays until it is closed.
+component NoteBanner inherits Rectangle {
+    in property <string> text;
+    callback closed();
+    background: #d29922.with-alpha(0.12);
+    border-color: #d29922.with-alpha(0.45);
+    border-width: 1px;
+    border-radius: 10px;
+    HorizontalLayout {
+        padding: 8px;
+        padding-left: 12px;
+        spacing: 8px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle { width: 8px; height: 8px; border-radius: 4px; background: #d29922; }
+        }
+        Text {
+            text: root.text;
+            font-size: 12px;
+            wrap: word-wrap;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        Rectangle {
+            width: 24px;
+            horizontal-stretch: 0;
+            forward-focus: close-key;
+            border-width: close-key.has-focus ? 2px : 0px;
+            border-color: Palette.foreground;
+            border-radius: 4px;
+            accessible-role: button;
+            accessible-label: @tr("Close");
+            accessible-action-default => { root.closed(); }
+            close-key := FocusScope {
+                key-pressed(event) => {
+                    if (event.text == " " || event.text == Key.Return) {
+                        root.closed();
+                        return accept;
+                    }
+                    return reject;
+                }
+            }
+            Text {
+                // × (not ✕): every font has it.
+                text: "×";
+                font-size: 20px;
+                color: close.has-hover ? Palette.foreground : Palette.foreground.with-alpha(0.55);
+            }
+            close := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.closed(); }
+            }
+        }
+    }
+}
+
 // The main view's quiet note that a new version is out, with the one click
 // that installs it. Closing it hides it until the next version.
 component UpdateBanner inherits Rectangle {
@@ -1651,6 +1714,18 @@ component GeneralSettings inherits Card {
         changed(i) => { AppState.effort-changed(i); }
     }
     Hint { text: root.effort-hint(AppState.effort-index); }
+    HorizontalLayout {
+        Caption { text: @tr("Overload protection"); vertical-alignment: center; }
+        Rectangle { }
+        Switch {
+            checked <=> AppState.auto-lean;
+            toggled => { AppState.auto-lean-toggled(self.checked); }
+        }
+    }
+    Hint {
+        text: AppState.auto-lean ? @tr("If the computer cannot keep up, kyrr switches to Lean by itself.")
+            : @tr("Off: if the computer cannot keep up, noise removal pauses now and then.");
+    }
     Separator { }
     HorizontalLayout {
         spacing: 8px;
@@ -2598,6 +2673,11 @@ export component MainWindow inherits Window {
             if main-page && !AppState.update-dismissed && (AppState.update-state == UpdateState.available
                 || AppState.update-state == UpdateState.downloading || AppState.update-state == UpdateState.installing
                 || AppState.update-state == UpdateState.download-failed): UpdateBanner { }
+            if main-page && AppState.overload-note != OverloadNote.none: NoteBanner {
+                text: AppState.overload-note == OverloadNote.switched ? @tr("The computer could not keep up: now Lean.")
+                    : @tr("The computer cannot keep up: noise removal pauses now and then.");
+                closed => { AppState.overload-note = OverloadNote.none; }
+            }
             if main-page: HorizontalLayout {
                 spacing: 8px;
                 AlertLine { }
