@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
+use kyrr_common::TOO_SLOW;
 use kyrr_denoise::{Model, VoiceFilter};
 
 use crate::apo::{build_filter, format_label, report};
@@ -56,6 +57,11 @@ pub struct Swap {
     /// Model of the filter running now.
     model: AtomicU8,
     loading: AtomicBool,
+    /// The running filter takes most of the audio's time on this computer
+    /// and is left out until another one comes; and whether the app was
+    /// told (by the settings watcher, see `report_too_slow`).
+    too_slow: AtomicBool,
+    reported: AtomicBool,
 }
 
 /// Every live instance, for the settings watcher.
@@ -79,6 +85,8 @@ impl Swap {
             generation: AtomicU32::new(0),
             model: AtomicU8::new(NO_MODEL),
             loading: AtomicBool::new(false),
+            too_slow: AtomicBool::new(false),
+            reported: AtomicBool::new(false),
         });
         if let Ok(mut all) = SWAPS.lock() {
             all.retain(|w| w.strong_count() > 0);
@@ -98,6 +106,18 @@ impl Swap {
             });
         }
         self.model.store(code(model), Ordering::Release);
+        self.too_slow.store(false, Ordering::Release);
+        self.reported.store(false, Ordering::Release);
+    }
+
+    /// On the audio thread: whether the running filter is left out.
+    pub fn too_slow(&self) -> bool {
+        self.too_slow.load(Ordering::Acquire)
+    }
+
+    /// On the audio thread: the running filter is too slow, from now on.
+    pub fn set_too_slow(&self) {
+        self.too_slow.store(true, Ordering::Release);
     }
 
     pub fn unlocked(&self) {
@@ -112,25 +132,58 @@ impl Swap {
 
     /// On the audio thread: swaps in a filter that finished loading for this
     /// stream. Never waits and never frees: when a slot is busy or the old
-    /// filter has not been collected yet, the next block tries again.
-    pub fn take(&self, filter: &mut Option<VoiceFilter>) {
+    /// filter has not been collected yet, the next block tries again. True
+    /// when it swapped.
+    pub fn take(&self, filter: &mut Option<VoiceFilter>) -> bool {
         let Ok(mut incoming) = self.incoming.try_lock() else {
-            return;
+            return false;
         };
         let current = self.generation.load(Ordering::Acquire);
         if !matches!(&*incoming, Some((_, _, generation)) if *generation == current) {
-            return;
+            return false;
         }
         let Ok(mut outgoing) = self.outgoing.try_lock() else {
-            return;
+            return false;
         };
         if outgoing.is_some() {
-            return;
+            return false;
         }
-        if let Some((new, model, _)) = incoming.take() {
-            *outgoing = filter.replace(new);
-            self.model.store(code(Some(model)), Ordering::Release);
+        let Some((new, model, _)) = incoming.take() else {
+            return false;
+        };
+        *outgoing = filter.replace(new);
+        self.model.store(code(Some(model)), Ordering::Release);
+        self.too_slow.store(false, Ordering::Release);
+        self.reported.store(false, Ordering::Release);
+        true
+    }
+}
+
+/// Called by the settings watcher every second: tells the app about a
+/// stream whose filter turned out too slow, once, so it switches to the
+/// light model.
+pub fn report_too_slow() {
+    let swaps: Vec<Arc<Swap>> = match SWAPS.lock() {
+        Ok(all) => all.iter().filter_map(Weak::upgrade).collect(),
+        Err(_) => return,
+    };
+    for swap in swaps {
+        if !swap.too_slow.load(Ordering::Acquire) || swap.reported.swap(true, Ordering::AcqRel) {
+            continue;
         }
+        let Some(format) = swap.format.lock().ok().and_then(|f| *f) else {
+            continue;
+        };
+        let model = match swap.model.load(Ordering::Acquire) {
+            0 => Model::Quality.label(),
+            1 => Model::Light.label(),
+            _ => "",
+        };
+        let label = format_label(format.rate, format.channels);
+        log(&format!(
+            "the {model} model is too slow for this computer, audio passes through: {label}"
+        ));
+        report(&format!("{TOO_SLOW} for the {model} model"), "", &label);
     }
 }
 

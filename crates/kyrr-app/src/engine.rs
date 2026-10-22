@@ -9,10 +9,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use kyrr_common::monitor::PROBE_SECONDS;
-use kyrr_common::FilterSettings;
-use kyrr_denoise::{Mode, Model, VoiceFilter};
+use kyrr_common::{FilterSettings, TOO_SLOW};
+use kyrr_denoise::{Load, Mode, Model, VoiceFilter};
 use kyrr_linux::mic::{Microphone, Status, VirtualMic, RATE};
 use kyrr_voice::Voice;
 
@@ -43,6 +44,9 @@ struct Shared {
     /// Counts model loads; a load that finishes after a newer one started
     /// is dropped.
     loads: AtomicU32,
+    /// The running filter was too slow for this computer and is left out
+    /// until another one comes.
+    too_slow: AtomicBool,
 }
 
 #[derive(Default)]
@@ -77,6 +81,10 @@ struct Chain {
     /// Peaks fall off slowly, so a meter polled now and then sees every word.
     before: f32,
     after: f32,
+    /// How much of the audio's time the filter takes, and whether it is
+    /// left out as too slow for this computer.
+    load: Load,
+    slow: bool,
 }
 
 impl Chain {
@@ -91,10 +99,17 @@ impl Chain {
 
         self.voice.set(&s.voice);
         self.voice.pre(buf);
-        if let Some(filter) = self.filter.as_mut() {
+        if let Some(filter) = self.filter.as_mut().filter(|_| !self.slow) {
             filter.set_mode(if s.enabled { Mode::Process } else { Mode::Bypass });
             filter.set_limit_db(s.limit_db as f32);
+            let started = Instant::now();
             filter.process_in_place(buf);
+            // Left out from then on: PipeWire's real-time thread would fall
+            // behind, and the system ends kyrr when it never gets to rest.
+            if self.load.add(started.elapsed(), buf.len(), RATE) {
+                self.slow = true;
+                self.shared.too_slow.store(true, Ordering::Relaxed);
+            }
         }
         self.voice.post(buf);
 
@@ -123,6 +138,9 @@ impl Chain {
         if outgoing.is_none() {
             if let Some(filter) = incoming.take() {
                 *outgoing = self.filter.replace(filter);
+                self.load = Load::default();
+                self.slow = false;
+                self.shared.too_slow.store(false, Ordering::Relaxed);
             }
         }
     }
@@ -184,6 +202,7 @@ impl Engine {
             probe: Mutex::new(Probe::default()),
             probe_wanted: AtomicBool::new(false),
             loads: AtomicU32::new(0),
+            too_slow: AtomicBool::new(false),
         });
         shared.set_settings(settings);
         let assets = assets_dir();
@@ -209,6 +228,8 @@ impl Engine {
             filter,
             before: 0.0,
             after: 0.0,
+            load: Load::default(),
+            slow: false,
         };
         let mic = VirtualMic::start(
             microphone,
@@ -253,7 +274,12 @@ impl Engine {
 
     /// Engine and model, e.g. "native, quality"; empty while loading.
     pub fn engine(&self) -> String {
-        lock(&self.shared.engine).clone()
+        let label = lock(&self.shared.engine).clone();
+        if self.shared.too_slow.load(Ordering::Relaxed) {
+            format!("{TOO_SLOW} for {label}")
+        } else {
+            label
+        }
     }
 
     pub fn use_microphone(&self, name: &str) {
