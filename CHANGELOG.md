@@ -2,6 +2,19 @@
 
 ## 0.6.0 (2026-10-21)
 
+- Windows: the dictation and memo keys also work while kyrr's own window
+  has the focus (Windows does not call the low-level hook then; the
+  window passes the keys on).
+- Voice memos, titles: a short opening sentence stays the title, a long or
+  chatty one gives way to up to three keywords (nouns, names, repeated or
+  long words); once the text is written, a memo still named automatically
+  is titled again from all of it.
+- "Global settings" is now "Setup", one view without Simple/Advanced (the
+  card pages too). The level check (meter, before/after test, listening)
+  and "Live text" (was "Words while you talk") moved to Setup; the credits
+  are folded. "Remove background noise" is now "Isolate your voice"; the
+  separate noise model choice is gone, Effort sets it. More room for the
+  word creation line on the main page; "Recordings" without a count.
 - Noise filter too slow for the computer: the filter weighs its own time
   per 100 ms of audio; above 90 % the quality model is left out and kyrr
   switches to Lean. On Linux PipeWire's real-time thread otherwise never

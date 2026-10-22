@@ -18,8 +18,8 @@ line saying nothing changes on Windows.
 
 ## 0.6.0
 
-- Voice memos: tap F8, talk, tap F8 again. kyrr saves the recording in Documents, folder kyrr, and names it after its first words. The list under "Recordings" plays, renames and deletes them; "Write text" turns a recording into text with the time each part starts. Switch it off on the main page; the key can be changed in the settings.
-- Settings are tidier: every switch on the main page has its own gear for its settings, "Global settings" holds the rest, and each page opens in "Simple".
+- Voice memos: tap F8, talk, tap F8 again. kyrr saves the recording in Documents, folder kyrr, and names it after what it is about. The list under "Recordings" plays, renames and deletes them; "Write text" turns a recording into text with the time each part starts. Switch it off on the main page; change the key under its gear.
+- Settings are tidier: every switch on the main page has its own gear, "Setup" holds the rest, each in one view. "Remove background noise" is now "Isolate your voice", "Words while you talk" is "Live text".
 - The setup has three steps now: microphone, language and dictation model, performance setting.
 - New setting "Effort": Lean or Best quality, for older laptops and for most computers. Lean dictations last up to 2 minutes, the others 15; towards the limit the wave turns yellow, then red.
 - The wave writes the words smoothly and with fewer mistakes, and sooner on slower computers.
@@ -27,17 +27,17 @@ line saying nothing changes on Windows.
 - The first words after starting kyrr or installing it are no longer lost.
 - Is the computer too slow for the best noise removal, kyrr switches to Lean by itself instead of letting the microphone stutter.
 - Long dictations are typed much sooner after you let go and use less memory.
-- An interrupted download of a speech model carries on where it stopped.
+- An interrupted model download carries on where it stopped.
 - More variety in the status line, and the note in the pill when nothing was heard stays longer.
-- Global settings, About: "Feedback" opens an e-mail to the developer, ready to write.
+- Setup, About: "Feedback" opens an e-mail to the developer, ready to write.
 - More controls work with the keyboard and with screen readers.
 - (Linux) To update, just paste the install commands again, without closing kyrr first.
 - (Linux) kyrr recovers when the sound system restarts, and the AppImage is a third smaller.
 
 ### Deutsch
 
-- Sprachaufzeichnungen: F8 antippen, sprechen, nochmal F8. kyrr speichert die Aufnahme unter Dokumente im Ordner kyrr und benennt sie nach den ersten Worten. Die Liste unter „Aufzeichnungen“ spielt ab, benennt um und löscht; „Text schreiben“ macht aus einer Aufnahme Text mit der Zeit, an der jeder Abschnitt beginnt. Auf der Hauptseite abschaltbar, die Taste lässt sich in den Einstellungen ändern.
-- Die Einstellungen sind aufgeräumter: Jeder Schalter auf der Hauptseite hat ein Zahnrad für seine Einstellungen, der Rest steht unter „Globale Einstellungen“.
+- Sprachaufzeichnungen: F8 antippen, sprechen, nochmal F8. kyrr speichert die Aufnahme unter Dokumente im Ordner kyrr und benennt sie nach ihrem Inhalt. Die Liste unter „Aufzeichnungen“ spielt ab, benennt um und löscht; „Text schreiben“ macht aus einer Aufnahme Text mit der Zeit, an der jeder Abschnitt beginnt. Auf der Hauptseite abschaltbar, die Taste ist im Zahnrad änderbar.
+- Die Einstellungen sind aufgeräumter: Jeder Schalter auf der Hauptseite hat ein Zahnrad, der Rest steht unter „Setup“, alles in einer Ansicht. „Störgeräusche entfernen“ heißt jetzt „Stimme isolieren“, „Wörter beim Sprechen“ heißt „Live-Text“.
 - Die Einrichtung hat jetzt drei Schritte: Mikrofon, Sprache und Diktiermodell, Leistungseinstellung.
 - Neue Einstellung „Rechenaufwand“: Sparsam oder Beste Qualität, für ältere Laptops und für die meisten Rechner. Mit Sparsam diktierst du bis zu 2 Minuten am Stück, sonst 15; zum Limit hin wird die Welle gelb, dann rot.
 - Die Welle schreibt die Wörter weich und mit weniger Fehlern, auf langsamen Rechnern früher.
@@ -45,9 +45,9 @@ line saying nothing changes on Windows.
 - Die ersten Wörter nach dem Start von kyrr oder nach der Installation gehen nicht mehr verloren.
 - Ist der Rechner für die beste Geräuschunterdrückung zu langsam, stellt kyrr selbst auf Sparsam, statt dass das Mikro stottert.
 - Langes Diktieren wird nach dem Loslassen deutlich früher getippt und braucht weniger Speicher.
-- Ein unterbrochener Download eines Sprachmodells macht dort weiter, wo er abgebrochen ist.
+- Ein abgebrochener Modell-Download macht dort weiter, wo er aufgehört hat.
 - Mehr Abwechslung in der Statuszeile, und der Spruch in der Pille, wenn nichts gehört wurde, bleibt länger stehen.
-- Globale Einstellungen, Über kyrr: „Feedback“ öffnet eine E-Mail an den Entwickler, fertig zum Schreiben.
+- Setup, Über kyrr: „Feedback“ öffnet eine E-Mail an den Entwickler, fertig zum Schreiben.
 - Mehr Bedienelemente gehen per Tastatur und Screenreader.
 - (Linux) Für ein Update einfach die Installationsbefehle nochmal einfügen, ohne kyrr vorher zu schließen.
 - (Linux) kyrr erholt sich vom Neustart des Soundsystems, das AppImage ist ein Drittel kleiner.
