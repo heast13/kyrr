@@ -7,12 +7,12 @@ use std::time::Duration;
 
 use kyrr_common::{FilterSettings, REG_FILTER};
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::ERROR_SUCCESS;
+use windows::Win32::Foundation::{ERROR_SUCCESS, WAIT_TIMEOUT};
 use windows::Win32::System::Registry::{
     RegCloseKey, RegNotifyChangeKeyValue, RegOpenKeyExW, HKEY, HKEY_LOCAL_MACHINE, KEY_NOTIFY, KEY_QUERY_VALUE,
     REG_NOTIFY_CHANGE_LAST_SET,
 };
-use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject, INFINITE};
+use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
 
 use crate::registry::{read_dword, wide};
 
@@ -88,7 +88,8 @@ fn read(key: HKEY) -> FilterSettings {
 }
 
 /// Waits for changes for the life of the process. Without the key (not
-/// installed yet, or removed) it retries every few seconds.
+/// installed yet, or removed) it retries every few seconds. Meanwhile it
+/// tells the app, every second, about a filter too slow for the computer.
 fn watch() {
     let Ok(event) = (unsafe { CreateEventW(None, false, false, PCWSTR::null()) }) else {
         return;
@@ -106,7 +107,9 @@ fn watch() {
             let settings = read(key);
             live().set(settings);
             crate::swap::settings_changed(settings.light_model);
-            unsafe { WaitForSingleObject(event, INFINITE) };
+            while unsafe { WaitForSingleObject(event, 1000) } == WAIT_TIMEOUT {
+                crate::swap::report_too_slow();
+            }
         }
         unsafe {
             let _ = RegCloseKey(key);

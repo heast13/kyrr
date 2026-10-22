@@ -596,6 +596,8 @@ struct App {
     /// Ticks in a row the microphone was in use but silent.
     silent_ticks: Cell<u32>,
     model_changed: Cell<Option<Instant>>,
+    /// The noise model was too slow for this computer once.
+    too_slow: Cell<bool>,
     /// Events from the probe thread, picked up by `tick`.
     probe_events: (mpsc::Sender<probe::Event>, mpsc::Receiver<probe::Event>),
     /// The last before/after take, for playing it again.
@@ -799,8 +801,18 @@ impl App {
         // On CPUs without AVX2 the filter runs ONNX Runtime, at several times
         // the CPU: kyrr picks the lean setting, once.
         let old_cpu = fs == FilterState::Running && detail.starts_with("onnx");
-        state.set_old_cpu(old_cpu);
-        if old_cpu && !self.config.borrow().lean_suggested {
+        // The noise model took most of the audio's time and is left out
+        // (see `kyrr_denoise::Load`): the light one, whatever was picked,
+        // or the microphone stutters (and on Linux the system ends kyrr).
+        let too_slow = detail.starts_with(kyrr_common::TOO_SLOW);
+        if too_slow {
+            self.too_slow.set(true);
+        }
+        state.set_old_cpu(old_cpu || self.too_slow.get());
+        if too_slow && !self.filter.borrow().light_model {
+            eprintln!("kyrr: the noise model is too slow for this computer, switching to lean ({detail})");
+            self.set_effort(true);
+        } else if old_cpu && !self.config.borrow().lean_suggested {
             {
                 let mut config = self.config.borrow_mut();
                 config.lean_suggested = true;
@@ -1773,6 +1785,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         alert_turn: Cell::new(0),
         silent_ticks: Cell::new(0),
         model_changed: Cell::new(None),
+        too_slow: Cell::new(false),
         probe_events: mpsc::channel(),
         take: RefCell::new(None),
         listening: RefCell::new(None),
