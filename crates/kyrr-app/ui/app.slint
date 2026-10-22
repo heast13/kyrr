@@ -484,32 +484,61 @@ component Meter inherits Rectangle {
 // slowly while kyrr works, barely breathes while it waits, and lies still
 // when everything is off (then nothing is redrawn at all). It steps on a
 // timer instead of every frame: a frame-by-frame wave kept a whole core of
-// an older laptop busy redrawing the window.
+// an older laptop busy redrawing the window. The sway follows the clock, not
+// the number of ticks, so a late tick makes a bigger step instead of a
+// stumble, and the bars' ends fade in by the pixel, so at a window scale of
+// 100% they glide instead of hopping a pixel at a time.
 component Pulse inherits Rectangle {
     in property <bool> working;
     in property <bool> waiting;
     property <bool> moving: root.working || root.waiting;
-    // Milliseconds of movement so far.
-    property <float> t: 0;
+    // Sways so far (1 = one full sway).
+    property <float> phase: 0;
+    property <duration> last-tick;
     Timer {
-        interval: root.working ? 50ms : 200ms;
+        interval: root.working ? 33ms : 66ms;
         running: root.moving;
-        triggered => { root.t += self.interval / 1ms; }
+        triggered => {
+            // A tick that comes much too late counts as at most a short step.
+            root.phase = mod(root.phase + min((animation-tick() - root.last-tick) / 1ms, 100) / root.period, 1);
+            root.last-tick = animation-tick();
+        }
     }
-    // Seconds per sway; slow on purpose, this is kyrr after all.
+    // The clock restarts with the movement, so a pause is not counted.
+    changed moving => { root.last-tick = animation-tick(); }
+    // Milliseconds per sway; slow on purpose, this is kyrr after all.
     property <float> period: root.working ? 2200 : 4500;
     property <float> depth: root.working ? 1 : 0.3;
+    property <color> tint: Palette.color-scheme == ColorScheme.dark ? #5eead4 : #14b8a6;
+    property <float> alpha: root.moving ? 0.85 : 0.4;
     width: 14px;
     height: 16px;
     for bar[i] in 4: Rectangle {
-        property <float> level: root.moving ? root.depth * (0.5 + 0.5 * sin(root.t / root.period * 360deg + i * 75deg)) : 0;
+        property <float> level: root.moving ? root.depth * (0.5 + 0.5 * sin(root.phase * 360deg + i * 75deg)) : 0;
+        // The bar's height in pixels: whole pixels (an even number, so it
+        // stays centred) as a solid middle, the rest as a fading pixel at
+        // each end.
+        property <float> size: 2 + 10 * self.level;
+        property <float> middle: 2 * floor(self.size / 2);
+        property <float> rest: (self.size - self.middle) / 2;
         x: i * 4px;
         width: 2px;
-        height: 2px + 10px * self.level;
-        y: (root.height - self.height) / 2;
-        border-radius: 1px;
-        background: Palette.color-scheme == ColorScheme.dark ? #5eead4 : #14b8a6;
-        opacity: root.moving ? 0.85 : 0.4;
+        height: root.height;
+        Rectangle {
+            y: (parent.height - self.height) / 2;
+            height: parent.middle * 1px;
+            background: root.tint.with-alpha(root.alpha);
+        }
+        Rectangle {
+            y: (parent.height - parent.middle * 1px) / 2 - 1px;
+            height: 1px;
+            background: root.tint.with-alpha(root.alpha * parent.rest);
+        }
+        Rectangle {
+            y: (parent.height + parent.middle * 1px) / 2;
+            height: 1px;
+            background: root.tint.with-alpha(root.alpha * parent.rest);
+        }
     }
 }
 
