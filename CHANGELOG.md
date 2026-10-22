@@ -14,8 +14,8 @@
   text waits while you dictate, and the two keys do nothing while the other
   one records. The main page card switches the feature off; its gear
   opens the memo settings (key, write text automatically, folder).
-  Flatpak: only `xdg-documents/kyrr` is opened. GNOME before 48 gets a second custom
-  shortcut; Hyprland, sway, river and niri a second line in kyrr's block.
+  Flatpak: only `xdg-documents/kyrr` is opened. GNOME before 48 gets a
+  second custom shortcut; Hyprland, sway, river and niri a second line in kyrr's block.
 - Dictation, words in the pill: fewer wrong and missing words. A word shows
   once 1.2 s of the recording followed it (was 0.8 s), and after a pause
   the next look starts 1.5 s before where the last one ended (was 0.8 s), so
@@ -50,13 +50,14 @@
   running kyrr like quitting does (SIGTERM, the default microphone is given
   back), waits until it is gone (up to 20 s; if it hangs longer, the old one
   just shows its window) and starts in its place. If the download fails, the
-  old file stays and is merely restarted. Only
-  a process called kyrr is ended, found by the socket it listens on; a
+  old file stays and is merely restarted. Only a process called kyrr is
+  ended, found by the socket it listens on; a
   Flatpak kyrr is left to Flatpak.
 - Distance compensation is out of beta and on by default, for existing
   users too. The 0.5.8 switch (`VoiceDistance`) is no longer read; the
   setting is now `VoiceDistanceOff`, so an off set in 0.5.8 does not carry
-  over. Settings, Advanced, "Distance compensation" switches it off.
+  over. The voice card's gear, Advanced, "Distance compensation" switches
+  it off.
 - Dictation wave: the words are written by an invisible pen that glides
   along the line at an even pace (the average of how fast words came in
   lately, plus a share of what waits), instead of every word fading in on
@@ -66,9 +67,9 @@
   of the effect the words stand about 0.3 to 0.5 s later than with the old
   look, in return for no stop and go.
 - Live words: after a look that found nothing new, the next look starts
-  shortly before where that one ended (see the first entry for the
-  current 1.5 s), so a pause no longer makes the stretch grow up to 8 s. In a simulation of a computer 4x slower than the
-  test machine, the words after a 15 s pause showed about 1.5 s sooner;
+  shortly before where that one ended (see the second entry for the
+  current 1.5 s), so a pause no longer makes the stretch grow up to 8 s.
+  In a simulation of a computer 4x slower than the test machine, the words after a 15 s pause showed about 1.5 s sooner;
   the share of CPU time spent on looks stayed about the same.
 - Flatpak on Hyprland, sway, niri and river: kyrr types and shows the
   dictation wave there too. The block kyrr writes into the compositor's
@@ -83,16 +84,15 @@
   `packaging/flatpak/flathub.py` writes the files for Flathub, and a CI
   workflow builds and lints them the way Flathub does.
 - AUR: `kyrr-bin` at the current version, built and checked on Arch for
-  every change to the package, and pushed to the AUR after each release once the key is
-  set up.
+  every change to the package, and pushed to the AUR after each release
+  once the key is set up.
 - Setup in three steps (Windows and Linux alike): microphone, then
   language and dictation model (with the key and typing questions on
   Linux), then the performance setting.
 - Effort setting, "Lean" or "Best quality" (Settings, Simple; asked in the
   setup): Lean is the small noise model and the words after you stop
-  talking, Best quality the large model and words while you talk. The first
-  time the dictation model loads, kyrr times one look; a slow computer (over
-  0.4 s for 4 s of audio, or no AVX2) gets a suggestion for Lean, once.
+  talking, Best quality the large model and words while you talk. A
+  processor without AVX2 gets Lean picked once.
   Lean dictations end after 2 minutes, others after 15; at the limit kyrr
   types what it heard instead of dropping the rest, and the wave turns
   yellow (30 s left) and red (10 s left). Text heard while the dictation key
