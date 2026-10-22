@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 (2026-10-21)
+## 0.6.0 (2026-10-22)
 
 - Keys: dictation (standard F9) and voice memos (standard F8) each offer
   the standard key and a "Set key" field: click it, press a key. Offered
