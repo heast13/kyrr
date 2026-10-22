@@ -22,7 +22,9 @@
 //!   "Configuration: Key Bindings".
 //!
 //! The voice memo key goes into the same block: a press runs `kyrr --memo`
-//! (Hyprland: the portal's shortcut "memo").
+//! (Hyprland: the portal's shortcut "memo"); to hold it, a press runs
+//! `kyrr --memo-start` and the release `--memo-stop`, where the compositor
+//! has release binds.
 //!
 //! Only the standard library is used here.
 
@@ -118,6 +120,9 @@ pub struct Keys {
     pub key: String,
     /// The voice memo key's name, e.g. "F8"; a press starts or ends a memo.
     pub memo: Option<String>,
+    /// The memo key is held to record, not tapped. Only where the compositor
+    /// can hold a key (niri taps).
+    pub memo_hold: bool,
     /// Through the GlobalShortcuts portal (Hyprland only); otherwise the key
     /// runs kyrr with `--dictate-start` on press and `--dictate-stop` on
     /// release, or `--dictate` on each press where it cannot be held.
@@ -328,19 +333,39 @@ fn bind_lines(syntax: Syntax, keys: &Keys) -> String {
     }
 }
 
-/// A press of `memo` starts or ends a voice memo.
+/// A press of `memo` starts or ends a voice memo; held, its press starts
+/// one and its release ends it.
 fn memo_lines(syntax: Syntax, keys: &Keys, memo: &str) -> String {
     let run = keys.command("--memo");
+    let (start, stop) = (keys.command("--memo-start"), keys.command("--memo-stop"));
     match (syntax, keys.portal) {
+        // Hyprland's portal reports the global bind's press and release.
         (Syntax::Conf, true) => format!("unbind = , {memo}\nbind = , {memo}, global, {GLOBAL_MEMO}"),
+        (Syntax::Conf, false) if keys.memo_hold => {
+            format!("unbind = , {memo}\nbind = , {memo}, exec, {start}\nbindr = , {memo}, exec, {stop}")
+        }
         (Syntax::Conf, false) => format!("unbind = , {memo}\nbind = , {memo}, exec, {run}"),
         (Syntax::Lua, true) => format!("hl.unbind(\"{memo}\")\nhl.bind(\"{memo}\", hl.dsp.global(\"{GLOBAL_MEMO}\"))"),
+        (Syntax::Lua, false) if keys.memo_hold => format!(
+            "hl.unbind(\"{memo}\")\nhl.bind(\"{memo}\", hl.dsp.exec_cmd(\"{}\"))\nhl.bind(\"{memo}\", hl.dsp.exec_cmd(\"{}\"), {{ release = true }})",
+            quoted(&start),
+            quoted(&stop)
+        ),
         (Syntax::Lua, false) => format!(
             "hl.unbind(\"{memo}\")\nhl.bind(\"{memo}\", hl.dsp.exec_cmd(\"{}\"))",
             quoted(&run)
         ),
+        (Syntax::Sway, _) if keys.memo_hold => {
+            format!("bindsym --no-repeat {memo} exec {start}\nbindsym --release {memo} exec {stop}")
+        }
         (Syntax::Sway, _) => format!("bindsym --no-repeat {memo} exec {run}"),
+        (Syntax::River, _) if keys.memo_hold => format!(
+            "riverctl map normal None {memo} spawn {}\nriverctl map -release normal None {memo} spawn {}",
+            sh_quoted(&start),
+            sh_quoted(&stop)
+        ),
         (Syntax::River, _) => format!("riverctl map normal None {memo} spawn {}", sh_quoted(&run)),
+        // niri has no release binds: a press each.
         (Syntax::Niri, _) => {
             let mut words = keys.program.clone();
             words.push("--memo".into());
@@ -841,6 +866,7 @@ mod tests {
         Keys {
             key: key.into(),
             memo: None,
+            memo_hold: false,
             portal,
             program: vec!["kyrr".into()],
             link: false,
@@ -1054,6 +1080,36 @@ mod tests {
         }
         let niri = block("binds {\n}\n", Syntax::Niri, &flatpak_keys("F9", false)).unwrap();
         assert!(matches!(claim(&niri, Syntax::Niri, "F9").unwrap(), Claim::Free));
+    }
+
+    #[test]
+    fn a_held_memo_key_has_a_bind_for_the_release() {
+        let held = |syntax: Syntax, portal: bool| {
+            lines(
+                syntax,
+                &Keys {
+                    memo: Some("F8".into()),
+                    memo_hold: true,
+                    ..keys("F9", portal)
+                },
+            )
+        };
+        assert!(held(Syntax::Conf, false)
+            .ends_with("\nbind = , F8, exec, kyrr --memo-start\nbindr = , F8, exec, kyrr --memo-stop"));
+        assert!(held(Syntax::Sway, false)
+            .ends_with("\nbindsym --no-repeat F8 exec kyrr --memo-start\nbindsym --release F8 exec kyrr --memo-stop"));
+        assert!(held(Syntax::River, false).ends_with(
+            "\nriverctl map normal None F8 spawn 'kyrr --memo-start'\nriverctl map -release normal None F8 spawn 'kyrr --memo-stop'"
+        ));
+        assert!(held(Syntax::Lua, false).contains("hl.dsp.exec_cmd(\"kyrr --memo-stop\"), { release = true }"));
+        // Hyprland's portal reports the release itself; niri has none.
+        assert!(held(Syntax::Conf, true).ends_with("\nbind = , F8, global, io.github.heast13.kyrr:memo"));
+        assert!(held(Syntax::Niri, false).ends_with("\n    F8 repeat=false { spawn \"kyrr\" \"--memo\"; }"));
+        // Either way it is kyrr's own bind.
+        assert!(matches!(
+            claim("bind = , F8, exec, kyrr --memo-start\n", Syntax::Conf, "F8").unwrap(),
+            Claim::Kyrr
+        ));
     }
 
     #[test]

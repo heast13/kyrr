@@ -22,16 +22,18 @@
 //! and <https://wiki.hyprland.org/Configuring/Binds/>.
 //!
 //! A second key starts and ends a voice memo ([`set_memo_key`]), caught the
-//! same ways as shortcut "memo" (`kyrr --memo` without them); only its press
-//! counts.
+//! same ways as shortcut "memo" (`kyrr --memo` without them, or
+//! `--memo-start` and `--memo-stop` on a key's press and release). Press and
+//! release are both reported; the app decides whether they mean tap or hold.
 
 use std::pin::pin;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
 use std::sync::{mpsc, Mutex, OnceLock, PoisonError};
 
 use ashpd::desktop::global_shortcuts::{GlobalShortcuts, NewShortcut};
 use ashpd::desktop::Session;
 use futures_lite::{future, stream, StreamExt};
+use kyrr_common::keys;
 use x11rb::connection::Connection;
 use x11rb::errors::ReplyError;
 use x11rb::protocol::xkb::{self, BoolCtrl, PerClientFlag};
@@ -43,8 +45,10 @@ use x11rb::rust_connection::RustConnection;
 pub enum KeyEvent {
     Pressed,
     Released,
-    /// The voice memo key was pressed.
-    Memo,
+    /// The voice memo key went down.
+    MemoPressed,
+    /// The voice memo key came up.
+    MemoReleased,
 }
 
 /// Where binding the key through the portal stands.
@@ -91,23 +95,16 @@ const SHORTCUT: &str = "dictate";
 const MEMO_SHORTCUT: &str = "memo";
 const APP_ID: &str = "io.github.heast13.kyrr";
 
-/// The keys the app offers: Windows virtual-key code, X11 keysym and the
-/// portal's name for it.
-const KEYS: [(u32, u32, &str); 4] = [
-    (0x77, 0xFFC5, "F8"),
-    (0x78, 0xFFC6, "F9"),
-    (0x13, 0xFF13, "Pause"),
-    (0xA3, 0xFFE4, "Control_R"),
-];
-
-static KEY: AtomicUsize = AtomicUsize::new(1);
-/// The voice memo key, an index into `KEYS`; `NO_KEY` for none.
-static MEMO_KEY: AtomicUsize = AtomicUsize::new(NO_KEY);
-const NO_KEY: usize = usize::MAX;
+static KEY: AtomicU32 = AtomicU32::new(keys::DICTATION_DEFAULT);
+/// The voice memo key as a Windows virtual-key code; 0 for none (memos off).
+static MEMO_KEY: AtomicU32 = AtomicU32::new(0);
 static MEMO_HELD: AtomicBool = AtomicBool::new(false);
 /// The description of the memo shortcut in the desktop's settings.
 static MEMO_DESCRIPTION: Mutex<String> = Mutex::new(String::new());
 static ACTIVE: AtomicBool = AtomicBool::new(false);
+/// A key field in the settings waits for a key: nothing is grabbed, and no
+/// press starts anything.
+static CAPTURING: AtomicBool = AtomicBool::new(false);
 static HELD: AtomicBool = AtomicBool::new(false);
 /// Where binding the shortcut stands, a [`Binding`] as u8.
 static BINDING: AtomicU8 = AtomicU8::new(Binding::NotAsked as u8);
@@ -123,8 +120,8 @@ static X11: OnceLock<X11> = OnceLock::new();
 /// The push-to-talk key (a Windows virtual-key code, e.g. 0x78 for F9).
 /// Codes the app does not offer are ignored.
 pub fn set_key(vk: u32) {
-    if let Some(index) = KEYS.iter().position(|k| k.0 == vk) {
-        KEY.store(index, Ordering::Relaxed);
+    if keys::allowed(vk) {
+        KEY.store(vk, Ordering::Relaxed);
         if let Some(x) = X11.get() {
             let _ = x.rebind();
         }
@@ -136,17 +133,31 @@ pub fn set_key(vk: u32) {
 /// portal the desktop owns the key: a change counts from the next binding
 /// ([`bind_again`], or the next start).
 pub fn set_memo_key(vk: u32, description: &str) {
-    let index = KEYS.iter().position(|k| k.0 == vk).unwrap_or(NO_KEY);
-    MEMO_KEY.store(index, Ordering::Relaxed);
+    MEMO_KEY.store(if keys::allowed(vk) { vk } else { 0 }, Ordering::Relaxed);
     *MEMO_DESCRIPTION.lock().unwrap_or_else(PoisonError::into_inner) = description.to_string();
     if let Some(x) = X11.get() {
         let _ = x.rebind();
     }
 }
 
-/// The voice memo key's name for the portal and for Hyprland's binds.
-pub fn memo_key_name() -> Option<&'static str> {
-    KEYS.get(MEMO_KEY.load(Ordering::Relaxed)).map(|k| k.2)
+/// The voice memo key's name for the portal and for the compositors' binds.
+pub fn memo_key_name() -> Option<String> {
+    keys::xkb_name(MEMO_KEY.load(Ordering::Relaxed))
+}
+
+/// While a key field in the settings waits for a key, kyrr lets go of its
+/// keys (on X11 they are not grabbed, so the window sees them) and takes
+/// no press for dictation or a memo.
+pub fn set_capture(on: bool) {
+    if on {
+        // A key still down would lose its release to the ungrab.
+        release();
+        memo_up();
+    }
+    CAPTURING.store(on, Ordering::Relaxed);
+    if let Some(x) = X11.get() {
+        let _ = x.rebind();
+    }
 }
 
 /// Whether the key is captured. When inactive, key events are ignored and,
@@ -159,8 +170,8 @@ pub fn set_active(active: bool) {
 }
 
 /// The key's name for the portal and for Hyprland's binds, e.g. "F9".
-pub fn key_name() -> &'static str {
-    KEYS[KEY.load(Ordering::Relaxed)].2
+pub fn key_name() -> String {
+    keys::xkb_name(KEY.load(Ordering::Relaxed)).unwrap_or_default()
 }
 
 /// Which way the key is caught; [`Backend::None`] until [`start`] succeeds.
@@ -180,25 +191,31 @@ fn send(event: KeyEvent) {
 
 fn press() {
     PRESSES.fetch_add(1, Ordering::Relaxed);
-    if ACTIVE.load(Ordering::Relaxed) && !HELD.swap(true, Ordering::Relaxed) {
+    if ACTIVE.load(Ordering::Relaxed) && !CAPTURING.load(Ordering::Relaxed) && !HELD.swap(true, Ordering::Relaxed) {
         send(KeyEvent::Pressed);
     }
 }
 
-/// `kyrr --memo`, and the memo key from the portal or the X server: starts
-/// or ends a memo. A key held down (auto-repeat) is one press.
+/// `kyrr --memo`: one press, as a key without a release would give.
 pub fn memo_press() {
-    send(KeyEvent::Memo);
-}
-
-fn memo_down() {
-    if !MEMO_HELD.swap(true, Ordering::Relaxed) {
-        memo_press();
+    if !CAPTURING.load(Ordering::Relaxed) {
+        send(KeyEvent::MemoPressed);
     }
 }
 
-fn memo_up() {
-    MEMO_HELD.store(false, Ordering::Relaxed);
+/// The memo key from the portal or the X server, and `kyrr --memo-start`:
+/// a key held down (auto-repeat) is one press.
+pub fn memo_down() {
+    if !CAPTURING.load(Ordering::Relaxed) && !MEMO_HELD.swap(true, Ordering::Relaxed) {
+        send(KeyEvent::MemoPressed);
+    }
+}
+
+/// The memo key's release, and `kyrr --memo-stop`; only after a press taken.
+pub fn memo_up() {
+    if MEMO_HELD.swap(false, Ordering::Relaxed) {
+        send(KeyEvent::MemoReleased);
+    }
 }
 
 /// Reported after any press we took, even if dictation stopped meanwhile, so
@@ -373,11 +390,11 @@ async fn portal(ready: mpsc::Sender<Result<(), String>>, description: String, as
 /// Asks the desktop to bind the key (and the memo key) to kyrr; GNOME and
 /// KDE show a dialog.
 async fn bind(shortcuts: &GlobalShortcuts, session: &Session<GlobalShortcuts>, description: &str) {
-    let trigger = KEYS[KEY.load(Ordering::Relaxed)].2;
-    let mut wanted = vec![NewShortcut::new(SHORTCUT, description).preferred_trigger(trigger)];
+    let trigger = key_name();
+    let mut wanted = vec![NewShortcut::new(SHORTCUT, description).preferred_trigger(trigger.as_str())];
     if let Some(memo) = memo_key_name() {
         let memo_description = MEMO_DESCRIPTION.lock().unwrap_or_else(PoisonError::into_inner).clone();
-        wanted.push(NewShortcut::new(MEMO_SHORTCUT, memo_description.as_str()).preferred_trigger(memo));
+        wanted.push(NewShortcut::new(MEMO_SHORTCUT, memo_description.as_str()).preferred_trigger(memo.as_str()));
     }
     Binding::Asking.set();
     let mut result = bind_these(shortcuts, session, &wanted).await;
@@ -439,10 +456,11 @@ impl X11 {
                 self.conn.ungrab_key(code, self.root, modifiers)?;
             }
         }
-        let dictate = ACTIVE
-            .load(Ordering::Relaxed)
-            .then(|| KEYS[KEY.load(Ordering::Relaxed)].1);
-        let memo = KEYS.get(MEMO_KEY.load(Ordering::Relaxed)).map(|k| k.1);
+        let grab = !CAPTURING.load(Ordering::Relaxed);
+        let dictate = (grab && ACTIVE.load(Ordering::Relaxed))
+            .then(|| keys::keysym(KEY.load(Ordering::Relaxed)))
+            .flatten();
+        let memo = grab.then(|| keys::keysym(MEMO_KEY.load(Ordering::Relaxed))).flatten();
         for (slot, keysym) in [dictate, memo].into_iter().enumerate() {
             let Some(code) = keysym.map(|k| self.keycode(k)).transpose()?.flatten() else {
                 continue;

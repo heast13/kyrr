@@ -211,34 +211,20 @@ mod imp {
     }
 
     /// Windows does not run the key hook for keys that reach kyrr's own
-    /// window, so the window passes the dictation and memo keys on to it.
-    pub fn keys_in_window(window: &slint::Window) {
-        use slint::winit_030::winit::event::{ElementState, WindowEvent};
-        use slint::winit_030::winit::keyboard::{KeyCode, PhysicalKey};
-        use slint::winit_030::{EventResult, WinitWindowAccessor};
-        window.on_winit_window_event(|_, event| {
-            // Not the synthetic presses and releases winit makes up when the
-            // window gains or loses focus with a key down.
-            if let WindowEvent::KeyboardInput {
-                event,
-                is_synthetic: false,
-                ..
-            } = event
-            {
-                let vk = match event.physical_key {
-                    PhysicalKey::Code(KeyCode::F8) => 0x77,
-                    PhysicalKey::Code(KeyCode::F9) => 0x78,
-                    PhysicalKey::Code(KeyCode::Pause) => 0x13,
-                    PhysicalKey::Code(KeyCode::ControlRight) => 0xA3,
-                    _ => return EventResult::Propagate,
-                };
-                if hotkey::window_key(vk, event.state == ElementState::Pressed) {
-                    return EventResult::PreventDefault;
-                }
-            }
-            EventResult::Propagate
-        });
+    /// windows, so they pass the keys on (see `keycapture::install`). True
+    /// when kyrr takes the key.
+    pub fn window_key(vk: u32, down: bool) -> bool {
+        hotkey::window_key(vk, down)
     }
+
+    /// A key field in the settings waits for a key: the hook lets keys
+    /// through, so the window sees them.
+    pub fn set_capture(on: bool) {
+        hotkey::set_capture(on);
+    }
+
+    /// The hook reports the release either way; the app decides.
+    pub fn set_memo_hold(_: bool) {}
 
     /// Shows the license notices that ship in the install folder.
     pub fn open_licenses() {
@@ -862,8 +848,24 @@ mod imp {
         kyrr_linux::hotkey::set_memo_key(vk, description);
     }
 
-    /// The desktop's shortcuts work in kyrr's window too.
-    pub fn keys_in_window(_: &slint::Window) {}
+    /// The desktop's shortcuts work in kyrr's windows too.
+    pub fn window_key(_: u32, _: bool) -> bool {
+        false
+    }
+
+    /// A key field in the settings waits for a key: kyrr lets go of its keys
+    /// where it grabs them itself, so the window sees them.
+    pub fn set_capture(on: bool) {
+        kyrr_linux::hotkey::set_capture(on);
+    }
+
+    /// The memo key is held, not tapped; where the desktop can tell, it
+    /// reports the release.
+    pub fn set_memo_hold(hold: bool) {
+        MEMO_HOLD.store(hold, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    static MEMO_HOLD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
     /// `description` names the shortcut in the desktop's dialog and settings.
     /// Before the setup is done, GNOME and KDE are asked for the key only
@@ -1049,8 +1051,9 @@ mod imp {
 
     fn compositor_note(compositor: Compositor, portal: bool) -> KeyNote {
         let keys = binds::Keys {
-            key: kyrr_linux::hotkey::key_name().to_string(),
-            memo: kyrr_linux::hotkey::memo_key_name().map(str::to_string),
+            key: kyrr_linux::hotkey::key_name(),
+            memo: kyrr_linux::hotkey::memo_key_name(),
+            memo_hold: MEMO_HOLD.load(std::sync::atomic::Ordering::Relaxed) && compositor.holds(),
             portal,
             program: program(),
             link: flatpak(),
@@ -1090,9 +1093,9 @@ mod imp {
 
     /// GNOME before 48 on Wayland: kyrr adds a custom shortcut of GNOME's.
     fn gnome_note() -> KeyNote {
-        let key = kyrr_linux::hotkey::key_name().to_string();
+        let key = kyrr_linux::hotkey::key_name();
         let command = binds::command(&program(), "--dictate");
-        let memo = kyrr_linux::hotkey::memo_key_name().map(str::to_string);
+        let memo = kyrr_linux::hotkey::memo_key_name();
         // The memo key has no note of its own on the main page: the log.
         match memo_outcome(memo.clone(), binds::command(&program(), "--memo")) {
             Some(gnome::Outcome::Taken { name }) => {

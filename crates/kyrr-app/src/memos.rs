@@ -362,6 +362,13 @@ impl Memos {
         }
     }
 
+    /// The memo key held down came up: ends the memo it started.
+    pub fn end(self: &Rc<Self>) {
+        if self.recording() {
+            self.stop();
+        }
+    }
+
     fn start(self: &Rc<Self>) {
         if !self.enabled.get() || self.dictating.load(Ordering::Relaxed) {
             return;

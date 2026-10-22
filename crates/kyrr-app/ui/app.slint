@@ -104,10 +104,21 @@ export global AppState {
     in property <string> last-text;
     // What dictation has to say (an error, a hint); "" for nothing.
     in property <string> dictation-message;
-    in-out property <int> key-index: 1; // F8, F9, Pause, right Ctrl
     in-out property <bool> key-toggle;  // tap to start and stop instead of holding
     in-out property <bool> live-words;  // the wave shows the words while you talk
     in property <string> key-name: "F9";
+    // Which key field waits for a key: 0 none, 1 dictation, 2 voice memos.
+    in property <int> key-capture;
+    // The key is not the standard one (F9, F8).
+    in property <bool> key-custom;
+    in property <bool> memo-key-custom;
+    // Why the key just pressed was not taken, and a word of warning about one
+    // that was; "" for nothing.
+    in property <string> key-refusal;
+    in property <string> key-warning;
+    // A key field starts (1, 2) or stops (0) waiting; the standard key back.
+    callback capture-key(int);
+    callback key-reset(int);
     // What the user has to do so the key reaches kyrr (Linux); "" for nothing.
     in property <string> key-note;
     // The desktop owns the key (GNOME, KDE): kyrr's choice of key does nothing.
@@ -200,7 +211,6 @@ export global AppState {
     callback dictation-retry();
     callback repair();
     callback move-to-default();
-    callback key-changed(int);
     callback key-toggle-changed(bool);
     callback live-words-toggled(bool);
     callback effort-changed(int);
@@ -219,9 +229,12 @@ export global AppState {
 
     // Voice memos
     in-out property <bool> memos-enabled: true;
-    in-out property <int> memo-key-index;   // F8, F9, Pause, none
-    in property <int> memo-taken-index: 1;  // the dictation key's place there
-    in property <string> memo-key-name: "F8"; // "" for none
+    in property <string> memo-key-name: "F8"; // "" while no key is taken
+    // The memo key whether it is taken or not, for the settings.
+    in property <string> memo-key-label: "F8";
+    in property <bool> memo-toggle: true;     // tap to start and stop instead of holding
+    // The key's release is reported (not on GNOME 46 and 47, niri).
+    in property <bool> memo-can-hold: true;
     in property <bool> memo-recording;
     in property <string> memo-elapsed;
     in property <[MemoItem]> memo-items;
@@ -245,7 +258,7 @@ export global AppState {
     in property <[MemoParagraph]> memo-sheet-paragraphs;
     in-out property <bool> memo-copied;
     callback memos-toggled(bool);
-    callback memo-key-changed(int);
+    callback memo-toggle-changed(bool);
     callback memo-auto-text-toggled(bool);
     callback memo-record();
     callback memo-open-list();
@@ -1013,15 +1026,96 @@ component NoiseSettings inherits Card {
     if root.attached && AppState.old-cpu: Hint { text: @tr("This processor is a bit older: Lean runs smoother on it. Switch in Setup, under Effort."); }
 }
 
+// The standard key as a choice, and next to it a field: click in, press a
+// key, and that key is taken. Escape or leaving the field gives up. A key of
+// one's own stands in the field with "change" behind it, so it reads as
+// something to click.
+component KeyPicker inherits HorizontalLayout {
+    in property <string> standard;
+    in property <string> current;
+    in property <bool> custom;
+    // 1 dictation, 2 voice memos: which field this is.
+    in property <int> slot;
+    property <bool> listening: AppState.key-capture == root.slot;
+    spacing: 6px;
+    // The standard key, picked while no key of one's own is set.
+    Rectangle {
+        horizontal-stretch: 1;
+        height: 28px;
+        property <bool> picked: !root.custom && !root.listening;
+        border-radius: 6px;
+        background: self.picked ? Palette.accent-background : Palette.control-background;
+        border-width: 1px;
+        border-color: Palette.border;
+        accessible-role: radio-button;
+        accessible-label: root.standard;
+        accessible-checkable: true;
+        accessible-checked: self.picked;
+        accessible-action-default => { AppState.key-reset(root.slot); }
+        Text {
+            text: root.standard;
+            color: parent.picked ? Palette.accent-foreground : Palette.control-foreground;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        TouchArea {
+            clicked => { AppState.key-reset(root.slot); }
+        }
+    }
+    field := FocusScope {
+        horizontal-stretch: 1;
+        focus-changed-event => {
+            if (!self.has-focus && root.listening) {
+                AppState.capture-key(0);
+            }
+        }
+        // Without a mouse: Enter or Space on the focused field starts it.
+        key-pressed(event) => {
+            if (!root.listening && (event.text == Key.Return || event.text == " ")) {
+                AppState.capture-key(root.slot);
+                return accept;
+            }
+            return reject;
+        }
+        Rectangle {
+            height: 28px;
+            border-radius: 6px;
+            background: root.custom && !root.listening ? Palette.accent-background : Palette.control-background;
+            border-width: root.listening || field.has-focus ? 2px : 1px;
+            border-color: root.listening || field.has-focus ? Palette.foreground : Palette.border;
+            accessible-role: button;
+            accessible-label: @tr("Set key");
+            accessible-description: root.custom ? root.current : "";
+            accessible-action-default => { AppState.capture-key(root.slot); }
+            Text {
+                text: root.listening ? @tr("Press a key …")
+                    : root.custom ? @tr("{} · change", root.current) : @tr("Set key");
+                color: root.custom && !root.listening ? Palette.accent-foreground : Palette.control-foreground;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            TouchArea {
+                clicked => {
+                    field.focus();
+                    AppState.capture-key(root.slot);
+                }
+            }
+        }
+    }
+}
+
 // Settings: the dictation key and how it works.
 component DictationSettings inherits Card {
     Caption { text: @tr("Key"); }
     // Where the desktop owns the key, its own settings change it.
-    if !AppState.key-fixed: Segmented {
-        options: ["F8", "F9", "Pause", @tr("Right Ctrl")];
-        selected <=> AppState.key-index;
-        changed(i) => { AppState.key-changed(i); }
+    if !AppState.key-fixed: KeyPicker {
+        standard: "F9";
+        current: AppState.key-name;
+        custom: AppState.key-custom;
+        slot: 1;
     }
+    if !AppState.key-fixed && AppState.key-refusal != "": Hint { text: AppState.key-refusal; color: #e0604f; }
+    if !AppState.key-fixed && AppState.key-warning != "": Hint { text: AppState.key-warning; }
     // Only where kyrr catches the key itself.
     if AppState.key-note == "": Hint { text: @tr("With Ctrl, Alt or Shift held, the key stays with your app."); }
     if AppState.key-note != "": Hint { text: AppState.key-note; }
@@ -2146,15 +2240,29 @@ component MemosPage inherits VerticalLayout {
 component RecordingSettings inherits Card {
     in property <string> folder;
     Caption { text: @tr("Key"); }
-    Segmented {
-        options: ["F8", "F9", "Pause", @tr("None")];
-        selected <=> AppState.memo-key-index;
-        unavailable: AppState.memo-taken-index;
-        changed(i) => { AppState.memo-key-changed(i); }
+    if !AppState.key-fixed: KeyPicker {
+        standard: "F8";
+        current: AppState.memo-key-label;
+        custom: AppState.memo-key-custom;
+        slot: 2;
+    }
+    if !AppState.key-fixed && AppState.key-refusal != "": Hint { text: AppState.key-refusal; color: #e0604f; }
+    if !AppState.key-fixed && AppState.key-warning != "": Hint { text: AppState.key-warning; }
+    // Where the desktop owns the key, its own settings change it.
+    if AppState.key-fixed: Hint { text: @tr("Your desktop sets this key, now {}.", AppState.memo-key-label); }
+    if AppState.key-fixed && AppState.key-button != "": Button {
+        text: AppState.key-button;
+        clicked => { AppState.key-button-clicked(); }
+    }
+    Caption { text: @tr("How"); }
+    if AppState.memo-can-hold: Segmented {
+        options: [@tr("Hold"), @tr("Tap")];
+        selected: AppState.memo-toggle ? 1 : 0;
+        changed(i) => { AppState.memo-toggle-changed(i == 1); }
     }
     Hint {
-        text: AppState.memo-key-index == 3 ? @tr("No key: record with the button and in the tray.")
-            : @tr("Tap once to start, once more to stop. Dictation keeps {}.", AppState.key-name);
+        text: AppState.memo-toggle || !AppState.memo-can-hold ? @tr("Tap once to start, once more to stop. Dictation keeps {}.", AppState.key-name)
+            : @tr("Hold while you talk, let go when you are done. Dictation keeps {}.", AppState.key-name);
     }
     Separator { }
     HorizontalLayout {
