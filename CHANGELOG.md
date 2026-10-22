@@ -21,7 +21,10 @@
   one records. The main page card switches the feature off; its gear
   opens the memo settings (key, write text automatically, folder).
   Flatpak: only `xdg-documents/kyrr` is opened. GNOME before 48 gets a
-  second custom shortcut; Hyprland, sway, river and niri a second line in kyrr's block.
+  second custom shortcut; Hyprland, sway, river and niri a second line in
+  kyrr's block. A recording under 3 s (a key pressed by accident) is not
+  kept; the pill says so. On Windows the memo key also works while kyrr's
+  own window has the focus.
 - Dictation, words in the pill: fewer wrong and missing words. A word shows
   once 1.2 s of the recording followed it (was 0.8 s), and after a pause
   the next look starts 1.5 s before where the last one ended (was 0.8 s), so
