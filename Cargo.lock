@@ -2883,7 +2883,7 @@ dependencies = [
 
 [[package]]
 name = "kyrr"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "audioadapter-buffers",
  "chrono",
@@ -2910,7 +2910,7 @@ dependencies = [
 
 [[package]]
 name = "kyrr-apo"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "kyrr-common",
  "kyrr-denoise",
@@ -2922,14 +2922,14 @@ dependencies = [
 
 [[package]]
 name = "kyrr-common"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "ab_glyph",
 ]
 
 [[package]]
 name = "kyrr-denoise"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "audioadapter-buffers",
  "hushmic-denoiser",
@@ -2938,7 +2938,7 @@ dependencies = [
 
 [[package]]
 name = "kyrr-dictate"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "audioadapter-buffers",
  "hound",
@@ -2950,7 +2950,7 @@ dependencies = [
 
 [[package]]
 name = "kyrr-linux"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "arboard",
  "ashpd",
@@ -2971,14 +2971,14 @@ dependencies = [
 
 [[package]]
 name = "kyrr-voice"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "kyrr-common",
 ]
 
 [[package]]
 name = "kyrr-windows"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "kyrr-common",
  "windows",

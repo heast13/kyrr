@@ -16,6 +16,36 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
+## 0.6.1
+
+- Voice memos: the recordings window is wider and easier to read. A memo's text is one field now: select, copy (Ctrl+C leaves the times out) and correct it, and your corrections stay. A change made in another program shows up by itself. The times are clock times, and a dot beside "Recordings" shows a recording you have not looked at yet.
+- Voice memos: "Play from here" starts at once, also an hour into a recording.
+- The memo key is held while you talk by default, once also for installs that had Tap; Tap is one click away in the gear.
+- Automatic level: it adjusts before the noise filter does its work, so the first words are no longer cut off after you move away from the microphone, and each recording starts with a fresh look at your voice.
+- The wave in the status line runs smoother.
+- Overload protection, new in Setup under Effort: on (as before) kyrr switches to Lean when the computer cannot keep up with the best noise removal; off, it never switches, and the microphone may stutter. A short hiccup no longer switches for good: kyrr tries the best quality again after a while.
+- Less work in the background: the wave is drawn faster, and a window hidden in the tray costs almost nothing.
+- (Windows) The dictation and memo keys no longer get stuck after Win+L or when a key release gets lost.
+- (Linux) The dictation and memo keys no longer get stuck when a key release gets lost.
+- Installing an update during a recording saves the recording first; a crash in dictation no longer takes the keys down with it. A tray that refuses kyrr's icon no longer ends kyrr.
+- (Linux) Unplug the microphone and kyrr moves to another one, and back when it returns.
+- (Linux) A dictation key set up in your desktop works every time when you tap it, not every second time.
+
+### Deutsch
+
+- Sprachaufzeichnungen: Das Fenster ist breiter und besser lesbar. Der Text einer Aufzeichnung ist jetzt ein Feld: markieren, kopieren (Strg+C lässt die Zeiten weg) und verbessern, deine Korrekturen bleiben. Was in einem anderen Programm geändert wird, erscheint von selbst. Die Zeiten sind Uhrzeiten, und ein Punkt neben „Aufzeichnungen“ zeigt eine Aufnahme, die du noch nicht angesehen hast.
+- Sprachaufzeichnungen: „Ab hier abspielen“ startet sofort, auch eine Stunde tief in der Aufnahme.
+- Die Taste für Aufzeichnungen wird standardmäßig beim Sprechen gehalten, einmalig auch bei Installationen mit Antippen; Antippen stellst du mit einem Klick im Zahnrad ein.
+- Automatische Lautstärke: Sie stellt sich vor der Geräuschunterdrückung ein, deshalb werden die ersten Wörter nicht mehr abgeschnitten, wenn du dich vom Mikrofon entfernst, und jede Aufnahme beginnt mit einem frischen Blick auf deine Stimme.
+- Die Welle in der Statuszeile läuft ruhiger.
+- Überlastschutz, neu im Setup unter Rechenaufwand: An (wie bisher) schaltet kyrr auf Sparsam, wenn der Rechner die beste Geräuschunterdrückung nicht schafft; Aus: kyrr schaltet nie um, und das Mikrofon kann stottern. Ein kurzer Hänger schaltet nicht mehr für immer um: kyrr probiert die beste Qualität nach einer Weile wieder.
+- Weniger Arbeit im Hintergrund: Die Welle wird schneller gezeichnet, und ein im Tray verstecktes Fenster kostet fast nichts.
+- (Windows) Die Tasten für Diktieren und Aufzeichnungen bleiben nach Win+L oder einem verlorenen Loslassen nicht mehr hängen.
+- (Linux) Die Tasten für Diktieren und Aufzeichnungen bleiben nicht mehr hängen, wenn ein Loslassen verloren geht.
+- Ein Update während einer Aufnahme speichert die Aufnahme vorher; ein Absturz beim Diktieren reißt die Tasten nicht mehr mit. Ein Tray, das das kyrr-Symbol ablehnt, beendet kyrr nicht mehr.
+- (Linux) Steckst du das Mikrofon ab, wechselt kyrr zu einem anderen, und zurück, wenn es wieder da ist.
+- (Linux) Eine im Desktop eingerichtete Diktiertaste funktioniert beim Antippen jedes Mal, nicht nur jedes zweite Mal.
+
 ## 0.6.0
 
 - Voice memos: tap F8, talk, tap F8 again, or hold it while you talk. kyrr saves the recording in Documents, folder kyrr, and names it after what it is about. The list under "Recordings" plays, renames and deletes them; "Write text" turns a recording into text with time marks. Switch it off on the main page.

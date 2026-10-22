@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.6.1 (2026-10-22)
+
+- Voice memos, recordings window: wider, with larger text. A memo's text
+  is one editable field (select, copy without the times, correct; changes
+  made outside kyrr are picked up within a second), its stamps show the
+  clock time, a dot beside "Recordings" marks a recording not looked at
+  yet, and hold is the standard for the memo key. "Play from here" seeks by
+  the Ogg pages instead of decoding everything before the place.
+- Auto level: measured on the raw microphone and applied before the noise
+  filter, with a fresh look at the first quarter second of each recording.
+  The filter learns the usual level, so after the microphone moved away the
+  quieter voice was taken for noise and the first words were cut off. Linux
+  resets the voice and the filter for each recording as Windows does.
+- Status line wave follows the clock and fades the bar ends (no stutter).
+- Overload protection: a switch in Setup under Effort (on by default).
+  The guard needs two slow 100 ms windows in a row; a filter left out is
+  tried again after 30, 60, 120, 240 s, then every 5 minutes. The main page
+  says once what happened.
+- Less work in the background: the pill is painted 2-4x faster with the
+  same pixels, and the status wave and the setup's key check only tick while
+  the window is shown.
+- Stability: a press after more than 1.5 s counts as new when a release was
+  lost (Win+L, an administrator window); the hook thread runs at high
+  priority; Linux moves to another microphone when the one in use is
+  unplugged; `kyrr --dictate` in tap mode works every time; a case-only
+  rename no longer replaces another memo on Linux; saving config.json
+  retries; a tray that refuses the icon no longer ends kyrr; an update
+  closes a recording first; a crash in the dictation worker no longer
+  takes the keys down.
+
 ## 0.6.0 (2026-10-22)
 
 - Keys: dictation (standard F9) and voice memos (standard F8) each offer

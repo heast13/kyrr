@@ -75,6 +75,18 @@
     <keyword>speech to text</keyword>
   </keywords>
   <releases>
+    <release version="0.6.1" date="2026-10-22">
+      <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.6.1</url>
+      <description>
+        <ul>
+          <li>A wider recordings window; a memo's text can be selected, copied and corrected</li>
+          <li>The first words are no longer cut off when you speak from further away</li>
+          <li>A smoother wave and less work in the background</li>
+          <li>An overload protection switch in Setup</li>
+          <li>Fewer stuck keys and a microphone that comes back after unplugging</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.6.0" date="2026-10-22">
       <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.6.0</url>
       <description>
