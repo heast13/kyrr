@@ -185,6 +185,12 @@ pub struct Reader {
     total: Option<u64>,
     pre_skip: u64,
     buffer: Vec<f32>,
+    serial: u32,
+    /// Where the page of the last packet ends (granule position), when that
+    /// packet was its last.
+    page_end: Option<u64>,
+    /// Sound of a page read for a seek, given out before anything new.
+    queued: Vec<f32>,
 }
 
 impl Reader {
@@ -213,12 +219,75 @@ impl Reader {
             total: None,
             pre_skip,
             buffer: vec![0.0; MAX_PACKET * 2],
+            serial: head.stream_serial(),
+            page_end: None,
+            queued: Vec::new(),
         })
+    }
+
+    /// Jumps to `seconds` into the recording by its pages, not by decoding
+    /// all that is before it: the next samples are those at `seconds`.
+    /// False when the file does not allow it; the reader is not to be used
+    /// then, open the file again.
+    pub fn seek(&mut self, seconds: f64) -> bool {
+        let wanted = (seconds.max(0.0) * GRANULE_RATE as f64) as u64;
+        // The page found starts up to a second before this; so the decoder
+        // has settled (it needs 80 ms) by the time the wanted place comes.
+        let goal = wanted.saturating_sub(GRANULE_RATE as u64) + self.pre_skip;
+        if wanted <= 2 * GRANULE_RATE as u64 || !matches!(self.packets.seek_absgp(Some(self.serial), goal), Ok(true)) {
+            return false;
+        }
+        self.made = 0;
+        self.total = None;
+        self.skip = 0;
+        self.queued.clear();
+        // A page at a time, on to the one that has the wanted place (the
+        // seek may stop a little short).
+        let mut page = Vec::new();
+        // Where the page before ended, once one has been read.
+        let mut before: Option<i64> = None;
+        let start = loop {
+            self.page_end = None;
+            page.clear();
+            while self.page_end.is_none() {
+                if !self.next(&mut page) {
+                    return false;
+                }
+            }
+            let end = self.page_end.unwrap_or_default();
+            let start = match before {
+                Some(before) => before,
+                // The first page: its sound ends at `end` in the file's
+                // time, which kyrr counts one delay ahead of what is
+                // decoded; the recording's own time is another delay behind
+                // that. (Other writers count a delay less: a few
+                // milliseconds off.) The last page has its end cut, so
+                // where it starts is not known this way.
+                None if self.total.is_some() => return false,
+                None => end as i64 - 2 * self.pre_skip as i64 - page.len() as i64,
+            };
+            let ends = start + page.len() as i64;
+            if ends > wanted as i64 {
+                break start;
+            }
+            before = Some(ends);
+            // What the end of the file cuts is counted from here on.
+            self.made = ends.max(0) as u64;
+        };
+        let drop = (wanted as i64 - start).clamp(0, page.len() as i64) as usize;
+        page.drain(..drop);
+        self.made = (start + (page.len() + drop) as i64).max(0) as u64;
+        self.queued = page;
+        true
     }
 
     /// Appends the next packet's samples to `out`; false at the end. A file
     /// cut off in the middle ends where it was cut.
     pub fn next(&mut self, out: &mut Vec<f32>) -> bool {
+        if !self.queued.is_empty() {
+            out.append(&mut self.queued);
+            return true;
+        }
         loop {
             if self.total.is_some_and(|t| self.made >= t) {
                 return false;
@@ -227,6 +296,7 @@ impl Reader {
                 Ok(Some(packet)) => packet,
                 Ok(None) | Err(_) => return false,
             };
+            self.page_end = packet.last_in_page().then(|| packet.absgp_page());
             if packet.last_in_stream() {
                 self.total = Some(packet.absgp_page().saturating_sub(self.pre_skip));
             }
@@ -344,6 +414,77 @@ mod tests {
             // About 24 kbit/s.
             let size = std::fs::metadata(&path).unwrap().len();
             assert!(size < 3 * 4000 + 2000, "{rate}: {size} bytes");
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn seeking_lands_where_reading_on_would() {
+        let dir = folder("seek");
+        for rate in [16_000, 48_000] {
+            let path = dir.join(format!("{rate}.opus"));
+            let mut writer = Writer::create(&path, rate).unwrap();
+            // A tone that rises with time, so each place sounds its own.
+            let rising: Vec<f32> = (0..rate as usize * 40)
+                .map(|i| {
+                    let t = i as f32 / rate as f32;
+                    0.3 * (std::f32::consts::TAU * (200.0 + 20.0 * t) * t).sin()
+                })
+                .collect();
+            for piece in rising.chunks(777) {
+                writer.push(piece).unwrap();
+            }
+            writer.finish().unwrap();
+            let mut reader = Reader::open(&path).unwrap();
+            let mut whole = Vec::new();
+            while reader.next(&mut whole) {}
+            for at in [2.5, 7.3, 20.0, 34.26, 39.0, 39.9] {
+                let mut reader = Reader::open(&path).unwrap();
+                assert!(reader.seek(at), "{rate}: {at}");
+                let mut out = Vec::new();
+                while reader.next(&mut out) {}
+                let from = (at * 48_000.0) as usize;
+                assert_eq!(out.len(), whole.len() - from, "{rate}: {at}");
+                let worst = out
+                    .iter()
+                    .zip(&whole[from..])
+                    .map(|(a, b)| (a - b).abs())
+                    .fold(0.0, f32::max);
+                assert!(worst < 0.02, "{rate}: {at}: {worst}");
+            }
+            // Near the start there is nothing to save: read on from there.
+            let mut reader = Reader::open(&path).unwrap();
+            assert!(!reader.seek(0.5));
+            // Short files and their last page: a seek there either works
+            // exactly or says it cannot.
+            for length in [2.05f32, 3.3, 5.4] {
+                let path = dir.join(format!("{rate}-{length}.opus"));
+                let mut writer = Writer::create(&path, rate).unwrap();
+                for piece in tone(rate, length).chunks(777) {
+                    writer.push(piece).unwrap();
+                }
+                writer.finish().unwrap();
+                let mut reader = Reader::open(&path).unwrap();
+                let mut whole = Vec::new();
+                while reader.next(&mut whole) {}
+                for step in 0..=((length - 2.0) * 100.0) as usize {
+                    let at = 2.0 + step as f64 / 100.0;
+                    let mut reader = Reader::open(&path).unwrap();
+                    if !reader.seek(at) {
+                        continue;
+                    }
+                    let mut out = Vec::new();
+                    while reader.next(&mut out) {}
+                    let from = (at * 48_000.0) as usize;
+                    assert_eq!(out.len(), whole.len().saturating_sub(from), "{rate}: {length}: {at}");
+                    let worst = out
+                        .iter()
+                        .zip(&whole[from..])
+                        .map(|(a, b)| (a - b).abs())
+                        .fold(0.0, f32::max);
+                    assert!(worst < 0.02, "{rate}: {length}: {at}: {worst}");
+                }
+            }
         }
         std::fs::remove_dir_all(dir).unwrap();
     }

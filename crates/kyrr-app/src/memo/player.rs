@@ -112,9 +112,21 @@ fn play(path: &Path, from: f64, stop: &AtomicBool, played: &Arc<AtomicU64>, rate
         other => return Err(format!("unsupported sample format {other}")),
     }?;
 
-    // To the start: decoding is quick, a minute of it takes a blink.
+    // To the start: by the file's pages when it can be, else by decoding
+    // what is before it.
     let mut skip = (from.max(0.0) * GRANULE_RATE as f64) as usize;
     let mut decoded = Vec::new();
+    if skip > 2 * GRANULE_RATE as usize {
+        if reader.seek(from) {
+            // The sound at `from` is the first the reader gives.
+            skip = 0;
+            if !reader.next(&mut decoded) {
+                return Ok(());
+            }
+        } else {
+            reader = Reader::open(path)?;
+        }
+    }
     while skip > 0 {
         decoded.clear();
         if !reader.next(&mut decoded) || stop.load(Ordering::Relaxed) {
