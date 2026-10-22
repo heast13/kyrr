@@ -267,11 +267,14 @@
   go.type = "button";
   go.className = "go";
   go.textContent = lang === "de" ? "Abspielen" : "Play";
+  go.setAttribute("aria-label", lang === "de" ? "Animation abspielen" : "Play animation");
   go.addEventListener("click", function (e) {
     e.stopPropagation();
     go.remove();
     key.classList.remove("down");
     start();
+    screen.focus();
   });
-  screen.appendChild(go);
+  // Next to the screen, not in it: the screen is an image for screen readers.
+  screen.parentNode.appendChild(go);
 })();
