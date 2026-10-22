@@ -299,7 +299,7 @@ fn show_voice(state: &AppState, v: &VoiceSettings) {
 }
 
 /// Tallest the window gets, screen permitting; more content scrolls. Room
-/// for the tallest settings page in its advanced view (about 1260).
+/// for the tallest settings page (Setup, about 1060).
 const MAX_HEIGHT: f32 = 1310.0;
 /// Tallest when the screen is unknown: fits a 768-pixel-high laptop screen
 /// with the taskbar and title bar.
@@ -1082,7 +1082,6 @@ impl App {
         let _ = self.worker.send(Command::Live(!lean));
         if let Some(w) = self.window.upgrade() {
             let state = w.global::<AppState>();
-            state.set_model_index(lean as i32);
             state.set_live_words(!lean);
         }
         self.show_effort();
@@ -1825,7 +1824,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     state.set_download_size(megabytes(&app.config.borrow()).into());
     state.set_dictation_enabled(app.config.borrow().dictation);
     state.set_strength_index(strength_index(filter.limit_db));
-    state.set_model_index(filter.light_model as i32);
     state.set_autostart(platform::autostart_enabled());
     state.set_update_auto(app.config.borrow().update_check);
     state.set_linux(cfg!(target_os = "linux"));
@@ -1863,10 +1861,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             config.update_check = on;
             config.save();
         }
-    });
-    state.on_advanced_toggled({
-        let app = Rc::clone(&app);
-        move |_| fit(&app.window)
     });
     state.on_dismiss_update({
         let app = Rc::clone(&app);
@@ -2153,13 +2147,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
                 w.invoke_reset_scroll();
             }
             fit(&weak);
-        }
-    });
-    state.on_model_changed({
-        let app = Rc::clone(&app);
-        move |i| {
-            app.set_model(i == 1);
-            app.show_effort();
         }
     });
     state.on_probe_record({

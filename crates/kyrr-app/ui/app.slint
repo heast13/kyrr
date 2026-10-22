@@ -39,7 +39,6 @@ export global AppState {
     // Noise removal
     in-out property <bool> filter-enabled: true;
     in-out property <int> strength-index: 1; // 0 gentle, 1 medium, 2 strong
-    in-out property <int> model-index;       // 0 thorough (large), 1 lean (small)
     in property <bool> model-switching;
     // The filter fell back to ONNX Runtime: the CPU lacks AVX2, Lean suits it.
     in property <bool> old-cpu;
@@ -92,7 +91,6 @@ export global AppState {
     in-out property <bool> auto-level;
     in property <float> level-gain; // what it adds right now, dB
     // The settings page shows everything, not just the basics.
-    in-out property <bool> advanced;
     in-out property <int> deesser-index;       // off, light, medium, strong
     in-out property <int> compressor-index: 2; // off, light, medium, strong
     in property <bool> voice-is-default: true;
@@ -153,7 +151,7 @@ export global AppState {
     in property <string> error-text;
     in property <string> version;
 
-    // 0 is the main view, 1 the global settings, then the settings of each
+    // 0 is the main view, 1 the setup, then the settings of each
     // card: 2 noise, 3 voice, 4 dictation, 5 voice memos; 6 the voice memos
     // themselves.
     in-out property <int> page;
@@ -165,7 +163,6 @@ export global AppState {
 
     callback filter-toggled(bool);
     callback strength-changed(int);
-    callback model-changed(int);
     callback probe-record();
     callback probe-play(bool); // false before, true after
     callback probe-reset();
@@ -177,7 +174,6 @@ export global AppState {
     callback pops-toggled(bool);
     callback distance-toggled(bool);
     callback auto-level-toggled(bool);
-    callback advanced-toggled(bool);
     callback deesser-changed(int);
     callback compressor-changed(int);
     callback voice-reset();
@@ -196,9 +192,8 @@ export global AppState {
     // Switches Windows' mute off the microphone.
     callback unmute();
     callback page-changed();
-    // A card's gear: its own settings page, in the simple view.
+    // A card's gear: its own settings page.
     public function open-page(p: int) {
-        root.advanced = false;
         root.page = p;
         root.page-changed();
     }
@@ -312,7 +307,7 @@ export component Tray inherits SystemTrayIcon {
             activated => { root.open(); }
         }
         MenuItem {
-            title: root.filter-enabled ? @tr("Remove background noise: on") : @tr("Remove background noise: off");
+            title: root.filter-enabled ? @tr("Isolate your voice: on") : @tr("Isolate your voice: off");
             activated => { root.toggle-filter(); }
         }
         MenuItem {
@@ -763,9 +758,11 @@ component StatusLine inherits HorizontalLayout {
     }
 
     // The text lines up with the name and sits close under it (pulled up
-    // into the page layout's spacing); the wave follows right after it.
+    // into the page layout's spacing, less than the Setup button's height
+    // needs); the wave follows right after it.
     padding-left: 38px;
-    padding-top: -10px;
+    padding-top: -2px;
+    padding-bottom: 2px;
     spacing: 8px;
     property <bool> working: AppState.mic-active || AppState.probe-state != ProbeState.idle || AppState.model-switching
         || AppState.dictation-state == DictationState.recording || AppState.dictation-state == DictationState.transcribing
@@ -858,8 +855,8 @@ component RowHead inherits HorizontalLayout {
 component NoiseCard inherits Card {
     property <bool> attached: AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking;
     RowHead {
-        title: @tr("Remove background noise");
-        gear-label: @tr("Settings: {}", @tr("Remove background noise"));
+        title: @tr("Isolate your voice");
+        gear-label: @tr("Settings: {}", @tr("Isolate your voice"));
         gear => { AppState.open-page(2); }
         enabled: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed
             && AppState.filter-state != FilterState.unsupported;
@@ -1001,10 +998,6 @@ component NoiseSettings inherits Card {
         if (i == 1) { return @tr("The sweet spot for most rooms."); }
         return @tr("Out with everything but you. Bouncer mode.");
     }
-    pure function model-hint(i: int) -> string {
-        if (i == 1) { return @tr("A third of the CPU, barely less clean. For old laptops."); }
-        return @tr("Cleanest result, a bit more CPU. Default for a reason.");
-    }
     property <bool> attached: AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking;
 
     if !root.attached: Hint {
@@ -1017,14 +1010,7 @@ component NoiseSettings inherits Card {
         changed(i) => { AppState.strength-changed(i); }
     }
     if root.attached: Hint { text: root.strength-hint(AppState.strength-index); }
-    if root.attached && AppState.advanced: Caption { text: @tr("Model"); }
-    if root.attached && AppState.advanced: Segmented {
-        options: [@tr("Thorough"), @tr("Lean")];
-        selected <=> AppState.model-index;
-        changed(i) => { AppState.model-changed(i); }
-    }
-    if root.attached && AppState.advanced: Hint { text: root.model-hint(AppState.model-index); }
-    if root.attached && AppState.advanced && AppState.old-cpu: Hint { text: @tr("This processor is a bit older: Lean runs smoother on it."); }
+    if root.attached && AppState.old-cpu: Hint { text: @tr("This processor is a bit older: Lean runs smoother on it. Switch in Setup, under Effort."); }
 }
 
 // Settings: the dictation key and how it works.
@@ -1054,25 +1040,13 @@ component DictationSettings inherits Card {
             : @tr("Hold while you talk, let go when you are done. Walkie-talkie style.");
     }
     Hint { text: @tr("Say “new line” or “new paragraph” for line breaks."); }
-    if AppState.advanced: HorizontalLayout {
-        Caption { text: @tr("Words while you talk"); vertical-alignment: center; }
-        Rectangle { }
-        Switch {
-            checked <=> AppState.live-words;
-            toggled => { AppState.live-words-toggled(self.checked); }
-        }
-    }
-    if AppState.advanced: Hint {
-        text: AppState.live-words ? @tr("The display at the bottom of the screen shows what kyrr hears as you speak.")
-            : @tr("Off. The display shows only the bars; the text comes when you are done.");
-    }
 }
 
 // Settings: who made what.
 component AboutSettings inherits Card {
-    // The simple view folds the credits away behind a button.
+    // The credits are folded away behind a button.
     in-out property <bool> unfolded;
-    property <bool> credits: AppState.advanced || root.unfolded;
+    property <bool> credits: root.unfolded;
     Heading { text: @tr("About"); }
     // The models' credits, as their licenses ask. NVIDIA's sentence stays
     // in English in every language: the license gives it word for word.
@@ -1087,7 +1061,7 @@ component AboutSettings inherits Card {
     HorizontalLayout {
         spacing: 8px;
         Rectangle { }
-        if !AppState.advanced: Button {
+        Button {
             text: root.unfolded ? @tr("Less") : @tr("Credits");
             clicked => { root.unfolded = !root.unfolded; }
         }
@@ -1349,13 +1323,12 @@ component VoiceSettings inherits Card {
     }
     if root.shown: Caption { text: @tr("Sound"); }
     if root.shown: Segmented {
-        options: AppState.advanced || AppState.look-index == 4 ? [@tr("Neutral"), @tr("Warm"), @tr("Clear"), @tr("Bright"), @tr("Custom")]
-            : [@tr("Neutral"), @tr("Warm"), @tr("Clear"), @tr("Bright")];
+        options: [@tr("Neutral"), @tr("Warm"), @tr("Clear"), @tr("Bright"), @tr("Custom")];
         selected <=> AppState.look-index;
         changed(i) => { AppState.look-changed(i); }
     }
     if root.shown: Hint { text: root.look-hint(AppState.look-index); }
-    if root.shown && AppState.advanced && AppState.look-index == 4: VerticalLayout {
+    if root.shown && AppState.look-index == 4: VerticalLayout {
         spacing: 2px;
         BandRow {
             label: @tr("Body");
@@ -1373,21 +1346,21 @@ component VoiceSettings inherits Card {
             changed(v) => { AppState.band-changed(2, v); }
         }
     }
-    if root.shown && AppState.advanced: Caption { text: @tr("Compressor"); }
-    if root.shown && AppState.advanced: Segmented {
+    if root.shown: Caption { text: @tr("Compressor"); }
+    if root.shown: Segmented {
         options: [@tr("Off"), @tr("Light"), @tr("Medium"), @tr("Strong")];
         selected <=> AppState.compressor-index;
         changed(i) => { AppState.compressor-changed(i); }
     }
-    if root.shown && AppState.advanced: Hint { text: root.compressor-hint(AppState.compressor-index); }
-    if root.shown && AppState.advanced: Caption { text: @tr("Soften S sounds"); }
-    if root.shown && AppState.advanced: Segmented {
+    if root.shown: Hint { text: root.compressor-hint(AppState.compressor-index); }
+    if root.shown: Caption { text: @tr("Soften S sounds"); }
+    if root.shown: Segmented {
         options: [@tr("Off"), @tr("Light"), @tr("Medium"), @tr("Strong")];
         selected <=> AppState.deesser-index;
         changed(i) => { AppState.deesser-changed(i); }
     }
-    if root.shown && AppState.advanced: Hint { text: root.deesser-hint(AppState.deesser-index); }
-    if root.shown && AppState.advanced: HorizontalLayout {
+    if root.shown: Hint { text: root.deesser-hint(AppState.deesser-index); }
+    if root.shown: HorizontalLayout {
         Caption { text: @tr("Cut low rumble"); vertical-alignment: center; }
         Rectangle { }
         Switch {
@@ -1395,11 +1368,11 @@ component VoiceSettings inherits Card {
             toggled => { AppState.low-cut-toggled(self.checked); }
         }
     }
-    if root.shown && AppState.advanced: Hint {
+    if root.shown: Hint {
         text: AppState.low-cut ? @tr("Swallows footsteps, desk bumps and wind below {} Hz.", AppState.look-index == 3 ? 100 : 80)
             : @tr("Off. Rumble, wind and desk bumps get through.");
     }
-    if root.shown && AppState.advanced: HorizontalLayout {
+    if root.shown: HorizontalLayout {
         Caption { text: @tr("Pop protection"); vertical-alignment: center; }
         Rectangle { }
         Switch {
@@ -1407,11 +1380,11 @@ component VoiceSettings inherits Card {
             toggled => { AppState.pops-toggled(self.checked); }
         }
     }
-    if root.shown && AppState.advanced: Hint {
+    if root.shown: Hint {
         text: AppState.pops ? @tr("Takes the thump out of P and B when you are close to the mic.")
             : @tr("Off. P and B can thump.");
     }
-    if root.shown && AppState.advanced: HorizontalLayout {
+    if root.shown: HorizontalLayout {
         Caption { text: @tr("Distance compensation"); vertical-alignment: center; }
         Rectangle { }
         Switch {
@@ -1419,7 +1392,7 @@ component VoiceSettings inherits Card {
             toggled => { AppState.distance-toggled(self.checked); }
         }
     }
-    if root.shown && AppState.advanced: Hint {
+    if root.shown: Hint {
         text: AppState.distance ? @tr("Far from the mic, it takes some of the room's echo out. Close up, it does nothing.")
             : @tr("Off. Far from the mic, the room echoes along.");
     }
@@ -1430,7 +1403,7 @@ component VoiceSettings inherits Card {
 }
 
 // Settings: the automatic volume, a choice of its own: it works with or
-// without the voice shaping. The advanced view shows what it does right now.
+// without the voice shaping. The page shows what it does right now.
 component LevelSettings inherits Card {
     property <bool> available: AppState.filter-state != FilterState.not-attached && AppState.filter-state != FilterState.not-installed
         && AppState.filter-state != FilterState.unsupported;
@@ -1449,7 +1422,7 @@ component LevelSettings inherits Card {
     }
     // What it adds right now: green when it boosts, red when it cuts.
     property <string> signed: root.gain > 0 ? "+" + root.gain : root.gain < 0 ? "−" + (-root.gain) : "0";
-    if root.available && AppState.auto-level && AppState.advanced: Caption {
+    if root.available && AppState.auto-level: Caption {
         text: !AppState.mic-active ? @tr("Shows what it evens out while an app uses the mic.")
             : root.gain == 0 ? @tr("Right now unchanged: your mic is just right.")
             : @tr("Right now: {} dB", root.signed);
@@ -1528,9 +1501,9 @@ component ToolsSettings inherits Card {
 // Settings: the rest.
 component GeneralSettings inherits Card {
     pure function effort-hint(i: int) -> string {
-        if (i == 0) { return @tr("Simpler noise removal, the words show once you are done talking, dictations up to 2 minutes. Typed just as well. For older laptops."); }
-        if (i == 1) { return @tr("The most thorough noise removal, the words show while you talk, dictations up to 15 minutes. Needs a bit more power."); }
-        return @tr("Your own mix of noise removal and words while you talk.");
+        if (i == 0) { return @tr("Simpler noise removal, no live text: the words show once you are done talking. Dictations up to 2 minutes. Typed just as well. For older laptops."); }
+        if (i == 1) { return @tr("The most thorough noise removal and live text: the words show while you talk. Dictations up to 15 minutes. Needs a bit more power."); }
+        return @tr("Your own mix of noise removal and live text.");
     }
     Caption { text: @tr("Effort"); }
     Segmented {
@@ -1555,6 +1528,19 @@ component GeneralSettings inherits Card {
     }
     Separator { }
     HorizontalLayout {
+        Caption { text: @tr("Live text"); vertical-alignment: center; }
+        Rectangle { }
+        Switch {
+            checked <=> AppState.live-words;
+            toggled => { AppState.live-words-toggled(self.checked); }
+        }
+    }
+    Hint {
+        text: AppState.live-words ? @tr("The display at the bottom of the screen shows what kyrr hears as you speak.")
+            : @tr("Off. The display shows only the bars; the text comes when you are done.");
+    }
+    Separator { }
+    HorizontalLayout {
         Caption { text: (AppState.linux ? @tr("Start when you sign in") : @tr("Start with Windows")); vertical-alignment: center; }
         Rectangle { }
         Switch {
@@ -1562,8 +1548,8 @@ component GeneralSettings inherits Card {
             toggled => { AppState.autostart-toggled(self.checked); }
         }
     }
-    if AppState.advanced: Separator { }
-    if AppState.advanced: HorizontalLayout {
+    Separator { }
+    HorizontalLayout {
         Caption { text: @tr("Check for updates automatically"); vertical-alignment: center; }
         Rectangle { }
         Switch {
@@ -1571,11 +1557,11 @@ component GeneralSettings inherits Card {
             toggled => { AppState.update-auto-toggled(self.checked); }
         }
     }
-    if AppState.advanced: Hint {
+    Hint {
         text: AppState.update-auto ? @tr("kyrr asks GitHub once a day. Nothing about you is sent, installing is always your click.")
             : @tr("kyrr only asks GitHub when you click.");
     }
-    if AppState.advanced: HorizontalLayout {
+    HorizontalLayout {
         Rectangle { }
         Button {
             text: @tr("Check for updates");
@@ -1584,21 +1570,21 @@ component GeneralSettings inherits Card {
             clicked => { AppState.check-updates(); }
         }
     }
-    if AppState.advanced && (AppState.update-state == UpdateState.checking): Hint { text: @tr("Having a look…"); }
-    if AppState.advanced && (AppState.update-state == UpdateState.current): Hint { text: @tr("You have the newest version. Nothing to do."); }
-    if AppState.advanced && (AppState.update-state == UpdateState.failed): Hint { text: @tr("Could not check right now. Offline?"); }
+    if (AppState.update-state == UpdateState.checking): Hint { text: @tr("Having a look…"); }
+    if (AppState.update-state == UpdateState.current): Hint { text: @tr("You have the newest version. Nothing to do."); }
+    if (AppState.update-state == UpdateState.failed): Hint { text: @tr("Could not check right now. Offline?"); }
     // Text and button separately: wrapped text inside a nested layout
     // under `if` is measured as one line.
-    if AppState.advanced && (AppState.update-state == UpdateState.available && AppState.update-installable): Hint {
+    if (AppState.update-state == UpdateState.available && AppState.update-installable): Hint {
         text: @tr("Version {} is out. One click and kyrr updates itself, your settings stay.", AppState.update-version);
     }
-    if AppState.advanced && (AppState.update-state == UpdateState.available && !AppState.update-installable): Hint {
+    if (AppState.update-state == UpdateState.available && !AppState.update-installable): Hint {
         text: (AppState.linux ? @tr("Version {} is out. Update kyrr where you installed it from, your settings stay.", AppState.update-version) : @tr("Version {} is out. Download it and run the installer, your settings stay.", AppState.update-version));
     }
-    if AppState.advanced && (AppState.update-state == UpdateState.download-failed): Hint {
+    if (AppState.update-state == UpdateState.download-failed): Hint {
         text: @tr("The download did not work. Try again, or get it from the download page.");
     }
-    if AppState.advanced && (AppState.update-state == UpdateState.available || AppState.update-state == UpdateState.download-failed): HorizontalLayout {
+    if (AppState.update-state == UpdateState.available || AppState.update-state == UpdateState.download-failed): HorizontalLayout {
         spacing: 8px;
         Rectangle { }
         Button {
@@ -1611,11 +1597,11 @@ component GeneralSettings inherits Card {
             clicked => { AppState.install-update(); }
         }
     }
-    if AppState.advanced && (AppState.update-state == UpdateState.downloading): Hint {
+    if (AppState.update-state == UpdateState.downloading): Hint {
         text: @tr("Downloading the update… {}%", round(AppState.update-progress * 100));
     }
-    if AppState.advanced && (AppState.update-state == UpdateState.downloading): ProgressIndicator { progress: AppState.update-progress; height: 6px; }
-    if AppState.advanced && (AppState.update-state == UpdateState.installing): Hint {
+    if (AppState.update-state == UpdateState.downloading): ProgressIndicator { progress: AppState.update-progress; height: 6px; }
+    if (AppState.update-state == UpdateState.installing): Hint {
         text: @tr("Installing. Windows asks for permission once, then kyrr restarts by itself.");
     }
     if AppState.filter-state != FilterState.unsupported: Separator { }
@@ -1714,13 +1700,13 @@ component SetupPage inherits VerticalLayout {
     if step == 2: Caption { text: @tr("How much may kyrr ask of your computer?"); }
     if step == 2: EffortOption {
         title: @tr("Best quality");
-        text: @tr("For most computers. The most thorough noise removal, the words show while you talk, dictations up to 15 minutes.");
+        text: @tr("For most computers. The most thorough noise removal and live text: the words show while you talk. Dictations up to 15 minutes.");
         picked: AppState.effort-index == 1;
         clicked => { AppState.effort-index = 1; AppState.effort-changed(1); }
     }
     if step == 2: EffortOption {
         title: @tr("Lean");
-        text: @tr("For older or weaker laptops, and if things stutter. Simpler noise removal, the words show once you are done talking, dictations up to 2 minutes.");
+        text: @tr("For older or weaker laptops, and if things stutter. Simpler noise removal, no live text: the words show once you are done talking. Dictations up to 2 minutes.");
         picked: AppState.effort-index == 0;
         clicked => { AppState.effort-index = 0; AppState.effort-changed(0); }
     }
@@ -1903,7 +1889,7 @@ component RecordingCard inherits Card {
         }
         Rectangle { }
         Button {
-            text: @tr("Recordings ({})", AppState.memo-count);
+            text: @tr("Recordings");
             horizontal-stretch: 0;
             clicked => { AppState.memo-open-list(); }
         }
@@ -2340,14 +2326,11 @@ export component MainWindow inherits Window {
     property <bool> main-page: !setup-mode && AppState.page == 0;
     property <bool> settings-page: !setup-mode && AppState.page >= 1 && AppState.page <= 5;
     property <bool> memos-page: !setup-mode && AppState.page == 6;
-    // The simple view and the advanced one: global settings and the pages
-    // of cards that have something more to show.
-    property <bool> has-advanced: AppState.page >= 1 && AppState.page <= 4;
-    property <string> page-title: AppState.page == 2 ? @tr("Remove background noise")
+    property <string> page-title: AppState.page == 2 ? @tr("Isolate your voice")
         : AppState.page == 3 ? @tr("Improve voice")
         : AppState.page == 4 ? @tr("Dictation")
         : AppState.page == 5 ? @tr("Voice memo")
-        : @tr("Global settings");
+        : @tr("Setup");
     // Where the memos are, as the user knows the folder.
     in property <string> memo-folder;
 
@@ -2369,7 +2352,7 @@ export component MainWindow inherits Window {
                 Heading { text: "kyrr"; font-size: 20px; vertical-alignment: center; }
                 Rectangle { }
                 Button {
-                    text: @tr("Global settings");
+                    text: @tr("Setup");
                     horizontal-stretch: 0;
                     clicked => {
                         AppState.open-page(1);
@@ -2425,19 +2408,10 @@ export component MainWindow inherits Window {
                 Heading { text: root.page-title; font-size: 20px; vertical-alignment: center; }
                 Rectangle { }
             }
-            // The basics by default; the rest for those who want it.
-            if settings-page && root.has-advanced: Segmented {
-                options: [@tr("Simple"), @tr("Advanced")];
-                selected: AppState.advanced ? 1 : 0;
-                changed(i) => {
-                    AppState.advanced = i == 1;
-                    AppState.advanced-toggled(i == 1);
-                }
-            }
             if settings-page && AppState.page == 1: GeneralSettings { }
+            if settings-page && AppState.page == 1: ToolsSettings { }
             if settings-page && AppState.page == 1: AboutSettings { }
             if settings-page && AppState.page == 2: NoiseSettings { }
-            if settings-page && AppState.page == 2: ToolsSettings { }
             if settings-page && AppState.page == 3: VoiceSettings { }
             if settings-page && AppState.page == 3: LevelSettings { }
             if settings-page && AppState.page == 4: DictationSettings { }
