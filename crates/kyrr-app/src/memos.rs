@@ -22,7 +22,7 @@ use crate::memo::recorder::{Ending, Recording};
 use crate::{AppState, MainWindow, MemoItem, MemoParagraph};
 
 /// Shorter memos are a key pressed twice by accident: not kept.
-const SHORTEST: f64 = 1.0;
+const SHORTEST: f64 = 3.0;
 /// How often the clock and the playing position move on.
 const TICK: Duration = Duration::from_millis(200);
 /// How long "Copied" stays on the button.
@@ -405,8 +405,12 @@ impl Memos {
         self.active.store(false, Ordering::Relaxed);
         self.wave.set(Mode::Hidden);
         let path = finished.path.clone();
-        if finished.seconds < SHORTEST && finished.ending == Ending::Stopped {
+        // A full disk may leave nothing to measure: that message stays.
+        let short = finished.seconds < SHORTEST && finished.ending != Ending::Disk;
+        if short {
             let _ = std::fs::remove_file(&path);
+            self.wave
+                .set_note(self.say("Zu kurz, nicht gespeichert", "Too short, not saved"));
         } else if path.exists() {
             self.titling.borrow_mut().push(path.clone());
             let _ = self
@@ -414,6 +418,14 @@ impl Memos {
                 .send(Command::Job(Job::Title(path, finished.rate, finished.start)));
         }
         let message = match finished.ending {
+            Ending::MicGone if short => self.say(
+                "Das Mikrofon war weg, und unter 3 Sekunden speichert kyrr nichts.",
+                "The microphone went away, and kyrr keeps nothing under 3 seconds.",
+            ),
+            _ if short => self.say(
+                "Aufnahmen unter 3 Sekunden speichert kyrr nicht: das war wohl ein Versehen.",
+                "kyrr does not keep recordings under 3 seconds: that was probably by accident.",
+            ),
             Ending::Stopped => String::new(),
             Ending::Limit => self.say(
                 "Nach 4 Stunden war Schluss: die Aufnahme ist gespeichert.",

@@ -1635,6 +1635,11 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     #[cfg(target_os = "linux")]
     let _ = slint::set_xdg_app_id("io.github.heast13.kyrr");
     let _ = slint::select_bundled_translation(language.code());
+    platform::memo_key_in_window(window.window(), || {
+        if let Some(m) = memos::memos() {
+            m.toggle();
+        }
+    });
 
     // Dictation worker, reporting back on the UI thread. Whether it records
     // is also kept here, for the tap-to-toggle key.
