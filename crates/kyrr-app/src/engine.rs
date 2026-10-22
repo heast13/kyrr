@@ -116,6 +116,8 @@ impl Chain {
             if let Some(filter) = self.filter.as_mut() {
                 filter.reset();
             }
+            // Its first block after a pause (or a sleep) is slow again.
+            self.load = Load::default();
         }
         self.last = Some(now);
         self.voice.set(&s.voice);

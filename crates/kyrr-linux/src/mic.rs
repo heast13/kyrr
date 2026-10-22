@@ -456,12 +456,33 @@ fn run(
             }
         })
         .global_remove(move |id| {
-            let mut state = on_remove.borrow_mut();
-            lock(&state.shared).microphones.retain(|(i, _)| *i != id);
-            if let Some(streams) = state.streams.as_mut() {
-                streams.set_links(|links| {
-                    links.remove(&id);
-                });
+            let unplugged = {
+                let mut state = on_remove.borrow_mut();
+                let gone = {
+                    let mut shared = lock(&state.shared);
+                    let gone = shared
+                        .microphones
+                        .iter()
+                        .find(|(i, _)| *i == id)
+                        .map(|(_, m)| m.name.clone());
+                    shared.microphones.retain(|(i, _)| *i != id);
+                    gone
+                };
+                if let Some(streams) = state.streams.as_mut() {
+                    streams.set_links(|links| {
+                        links.remove(&id);
+                    });
+                }
+                state.synced
+                    && state.quit_after.is_none()
+                    && gone.is_some_and(|name| state.streams.as_ref().is_some_and(|s| s.microphone == name))
+            };
+            // The microphone "kyrr" records from was unplugged: on to another
+            // one, or "kyrr" stays silent (it never falls back by itself).
+            // Without another one it waits: the same one plugged in again is
+            // linked anew, and a new one comes through `connect_if_needed`.
+            if unplugged {
+                reconnect(&on_remove);
             }
         })
         .register();

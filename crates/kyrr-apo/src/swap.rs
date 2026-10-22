@@ -261,5 +261,10 @@ fn load(swap: &Swap, format: Format, generation: u32, model: Model) -> bool {
     if let Ok(mut incoming) = swap.incoming.lock() {
         *incoming = None;
     }
+    // Taken right after the last look: the old filter waits here, and while
+    // it does the stream can never switch again.
+    if let Ok(mut outgoing) = swap.outgoing.lock() {
+        drop(outgoing.take());
+    }
     false
 }

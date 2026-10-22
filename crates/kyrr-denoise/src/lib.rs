@@ -38,13 +38,17 @@ const LOADER_STACK: usize = 8 * 1024 * 1024;
 /// The filter's work is weighed over this much audio...
 const LOAD_WINDOW: Duration = Duration::from_millis(100);
 /// ...and is too much for the computer once it takes this share of the
-/// audio's own time: the audio thread falls behind, the microphone
-/// stutters, and on Linux a real-time thread that never gets to rest is
-/// ended by the system, with the program.
+/// audio's own time in two windows in a row: the audio thread falls behind,
+/// the microphone stutters, and on Linux a real-time thread that never gets
+/// to rest is ended by the system, with the program. One slow window alone
+/// is a hiccup (another program, a waking processor, memory read back from
+/// disk), not a computer too slow for the model.
 const TOO_SLOW: f64 = 0.9;
+/// A window this far behind is too much at once.
+const FAR_TOO_SLOW: f64 = 1.5;
 
 /// How much of the audio's own time the filter takes, to tell a computer
-/// that is too slow for a model within a tenth of a second. Never
+/// that is too slow for a model within a fifth of a second. Never
 /// allocates, for the audio thread.
 #[derive(Default)]
 pub struct Load {
@@ -52,6 +56,8 @@ pub struct Load {
     heard: Duration,
     /// Past the first block of a new filter, whose caches are cold.
     warm: bool,
+    /// The window before was too much.
+    behind: bool,
 }
 
 impl Load {
@@ -66,9 +72,12 @@ impl Load {
         if self.heard < LOAD_WINDOW {
             return false;
         }
-        let too_slow = self.busy.as_secs_f64() > self.heard.as_secs_f64() * TOO_SLOW;
+        let share = self.busy.as_secs_f64() / self.heard.as_secs_f64();
         self.busy = Duration::ZERO;
         self.heard = Duration::ZERO;
+        let behind = share > TOO_SLOW;
+        let too_slow = share > FAR_TOO_SLOW || (behind && self.behind);
+        self.behind = behind;
         too_slow
     }
 }
@@ -443,8 +452,22 @@ mod tests {
     }
 
     #[test]
-    fn a_filter_slower_than_the_audio_shows_within_a_window() {
-        assert!(feed(&mut Load::default(), 1.1, 7));
+    fn a_filter_slower_than_the_audio_shows_within_two_windows() {
+        assert!(!feed(&mut Load::default(), 1.1, 7));
+        assert!(feed(&mut Load::default(), 1.1, 11));
+        assert!(feed(&mut Load::default(), 0.95, 11));
+        // Far behind: at once.
+        assert!(feed(&mut Load::default(), 2.0, 7));
+    }
+
+    #[test]
+    fn one_slow_window_is_a_hiccup() {
+        let mut load = Load::default();
+        assert!(!feed(&mut load, 0.4, 20));
+        assert!(!feed(&mut load, 1.2, 5));
+        assert!(!feed(&mut load, 0.4, 20));
+        assert!(!feed(&mut load, 1.2, 5));
+        assert!(!feed(&mut load, 0.4, 20));
     }
 
     #[test]
