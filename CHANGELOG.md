@@ -1,28 +1,60 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (2026-10-22)
 
-- Voice memos: F8 (F9 or Pause when dictation has F8; switchable, or
-  none) starts and ends a recording, also from the tray (and on Linux
-  with `kyrr --memo`). Opus mono at 24 kbit/s, up to 4 hours, into
-  `Documents/kyrr` as `YYYY-MM-DD HH-MM Title.opus`; the title comes from
-  the first sentence the dictation model hears, and the pen next to it
-  renames the file. The list (play, show in folder, delete with a question,
-  search) and "Write text": the whole memo as paragraphs of about 30 s,
-  cut at a pause, each with its start time, as a `.txt` beside it, shown in
-  a large view where a time plays from there. Dictation goes first: the
-  text waits while you dictate, and the two keys do nothing while the other
-  one records. The main page card switches the feature off; its gear
-  opens the memo settings (key, write text automatically, folder).
-  Flatpak: only `xdg-documents/kyrr` is opened. GNOME before 48 gets a second custom
-  shortcut; Hyprland, sway, river and niri a second line in kyrr's block.
-- Dictation, words in the pill: fewer wrong and missing words. A word shows
-  once 1.2 s of the recording followed it (was 0.8 s), and after a pause
-  the next look starts 1.5 s before where the last one ended (was 0.8 s), so
-  speech that had just begun is not cut off. Looks cover a little more
-  audio, so they take a little more computing time. In a test with 27
-  synthetic clips, 71 of 1536 shown words differed from what was said, down
-  from 90 of 1518, at about 0.1 s more delay on average.
+- Keys: dictation (standard F9) and voice memos (standard F8) each offer
+  the standard key and a "Set key" field: click it, press a key. Offered
+  are F1-F24, Pause, Scroll Lock, Menu and right Ctrl; letters, Space,
+  Enter, Escape, arrows and the other modifiers are refused with a
+  sentence, and so is the key the other feature already has (no silent
+  swap). While a field waits, kyrr takes no key. Voice memos get Hold or
+  Tap like dictation (Tap stays the standard); the main page card says
+  which. Where only a press arrives (GNOME before 48, niri, an own
+  command) memos are tap only. Linux: `kyrr --memo-start` and `kyrr
+  --memo-stop` for held memo keys in Hyprland, sway and river binds. Old
+  settings keep working; "none" for the memo key becomes F8.
+- Windows: the dictation and memo keys also work while kyrr's own window
+  has the focus (Windows does not call the low-level hook then; the window
+  passes the keys on).
+- Voice memos, titles: a short opening sentence stays the title, a long or
+  chatty one gives way to up to three keywords (nouns, names, repeated or
+  long words); once the text is written, a memo still named automatically
+  is titled again from all of it.
+- "Global settings" is now "Setup", one view without Simple/Advanced (the
+  card pages too). The level check (meter, before/after test, listening)
+  and "Live text" (was "Words while you talk") moved to Setup; the credits
+  are folded. "Remove background noise" is now "Isolate your voice"; the
+  separate noise model choice is gone, Effort sets it. More room for the
+  word creation line on the main page; "Recordings" without a count.
+- Noise filter too slow for the computer: the filter weighs its own time
+  per 100 ms of audio; above 90 % the quality model is left out and kyrr
+  switches to Lean. On Linux PipeWire's real-time thread otherwise never
+  rested and RTKit ended kyrr; on both systems the microphone stuttered
+  and dictation heard nothing. The pill's "nothing heard" note stays 3.2 s
+  (was 1.6 s).
+- Voice memos: F8 (switchable) starts and ends a recording, also from the
+  tray (and on Linux with `kyrr --memo`). Opus mono at 24 kbit/s, up to 4
+  hours, into `Documents/kyrr` as `YYYY-MM-DD HH-MM Title.opus`; the title
+  comes from the first sentence the dictation model hears, and the pen
+  next to it renames the file. The list (play, show in folder, delete with
+  a question, search) and "Write text": the whole memo as paragraphs of
+  about 30 s, cut at a pause, each with its start time, as a `.txt` beside
+  it, shown in a large view where a time plays from there. Dictation goes
+  first: the text waits while you dictate, and the two keys do nothing
+  while the other one records. The main page card switches the feature
+  off; its gear opens the memo settings (key, write text automatically,
+  folder). Flatpak: only `xdg-documents/kyrr` is opened. GNOME before 48
+  gets a second custom shortcut; Hyprland, sway, river and niri a second
+  line in kyrr's block. A recording under 3 s (a key pressed by accident)
+  is not kept; the pill and, for 5 s, the card say "Too short". On Windows
+  the memo key also works while kyrr's own window has the focus.
+- Dictation, words in the pill: fewer wrong and missing words. A word
+  shows once 1.2 s of the recording followed it (was 0.8 s), and after a
+  pause the next look starts 1.5 s before where the last one ended (was
+  0.8 s), so speech that had just begun is not cut off. Looks cover a
+  little more audio, so they take a little more computing time. In a test
+  with 27 synthetic clips, 71 of 1536 shown words differed from what was
+  said, down from 90 of 1518, at about 0.1 s more delay on average.
 - Settings rebuilt for overview: the "Settings" page is now "Global
   settings" (effort, language, start with the system, microphone, updates,
   about). Each switch on the main page has its own gear that opens only
@@ -35,53 +67,111 @@
   remembered between visits.
 - "Feedback" under Global settings, About (and on the website and in the
   README): opens an e-mail to the maintainer with the kyrr version, the
-  system (Windows, or distribution, desktop and install type on Linux) and
-  the language filled in. kyrr sends nothing itself; no log is attached.
+  system (Windows version and build, or distribution, desktop and install
+  type on Linux; in the Flatpak the host's distribution, not the
+  runtime's) and the language filled in. kyrr sends nothing itself; no log
+  is attached.
 - Dictation: a key press while the speech model still loads (a few seconds
   after kyrr starts or was installed) starts the recording at once, and it
   is recognised when the model is there. Before, the recording waited for
   the model, so the first words were missing or cut and came out wrong.
+  The key is held for kyrr while the model loads, too (it was let go to
+  the app in front until the model was there).
 - Linux, AppImage: pasting the install commands again no longer needs kyrr
-  closed first. The commands download to `kyrr.new` and move it over `kyrr`
-  (a running AppImage cannot be written to), and `kyrr --replace` ends the
-  running kyrr like quitting does (SIGTERM, the default microphone is given
-  back), waits until it is gone (up to 20 s; if it hangs longer, the old one
-  just shows its window) and starts in its place. If the download fails, the
-  old file stays and is merely restarted. Only
-  a process called kyrr is ended, found by the socket it listens on; a
-  Flatpak kyrr is left to Flatpak.
+  closed first. The commands download to `kyrr.new` and move it over
+  `kyrr` (a running AppImage cannot be written to), and `kyrr --replace`
+  ends the running kyrr like quitting does (SIGTERM, the default
+  microphone is given back), waits until it is gone (up to 20 s; if it
+  hangs longer, the old one just shows its window) and starts in its
+  place. If the download fails, the old file stays and is merely
+  restarted. Only a process called kyrr is ended, found by the socket it
+  listens on; a Flatpak kyrr is left to Flatpak.
 - Distance compensation is out of beta and on by default, for existing
   users too. The 0.5.8 switch (`VoiceDistance`) is no longer read; the
   setting is now `VoiceDistanceOff`, so an off set in 0.5.8 does not carry
-  over. Settings, Advanced, "Distance compensation" switches it off.
+  over. The voice card's gear, Advanced, "Distance compensation" switches
+  it off.
 - Dictation wave: the words are written by an invisible pen that glides
   along the line at an even pace (the average of how fast words came in
   lately, plus a share of what waits), instead of every word fading in on
   its own as soon as a pass delivered it. Each letter fades in over 0.8 s
   after the pen passed it, rising a little; the pill widens and the line
-  scrolls with the pen, not in steps per batch of words. In a recording
-  of the effect the words stand about 0.3 to 0.5 s later than with the old
+  scrolls with the pen, not in steps per batch of words. In a recording of
+  the effect the words stand about 0.3 to 0.5 s later than with the old
   look, in return for no stop and go.
 - Live words: after a look that found nothing new, the next look starts
-  0.8 s before where that one ended, so a pause no longer makes the
-  stretch grow up to 8 s. In a simulation of a computer 4x slower than the
-  test machine, the words after a 15 s pause showed about 1.5 s sooner;
-  the share of CPU time spent on looks stayed about the same.
+  shortly before where that one ended (see the second entry for the
+  current 1.5 s), so a pause no longer makes the stretch grow up to 8 s.
+  In a simulation of a computer 4x slower than the test machine, the words
+  after a 15 s pause showed about 1.5 s sooner; the share of CPU time
+  spent on looks stayed about the same.
 - Flatpak on Hyprland, sway, niri and river: kyrr types and shows the
   dictation wave there too. The block kyrr writes into the compositor's
   config (dictation key, start at sign-in) now also links the compositor's
   Wayland socket into kyrr's runtime folder, because the sandbox's own
   socket hides the virtual keyboard and layer surfaces. Without the link,
-  kyrr says that the AppImage can type there. The start at sign-in on these
-  compositors also goes through their config in the Flatpak.
+  kyrr says that the AppImage can type there. The start at sign-in on
+  these compositors also goes through their config in the Flatpak.
 - Flatpak: the tray icon works (registers under its unique D-Bus name, as
   sandboxed apps must; `vendor/ksni` patches the tray library for that).
   On CPUs without AVX2 the noise filter uses the shipped ONNX Runtime.
   `packaging/flatpak/flathub.py` writes the files for Flathub, and a CI
   workflow builds and lints them the way Flathub does.
 - AUR: `kyrr-bin` at the current version, built and checked on Arch for
-  every change to the package, and pushed to the AUR after each release once the key is
-  set up.
+  every change to the package, and pushed to the AUR after each release
+  once the key is set up.
+- Setup in three steps (Windows and Linux alike): microphone, then
+  language and dictation model (with the key and typing questions on
+  Linux), then the performance setting.
+- Effort setting, "Lean" or "Best quality" (Settings, Simple; asked in the
+  setup): Lean is the small noise model and the words after you stop
+  talking, Best quality the large model and words while you talk. A
+  processor without AVX2 gets Lean picked once. Lean dictations end after
+  2 minutes, others after 15; at the limit kyrr types what it heard
+  instead of dropping the rest, and the wave turns yellow (30 s left) and
+  red (10 s left). Text heard while the dictation key is still down waits
+  for its release (at most 3 s).
+- Live words: placed by the model's own word times; a look starts 1.5 s
+  before the last word shown, a word shows once 0.8 s of recording
+  followed it or two looks agree. On a computer three times slower the
+  words show after about 2.4 s instead of 6 s. A computer needing over 2.5
+  s per look stops showing words for that dictation.
+- Status line: 20 phrases per state, picked at random, never the same one
+  twice in a row; 14 grumbles in the pill after a dictation that heard
+  nothing. 12 px hints, the tray menu uses the card titles.
+- Performance: pieces of a long dictation are recognised while the key is
+  held (2 minutes of speech: 8.3 s wait after the key before, 0.9 s now);
+  ONNX Runtime without a memory arena and without spinning threads (peak
+  RAM 1.92 to 1.59 GB, about 17 % less CPU for the final recognition); the
+  noise filter's int8 kernels also come as AVX-VNNI and AVX-512 VNNI
+  builds, bit for bit like AVX2 (Quality 29 % to 20 % of one core).
+- Stability: a model download that stalls (60 s without data) is asked
+  again from where it broke off, and a cancel stops at once; a damaged
+  model is deleted and fetched again by Retry; a language change waits
+  until a dictation is typed; one update download at a time, written to a
+  .part file first; `filter.json` is written atomically and a broken
+  `config.json` no longer resets everything; Linux: kyrr sets the virtual
+  microphone up again after a PipeWire restart, waits for PipeWire at the
+  start, and a second start at the same moment hands over; the default
+  microphone is given back correctly even after a crash; Windows: pasting
+  and the audio filter's setup handle more edge cases. Voice shaping: the
+  filters no longer slow down after long silences and the low cut no
+  longer clicks when switched on.
+- Linux: the window is drawn by the software renderer only (the OpenGL
+  renderer crashed at start on Wayland without libwayland-egl and kept
+  over 100 MB of RAM). The AppImage and the tarball are a third smaller
+  (69 to 46 MB: the noise models without their `.onnx` files). An AppImage
+  on a system with a too old glibc says so in a dialog.
+- Security: downloads and the update check are HTTPS only, redirects
+  included; newer root certificates (RUSTSEC-2026-0381); third-party CI
+  actions pinned to commits.
+- Keyboard and screen reader access for the remaining click-only controls,
+  better contrast for small notes.
+- Windows: the README and the website say that dictation does not work
+  while a window running as administrator is in front (Windows hides the
+  keyboard from normal programs there).
+- Release: release notes start with the plain summary from NEWS.md and
+  fold the technical section away.
 
 ## 0.5.8 (2026-10-20)
 

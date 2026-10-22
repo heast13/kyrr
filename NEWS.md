@@ -16,6 +16,44 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
+## 0.6.0
+
+- Voice memos: tap F8, talk, tap F8 again, or hold it while you talk. kyrr saves the recording in Documents, folder kyrr, and names it after what it is about. The list under "Recordings" plays, renames and deletes them; "Write text" turns a recording into text with time marks. Switch it off on the main page.
+- A key of your own for dictation and for memos: under the gear, "Set key", then press it.
+- Settings are tidier: every switch on the main page has its own gear, "Setup" holds the rest. "Remove background noise" is now "Isolate your voice", "Words while you talk" is "Live text".
+- The setup has three steps now: microphone, language and dictation model, performance setting.
+- New setting "Effort": Lean for older laptops, otherwise Best quality. Lean dictations last up to 2 minutes, the others 15; towards the limit the wave turns yellow, then red.
+- The wave writes the words smoothly and with fewer mistakes, and sooner on slower computers.
+- Distance compensation is no longer a beta and is on by default (gear of the voice card, Advanced).
+- The first words after starting kyrr or installing it are no longer lost.
+- Is the computer too slow for the best noise removal, kyrr switches to Lean by itself instead of letting the microphone stutter.
+- Long dictations are typed much sooner after you let go and use less memory.
+- An interrupted model download carries on where it stopped.
+- More variety in the status line, and the note in the pill when nothing was heard stays longer.
+- Setup, About: "Feedback" opens an e-mail to the developer, ready to write.
+- More controls work with the keyboard and with screen readers.
+- (Linux) To update, just paste the install commands again, without closing kyrr first.
+- (Linux) kyrr recovers when the sound system restarts, and the AppImage is a third smaller.
+
+### Deutsch
+
+- Sprachaufzeichnungen: F8 antippen, sprechen, nochmal F8, oder beim Sprechen halten. kyrr speichert die Aufnahme unter Dokumente im Ordner kyrr und benennt sie nach ihrem Inhalt. Die Liste unter „Aufzeichnungen“ spielt ab, benennt um und löscht; „Text schreiben“ macht aus einer Aufnahme Text mit Zeitmarken. Auf der Hauptseite abschaltbar.
+- Eigene Taste fürs Diktieren und für Aufzeichnungen: im Zahnrad „Taste festlegen“ und drücken.
+- Die Einstellungen sind aufgeräumter: Jeder Schalter auf der Hauptseite hat ein Zahnrad, der Rest steht unter „Setup“. „Störgeräusche entfernen“ heißt jetzt „Stimme isolieren“, „Wörter beim Sprechen“ heißt „Live-Text“.
+- Die Einrichtung hat jetzt drei Schritte: Mikrofon, Sprache und Diktiermodell, Leistungseinstellung.
+- Neue Einstellung „Rechenaufwand“: Sparsam für ältere Laptops, sonst Beste Qualität. Mit Sparsam diktierst du bis zu 2 Minuten am Stück, sonst 15; zum Limit hin wird die Welle gelb, dann rot.
+- Die Welle schreibt die Wörter weich und mit weniger Fehlern, auf langsamen Rechnern früher.
+- Der Abstandsausgleich ist keine Beta mehr und standardmäßig an (Zahnrad der Stimme-Karte, Erweitert).
+- Die ersten Wörter nach dem Start von kyrr oder nach der Installation gehen nicht mehr verloren.
+- Ist der Rechner für die beste Geräuschunterdrückung zu langsam, stellt kyrr selbst auf Sparsam, statt dass das Mikro stottert.
+- Langes Diktieren wird nach dem Loslassen deutlich früher getippt und braucht weniger Speicher.
+- Ein abgebrochener Modell-Download läuft an der Stelle weiter.
+- Mehr Abwechslung in der Statuszeile, und der Spruch in der Pille, wenn nichts gehört wurde, bleibt länger stehen.
+- Setup, Über kyrr: „Feedback“ öffnet eine fertige E-Mail an den Entwickler.
+- Mehr Bedienelemente gehen per Tastatur und Screenreader.
+- (Linux) Für ein Update einfach die Installationsbefehle nochmal einfügen, ohne kyrr vorher zu schließen.
+- (Linux) kyrr erholt sich vom Neustart des Soundsystems, das AppImage ist ein Drittel kleiner.
+
 ## 0.5.8
 
 - Dictation in more languages: next to "Deutsch" and "English" there is now "Multilingual" (in the setup and under Settings, General, Language). It adds French, Spanish, Italian, Dutch, Polish, Portuguese and more; kyrr notices the language by itself. It needs one more download of about 900 MB. German and English keep their own models.

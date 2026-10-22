@@ -248,7 +248,7 @@ fn say(language: Language, what: &str) -> String {
     }
     match (what, german) {
         ("nothing", german) => return nothing(german),
-        ("limit", true) => "Maximale Diktatlänge",
+        ("limit", true) => "Maximale Länge erreicht",
         ("limit", false) => "Longest dictation reached",
         ("offline", true) => "Kein Internet oder der Server antwortet nicht. Nochmal versuchen?",
         ("offline", false) => "No internet, or the server does not answer. Try again?",

@@ -1209,7 +1209,7 @@ mod tests {
         let mut wave = shown(Mode::Listening, 0.5, &QUIET);
         wave.set_words(&words("eins zwei drei"));
         run_for(&mut wave, 1.0);
-        wave.set_limit("Maximale Diktatlänge".into());
+        wave.set_limit("Maximale Länge erreicht".into());
         wave.set_mode(Mode::Writing);
         run_for(&mut wave, 4.0);
         assert_eq!(wave.words.len(), 1);

@@ -26,6 +26,29 @@ pub mod window;
 /// more): nothing was changed and the audio service was not restarted.
 pub const EXIT_GONE: i32 = 3;
 
+/// "Windows 11 24H2 (build 26100)", for the feedback mail. Windows 11 still
+/// calls itself Windows 10 in the registry; its builds start at 22000.
+pub fn version_name() -> String {
+    use windows::Win32::System::Registry::HKEY_LOCAL_MACHINE;
+    let Some(key) = reg::Key::open(HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion") else {
+        return "Windows".into();
+    };
+    let build = key.get_string("CurrentBuild").unwrap_or_default();
+    let name = match build.parse::<u32>() {
+        Ok(b) if b >= 22000 => "Windows 11",
+        Ok(_) => "Windows 10",
+        Err(_) => "Windows",
+    };
+    let mut text = name.to_string();
+    if let Some(release) = key.get_string("DisplayVersion").filter(|v| !v.is_empty()) {
+        text = format!("{text} {release}");
+    }
+    if !build.is_empty() {
+        text = format!("{text} (build {build})");
+    }
+    text
+}
+
 /// Runs an elevated setup command and returns the process exit code:
 /// `install` (the DLL next to this exe), `uninstall`, `move <guid>`,
 /// `detach <guid>`. All but install restart the audio service so the

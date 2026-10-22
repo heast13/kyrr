@@ -215,6 +215,8 @@ fn main() {
     // Switched on early: a switch flipped right before a shot is caught
     // mid-animation.
     state.set_auto_level(true);
+    state.set_distance(true);
+    state.set_memo_count(5);
     state.set_level_gain(8.6);
     render(&window, &ui, &format!("{out}/main-{lang}.rgba"));
     memos(&window, &ui, &out, &lang);

@@ -28,6 +28,8 @@ const SHORTEST: f64 = 3.0;
 const TICK: Duration = Duration::from_millis(200);
 /// How long "Copied" stays on the button.
 const COPIED: Duration = Duration::from_secs(2);
+/// How long a short note under the card ("Too short") stays.
+const BRIEF: Duration = Duration::from_secs(5);
 
 pub struct Memos {
     window: Weak<MainWindow>,
@@ -62,6 +64,7 @@ pub struct Memos {
     sheet: RefCell<Option<PathBuf>>,
     timer: slint::Timer,
     copied: slint::Timer,
+    brief: slint::Timer,
 }
 
 thread_local! {
@@ -106,6 +109,7 @@ impl Memos {
             sheet: RefCell::new(None),
             timer: slint::Timer::default(),
             copied: slint::Timer::default(),
+            brief: slint::Timer::default(),
         });
         MEMOS.set(Some(Rc::clone(&memos)));
         window
@@ -233,6 +237,22 @@ impl Memos {
         if let Some(w) = self.window.upgrade() {
             w.global::<AppState>().set_memo_message(message.into());
         }
+    }
+
+    /// A note that goes again after a few seconds, unless another took its
+    /// place.
+    fn tell_briefly(&self, message: &str) {
+        self.tell(message);
+        let weak = self.window.clone();
+        let message = slint::SharedString::from(message);
+        self.brief.start(slint::TimerMode::SingleShot, BRIEF, move || {
+            if let Some(w) = weak.upgrade() {
+                let state = w.global::<AppState>();
+                if state.get_memo_message() == message {
+                    state.set_memo_message("".into());
+                }
+            }
+        });
     }
 
     /// Reads the folder again and shows it.
@@ -435,10 +455,7 @@ impl Memos {
                 "Das Mikrofon war weg, und unter 3 Sekunden speichert kyrr nichts.",
                 "The microphone went away, and kyrr keeps nothing under 3 seconds.",
             ),
-            _ if short => self.say(
-                "Aufnahmen unter 3 Sekunden speichert kyrr nicht: das war wohl ein Versehen.",
-                "kyrr does not keep recordings under 3 seconds: that was probably by accident.",
-            ),
+            _ if short => self.say("Zu kurz, nicht gespeichert.", "Too short, not saved."),
             Ending::Stopped => String::new(),
             Ending::Limit => self.say(
                 "Nach 4 Stunden war Schluss: die Aufnahme ist gespeichert.",
@@ -453,7 +470,12 @@ impl Memos {
                 "The disk is full. What came until then is saved.",
             ),
         };
-        self.tell(&message);
+        // A key pressed by accident needs no lasting note.
+        if short && finished.ending != Ending::MicGone {
+            self.tell_briefly(&message);
+        } else {
+            self.tell(&message);
+        }
         self.keep_ticking();
         self.show_state();
         self.refresh();
