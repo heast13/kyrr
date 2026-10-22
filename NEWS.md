@@ -22,15 +22,16 @@ line saying nothing changes on Windows.
 - Settings are tidier: every switch on the main page has its own gear for its settings, "Global settings" holds the rest, and each page opens in "Simple".
 - The setup has three steps now: microphone, language and dictation model, performance setting.
 - New setting "Effort": Lean or Best quality, for older laptops and for most computers. Lean dictations last up to 2 minutes, the others 15; towards the limit the wave turns yellow, then red.
-- The wave writes the words smoothly, letter by letter, with fewer wrong words, and shows them sooner on slower computers.
+- The wave writes the words smoothly and with fewer mistakes, and sooner on slower computers.
 - Distance compensation is no longer a beta and is on by default (gear of the voice card, Advanced).
 - The first words after starting kyrr or installing it are no longer lost.
+- Is the computer too slow for the best noise removal, kyrr switches to Lean by itself instead of letting the microphone stutter.
 - Long dictations are typed much sooner after you let go and use less memory.
 - An interrupted download of a speech model carries on where it stopped.
-- More variety in the status line.
+- More variety in the status line, and the note in the pill when nothing was heard stays longer.
 - Global settings, About: "Feedback" opens an e-mail to the developer, ready to write.
 - More controls work with the keyboard and with screen readers.
-- (Linux) To update, paste the install commands again: kyrr no longer has to be closed first.
+- (Linux) To update, just paste the install commands again, without closing kyrr first.
 - (Linux) kyrr recovers when the sound system restarts, and the AppImage is a third smaller.
 
 ### Deutsch
@@ -39,15 +40,16 @@ line saying nothing changes on Windows.
 - Die Einstellungen sind aufgeräumter: Jeder Schalter auf der Hauptseite hat ein Zahnrad für seine Einstellungen, der Rest steht unter „Globale Einstellungen“.
 - Die Einrichtung hat jetzt drei Schritte: Mikrofon, Sprache und Diktiermodell, Leistungseinstellung.
 - Neue Einstellung „Rechenaufwand“: Sparsam oder Beste Qualität, für ältere Laptops und für die meisten Rechner. Mit Sparsam diktierst du bis zu 2 Minuten am Stück, sonst 15; zum Limit hin wird die Welle gelb, dann rot.
-- Die Welle schreibt die Wörter weich, Buchstabe für Buchstabe, mit weniger Fehlern, auf langsamen Rechnern früher.
+- Die Welle schreibt die Wörter weich und mit weniger Fehlern, auf langsamen Rechnern früher.
 - Der Abstandsausgleich ist keine Beta mehr und standardmäßig an (Zahnrad der Stimme-Karte, Erweitert).
 - Die ersten Wörter nach dem Start von kyrr oder nach der Installation gehen nicht mehr verloren.
+- Ist der Rechner für die beste Geräuschunterdrückung zu langsam, stellt kyrr selbst auf Sparsam, statt dass das Mikro stottert.
 - Langes Diktieren wird nach dem Loslassen deutlich früher getippt und braucht weniger Speicher.
 - Ein unterbrochener Download eines Sprachmodells macht dort weiter, wo er abgebrochen ist.
-- Mehr Abwechslung in der Statuszeile.
+- Mehr Abwechslung in der Statuszeile, und der Spruch in der Pille, wenn nichts gehört wurde, bleibt länger stehen.
 - Globale Einstellungen, Über kyrr: „Feedback“ öffnet eine E-Mail an den Entwickler, fertig zum Schreiben.
 - Mehr Bedienelemente gehen per Tastatur und Screenreader.
-- (Linux) Für ein Update die Installationsbefehle einfach nochmal einfügen: kyrr muss nicht mehr vorher geschlossen werden.
+- (Linux) Für ein Update einfach die Installationsbefehle nochmal einfügen, ohne kyrr vorher zu schließen.
 - (Linux) kyrr erholt sich vom Neustart des Soundsystems, das AppImage ist ein Drittel kleiner.
 
 ## 0.5.8

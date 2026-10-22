@@ -2,6 +2,12 @@
 
 ## 0.6.0 (2026-10-21)
 
+- Noise filter too slow for the computer: the filter weighs its own time
+  per 100 ms of audio; above 90 % the quality model is left out and kyrr
+  switches to Lean. On Linux PipeWire's real-time thread otherwise never
+  rested and RTKit ended kyrr; on both systems the microphone stuttered and
+  dictation heard nothing. The pill's "nothing heard" note stays 3.2 s
+  (was 1.6 s).
 - Voice memos: F8 (F9 or Pause when dictation has F8; switchable, or
   none) starts and ends a recording, also from the tray (and on Linux
   with `kyrr --memo`). Opus mono at 24 kbit/s, up to 4 hours, into
