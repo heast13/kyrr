@@ -8,11 +8,11 @@ msgstr ""
 msgid "Open kyrr"
 msgstr "kyrr öffnen"
 
-msgid "Remove background noise: on"
-msgstr "Störgeräusche entfernen: an"
+msgid "Isolate your voice: on"
+msgstr "Stimme isolieren: an"
 
-msgid "Remove background noise: off"
-msgstr "Störgeräusche entfernen: aus"
+msgid "Isolate your voice: off"
+msgstr "Stimme isolieren: aus"
 
 msgid "Improve voice: on"
 msgstr "Stimme verbessern: an"
@@ -47,8 +47,8 @@ msgstr "Hoppla, da ging was schief. Details unten."
 msgid "Oops, the filter is stuck. Your mic passes through as it is."
 msgstr "Hoppla, der Filter hakt. Dein Mikro läuft unverändert durch."
 
-msgid "Remove background noise"
-msgstr "Störgeräusche entfernen"
+msgid "Isolate your voice"
+msgstr "Stimme isolieren"
 
 msgid "Off. Your mic passes through as it is."
 msgstr "Aus. Dein Mikro läuft unverändert durch."
@@ -401,17 +401,11 @@ msgstr "Sprache und Diktiermodell"
 msgid "Done"
 msgstr "Fertig"
 
-msgid "Global settings"
-msgstr "Globale Einstellungen"
+msgid "Setup"
+msgstr "Setup"
 
 msgid "Settings: {}"
 msgstr "Einstellungen: {}"
-
-msgid "Simple"
-msgstr "Einfach"
-
-msgid "Advanced"
-msgstr "Erweitert"
 
 msgid "Credits"
 msgstr "Danksagungen"
@@ -1035,8 +1029,8 @@ msgstr "Strg rechts"
 msgid "Say “new line” or “new paragraph” for line breaks."
 msgstr "Sag „neue Zeile“ oder „neuer Absatz“ für Zeilenumbrüche."
 
-msgid "Words while you talk"
-msgstr "Wörter beim Sprechen"
+msgid "Live text"
+msgstr "Live-Text"
 
 msgid "The display at the bottom of the screen shows what kyrr hears as you speak."
 msgstr "Die Anzeige unten am Bildschirm zeigt schon beim Sprechen, was kyrr hört."

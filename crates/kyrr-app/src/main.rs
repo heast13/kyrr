@@ -1859,10 +1859,6 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             config.save();
         }
     });
-    state.on_advanced_toggled({
-        let app = Rc::clone(&app);
-        move |_| fit(&app.window)
-    });
     state.on_dismiss_update({
         let app = Rc::clone(&app);
         move || {
