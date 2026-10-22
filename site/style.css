@@ -78,7 +78,7 @@ code { background: var(--code); padding: 0.1em 0.35em; border-radius: 4px; }
 .more:hover { text-decoration: underline; }
 
 /* the dictation demo (app.js): a notes window, the dictation display below it, the text lands in the document */
-.demo { margin: 3rem auto 0; max-width: 560px; }
+.demo { position: relative; container-type: inline-size; margin: 3rem auto 0; max-width: 560px; }
 .screen {
   position: relative; container-type: inline-size; aspect-ratio: 16 / 10; overflow: hidden; text-align: left;
   border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow);
@@ -106,6 +106,12 @@ code { background: var(--code); padding: 0.1em 0.35em; border-radius: 4px; }
 @keyframes blink { 50% { opacity: 0; } }
 .screen video { display: none; position: absolute; left: 7%; bottom: 2%; width: 86%; height: auto; aspect-ratio: 1160 / 160; pointer-events: none; }
 .js .screen video { display: block; }
+.go {
+  position: absolute; left: 50%; top: 36cqw; transform: translate(-50%, -50%); padding: 0.6rem 1.4rem 0.6rem 1.1rem; border: 0; border-radius: 999px;
+  background: var(--accent); color: var(--accent-text); font-family: inherit; font-size: 1rem; font-weight: 600; line-height: 1.2; cursor: pointer; box-shadow: var(--shadow);
+}
+.go::before { content: "\25B6"; margin-right: 0.5em; font-size: 0.8em; }
+.go:hover { filter: brightness(1.1); }
 .keys { margin: 1rem 0 0; font-size: 0.95rem; color: var(--muted); }
 kbd {
   display: inline-block; min-width: 2.2em; padding: 0.05em 0.5em; border: 1px solid var(--border); border-bottom-width: 3px; border-radius: 6px;
