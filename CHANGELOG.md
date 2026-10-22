@@ -2,6 +2,17 @@
 
 ## 0.6.0 (2026-10-21)
 
+- Keys: dictation (standard F9) and voice memos (standard F8) each offer
+  the standard key and a "Set key" field: click it, press a key. Offered
+  are F1-F24, Pause, Scroll Lock, Menu and right Ctrl; letters, Space,
+  Enter, Escape, arrows and the other modifiers are refused with a
+  sentence, and so is the key the other feature already has (no silent
+  swap). While a field waits, kyrr takes no key. Voice memos get Hold or
+  Tap like dictation (Tap stays the standard). Where only a press arrives
+  (GNOME before 48, niri, an own command) memos are tap only. Linux:
+  `kyrr --memo-start` and `kyrr --memo-stop` for held memo keys in
+  Hyprland, sway and river binds. Old settings keep working; "none" for
+  the memo key becomes F8.
 - Windows: the dictation and memo keys also work while kyrr's own window
   has the focus (Windows does not call the low-level hook then; the
   window passes the keys on).
@@ -21,8 +32,7 @@
   rested and RTKit ended kyrr; on both systems the microphone stuttered and
   dictation heard nothing. The pill's "nothing heard" note stays 3.2 s
   (was 1.6 s).
-- Voice memos: F8 (F9 or Pause when dictation has F8; switchable, or
-  none) starts and ends a recording, also from the tray (and on Linux
+- Voice memos: F8 (switchable) starts and ends a recording, also from the tray (and on Linux
   with `kyrr --memo`). Opus mono at 24 kbit/s, up to 4 hours, into
   `Documents/kyrr` as `YYYY-MM-DD HH-MM Title.opus`; the title comes from
   the first sentence the dictation model hears, and the pen next to it

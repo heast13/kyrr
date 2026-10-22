@@ -81,11 +81,12 @@
       <description>
         <ul>
           <li>Voice memos with F8, a list and one-click text</li>
+          <li>A key of your own for dictation and for voice memos</li>
           <li>Setup in three steps, with a Lean or Best quality setting for slower computers</li>
           <li>The wave writes the words smoothly, and they show sooner on slower computers</li>
           <li>Distance compensation is on by default</li>
           <li>The first words after starting kyrr are no longer lost</li>
-          <li>A Feedback button in Settings, About</li>
+          <li>A Feedback button in Setup, About</li>
         </ul>
       </description>
     </release>
