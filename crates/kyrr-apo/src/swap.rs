@@ -266,5 +266,11 @@ fn load(swap: &Swap, format: Format, generation: u32, model: Model) -> bool {
     if let Ok(mut outgoing) = swap.outgoing.lock() {
         drop(outgoing.take());
     }
+    // Taken all the same, just after the last look.
+    if swap.model.load(Ordering::Acquire) == code(Some(model)) {
+        log(&format!("switched: {label}, engine {engine}"));
+        report("running", &engine, &label);
+        return true;
+    }
     false
 }

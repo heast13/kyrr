@@ -217,8 +217,17 @@ pub fn start() -> Result<mpsc::Receiver<KeyEvent>, String> {
                 return;
             }
             let mut msg = MSG::default();
-            // -1 is an error, not a message.
-            while unsafe { GetMessageW(&mut msg, None, 0, 0) }.0 > 0 {}
+            // -1 is an error, not a message: once more after a moment.
+            loop {
+                match unsafe { GetMessageW(&mut msg, None, 0, 0) }.0 {
+                    0 => break,
+                    -1 => {
+                        eprintln!("kyrr: hotkey: the message loop failed");
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                    }
+                    _ => {}
+                }
+            }
         })
         .map_err(|e| e.to_string())?;
     ready_rx.recv().map_err(|e| e.to_string())??;
