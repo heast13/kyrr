@@ -8,11 +8,11 @@ msgstr ""
 msgid "Open kyrr"
 msgstr "kyrr öffnen"
 
-msgid "Remove background noise: on"
-msgstr "Störgeräusche entfernen: an"
+msgid "Isolate your voice: on"
+msgstr "Stimme isolieren: an"
 
-msgid "Remove background noise: off"
-msgstr "Störgeräusche entfernen: aus"
+msgid "Isolate your voice: off"
+msgstr "Stimme isolieren: aus"
 
 msgid "Improve voice: on"
 msgstr "Stimme verbessern: an"
@@ -47,8 +47,8 @@ msgstr "Hoppla, da ging was schief. Details unten."
 msgid "Oops, the filter is stuck. Your mic passes through as it is."
 msgstr "Hoppla, der Filter hakt. Dein Mikro läuft unverändert durch."
 
-msgid "Remove background noise"
-msgstr "Störgeräusche entfernen"
+msgid "Isolate your voice"
+msgstr "Stimme isolieren"
 
 msgid "Off. Your mic passes through as it is."
 msgstr "Aus. Dein Mikro läuft unverändert durch."
@@ -113,12 +113,6 @@ msgstr "Der goldene Mittelweg für die meisten Räume."
 msgid "Out with everything but you. Bouncer mode."
 msgstr "Alles raus außer dir. Türsteher-Modus."
 
-msgid "A third of the CPU, barely less clean. For old laptops."
-msgstr "Ein Drittel der Rechenleistung, kaum weniger sauber. Für alte Laptops."
-
-msgid "Cleanest result, a bit more CPU. Default for a reason."
-msgstr "Sauberstes Ergebnis, etwas mehr Rechenleistung. Nicht umsonst die Vorgabe."
-
 msgid "Set up a microphone first."
 msgstr "Richte zuerst ein Mikrofon ein."
 
@@ -133,12 +127,6 @@ msgstr "Mittel"
 
 msgid "Strong"
 msgstr "Stark"
-
-msgid "Model"
-msgstr "Modell"
-
-msgid "Thorough"
-msgstr "Gründlich"
 
 msgid "Lean"
 msgstr "Sparsam"
@@ -401,17 +389,11 @@ msgstr "Sprache und Diktiermodell"
 msgid "Done"
 msgstr "Fertig"
 
-msgid "Global settings"
-msgstr "Globale Einstellungen"
+msgid "Setup"
+msgstr "Setup"
 
 msgid "Settings: {}"
 msgstr "Einstellungen: {}"
-
-msgid "Simple"
-msgstr "Einfach"
-
-msgid "Advanced"
-msgstr "Erweitert"
 
 msgid "Credits"
 msgstr "Danksagungen"
@@ -1035,15 +1017,6 @@ msgstr "Strg rechts"
 msgid "Say “new line” or “new paragraph” for line breaks."
 msgstr "Sag „neue Zeile“ oder „neuer Absatz“ für Zeilenumbrüche."
 
-msgid "Words while you talk"
-msgstr "Wörter beim Sprechen"
-
-msgid "The display at the bottom of the screen shows what kyrr hears as you speak."
-msgstr "Die Anzeige unten am Bildschirm zeigt schon beim Sprechen, was kyrr hört."
-
-msgid "Off. The display shows only the bars; the text comes when you are done."
-msgstr "Aus. Die Anzeige zeigt nur die Balken, der Text kommt, wenn du fertig bist."
-
 msgid "Step 1 of 3"
 msgstr "Schritt 1 von 3"
 
@@ -1074,8 +1047,8 @@ msgstr "{} tippen, reden, nochmal tippen. Der Text landet an deinem Cursor."
 msgid "The kyrr filter is missing. Reinstall, please."
 msgstr "Der kyrr-Filter fehlt. Bitte neu installieren."
 
-msgid "This processor is a bit older: Lean runs smoother on it."
-msgstr "Dieser Prozessor ist etwas älter: Sparsam läuft darauf runder."
+msgid "This processor is a bit older: Lean runs smoother on it. Switch in Setup, under Effort."
+msgstr "Dieser Prozessor ist etwas älter: Sparsam läuft darauf runder. Umstellen im Setup, unter Rechenaufwand."
 
 msgid "Try again"
 msgstr "Nochmal versuchen"
@@ -1254,14 +1227,23 @@ msgstr "Mehrsprachig"
 msgid "Multilingual: French, Spanish, Italian, Dutch, Polish, Portuguese and more. kyrr notices the language by itself. German and English can be a bit less precise, and it needs its own download."
 msgstr "Mehrsprachig: Französisch, Spanisch, Italienisch, Niederländisch, Polnisch, Portugiesisch und mehr. kyrr erkennt die Sprache selbst. Deutsch und Englisch können etwas weniger genau sein, und es braucht einen eigenen Download."
 
-msgid "Simpler noise removal, the words show once you are done talking, dictations up to 2 minutes. Typed just as well. For older laptops."
-msgstr "Einfachere Geräuschunterdrückung, die Wörter erscheinen erst nach dem Sprechen, Diktieren bis 2 Minuten am Stück. Getippt wird genauso gut. Für ältere Laptops."
+msgid "Simpler noise removal, no live text: the words show once you are done talking. Dictations up to 2 minutes. Typed just as well. For older laptops."
+msgstr "Einfachere Geräuschunterdrückung, kein Live-Text: die Wörter erscheinen erst nach dem Sprechen. Diktieren bis 2 Minuten am Stück. Getippt wird genauso gut. Für ältere Laptops."
 
-msgid "The most thorough noise removal, the words show while you talk, dictations up to 15 minutes. Needs a bit more power."
-msgstr "Die gründlichste Geräuschunterdrückung, die Wörter erscheinen schon beim Sprechen, Diktieren bis 15 Minuten am Stück. Braucht etwas mehr Leistung."
+msgid "The most thorough noise removal and live text: the words show while you talk. Dictations up to 15 minutes. Needs a bit more power."
+msgstr "Die gründlichste Geräuschunterdrückung und Live-Text: die Wörter erscheinen schon beim Sprechen. Diktieren bis 15 Minuten am Stück. Braucht etwas mehr Leistung."
 
-msgid "Your own mix of noise removal and words while you talk."
-msgstr "Deine eigene Mischung aus Geräuschunterdrückung und Wörtern beim Sprechen."
+msgid "Live text"
+msgstr "Live-Text"
+
+msgid "The display at the bottom of the screen shows what kyrr hears as you speak."
+msgstr "Die Anzeige unten am Bildschirm zeigt schon beim Sprechen, was kyrr hört."
+
+msgid "Off. The display shows only the bars; the text comes when you are done."
+msgstr "Aus. Die Anzeige zeigt nur die Balken, der Text kommt, wenn du fertig bist."
+
+msgid "Your own mix of noise removal and live text."
+msgstr "Deine eigene Mischung aus Geräuschunterdrückung und Live-Text."
 
 msgid "Effort"
 msgstr "Rechenaufwand"
@@ -1269,11 +1251,11 @@ msgstr "Rechenaufwand"
 msgid "Best quality"
 msgstr "Beste Qualität"
 
-msgid "For most computers. The most thorough noise removal, the words show while you talk, dictations up to 15 minutes."
-msgstr "Für die meisten Rechner. Die gründlichste Geräuschunterdrückung, die Wörter erscheinen schon beim Sprechen, Diktieren bis 15 Minuten am Stück."
+msgid "For most computers. The most thorough noise removal and live text: the words show while you talk. Dictations up to 15 minutes."
+msgstr "Für die meisten Rechner. Die gründlichste Geräuschunterdrückung und Live-Text: die Wörter erscheinen schon beim Sprechen. Diktieren bis 15 Minuten am Stück."
 
-msgid "For older or weaker laptops, and if things stutter. Simpler noise removal, the words show once you are done talking, dictations up to 2 minutes."
-msgstr "Für ältere oder schwächere Laptops, und wenn’s ruckelt. Einfachere Geräuschunterdrückung, die Wörter erscheinen erst nach dem Sprechen, Diktieren bis 2 Minuten am Stück."
+msgid "For older or weaker laptops, and if things stutter. Simpler noise removal, no live text: the words show once you are done talking. Dictations up to 2 minutes."
+msgstr "Für ältere oder schwächere Laptops, und wenn’s ruckelt. Einfachere Geräuschunterdrückung, kein Live-Text: die Wörter erscheinen erst nach dem Sprechen. Diktieren bis 2 Minuten am Stück."
 
 msgid "Typed just as well either way. You can switch any time in the settings."
 msgstr "Getippt wird bei beiden gleich gut. Umschalten geht jederzeit in den Einstellungen."
@@ -1370,9 +1352,6 @@ msgstr "Tippe {}, sprich, tippe nochmal. kyrr speichert und benennt die Aufnahme
 
 msgid "Stop"
 msgstr "Stopp"
-
-msgid "Recordings ({})"
-msgstr "Aufzeichnungen ({})"
 
 msgid "Play"
 msgstr "Abspielen"

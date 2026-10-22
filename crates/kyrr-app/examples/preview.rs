@@ -273,8 +273,7 @@ fn main() {
     state.set_phrase(2);
     render(&window, &ui, &format!("{out}/download-{lang}.rgba"));
 
-    // The settings pages: global, then one for each card's gear. The basics
-    // first, then the same page in its advanced view.
+    // The settings pages: setup, then one for each card's gear.
     state.set_dictation_state(DictationState::Ready);
     state.set_probe_state(ProbeState::Idle);
     state.set_has_probe(true);
@@ -289,16 +288,13 @@ fn main() {
     state.set_deesser_index(2);
     for (page, name) in [(1, "settings"), (2, "noise"), (3, "voice"), (4, "dictation")] {
         state.set_page(page);
-        state.set_advanced(false);
         render(&window, &ui, &format!("{out}/{name}-{lang}.rgba"));
-        state.set_advanced(true);
         if page == 3 {
             state.set_look_index(4);
+            render(&window, &ui, &format!("{out}/{name}-custom-{lang}.rgba"));
+            state.set_look_index(2);
         }
-        render(&window, &ui, &format!("{out}/{name}-advanced-{lang}.rgba"));
-        state.set_look_index(2);
     }
-    state.set_advanced(false);
     state.set_page(5);
     ui.set_memo_folder(if lang == "de" { "Dokumente" } else { "Documents" }.into());
     render(&window, &ui, &format!("{out}/recordings-settings-{lang}.rgba"));
@@ -309,10 +305,8 @@ fn main() {
     state.set_listening(false);
     state.set_page(1);
     state.set_effort_index(2);
-    state.set_advanced(true);
-    render(&window, &ui, &format!("{out}/settings-advanced-custom-{lang}.rgba"));
+    render(&window, &ui, &format!("{out}/settings-custom-{lang}.rgba"));
     state.set_effort_index(1);
-    state.set_advanced(false);
 
     // The voice page with voice off, the defaults and an update on the way.
     state.set_voice_enabled(false);
@@ -325,9 +319,7 @@ fn main() {
     state.set_update_state(UpdateState::Available);
     state.set_update_version("0.4.0".into());
     state.set_update_installable(true);
-    state.set_advanced(true);
     render(&window, &ui, &format!("{out}/update-settings-{lang}.rgba"));
-    state.set_advanced(false);
     state.set_update_state(UpdateState::Downloading);
     state.set_update_progress(0.37);
     render(&window, &ui, &format!("{out}/update-{lang}.rgba"));
