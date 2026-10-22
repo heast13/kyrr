@@ -107,7 +107,9 @@ impl Chain {
         // microphone moved): the automatic level takes a fresh look, and the
         // noise filter, which still expects the last room and level, learns
         // anew. It does that within a word; holding on to the old state, it
-        // would take seconds and drop quiet words meanwhile.
+        // would take seconds and drop quiet words meanwhile. A stall of the
+        // audio in the middle of a recording looks the same and costs only
+        // that fresh start.
         let now = Instant::now();
         if self.last.is_some_and(|last| now.duration_since(last) > NEW_RECORDING) {
             self.voice.reset();

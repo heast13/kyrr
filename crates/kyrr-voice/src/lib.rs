@@ -116,7 +116,8 @@ const LEVEL_LOOK_DB: f64 = 4.0;
 /// How fast the gain moves: close to where it should be, gently (up
 /// slower than down), so it never pumps with the voice. Further off it
 /// closes the rest of the gap with `LEVEL_CATCH_MS` as time constant: a
-/// big change is done within the first word, not crept up on for seconds.
+/// big change is done within about half a second of speech, not crept up
+/// on for seconds.
 const LEVEL_UP_DB_PER_S: f64 = 3.0;
 const LEVEL_DOWN_DB_PER_S: f64 = 6.0;
 const LEVEL_CLOSE_DB: f64 = 2.0;
@@ -525,7 +526,7 @@ impl Level {
                 // Somewhere else now: the look is all that is known, and
                 // the next frames refine it quickly.
                 self.speech = look;
-                self.heard = self.look_frames;
+                self.heard = self.look_frames.max(self.first_frames);
             }
         }
         self.heard = self.heard.saturating_add(1);
@@ -758,7 +759,8 @@ impl Voice {
     }
 
     /// Starts the automatic level from a gain an earlier stream learned, so
-    /// a new call does not begin at the microphone's raw level.
+    /// a new call does not begin at the microphone's raw level. It still
+    /// takes a fresh look at the first speech, in case the voice moved.
     pub fn resume_level(&mut self, gain_db: f64) {
         self.level.resume(gain_db);
     }
@@ -788,7 +790,8 @@ impl Voice {
     }
 
     /// Clears all filter and dynamics state. The automatic level keeps
-    /// what it learned about the voice.
+    /// what it learned about the voice and takes a fresh look at the next
+    /// speech.
     pub fn reset(&mut self) {
         self.state.fill(Channel::default());
         self.deess_env = 0.0;
@@ -887,6 +890,10 @@ impl Voice {
             self.level.applied = self.level.smooth * self.level.applied + (1.0 - self.level.smooth) * want;
             let level = self.level.applied;
 
+            // Not clamped: a loud start while the gain is still high (the
+            // fresh look) may go over full scale here for a moment. The
+            // noise filter takes that in its stride, the limiter after it
+            // catches it cleanly, where a clamp here would crackle.
             for (x, v) in frame.iter_mut().zip(low_cut_buf.iter()) {
                 *x = (*v * level) as f32;
             }
@@ -923,7 +930,7 @@ impl Voice {
         }
         let ch = self.channels;
         // At most 8 channels are shaped together on the stack; more than
-        // that never reaches a microphone APO, the rest pass unchanged.
+        // that never reaches a microphone APO, the rest only get the gain.
         let mut frame_buf = [0f64; 8];
         let n = ch.min(frame_buf.len());
         for frame in buf.chunks_exact_mut(ch) {
@@ -1028,7 +1035,7 @@ impl Voice {
                 *x = (v * gain).clamp(-1.0, 1.0) as f32;
             }
             // Channels beyond the shaped ones keep their sound but get the
-            // same level, and never NaN or clipping.
+            // same gain, and never NaN or clipping.
             for x in frame.iter_mut().skip(n) {
                 let v = if x.is_finite() { *x as f64 } else { 0.0 };
                 *x = (v * gain).clamp(-1.0, 1.0) as f32;
