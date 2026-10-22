@@ -103,7 +103,7 @@
 // after the key is let go the sentence is written into the notes window. One saying after
 // another in random order, never the same one twice in a row. A click or tap pauses and
 // resumes it; it also waits while scrolled out of view. Visitors who asked for less motion
-// get one saying standing still: the words in the display and the sentence in the document.
+// get one saying standing still with a play button.
 (function () {
   var screen = document.querySelector("[data-demo]");
   if (!screen) return;
@@ -219,48 +219,59 @@
     requestAnimationFrame(tick);
   }
 
-  if (still) {
-    // One saying, complete: words in the display, the sentence in the document.
-    var n = pick();
-    while (doc.firstChild !== caret) doc.removeChild(doc.firstChild);
-    line(said[n], true);
-    place(spans[spans.length - 1], true);
-    caret.classList.add("typing");
-    key.classList.add("down");
-    video.src = base + lang + "-" + theme() + "-" + (n + 1) + ".webm";
-    video.addEventListener("loadeddata", function () { video.currentTime = 4; video.pause(); }, { once: true });
-    return;
-  }
-
-  // Click, tap or Enter/Space pauses and resumes.
-  function toggle() {
-    userPaused = !userPaused;
-    sync();
-  }
-  screen.classList.add("play");
-  screen.tabIndex = 0;
-  screen.addEventListener("click", toggle);
-  screen.addEventListener("keydown", function (e) {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
-  });
-
-  // A clip that cannot play is skipped, so the demo never stands still on a failure.
-  function done() {
-    key.classList.remove("down");
-    if (!inserted) { inserted = true; reveal(); }
-    gap = 0;
-    phase = "gap";
-  }
-  video.addEventListener("ended", done);
-  video.addEventListener("error", function () { if (phase === "video") done(); });
-  if (window.IntersectionObserver) {
-    new IntersectionObserver(function (e) {
-      visible = e[e.length - 1].isIntersecting;
+  function start() {
+    // Click, tap or Enter/Space pauses and resumes.
+    function toggle() {
+      userPaused = !userPaused;
       sync();
-    }).observe(screen);
+    }
+    screen.classList.add("play");
+    screen.tabIndex = 0;
+    screen.addEventListener("click", toggle);
+    screen.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+    });
+
+    // A clip that cannot play is skipped, so the demo never stands still on a failure.
+    function done() {
+      key.classList.remove("down");
+      if (!inserted) { inserted = true; reveal(); }
+      gap = 0;
+      phase = "gap";
+    }
+    video.addEventListener("ended", done);
+    video.addEventListener("error", function () { if (phase === "video") done(); });
+    if (window.IntersectionObserver) {
+      new IntersectionObserver(function (e) {
+        visible = e[e.length - 1].isIntersecting;
+        sync();
+      }).observe(screen);
+    }
+    // Without script the document shows the first saying as plain text; here it starts empty.
+    while (doc.firstChild !== caret) doc.removeChild(doc.firstChild);
+    begin();
+    requestAnimationFrame(tick);
   }
-  // Without script the document shows the first saying as plain text; here it starts empty.
+
+  if (!still) return start();
+
+  // One saying, written into the document. The visitor
+  // asked for less motion, so the demo only moves after a click on the play button.
+  var n = pick();
   while (doc.firstChild !== caret) doc.removeChild(doc.firstChild);
-  begin();
-  requestAnimationFrame(tick);
+  line(said[n], true);
+  place(spans[spans.length - 1], true);
+  caret.classList.add("typing");
+  key.classList.add("down");
+  var go = document.createElement("button");
+  go.type = "button";
+  go.className = "go";
+  go.textContent = lang === "de" ? "Abspielen" : "Play";
+  go.addEventListener("click", function (e) {
+    e.stopPropagation();
+    go.remove();
+    key.classList.remove("down");
+    start();
+  });
+  screen.appendChild(go);
 })();
