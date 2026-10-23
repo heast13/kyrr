@@ -58,8 +58,8 @@ de.RemoveData=Auch die heruntergeladenen Sprachmodelle (bis zu 900 MB) und die E
 en.UninstallFailed=Not everything could be removed. Restart the PC and try again.
 de.UninstallFailed=Nicht alles ließ sich entfernen. PC neu starten und nochmal versuchen.
 ; The same thanks as in the README and NOTICE.
-en.Thanks=kyrr stands on the work of others. Thank you to Fovty (HushMic), Ceva (DPDFNet), primeLine AI (German speech model), NVIDIA (Parakeet), csukuangfj and the k2-fsa team (sherpa-onnx), Equalizer APO and Slint.
-de.Thanks=kyrr baut auf der Arbeit anderer auf. Danke an Fovty (HushMic), Ceva (DPDFNet), primeLine AI (deutsches Sprachmodell), NVIDIA (Parakeet), csukuangfj und das k2-fsa-Team (sherpa-onnx), Equalizer APO und Slint.
+en.Thanks=kyrr stands on the work of others. Thank you to Fovty (HushMic), Ceva (DPDFNet), moondream (German and multilingual speech model), NVIDIA (Parakeet), csukuangfj and the k2-fsa team (sherpa-onnx), Equalizer APO and Slint.
+de.Thanks=kyrr baut auf der Arbeit anderer auf. Danke an Fovty (HushMic), Ceva (DPDFNet), moondream (deutsches und mehrsprachiges Sprachmodell), NVIDIA (Parakeet), csukuangfj und das k2-fsa-Team (sherpa-onnx), Equalizer APO und Slint.
 
 [Files]
 Source: "{#Stage}\kyrr.exe"; DestDir: "{app}"; Flags: ignoreversion

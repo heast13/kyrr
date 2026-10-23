@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
-/// Dictation language. Each language has its own model; the German one also
-/// handles English words and sentences well, the English one knows no German.
-/// The model for the other European languages is separate, see [`european`].
+/// Dictation language. German and English have a setting each; English has a
+/// model of its own (it knows no German), German shares its model with the
+/// other European languages, see [`european`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Language {
     German,
@@ -32,7 +32,7 @@ impl Language {
 
     pub fn model(self) -> &'static ModelSpec {
         match self {
-            Language::German => &GERMAN,
+            Language::German => &ULTRA,
             Language::English => &ENGLISH,
         }
     }
@@ -67,7 +67,7 @@ pub struct ModelSpec {
 macro_rules! hf {
     ($path:literal) => {
         concat!(
-            "https://huggingface.co/heast13/kyrr-models/resolve/3d3197f018575f10e5fcca2c2a0374c244d6e5e0/",
+            "https://huggingface.co/heast13/kyrr-models/resolve/714356e7a1f08ab7b3f014049e2225876cb09447/",
             $path
         )
     };
@@ -93,92 +93,49 @@ macro_rules! sherpa {
     };
 }
 
-/// primeline/parakeet-primeline, converted with `tools/export-primeline`.
-/// `de-primeline` had signed int8 weights, which ONNX Runtime gets wrong on
-/// x86 CPUs without VNNI (see the tool's README).
-static GERMAN: ModelSpec = ModelSpec {
-    id: "de-primeline-u8",
-    attribution: "German: primeline/parakeet-primeline by primeLine AI (CC-BY-4.0), \
+/// moondream/parakeet-ultra, a further training of NVIDIA's
+/// parakeet-tdt-0.6b-v3, converted with `tools/export-primeline`. It knows 25
+/// European languages, picks the right one by itself and is the one model for
+/// both "German" and "Multilingual": the setting differs, the files do not.
+static ULTRA: ModelSpec = ModelSpec {
+    id: "ultra-u8",
+    attribution: "German and other European languages: moondream/parakeet-ultra by moondream (CC-BY-4.0), \
                   based on NVIDIA parakeet-tdt-0.6b-v3; converted to ONNX and quantized to int8.",
     files: &[
         ModelFile {
             name: "encoder.int8.onnx",
-            urls: &[
-                hf!("de-primeline-u8/encoder.int8.onnx"),
-                github!("de-primeline-u8.encoder.int8.onnx"),
-            ],
-            size: 881_596_736,
-            sha256: "49596a2c9c20a224fd087b2c1dc8cdc5dfe3fb8d3ddd4eefb070d81e492c93d8",
-        },
-        ModelFile {
-            name: "decoder.int8.onnx",
-            urls: &[
-                hf!("de-primeline-u8/decoder.int8.onnx"),
-                github!("de-primeline-u8.decoder.int8.onnx"),
-            ],
-            size: 11_845_274,
-            sha256: "6b32c9339900086afd3d282eb40688ae19f3d106281e7731ee27ead1add8b29d",
-        },
-        ModelFile {
-            name: "joiner.int8.onnx",
-            urls: &[
-                hf!("de-primeline-u8/joiner.int8.onnx"),
-                github!("de-primeline-u8.joiner.int8.onnx"),
-            ],
-            size: 6_355_277,
-            sha256: "c84fcf848108531a7309ef65308dc5dc610091ce0fbde134f76bb0f6c42ca530",
-        },
-        ModelFile {
-            name: "tokens.txt",
-            urls: &[hf!("de-primeline-u8/tokens.txt"), github!("de-primeline-u8.tokens.txt")],
-            size: 93_939,
-            sha256: "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
-        },
-    ],
-    replaces: &["de-primeline"],
-};
-
-/// nvidia/parakeet-tdt-0.6b-v3 itself, converted like the German model. It
-/// is the base of `primeline/parakeet-primeline`, knows 25 European languages
-/// and picks the right one by itself.
-static EUROPEAN: ModelSpec = ModelSpec {
-    id: "eu-v3-u8",
-    attribution: "Other European languages: NVIDIA parakeet-tdt-0.6b-v3 (CC-BY-4.0); \
-                  converted to ONNX and quantized to int8.",
-    files: &[
-        ModelFile {
-            name: "encoder.int8.onnx",
-            urls: &[hf!("eu-v3-u8/encoder.int8.onnx"), github!("eu-v3-u8.encoder.int8.onnx")],
+            urls: &[hf!("ultra-u8/encoder.int8.onnx"), github!("ultra-u8.encoder.int8.onnx")],
             size: 881_596_698,
-            sha256: "098defd35fcbbcc5e4a5fa3e7832920cb7686f03c26103d24ae61ea176a62b46",
+            sha256: "5936b02bc4bb072af7ddef82e0960d920c938461a41c331398bf9a7ec86fd04a",
         },
         ModelFile {
             name: "decoder.int8.onnx",
-            urls: &[hf!("eu-v3-u8/decoder.int8.onnx"), github!("eu-v3-u8.decoder.int8.onnx")],
+            urls: &[hf!("ultra-u8/decoder.int8.onnx"), github!("ultra-u8.decoder.int8.onnx")],
             size: 11_845_274,
-            sha256: "0222a86147299d4dee90edf95b6d13827edb42ad8b7c9cf0b2582f030937c0b5",
+            sha256: "1fab98fe6c12aded87d2da66272cc9e148d0a0044ce3850a12fe56302ec4a922",
         },
         ModelFile {
             name: "joiner.int8.onnx",
-            urls: &[hf!("eu-v3-u8/joiner.int8.onnx"), github!("eu-v3-u8.joiner.int8.onnx")],
+            urls: &[hf!("ultra-u8/joiner.int8.onnx"), github!("ultra-u8.joiner.int8.onnx")],
             size: 6_355_277,
-            sha256: "fcc04e8d98f879196bb76015e3d91067ffa8304fb33c6ed8c04a72f53c9c0452",
+            sha256: "22061dbf5f87b9a6836255e71c6e1c022ad089130b8bd7062f598b6b419162be",
         },
         ModelFile {
             name: "tokens.txt",
-            urls: &[hf!("eu-v3-u8/tokens.txt"), github!("eu-v3-u8.tokens.txt")],
+            urls: &[hf!("ultra-u8/tokens.txt"), github!("ultra-u8.tokens.txt")],
             size: 102_132,
             sha256: "ba8e4007c65f4bb4358ffe2ecc13d9ccc7a10351151065242b5c3a943e685742",
         },
     ],
-    replaces: &[],
+    // The two earlier models: someone who had either chosen one gets Ultra
+    // without being asked, and the old files go.
+    replaces: &["de-primeline-u8", "de-primeline", "eu-v3-u8"],
 };
 
 /// The model for French, Spanish, Italian, Dutch, Polish, Portuguese and the
-/// other European languages. It also knows German and English, which the
-/// two models made for them handle a little better on some test sets.
+/// other European languages. It is the German model too.
 pub fn european() -> &'static ModelSpec {
-    &EUROPEAN
+    &ULTRA
 }
 
 /// nvidia/parakeet-unified-en-0.6b as packaged by sherpa-onnx (int8,

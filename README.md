@@ -151,8 +151,8 @@ kyrr stands on the work of others. Thank you to
   kyrr's filter is built on,
 - [Ceva](https://github.com/ceva-ip/DPDFNet) for DPDFNet and for releasing
   its models openly,
-- [primeLine AI](https://huggingface.co/primeline/parakeet-primeline) for
-  the German speech model,
+- [moondream](https://huggingface.co/moondream/parakeet-ultra) for the
+  German and multilingual speech model,
 - NVIDIA for Parakeet, the model family behind all dictation languages,
 - csukuangfj and the [k2-fsa](https://github.com/k2-fsa/sherpa-onnx) team
   for sherpa-onnx and the English model in ONNX,

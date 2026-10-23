@@ -278,8 +278,8 @@ msgstr "kyrr ist eigentlich nur sehr gut im Zusammenstecken. Gebaut auf der Arbe
 msgid "Noise removal: DPDFNet by Ceva (Apache-2.0), via Fovty's HushMic."
 msgstr "Störgeräusche: DPDFNet von Ceva (Apache-2.0), über HushMic von Fovty."
 
-msgid "German dictation: parakeet-primeline by primeLine AI (CC-BY-4.0), based on NVIDIA Parakeet."
-msgstr "Diktierfunktion DE: parakeet-primeline von primeLine AI (CC-BY-4.0), auf Basis von NVIDIA Parakeet."
+msgid "German and multilingual dictation: parakeet-ultra by moondream (CC-BY-4.0), based on NVIDIA parakeet-tdt-0.6b-v3."
+msgstr "Diktierfunktion DE und mehrsprachig: parakeet-ultra von moondream (CC-BY-4.0), auf Basis von NVIDIA parakeet-tdt-0.6b-v3."
 
 msgid "English dictation: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX by sherpa-onnx."
 msgstr "Diktierfunktion EN: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX von sherpa-onnx."
@@ -1214,9 +1214,6 @@ msgstr "✓ kyrr darf tippen."
 
 msgid "Allow typing"
 msgstr "Tippen erlauben"
-
-msgid "Dictation in more languages: NVIDIA parakeet-tdt-0.6b-v3 (CC-BY-4.0)."
-msgstr "Diktieren in weiteren Sprachen: NVIDIA parakeet-tdt-0.6b-v3 (CC-BY-4.0)."
 
 msgid "Multilingual"
 msgstr "Mehrsprachig"
