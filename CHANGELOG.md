@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.2 (2026-10-23)
+
+- Dictation model: parakeet-ultra (about 900 MB) replaces the German
+  (primeline) and the Multilingual (EU-v3) model; both settings stay, one
+  download behind them. It does better on short clips, spontaneous speech,
+  noise and "ß". Installs with an old model get Ultra downloaded without
+  asking, and the old model folders are removed afterwards.
+- Multilingual: the whole app is in English (was the system language).
+- Live words in the pill: a word the last look heard differently waits
+  until two looks agree (or 2.5 s), the pen writes quicker and letters fade
+  in over 0.4 s; slow computers look at shorter stretches. On 115 German
+  dictations wrong words fell from 5.1 to 4.3 %, the time until a word is
+  readable from 2.1 to 1.7 s (4.4 to 3.7 s at laptop speed).
+- Credits name the Ultra model's author (moondream, CC-BY-4.0).
+
 ## 0.6.1 (2026-10-22)
 
 - Voice memos, recordings window: wider, with larger text. A memo's text
