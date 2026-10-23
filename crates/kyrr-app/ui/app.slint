@@ -1198,9 +1198,8 @@ component AboutSettings inherits Card {
     // in English in every language: the license gives it word for word.
     Hint { text: @tr("kyrr is mostly just very good at plugging things together. Built on the work of many."); }
     if root.credits: Hint { text: @tr("Noise removal: DPDFNet by Ceva (Apache-2.0), via Fovty's HushMic."); }
-    if root.credits: Hint { text: @tr("German dictation: parakeet-primeline by primeLine AI (CC-BY-4.0), based on NVIDIA Parakeet."); }
+    if root.credits: Hint { text: @tr("German and multilingual dictation: parakeet-ultra by moondream (CC-BY-4.0), based on NVIDIA parakeet-tdt-0.6b-v3."); }
     if root.credits: Hint { text: @tr("English dictation: NVIDIA parakeet-unified-en-0.6b, Licensed by NVIDIA Corporation under the NVIDIA Open Model License; ONNX by sherpa-onnx."); }
-    if root.credits: Hint { text: @tr("Dictation in more languages: NVIDIA parakeet-tdt-0.6b-v3 (CC-BY-4.0)."); }
     if root.credits: Hint { text: @tr("Plus the work of many more not named here. Raising a beer to you all."); }
     // Up to two rows: three buttons side by side overflow the card in German and
     // with wider system fonts, and the window has a fixed width.

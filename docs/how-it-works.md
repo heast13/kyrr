@@ -120,9 +120,8 @@ of after a quarter of an hour without dictation:
 
 | Language | Model | Size |
 |---|---|---|
-| German | [primeline/parakeet-primeline](https://huggingface.co/primeline/parakeet-primeline), a German fine-tune of NVIDIA Parakeet; also handles English | 900 MB |
+| German and Multilingual (Language choice in the first-start setup and in Setup) | [moondream/parakeet-ultra](https://huggingface.co/moondream/parakeet-ultra), a further training of NVIDIA Parakeet v3 for 25 European languages. Both choices use the same files (one download); "Multilingual" picks the language itself. Works in French, Spanish, Polish, Portuguese, Italian and Dutch as well as German and English | 900 MB |
 | English | [NVIDIA parakeet-unified-en-0.6b](https://huggingface.co/nvidia/parakeet-unified-en-0.6b) | 663 MB |
-| Multilingual (Language choice in the first-start setup and in Setup) | [NVIDIA parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), 25 European languages, picks the language itself. Works in French, Spanish, Polish, Portuguese, Italian and Dutch (see the measurements in `tools/export-primeline`); German and English also work | 900 MB |
 
 On Windows dictation does nothing while a window running as administrator is
 in front: Windows keeps normal programs from seeing the keyboard there.
