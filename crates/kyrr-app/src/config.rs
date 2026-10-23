@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 #[serde(default)]
 pub struct Config {
     /// "de" or "en": user interface and dictation model. "multi": dictation
-    /// with the model for many European languages, the interface in the
-    /// system's language.
+    /// with the model for many European languages, the interface in English
+    /// (the language someone who speaks any of them most likely reads).
     pub language: String,
     pub dictation: bool,
     /// First-run setup finished.
@@ -142,10 +142,10 @@ impl Config {
         }
     }
 
-    /// The interface language.
+    /// The interface language: English while dictating in many languages.
     pub fn language(&self) -> Language {
         if self.more_languages() {
-            return system_language();
+            return Language::English;
         }
         Language::from_code(&self.language).unwrap_or(Language::English)
     }
@@ -329,6 +329,21 @@ pub fn models_dir() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn many_languages_means_an_english_interface() {
+        let config = Config {
+            language: MULTI.into(),
+            ..Config::default()
+        };
+        assert_eq!(config.language(), Language::English);
+        assert_eq!(config.language_index(), 2);
+        let config = Config {
+            language: "de".into(),
+            ..Config::default()
+        };
+        assert_eq!(config.language(), Language::German);
+    }
 
     #[test]
     fn the_memo_key_is_never_dictations() {
