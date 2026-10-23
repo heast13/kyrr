@@ -16,7 +16,7 @@
 //!   more after it): a word the model is unsure of comes out different from
 //!   look to look, and the first guess is often wrong.
 //! - A slow computer looks at shorter stretches and takes a word as sure a
-//!   little sooner: its looks come seconds apart, so by the time a word
+//!   little sooner: its looks come far apart, so by the time a word
 //!   shows, much more was said after it anyway.
 //!
 //! - After a look that found nothing new, the next one starts shortly before
@@ -223,12 +223,12 @@ mod tests {
         let mut live = Live::default();
         live.heard(0.0, 1.2, timed("Wir haben Kalk", 0.0));
         assert_eq!(shown(&live), "");
-        // "Kalb" has a second and a bit after it, but the last look heard
-        // "Kalk" there.
-        live.heard(0.0, 2.2, timed("Wir haben Kalb fleisch", 0.0));
+        // "Kalb" (to 1.1 s) has a second and a bit after it, but the last
+        // look heard "Kalk" there.
+        live.heard(0.0, 2.5, timed("Wir haben Kalb fleisch", 0.0));
         assert_eq!(shown(&live), "Wir haben");
         // Heard alike once more: sure.
-        live.heard(0.0, 2.6, timed("Wir haben Kalb fleisch aus", 0.0));
+        live.heard(0.0, 2.9, timed("Wir haben Kalb fleisch aus", 0.0));
         assert_eq!(shown(&live), "Wir haben Kalb fleisch");
     }
 
