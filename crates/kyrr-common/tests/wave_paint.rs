@@ -45,8 +45,10 @@ fn frames(scale: f32, dark: bool, with_words: bool) -> u64 {
 
 #[test]
 fn the_quick_paths_paint_the_same_pixels() {
-    assert_eq!(frames(1.0, true, true), 0x5bec_60a3_b703_be34);
-    assert_eq!(frames(1.5, false, true), 0x2f0a_8596_bbea_3172);
+    // With words: taken again from the plain drawing when the pen got
+    // quicker.
+    assert_eq!(frames(1.0, true, true), 0x9f6c_55ad_055f_14fc);
+    assert_eq!(frames(1.5, false, true), 0xf080_9279_027f_4cf3);
     assert_eq!(frames(2.0, true, false), 0xcd49_4ac9_ae7f_0d0d);
     assert_eq!(frames(1.25, false, false), 0x42d5_7580_8033_24fd);
 }

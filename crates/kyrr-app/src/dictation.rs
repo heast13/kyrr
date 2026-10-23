@@ -34,6 +34,10 @@ const IDLE_UNLOAD: Duration = Duration::from_secs(15 * 60);
 const LOOK_FIRST: Duration = Duration::from_millis(700);
 const LOOK_REST: Duration = Duration::from_millis(400);
 
+/// A look that takes longer than this marks a slow computer: the next one
+/// looks at a shorter stretch (see [`Live::set_slow`]).
+const LOOK_SLOW: Duration = Duration::from_millis(500);
+
 /// While the key is held, the recording is taken in this often, and every
 /// piece of it that is complete is recognised then, so a long dictation is
 /// typed soon after the key goes up (see [`Transcript`]).
@@ -691,6 +695,7 @@ impl Worker {
             (self.notify)(Event::Heard(self.words.shown().to_vec()));
         }
         let took = started.elapsed();
+        self.words.set_slow(took > LOOK_SLOW);
         self.looks.push(took);
         // The first look after loading the model may be slow once.
         let slow = self.looks.iter().rev().take(2).filter(|t| **t > LOOK_TOO_SLOW).count();

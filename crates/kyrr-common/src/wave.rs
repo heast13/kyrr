@@ -70,7 +70,7 @@ const EDGE_FADE: f32 = 22.0;
 /// an even speed, however the words come in (a few at a time, every now and
 /// then). A letter fades in over this long (seconds) from the moment the pen
 /// reaches it, rising a little (`RISE`, logical pixels).
-const FADE_TIME: f32 = 0.8;
+const FADE_TIME: f32 = 0.4;
 const RISE: f32 = 3.0;
 /// The pen goes at the pace the words have been coming in lately (averaged
 /// over `PEN_AVERAGE` seconds, a little faster to work off a backlog) plus a
@@ -79,8 +79,8 @@ const RISE: f32 = 3.0;
 /// changes its speed gently (`PEN_EASE` per second), so a burst of words
 /// does not make it dash and then stand still.
 const PEN_AVERAGE: f32 = 3.0;
-const PEN_CATCH_UP: f32 = 1.0;
-const PEN_MIN: f32 = 110.0;
+const PEN_CATCH_UP: f32 = 0.4;
+const PEN_MIN: f32 = 200.0;
 const PEN_MAX: f32 = 400.0;
 const PEN_EASE: f32 = 4.0;
 /// The pill makes room for the line this far ahead of the pen.

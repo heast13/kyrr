@@ -11,7 +11,13 @@
 //!   short however long the recording gets.
 //! - A word is sure once a second and a bit followed it (the model hears a
 //!   word better once it knows what comes after), or once two looks in a
-//!   row heard it alike and the speaker has moved on from it.
+//!   row heard it alike and the speaker has moved on from it. Where the last
+//!   look heard something else, it waits for two looks to agree (or for much
+//!   more after it): a word the model is unsure of comes out different from
+//!   look to look, and the first guess is often wrong.
+//! - A slow computer looks at shorter stretches and takes a word as sure a
+//!   little sooner: its looks come far apart, so by the time a word
+//!   shows, much more was said after it anyway.
 //!
 //! - After a look that found nothing new, the next one starts shortly before
 //!   where that one ended, early enough to catch speech that had begun but
@@ -43,6 +49,15 @@ const AFTER: f32 = 1.2;
 /// A word two looks agree on is sure with this much after it.
 const AFTER_AGREED: f32 = 0.3;
 
+/// A word the last look heard differently is sure with this much after it,
+/// unless two looks agree on it before.
+const AFTER_DISPUTED: f32 = 2.5;
+
+/// On a slow computer (see [`Live::set_slow`]): heard before the first new
+/// word, and the time after a word that makes it sure.
+const BEFORE_SLOW: f32 = 0.8;
+const AFTER_SLOW: f32 = 1.0;
+
 /// Two looks agree on a word heard this close in time.
 const SAME_PLACE: f32 = 0.3;
 
@@ -63,6 +78,8 @@ pub struct Live {
     unsure: Vec<Word>,
     /// Where the last look that found nothing new ended.
     quiet: f32,
+    /// The looks take long on this computer.
+    slow: bool,
 }
 
 impl Live {
@@ -71,10 +88,16 @@ impl Live {
         &self.shown
     }
 
+    /// Whether the looks take long on this computer (the last one did).
+    pub fn set_slow(&mut self, slow: bool) {
+        self.slow = slow;
+    }
+
     /// Where to start the next look, seconds into a recording `length`
     /// seconds long so far.
     pub fn from(&self, length: f32) -> f32 {
-        (self.last.1 - BEFORE)
+        let before = if self.slow { BEFORE_SLOW } else { BEFORE };
+        (self.last.1 - before)
             .max(self.quiet - QUIET_BEFORE)
             .max(length - LONGEST)
             .max(0.0)
@@ -97,13 +120,22 @@ impl Live {
             .filter(|w| (w.start + w.end) / 2.0 > done)
             .skip_while(|w| last_key.as_deref() == Some(&key(&w.text)) && (w.start - last_start).abs() <= SAME_PLACE)
             .collect();
+        let after = if self.slow { AFTER_SLOW } else { AFTER };
         let mut added = 0;
-        for (i, word) in new.iter().enumerate() {
+        for word in &new {
+            let here = |u: &&Word| u.start < word.end && word.start < u.end;
             let agreed = self
                 .unsure
-                .get(i)
-                .is_some_and(|u| key(&u.text) == key(&word.text) && (u.start - word.start).abs() <= SAME_PLACE);
-            let sure = word.end <= to - AFTER || (agreed && word.end <= to - AFTER_AGREED);
+                .iter()
+                .any(|u| key(&u.text) == key(&word.text) && (u.start - word.start).abs() <= SAME_PLACE);
+            let disputed = !agreed && self.unsure.iter().filter(here).any(|u| key(&u.text) != key(&word.text));
+            let sure = if agreed {
+                word.end <= to - AFTER_AGREED
+            } else if disputed {
+                word.end <= to - AFTER_DISPUTED
+            } else {
+                word.end <= to - after
+            };
             if !sure {
                 break;
             }
@@ -184,6 +216,33 @@ mod tests {
         assert_eq!(shown(&live), "Hallo");
         live.heard(0.0, 1.95, timed("Hallo Anna, wie geht", 0.0));
         assert_eq!(shown(&live), "Hallo Anna, wie");
+    }
+
+    #[test]
+    fn a_word_heard_differently_waits_for_two_looks_to_agree() {
+        let mut live = Live::default();
+        live.heard(0.0, 1.2, timed("Wir haben Kalk", 0.0));
+        assert_eq!(shown(&live), "");
+        // "Kalb" (to 1.1 s) has a second and a bit after it, but the last
+        // look heard "Kalk" there.
+        live.heard(0.0, 2.5, timed("Wir haben Kalb fleisch", 0.0));
+        assert_eq!(shown(&live), "Wir haben");
+        // Heard alike once more: sure.
+        live.heard(0.0, 2.9, timed("Wir haben Kalb fleisch aus", 0.0));
+        assert_eq!(shown(&live), "Wir haben Kalb fleisch");
+    }
+
+    #[test]
+    fn a_slow_computer_looks_at_shorter_stretches() {
+        let mut live = Live::default();
+        live.set_slow(true);
+        // "haben" (to 0.7 s) has a second after it.
+        assert!(live.heard(0.0, 1.75, timed("Wir haben lange", 0.0)));
+        assert_eq!(shown(&live), "Wir haben");
+        live.heard(0.0, 4.0, timed("Wir haben lange über die Arbeit", 0.0));
+        assert_eq!(shown(&live), "Wir haben lange über die Arbeit");
+        // "Arbeit" ends at 2.3 s: the next look starts 0.8 s before.
+        assert!((live.from(4.5) - 1.5).abs() < 1e-5);
     }
 
     #[test]
