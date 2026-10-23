@@ -16,6 +16,18 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
+## 0.6.2
+
+- A new dictation model for German and Multilingual: it understands short sentences and everyday speech better, copes better with noise and writes "ß" correctly. kyrr downloads it once (about 900 MB) and then removes the old model; English stays as it is.
+- Multilingual now shows kyrr entirely in English.
+- The words in the pill appear sooner and are wrong less often: a word the model is unsure about waits a moment until it is confirmed, and the pen writes quicker.
+
+### Deutsch
+
+- Ein neues Diktiermodell für Deutsch und Mehrsprachig: Es versteht kurze Sätze und Alltagssprache besser, kommt mit Geräuschen besser zurecht und schreibt „ß“ richtig. kyrr lädt es einmal herunter (etwa 900 MB) und entfernt dann das alte Modell; Englisch bleibt, wie es ist.
+- Mehrsprachig zeigt kyrr jetzt ganz auf Englisch.
+- Die Wörter in der Pille erscheinen früher und sind seltener falsch: Ein Wort, bei dem sich das Modell unsicher ist, wartet kurz auf Bestätigung, und der Stift schreibt schneller.
+
 ## 0.6.1
 
 - Voice memos: the recordings window is wider and easier to read. A memo's text is one field now: select, copy (Ctrl+C leaves the times out) and correct it, and your corrections stay. A change made in another program shows up by itself. The times are clock times, and a dot beside "Recordings" shows a recording you have not looked at yet.
