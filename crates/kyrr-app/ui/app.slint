@@ -795,7 +795,13 @@ export component Tray inherits SystemTrayIcon {
     callback toggle-voice();
     callback toggle-dictation();
     callback quit();
-    icon: recording || memo-recording ? @image-url("icons/kyrr-recording-32.png") : active ? @image-url("icons/kyrr-32.png") : @image-url("icons/kyrr-off-32.png");
+    // No icon at all where kyrr's widget in Omarchy's bar stands in for it:
+    // Slint registers the icon with the panel as soon as it has an image,
+    // whatever `visible` says, so the image is what keeps it away.
+    in property <bool> off;
+    property <image> no-icon;
+    visible: !root.off;
+    icon: root.off ? root.no-icon : recording || memo-recording ? @image-url("icons/kyrr-recording-32.png") : active ? @image-url("icons/kyrr-32.png") : @image-url("icons/kyrr-off-32.png");
     tooltip: "kyrr · " + (root.memo-recording ? @tr("recording") + " · " : "")
         + (root.filter-enabled ? @tr("noise filter on") : @tr("noise filter off"))
         + (root.dictation-ready ? " · " + @tr("{} ready", root.key-name) : "")

@@ -3156,6 +3156,20 @@ fn tell_widget(window: &MainWindow) {
         .into_iter()
         .find(|n| !n.is_empty())
         .unwrap_or_default();
+    // The little wave next to the status line, as in the window: busy,
+    // or on and waiting for an app to use the microphone.
+    let filter_state = state.get_filter_state();
+    let working = state.get_mic_active()
+        || state.get_probe_state() != ProbeState::Idle
+        || state.get_model_switching()
+        || matches!(
+            state.get_dictation_state(),
+            DictationState::Recording | DictationState::Transcribing | DictationState::Downloading
+        )
+        || filter_state == FilterState::SettingUp
+        || state.get_memo_recording();
+    let waiting = (state.get_filter_enabled() || state.get_voice_enabled())
+        && matches!(filter_state, FilterState::Running | FilterState::Checking);
     let memos = memos::memos();
     let status = json!({
         "lang": if german { "de" } else { "en" },
@@ -3164,6 +3178,7 @@ fn tell_widget(window: &MainWindow) {
         "note": state.invoke_alert_note().as_str(),
         // The red notes are problems; a microphone coming back is good news.
         "noteGood": state.get_alert() == 7,
+        "pulse": if working { "working" } else if waiting { "waiting" } else { "" },
         "setupDone": !window.get_setup_mode(),
         "setupStep": window.get_setup_step() + 1,
         "filter": {
@@ -3243,6 +3258,7 @@ fn tell_widget(window: &MainWindow) {
 /// A tray icon wired to the app.
 fn new_tray(app: &Rc<App>) -> Result<Tray, slint::PlatformError> {
     let tray = Tray::new()?;
+    tray.set_off(headless());
     let quit = {
         let worker = app.worker.clone();
         move || {
