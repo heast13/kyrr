@@ -105,7 +105,7 @@
     <section class="steps" aria-labelledby="h-how">
       <h2 class="section-title" id="h-how">How it works</h2>
       <ol>
-        <li><b>Installation.</b> Windows: an installer, which needs administrator rights. Linux: a single AppImage file, no administrator rights. kyrr sets itself up on first start.</li>
+        <li><b>Installation.</b> Windows: an installer, which needs administrator rights. Linux: a single AppImage file, no administrator rights. Omarchy: a plugin for the bar, installed with one command. kyrr sets itself up on first start.</li>
         <li><b>Audio.</b> On Windows, kyrr adds a filter to the Windows audio system that runs directly on the microphone. On Linux, kyrr creates a PipeWire microphone called “kyrr” and makes it the default. Your apps need no changes. If you switch to another microphone, kyrr switches with it.</li>
         <li><b>Dictation.</b> The first time you dictate, kyrr downloads the speech model for your language once (German 900 MB, English 663 MB, other European languages 900 MB). After that, dictation works offline.</li>
         <li><b>Updates.</b> kyrr checks once a day for a new version and tells you about it. On Windows, “Update” installs it. On Linux, run the install commands again; a running kyrr is replaced by the new version.</li>
@@ -150,7 +150,7 @@
 <section class="download" id="download" aria-labelledby="h-download">
   <div class="wrap">
     <h2 id="h-download">Download</h2>
-    <p class="lead">Free of charge. Source code on GitHub under MIT or Apache 2.0.</p>
+    <p class="lead">Free of charge. Three versions: Windows, Linux and Omarchy. Source code on GitHub under MIT or Apache 2.0.</p>
     <div data-tabs>
       <div class="panel" id="windows" data-label="Windows">
         <h3>Windows</h3>
@@ -166,7 +166,7 @@
 
       <div class="panel" id="appimage" data-label="Linux (beta)">
         <h3>Linux (beta)</h3>
-        <p class="small">The Linux version is still a beta: it works, but has been tested on fewer systems than the Windows version.</p>
+        <p class="small">The Linux version is still a beta: it works, but has been tested on fewer systems than the Windows version. On Omarchy, use the Omarchy tab instead.</p>
         <p>Paste this into a terminal. It downloads kyrr to <code>~/.local/bin</code>, makes it executable and starts it. Run it again for an update: a running kyrr closes and the new one starts.</p>
         <div class="codebox"><pre tabindex="0"><code>mkdir -p ~/.local/bin
 curl -fL -o ~/.local/bin/kyrr.new https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage && chmod +x ~/.local/bin/kyrr.new && mv -f ~/.local/bin/kyrr.new ~/.local/bin/kyrr
@@ -189,6 +189,13 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
             <p class="small">The last line also deletes your settings and the speech models. Leave it out to keep them.</p>
           </details>
         </div>
+      </div>
+
+      <div class="panel" id="omarchy" data-label="Omarchy">
+        <h3>Omarchy</h3>
+        <p>For Omarchy 4.0 or newer. kyrr is a plugin for the bar: the same app, with its menu in Omarchy's style and no window of its own. Paste this into a terminal:</p>
+        <div class="codebox"><pre tabindex="0"><code>omarchy plugin add https://github.com/heast13/omarchy-kyrr.git --enable</code></pre></div>
+        <p class="small">Then click the kyrr icon in the bar. The menu installs kyrr for you and starts its setup. <a href="https://github.com/heast13/omarchy-kyrr">Details on GitHub</a></p>
       </div>
     </div>
     <p class="made-with"><a href="https://slint.dev"><img src="made-with-slint.png" width="141" height="65" alt="Made with Slint"></a></p>
@@ -233,6 +240,7 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
       <a href="https://github.com/heast13/kyrr">GitHub</a>
       <a href="https://github.com/heast13/kyrr#readme">README</a>
       <a href="https://github.com/heast13/kyrr/releases/latest">Releases</a>
+      <a href="https://github.com/heast13/omarchy-kyrr">Omarchy</a>
       <a href="https://github.com/heast13/kyrr#privacy">Privacy</a>
     </p>
     <p>Free software under MIT or Apache 2.0. This website sets no cookies and uses no trackers; a language choice is stored only in your browser.</p>
