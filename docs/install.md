@@ -87,7 +87,8 @@ Either way kyrr adds itself to your app menu on its first start.
   For Omarchy's bar there is a widget with kyrr's menu, which also installs
   kyrr: `omarchy plugin add https://github.com/heast13/omarchy-kyrr.git
   --enable`. While it is in the bar, kyrr has no tray icon and its window no
-  buttons to hide or quit; the widget's menu does both.
+  buttons to hide or quit: the widget's menu opens it, a right click on the
+  widget quits it.
 - **X11 desktops (Linux Mint, XFCE):** the keys just work.
 - **Without a tray icon** the window's X minimizes kyrr where the desktop can
   bring it back (GNOME, say) and quits it on tiling ones; "Quit" always ends
