@@ -3108,6 +3108,12 @@ fn follow_widget(window: &MainWindow) {
             eprintln!("kyrr: Omarchy's bar shows no kyrr widget, so kyrr opens its window");
             HEADLESS.set(false);
             state.set_widget(false);
+            // An icon only where a tray host takes it, as at a normal start.
+            let host = platform::has_tray();
+            if host {
+                tray.set_off(false);
+            }
+            state.set_tray(host && tray.show().is_ok());
             show(window);
             return;
         }
