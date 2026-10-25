@@ -309,34 +309,10 @@ fn state_file() -> Option<PathBuf> {
     Some(dir.join("kyrr/state"))
 }
 
-/// The switches of kyrr's tray menu, for the bar widget's menu.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Status {
-    /// kyrr speaks German; else English.
-    pub german: bool,
-    pub filter: bool,
-    pub voice: bool,
-    pub dictation: bool,
-    /// The dictation key works now (model there, key set).
-    pub ready: bool,
-    pub key: String,
-    pub memos: bool,
-    /// A voice memo is being recorded.
-    pub memo: bool,
-    pub memo_key: String,
-    /// A newer version kyrr found, "" for none.
-    pub update: String,
-    /// The line under kyrr's name in its window.
-    pub line: String,
-    /// The note at the bottom of the window, "" for none.
-    pub note: String,
-    /// The note is good news (a microphone came back), not a problem.
-    pub note_good: bool,
-}
-
 struct Shown {
     mode: &'static str,
-    status: Option<Status>,
+    /// Everything else the widget shows, a JSON object kyrr's app makes.
+    status: Option<String>,
     written: String,
 }
 
@@ -352,8 +328,9 @@ pub fn set_state(mode: &'static str) {
     show(|shown| shown.mode = mode);
 }
 
-/// Tells the bar widget kyrr's switches.
-pub fn set_status(status: Status) {
+/// Tells the bar widget kyrr's settings and what they show: a JSON object,
+/// described in the widget's README ("State").
+pub fn set_status(status: String) {
     show(|shown| shown.status = Some(status));
 }
 
@@ -383,39 +360,12 @@ fn show(change: impl FnOnce(&mut Shown)) {
     shown.written = text;
 }
 
-fn state_json(mode: &str, s: &Status, pid: u32) -> String {
-    format!(
-        "{{\"pid\":{pid},\"mode\":{},\"lang\":{},\"filter\":{},\"voice\":{},\"dictation\":{},\"ready\":{},\"key\":{},\"memos\":{},\"memo\":{},\"memoKey\":{},\"update\":{},\"line\":{},\"note\":{},\"noteGood\":{}}}\n",
-        json_text(mode),
-        json_text(if s.german { "de" } else { "en" }),
-        s.filter,
-        s.voice,
-        s.dictation,
-        s.ready,
-        json_text(&s.key),
-        s.memos,
-        s.memo,
-        json_text(&s.memo_key),
-        json_text(&s.update),
-        json_text(&s.line),
-        json_text(&s.note),
-        s.note_good,
-    )
-}
-
-fn json_text(text: &str) -> String {
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push('"');
-    for c in text.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
+/// The status object with the format's version, kyrr's process id and what
+/// it does in front, on one line.
+fn state_json(mode: &str, status: &str, pid: u32) -> String {
+    let rest = status.trim().strip_prefix('{').unwrap_or("}").trim_start();
+    let comma = if rest.starts_with('}') { "" } else { "," };
+    format!("{{\"v\":2,\"pid\":{pid},\"mode\":\"{mode}\"{comma}{rest}\n")
 }
 
 /// kyrr ends: the widget shows it as not running.
@@ -426,6 +376,39 @@ pub fn clear_state() {
             let _ = std::fs::remove_dir(dir);
         }
     }
+}
+
+/// The id of kyrr's widget among Omarchy's plugins.
+const PLUGIN: &str = "heast13.kyrr";
+
+/// Whether kyrr's widget is in Omarchy's bar for good: installed, and
+/// turned on, which is its id in the bar's layout in `shell.json` (turning
+/// a widget off takes it out of the layout). Then the widget's menu is all
+/// of kyrr: no window, no tray icon.
+pub fn plugin_on() -> bool {
+    let omarchy = config_home().join("omarchy");
+    path().is_some()
+        && omarchy.join("plugins").join(PLUGIN).join("manifest.json").is_file()
+        && std::fs::read_to_string(omarchy.join("shell.json")).is_ok_and(|text| plugin_in(&text))
+}
+
+fn plugin_in(shell_json: &str) -> bool {
+    shell_json.contains(&format!("\"{PLUGIN}\""))
+}
+
+/// Opens the widget's menu, where kyrr's window would come up elsewhere.
+pub fn open_menu() {
+    let program = path()
+        .map(|p| p.join("bin/omarchy-shell"))
+        .filter(|p| p.is_file())
+        .unwrap_or_else(|| PathBuf::from("omarchy-shell"));
+    let _ = std::process::Command::new(program)
+        .args(["-q", PLUGIN, "open"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map(|mut child| std::thread::spawn(move || child.wait()));
 }
 
 /// Whether kyrr's widget sits in Omarchy's bar: while it does, it renews
@@ -568,16 +551,17 @@ mod tests {
 
     #[test]
     fn state_for_the_widget() {
-        let status = Status {
-            german: true,
-            filter: true,
-            key: "Strg \"rechts\"".into(),
-            ..Status::default()
-        };
         assert_eq!(
-            state_json("listening", &status, 42),
-            "{\"pid\":42,\"mode\":\"listening\",\"lang\":\"de\",\"filter\":true,\"voice\":false,\"dictation\":false,\"ready\":false,\"key\":\"Strg \\\"rechts\\\"\",\"memos\":false,\"memo\":false,\"memoKey\":\"\",\"update\":\"\",\"line\":\"\",\"note\":\"\",\"noteGood\":false}\n"
+            state_json("listening", "{\"lang\":\"de\",\"filter\":{\"on\":true}}", 42),
+            "{\"v\":2,\"pid\":42,\"mode\":\"listening\",\"lang\":\"de\",\"filter\":{\"on\":true}}\n"
         );
+        assert_eq!(state_json("idle", "{}", 7), "{\"v\":2,\"pid\":7,\"mode\":\"idle\"}\n");
+    }
+
+    #[test]
+    fn plugin_turned_on() {
+        assert!(plugin_in("{\"bar\":{\"right\":[{\"id\":\"heast13.kyrr\"}]}}"));
+        assert!(!plugin_in("{\"bar\":{\"right\":[{\"id\":\"heast13.kyrr-old\"}]}}"));
     }
 
     #[test]

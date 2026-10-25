@@ -35,7 +35,7 @@ use kyrr_common::keys;
 use kyrr_common::wave::{Mode, Overlay};
 use kyrr_common::{Amount, FilterSettings, Look, Request, VoiceSettings};
 use kyrr_dictate::Language;
-use slint::{ComponentHandle, LogicalSize, ModelRc, PhysicalPosition, SharedString, VecModel, Weak};
+use slint::{ComponentHandle, LogicalSize, Model, ModelRc, PhysicalPosition, SharedString, VecModel, Weak};
 
 use config::Config;
 use dictation::{Command, Event, State};
@@ -589,6 +589,12 @@ const MODEL_SWITCH_TIMEOUT: Duration = Duration::from_secs(20);
 /// size, and content changes while it was hidden; both used to show it too
 /// small. Showing alone left it behind the current window at times.
 fn show(window: &MainWindow) {
+    // On Omarchy with kyrr's widget the widget's menu is all of kyrr.
+    if headless() {
+        #[cfg(target_os = "linux")]
+        kyrr_linux::omarchy::open_menu();
+        return;
+    }
     if !window.window().is_visible() {
         // The width first: until the window has one, text is measured as if
         // it wrapped after every word, and the content seems far taller.
@@ -672,6 +678,16 @@ thread_local! {
 
 fn tray() -> Option<Tray> {
     TRAY.with_borrow(|t| t.as_ref().map(Tray::clone_strong))
+}
+
+thread_local! {
+    /// kyrr runs without a window or tray icon of its own: on Omarchy, with
+    /// its widget turned on in the bar, whose menu is all of kyrr.
+    static HEADLESS: Cell<bool> = const { Cell::new(false) };
+}
+
+fn headless() -> bool {
+    HEADLESS.get()
 }
 
 impl App {
@@ -1181,6 +1197,189 @@ impl App {
     fn widget_still_looks(self: &Rc<Self>) {
         if self.widget_open.get().is_some_and(|at| at.elapsed() > WIDGET_GONE) {
             self.widget_looks(false);
+        }
+    }
+
+    /// A line from the menu of kyrr's widget in Omarchy's bar, which is all
+    /// of kyrr there (the widget's README, "Commands"): does what the same
+    /// click in the window does.
+    fn omarchy_command(self: &Rc<Self>, line: &str) {
+        let Some(w) = self.window.upgrade() else {
+            return;
+        };
+        let state = w.global::<AppState>();
+        let mut words = line.trim().splitn(3, ' ');
+        let verb = words.next().unwrap_or_default();
+        let what = words.next().unwrap_or_default();
+        let value = words.next().unwrap_or_default().trim();
+        macro_rules! flip {
+            ($get:ident, $set:ident, $call:ident) => {{
+                let on = !state.$get();
+                state.$set(on);
+                state.$call(on);
+            }};
+        }
+        // A memo by the name of its file.
+        let memo = || memos::memos().and_then(|m| m.index_of(value));
+        match (verb, what) {
+            ("toggle", "filter") => flip!(get_filter_enabled, set_filter_enabled, invoke_filter_toggled),
+            ("toggle", "voice") => flip!(get_voice_enabled, set_voice_enabled, invoke_voice_toggled),
+            ("toggle", "dictation") => flip!(get_dictation_enabled, set_dictation_enabled, invoke_dictation_toggled),
+            ("toggle", "memos") => flip!(get_memos_enabled, set_memos_enabled, invoke_memos_toggled),
+            ("toggle", "voice.rumble") => flip!(get_low_cut, set_low_cut, invoke_low_cut_toggled),
+            ("toggle", "voice.pops") => flip!(get_pops, set_pops, invoke_pops_toggled),
+            ("toggle", "voice.distance") => flip!(get_distance, set_distance, invoke_distance_toggled),
+            ("toggle", "voice.autoLevel") => flip!(get_auto_level, set_auto_level, invoke_auto_level_toggled),
+            ("toggle", "memos.autoText") => {
+                flip!(get_memo_auto_text, set_memo_auto_text, invoke_memo_auto_text_toggled)
+            }
+            ("toggle", "general.liveText") => flip!(get_live_words, set_live_words, invoke_live_words_toggled),
+            ("toggle", "general.overload") => flip!(get_auto_lean, set_auto_lean, invoke_auto_lean_toggled),
+            ("toggle", "general.updateCheck") => flip!(get_update_auto, set_update_auto, invoke_update_auto_toggled),
+            ("toggle", "listen") => state.invoke_listen_toggled(),
+            ("set", setting) => self.omarchy_set(&state, setting, value),
+            ("mic", index) => {
+                let Ok(index) = index.parse::<i32>() else {
+                    return;
+                };
+                // The first-run setup picks one and sets it up with "Next".
+                if w.get_setup_mode() {
+                    state.set_mic_index(index);
+                } else {
+                    state.invoke_attach_microphone(index);
+                }
+            }
+            ("memo", "start") if !memos::memos().is_some_and(|m| m.recording()) => state.invoke_memo_record(),
+            ("memo", "stop") if memos::memos().is_some_and(|m| m.recording()) => state.invoke_memo_record(),
+            ("memo", "play") => {
+                if let Some(i) = memo() {
+                    state.invoke_memo_play(i);
+                }
+            }
+            ("memo", "text") => {
+                if let Some(i) = memo() {
+                    state.invoke_memo_write_text(i);
+                }
+            }
+            ("memo", "delete") => {
+                if let Some(i) = memo() {
+                    state.invoke_memo_delete(i);
+                }
+            }
+            ("memo", "folder") => state.invoke_memo_open_folder(),
+            ("memo", "show") => {
+                if let Some(m) = memos::memos() {
+                    m.show_in_widget((!value.is_empty()).then_some(value));
+                }
+            }
+            ("memo", "seen") => {
+                if let Some(m) = memos::memos() {
+                    m.mark_seen();
+                }
+            }
+            ("update", "install") => state.invoke_install_update(),
+            ("update", "check") => state.invoke_check_updates(),
+            ("test", "start") => state.invoke_probe_record(),
+            ("test", "before") => state.invoke_probe_play(false),
+            ("test", "after") => state.invoke_probe_play(true),
+            ("model", "download") => state.invoke_download_model(),
+            ("model", "cancel") => state.invoke_cancel_download(),
+            ("model", "retry") => state.invoke_dictation_retry(),
+            ("setup", "next") => match w.get_setup_step() {
+                0 if state.get_microphones().row_count() == 0
+                    || state.get_filter_state() == FilterState::Unsupported =>
+                {
+                    state.invoke_skip_setup()
+                }
+                0 if state.get_filter_state() != FilterState::SettingUp => {
+                    state.invoke_attach_microphone(state.get_mic_index())
+                }
+                1 => state.invoke_next_setup(),
+                _ => {}
+            },
+            ("setup", "skip") => state.invoke_skip_setup(),
+            ("setup", "done") => state.invoke_finish_setup(),
+            ("open", "feedback") => state.invoke_send_feedback(),
+            _ => {}
+        }
+        #[cfg(target_os = "linux")]
+        tell_widget(&w);
+    }
+
+    /// `set <setting> <value>` from the widget's menu.
+    fn omarchy_set(&self, state: &AppState, setting: &str, value: &str) {
+        let pick = |names: &[&str]| -> Option<i32> {
+            names
+                .iter()
+                .position(|n| *n == value)
+                .and_then(|i| i32::try_from(i).ok())
+                .or_else(|| value.parse().ok())
+        };
+        let level = || pick(&["off", "light", "medium", "strong"]).map(|i| i.clamp(0, 3));
+        let band = |i: i32| {
+            if let Ok(db) = value.parse::<f32>() {
+                let db = db.clamp(-6.0, 6.0);
+                match i {
+                    0 => state.set_body_db(db),
+                    1 => state.set_presence_db(db),
+                    _ => state.set_air_db(db),
+                }
+                state.invoke_band_changed(i, db);
+            }
+        };
+        match setting {
+            "filter.strength" => {
+                if let Some(i) = pick(&["gentle", "medium", "strong"]).map(|i| i.clamp(0, 2)) {
+                    state.set_strength_index(i);
+                    state.invoke_strength_changed(i);
+                }
+            }
+            "voice.tone" => {
+                if let Some(i) = pick(&["neutral", "warm", "clear", "bright", "custom"]).map(|i| i.clamp(0, 4)) {
+                    state.set_look_index(i);
+                    state.invoke_look_changed(i);
+                }
+            }
+            "voice.body" => band(0),
+            "voice.presence" => band(1),
+            "voice.air" => band(2),
+            "voice.comp" => {
+                if let Some(i) = level() {
+                    state.set_compressor_index(i);
+                    state.invoke_compressor_changed(i);
+                }
+            }
+            "voice.ess" => {
+                if let Some(i) = level() {
+                    state.set_deesser_index(i);
+                    state.invoke_deesser_changed(i);
+                }
+            }
+            "dictation.key" | "memos.key" => {
+                if let Some(vk) = keys::from_xkb_name(value) {
+                    self.set_key(if setting == "dictation.key" { 1 } else { 2 }, vk);
+                }
+            }
+            // Held down while talking, or tapped to start and again to end.
+            "dictation.hold" => {
+                let tap = value != "true";
+                state.set_key_toggle(tap);
+                state.invoke_key_toggle_changed(tap);
+            }
+            "memos.hold" => state.invoke_memo_toggle_changed(value != "true"),
+            "general.language" => {
+                if let Some(i) = pick(&["de", "en", "multi"]).map(|i| i.clamp(0, 2)) {
+                    state.set_language_index(i);
+                    state.invoke_language_changed(i);
+                }
+            }
+            "general.effort" => {
+                if let Some(i) = pick(&["lean", "best"]).map(|i| i.clamp(0, 1)) {
+                    state.set_effort_index(i);
+                    state.invoke_effort_changed(i);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -1841,6 +2040,7 @@ fn dictation_state(s: State) -> DictationState {
 fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Result<(), slint::PlatformError> {
     let config = Config::load();
     let language = config.language();
+    HEADLESS.set(platform::headless());
     // An installer downloaded for the last update is done with.
     let _ = std::fs::remove_dir_all(update::folder());
     let window = MainWindow::new()?;
@@ -2537,6 +2737,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
         let app = Rc::clone(&app);
         move |open| app.widget_looks(open)
     });
+    state.on_omarchy_command({
+        let app = Rc::clone(&app);
+        move |line| app.omarchy_command(&line)
+    });
     window.on_shown({
         let app = Rc::clone(&app);
         move || app.start_meter()
@@ -2621,7 +2825,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
                 config.save();
             }
             app.apply_memo_key();
-            platform::enable_autostart();
+            // With the widget in Omarchy's bar, the widget starts kyrr.
+            if !headless() {
+                platform::enable_autostart();
+            }
             if let Some(w) = app.window.upgrade() {
                 w.global::<AppState>().set_autostart(platform::autostart_enabled());
                 w.set_setup_mode(false);
@@ -2706,7 +2913,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
     // First visible start after an update (an existing install that last ran
     // another version): say what the new version brings, once. A start in the
     // background (Windows login) leaves it for the next visible one.
-    let updated = !background && {
+    let updated = !background && !headless() && {
         let mut config = app.config.borrow_mut();
         let version = env!("CARGO_PKG_VERSION");
         let updated = config.last_run_version != version && (!config.last_run_version.is_empty() || config.setup_done);
@@ -2734,7 +2941,18 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
     if state.get_filter_state() == FilterState::Unsupported && !platform::pipewire_missing() {
         window.set_setup_step(1);
     }
-    if !setup_done || !background {
+    if headless() {
+        // The widget's menu stands in for the window, the first-run setup
+        // included: open it once the state file says what to show.
+        if !setup_done || !background {
+            let weak = window.as_weak();
+            slint::Timer::single_shot(Duration::from_secs(2), move || {
+                if let Some(w) = weak.upgrade() {
+                    show(&w);
+                }
+            });
+        }
+    } else if !setup_done || !background {
         show(&window);
     } else if !platform::has_tray() && cfg!(windows) {
         // Started at login without a tray to sit in (or before the panel
@@ -2756,7 +2974,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
     // (the retry below) instead of shouting at start. One that is there but
     // takes no icon is waited for the same way, not the end of kyrr.
     // kyrr's widget in Omarchy's bar has the tray menu: no icon besides it.
-    let widget = platform::widget_shown();
+    let widget = platform::widget_shown() || headless();
     let tray_at_start =
         !widget && platform::has_tray() && tray.show().map_err(|e| eprintln!("kyrr: tray: {e}")).is_ok();
     // One lookup for both, so a host that turns up in between cannot leave
@@ -2764,7 +2982,9 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
     window.global::<AppState>().set_tray(tray_at_start);
     window.global::<AppState>().set_widget(widget);
     if widget {
-        WIDGET_SEEN.set(Some(Instant::now()));
+        // A kyrr started at sign-in gives the shell a minute to come up.
+        let grace = if headless() { WIDGET_GONE } else { Duration::ZERO };
+        WIDGET_SEEN.set(Some(Instant::now() + grace));
     }
     drop(tray);
     #[cfg(target_os = "linux")]
@@ -2772,7 +2992,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
     // A panel that hosts tray icons may start after kyrr (both at login).
     // An icon can only register once one is there: make a new one then.
     let tray_retry = slint::Timer::default();
-    if !tray_at_start {
+    if !tray_at_start && !headless() {
         let app = Rc::downgrade(&app);
         let started = Instant::now();
         let done = Cell::new(false);
@@ -2830,6 +3050,7 @@ fn answer(window: &MainWindow, request: Request) {
             window.global::<AppState>().invoke_open_page(page);
         }
         (Request::Quit, Some(tray)) => tray.invoke_quit(),
+        (Request::Line(line), Some(_)) => window.global::<AppState>().invoke_omarchy_command(line.into()),
     }
     #[cfg(target_os = "linux")]
     tell_widget(window);
@@ -2852,12 +3073,20 @@ fn follow_widget(window: &MainWindow) {
         WIDGET_SEEN.set(Some(Instant::now()));
     }
     let state = window.global::<AppState>();
-    if state.get_widget() == shown {
-        return;
-    }
     let Some(tray) = tray() else {
         return;
     };
+    // Without the widget kyrr has nothing to show itself in: turning the
+    // plugin off turns kyrr off.
+    if headless() {
+        if !shown && WIDGET_SEEN.get().is_some_and(|seen| seen.elapsed() > WIDGET_GONE) {
+            tray.invoke_quit();
+        }
+        return;
+    }
+    if state.get_widget() == shown {
+        return;
+    }
     if shown {
         state.set_widget(true);
         state.set_tray(false);
@@ -2871,29 +3100,144 @@ fn follow_widget(window: &MainWindow) {
     }
 }
 
-/// What the tray menu shows, for kyrr's widget in Omarchy's bar.
+/// What this version brings, read once from the NEWS.md built in.
+#[cfg(target_os = "linux")]
+fn bundled_news() -> &'static Option<update::News> {
+    static NEWS: std::sync::OnceLock<Option<update::News>> = std::sync::OnceLock::new();
+    NEWS.get_or_init(|| update::bundled_news(env!("CARGO_PKG_VERSION")))
+}
+
+/// Everything the menu of kyrr's widget in Omarchy's bar shows, which is all
+/// of kyrr there: the format is in the widget's README ("State").
 #[cfg(target_os = "linux")]
 fn tell_widget(window: &MainWindow) {
+    use serde_json::json;
     let Some(tray) = tray() else {
         return;
     };
     let state = window.global::<AppState>();
-    kyrr_linux::omarchy::set_status(kyrr_linux::omarchy::Status {
-        german: state.get_language_index() == 0,
-        filter: tray.get_filter_enabled(),
-        voice: tray.get_voice_enabled(),
-        dictation: tray.get_dictation_enabled(),
-        ready: tray.get_dictation_ready(),
-        key: tray.get_key_name().into(),
-        memos: tray.get_memos_enabled(),
-        memo: tray.get_memo_recording(),
-        memo_key: tray.get_memo_key_name().into(),
-        update: tray.get_update_version().into(),
-        line: state.invoke_status_line().into(),
-        note: state.invoke_alert_note().into(),
+    let pick = |names: &[&'static str], i: i32| names[usize::try_from(i).unwrap_or(0).min(names.len() - 1)];
+    let german = state.get_language_index() == 0;
+    let model = match state.get_dictation_state() {
+        DictationState::Off => "off",
+        DictationState::NoModel => "none",
+        DictationState::Downloading => "downloading",
+        DictationState::Loading => "loading",
+        DictationState::Error => "error",
+        _ => "ready",
+    };
+    let update = match state.get_update_state() {
+        UpdateState::Checking => "checking",
+        UpdateState::Current => "latest",
+        UpdateState::Available => "available",
+        UpdateState::Failed | UpdateState::DownloadFailed => "failed",
+        UpdateState::Downloading | UpdateState::Installing => "downloading",
+        UpdateState::Idle => "idle",
+    };
+    let setting_up = match state.get_filter_state() {
+        FilterState::SettingUp => "settingUp",
+        FilterState::Error => "error",
+        FilterState::Unsupported => "unsupported",
+        _ => "",
+    };
+    let probe = match state.get_probe_state() {
+        ProbeState::Idle => "idle",
+        ProbeState::Recording => "recording",
+        ProbeState::Before | ProbeState::After => "playing",
+    };
+    let news = |news: Option<update::News>| news.map(|n| if german { n.de } else { n.en }).unwrap_or_default();
+    let microphones: Vec<serde_json::Value> = state
+        .get_microphones()
+        .iter()
+        .enumerate()
+        .map(|(id, name)| json!({ "id": id, "name": name.as_str() }))
+        .collect();
+    let key_note = [state.get_key_refusal(), state.get_key_warning(), state.get_key_note()]
+        .into_iter()
+        .find(|n| !n.is_empty())
+        .unwrap_or_default();
+    let memos = memos::memos();
+    let status = json!({
+        "lang": if german { "de" } else { "en" },
+        "version": env!("CARGO_PKG_VERSION"),
+        "line": state.invoke_status_line().as_str(),
+        "note": state.invoke_alert_note().as_str(),
         // The red notes are problems; a microphone coming back is good news.
-        note_good: state.get_alert() == 7,
+        "noteGood": state.get_alert() == 7,
+        "setupDone": !window.get_setup_mode(),
+        "setupStep": window.get_setup_step() + 1,
+        "filter": {
+            "on": tray.get_filter_enabled(),
+            "strength": state.get_strength_index(),
+            "setup": setting_up,
+            // Improving the voice needs the filter on a microphone.
+            "attached": !matches!(
+                state.get_filter_state(),
+                FilterState::NotAttached | FilterState::NotInstalled | FilterState::Unsupported
+            ),
+            "error": state.get_error_text().as_str(),
+        },
+        "voice": {
+            "on": tray.get_voice_enabled(),
+            "tone": pick(&["neutral", "warm", "clear", "bright", "custom"], state.get_look_index()),
+            "body": state.get_body_db().round(),
+            "presence": state.get_presence_db().round(),
+            "air": state.get_air_db().round(),
+            "comp": state.get_compressor_index(),
+            "ess": state.get_deesser_index(),
+            "rumble": state.get_low_cut(),
+            "rumbleHz": if state.get_look_index() == 3 { 100 } else { 80 },
+            "pops": state.get_pops(),
+            "distance": state.get_distance(),
+            "autoLevel": state.get_auto_level(),
+            "levelDb": state.get_auto_level().then(|| (state.get_level_gain() * 10.0).round() / 10.0),
+        },
+        "dictation": {
+            "on": tray.get_dictation_enabled(),
+            "ready": tray.get_dictation_ready(),
+            "key": tray.get_key_name().as_str(),
+            "hold": !state.get_key_toggle(),
+            "note": key_note.as_str(),
+        },
+        "memos": {
+            "on": tray.get_memos_enabled(),
+            "recording": tray.get_memo_recording(),
+            "key": tray.get_memo_key_name().as_str(),
+            "hold": !state.get_memo_toggle(),
+            "autoText": state.get_memo_auto_text(),
+            "folder": memos.as_ref().map(|m| m.widget_folder()).unwrap_or_default(),
+            "message": state.get_memo_message().as_str(),
+            "list": memos.as_ref().map(|m| m.widget_list()).unwrap_or_else(|| json!([])),
+        },
+        "general": {
+            "language": pick(&["de", "en", "multi"], state.get_language_index()),
+            "effort": pick(&["lean", "best", "custom"], state.get_effort_index()),
+            "liveText": state.get_live_words(),
+            "overload": state.get_auto_lean(),
+            "updateCheck": state.get_update_auto(),
+        },
+        "mic": {
+            "name": state.get_attached_mic().as_str(),
+            "index": state.get_mic_index(),
+            "list": microphones,
+        },
+        "model": {
+            "state": model,
+            "progress": state.get_download_progress(),
+            "size": state.get_download_size().as_str(),
+        },
+        "update": {
+            "state": update,
+            "version": tray.get_update_version().as_str(),
+            "progress": state.get_update_progress(),
+            "news": news(pending_news().lock().unwrap_or_else(|e| e.into_inner()).clone()),
+        },
+        "probe": probe,
+        "hasProbe": state.get_has_probe(),
+        "listen": state.get_listening(),
+        "news": news(bundled_news().clone()),
     });
+    kyrr_linux::omarchy::set_status(status.to_string());
 }
 
 /// A tray icon wired to the app.

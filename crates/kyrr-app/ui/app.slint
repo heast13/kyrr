@@ -521,6 +521,9 @@ export global AppState {
     // The widget's menu opened (and says so every few seconds while open)
     // or closed: the status line and the notes run for it.
     callback widget-open(bool);
+    // A line from the widget's menu, which is all of kyrr on Omarchy: a
+    // setting to change or a step to take ("set voice.tone warm").
+    callback omarchy-command(string);
     // Without a tray, closing minimizes where the desktop can (not tiling ones).
     in property <bool> can-minimize: true;
     in property <FilterState> filter-state: FilterState.checking;

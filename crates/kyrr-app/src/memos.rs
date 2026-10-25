@@ -34,6 +34,8 @@ const BRIEF: Duration = Duration::from_secs(5);
 const SAVE_AFTER: Duration = Duration::from_millis(700);
 /// How often the open text looks whether its file changed outside kyrr.
 const WATCH: Duration = Duration::from_secs(1);
+/// How much of a memo's text the menu of the widget in Omarchy's bar shows.
+const WIDGET_TEXT: usize = 4000;
 
 /// Told when the list was looked at (seconds since 1970).
 type SeenHook = Box<dyn Fn(u64)>;
@@ -85,6 +87,8 @@ pub struct Memos {
     brief: slint::Timer,
     saving: slint::Timer,
     watching: slint::Timer,
+    /// The memo whose text the widget in Omarchy's bar shows.
+    widget_text: RefCell<Option<PathBuf>>,
 }
 
 thread_local! {
@@ -137,6 +141,7 @@ impl Memos {
             brief: slint::Timer::default(),
             saving: slint::Timer::default(),
             watching: slint::Timer::default(),
+            widget_text: RefCell::new(None),
         });
         MEMOS.set(Some(Rc::clone(&memos)));
         window
@@ -214,6 +219,73 @@ impl Memos {
         if let Some(w) = self.window.upgrade() {
             w.global::<AppState>().set_memo_new(false);
         }
+    }
+
+    /// Which memo the commands of the widget in Omarchy's bar mean: they
+    /// name it by its file, which stays put while the list changes.
+    pub fn index_of(&self, name: &str) -> Option<i32> {
+        self.shown
+            .borrow()
+            .iter()
+            .position(|p| p.file_name().is_some_and(|n| n.to_string_lossy() == name))
+            .map(|i| i as i32)
+    }
+
+    /// The memo whose text the widget's menu shows, by its file's name.
+    pub fn show_in_widget(&self, name: Option<&str>) {
+        let path = name.and_then(|n| self.index_of(n)).and_then(|i| self.path(i));
+        *self.widget_text.borrow_mut() = path;
+    }
+
+    /// The list for the widget in Omarchy's bar, newest first; the memo it
+    /// shows comes with its text.
+    pub fn widget_list(&self) -> serde_json::Value {
+        let all = self.all.borrow();
+        let texts = self.texts.borrow();
+        let titling = self.titling.borrow();
+        let open = self.widget_text.borrow();
+        let list: Vec<serde_json::Value> = all
+            .iter()
+            .map(|m| {
+                let (text, progress, left) = match texts.get(&m.path) {
+                    Some(Text::Waiting) => ("writing", 0.0, String::new()),
+                    Some(Text::Writing(done, left)) => {
+                        ("writing", *done, left.map(|l| self.left(l)).unwrap_or_default())
+                    }
+                    Some(Text::Failed | Text::NoModel) => ("failed", 0.0, String::new()),
+                    _ if m.text.is_some() => ("ready", 1.0, String::new()),
+                    _ => ("none", 0.0, String::new()),
+                };
+                let mut item = serde_json::json!({
+                    "id": m.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                    "title": m.title,
+                    "when": self.date(m.when),
+                    "length": library::clock(m.seconds.round() as u32),
+                    "pending": titling.contains(&m.path),
+                    "text": text,
+                    "progress": progress,
+                    "left": left,
+                    "isNew": m.saved > self.seen.get(),
+                });
+                if open.as_ref() == Some(&m.path) {
+                    let paragraphs: Vec<&str> = m.text.iter().flatten().map(|p| p.text.as_str()).collect();
+                    let mut transcript = paragraphs.join("\n\n");
+                    // The menu shows the start; the whole text is in the file.
+                    if let Some((cut, _)) = transcript.char_indices().nth(WIDGET_TEXT) {
+                        transcript.truncate(cut);
+                        transcript.push('…');
+                    }
+                    item["transcript"] = transcript.into();
+                }
+                item
+            })
+            .collect();
+        list.into()
+    }
+
+    /// The folder the memos' folder is in, as people know it: "Dokumente".
+    pub fn widget_folder(&self) -> String {
+        self.folder_name()
     }
 
     /// Whether texts can be written: the speech model is on the computer.

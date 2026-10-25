@@ -46,6 +46,11 @@ const WIDGET: [(&[u8], Request); 10] = [
     (b"menu-open", Request::WidgetOpen(true)),
     (b"menu-closed", Request::WidgetOpen(false)),
 ];
+/// The first words of the lines the widget's menu sends: everything kyrr
+/// does, there.
+const LINE_WORDS: [&str; 9] = [
+    "set ", "toggle ", "mic ", "memo ", "update ", "test ", "setup ", "open ", "model ",
+];
 /// How long a running kyrr gets to hand back the microphone and end.
 const REPLACE_WAIT: Duration = Duration::from_secs(20);
 
@@ -191,7 +196,11 @@ fn serve(listener: UnixListener, show: mpsc::Sender<Request>) {
         };
         let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
         let mut request = Vec::new();
-        let _ = stream.take(32).read_to_end(&mut request);
+        let _ = stream.take(1024).read_to_end(&mut request);
+        // The widget ends its lines with a newline.
+        while request.last().is_some_and(u8::is_ascii_whitespace) {
+            request.pop();
+        }
         match request.as_slice() {
             DICTATE => crate::hotkey::toggle(),
             DICTATE_START => crate::hotkey::remote_press(),
@@ -204,8 +213,9 @@ fn serve(listener: UnixListener, show: mpsc::Sender<Request>) {
                 let request = WIDGET
                     .iter()
                     .find(|(word, _)| *word == other)
-                    .map(|(_, request)| *request)
+                    .map(|(_, request)| request.clone())
                     .or_else(|| page(other))
+                    .or_else(|| line(other))
                     .unwrap_or(Request::Show);
                 if show.send(request).is_err() {
                     break;
@@ -221,6 +231,15 @@ fn page(word: &[u8]) -> Option<Request> {
         [digit @ b'1'..=b'5'] => Some(Request::OpenPage(i32::from(digit - b'0'))),
         _ => None,
     }
+}
+
+/// A line from the widget's menu, such as `set voice.tone warm`.
+fn line(text: &[u8]) -> Option<Request> {
+    let text = std::str::from_utf8(text).ok()?;
+    LINE_WORDS
+        .iter()
+        .any(|word| text.starts_with(word))
+        .then(|| Request::Line(text.to_string()))
 }
 
 #[cfg(test)]
@@ -250,6 +269,20 @@ mod tests {
             Ok(Request::OpenPage(3))
         );
         assert_eq!(page(b"page-9"), None);
+        UnixStream::connect(&path)
+            .unwrap()
+            .write_all(b"set voice.tone warm\n")
+            .unwrap();
+        assert_eq!(
+            show_requests.recv_timeout(Duration::from_secs(2)),
+            Ok(Request::Line("set voice.tone warm".into()))
+        );
+        UnixStream::connect(&path).unwrap().write_all(b"menu-open\n").unwrap();
+        assert_eq!(
+            show_requests.recv_timeout(Duration::from_secs(2)),
+            Ok(Request::WidgetOpen(true))
+        );
+        assert_eq!(line(b"settle"), None);
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
         std::fs::remove_dir_all(dir).unwrap();

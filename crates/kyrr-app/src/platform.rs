@@ -371,6 +371,10 @@ mod imp {
         false
     }
 
+    pub fn headless() -> bool {
+        false
+    }
+
     pub fn can_minimize() -> bool {
         true
     }
@@ -809,6 +813,12 @@ mod imp {
 
     pub fn widget_shown() -> bool {
         kyrr_linux::omarchy::widget_shown()
+    }
+
+    /// On Omarchy with kyrr's widget in the bar: the widget's menu is all
+    /// of kyrr, which has no window or tray icon there.
+    pub fn headless() -> bool {
+        kyrr_linux::omarchy::plugin_on()
     }
 
     /// Whether the desktop minimizes windows. Tiling compositors (Hyprland,

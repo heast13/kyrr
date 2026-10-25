@@ -9,7 +9,7 @@ pub mod wave;
 
 /// What a second start of kyrr, or Omarchy's bar widget, asks the running
 /// kyrr for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Request {
     Show,
     ToggleFilter,
@@ -24,6 +24,10 @@ pub enum Request {
     /// A page of the window: 1 Setup, 2 to 5 a main card's settings.
     OpenPage(i32),
     Quit,
+    /// A line from the menu of kyrr's widget in Omarchy's bar, which is all
+    /// of kyrr there: a setting to change or a step to take, such as
+    /// `set filter.strength 2` or `memo play <name>`.
+    Line(String),
 }
 
 /// COM class of kyrr's audio processing object.
