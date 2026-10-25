@@ -21,6 +21,8 @@ mod platform;
 mod player;
 mod probe;
 mod recorder;
+#[cfg(target_os = "linux")]
+mod skin;
 mod update;
 
 use std::cell::{Cell, RefCell};
@@ -1338,6 +1340,8 @@ impl App {
             Language::English => news.en,
         };
         let Ok(win) = NewsWindow::new() else { return };
+        #[cfg(target_os = "linux")]
+        skin::apply(&win.global::<Skin>());
         win.set_version(version.into());
         win.set_mode(mode);
         win.set_news(text.into());
@@ -1412,6 +1416,7 @@ impl App {
             (config.dictation_key(), config.dictation_toggle)
         };
         platform::set_key_wanted(self.config.borrow().dictation);
+        platform::join_omarchy(self.language() == Language::German, self.config.borrow().dictation);
         platform::set_hotkey_key(key);
         platform::set_hotkey_tap(toggle);
         self.key_toggle.store(toggle, Ordering::Relaxed);
@@ -1675,6 +1680,7 @@ impl App {
         }
         let _ = self.worker.send(Command::Enable(on));
         platform::set_key_wanted(on);
+        platform::join_omarchy(self.language() == Language::German, on);
         if let Some(w) = self.window.upgrade() {
             w.global::<AppState>().set_dictation_enabled(on);
         }
@@ -1801,6 +1807,21 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     // An installer downloaded for the last update is done with.
     let _ = std::fs::remove_dir_all(update::folder());
     let window = MainWindow::new()?;
+    #[cfg(target_os = "linux")]
+    skin::refresh(&window);
+    // What kyrr does, for its widget in Omarchy's bar.
+    #[cfg(target_os = "linux")]
+    {
+        kyrr_common::wave::on_mode(|mode| {
+            kyrr_linux::omarchy::set_state(match mode {
+                Mode::Hidden => "idle",
+                Mode::Listening => "listening",
+                Mode::Writing => "writing",
+                Mode::Recording => "recording",
+            })
+        });
+        kyrr_linux::omarchy::set_state("idle");
+    }
     // So the desktop matches the window to kyrr's desktop entry and icon.
     #[cfg(target_os = "linux")]
     let _ = slint::set_xdg_app_id("io.github.heast13.kyrr");
@@ -2615,6 +2636,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             app.check_mute();
             app.follow_default();
             app.refresh_key_note();
+            #[cfg(target_os = "linux")]
+            if let Some(w) = app.window.upgrade() {
+                skin::refresh(&w);
+            }
         }
     });
     if let Some(requests) = show_requests {

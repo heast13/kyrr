@@ -1,6 +1,7 @@
 //! Renders the dictation pill with words appearing as raw RGBA frames (for the
 //! website's animation): `cargo run --example wave_frames -- <out.rgba> [de|en]
-//! [dark|light] [scale] [text]`. The size goes to stderr. The website's loops
+//! [dark|light] [scale] [text]`; Omarchy's look with `KYRR_OMARCHY=<colors.toml>`
+//! and `KYRR_FONT=<font file>`. The size goes to stderr. The website's loops
 //! are this at scale 2.4, on a transparent 1160x160 canvas, encoded to WebM
 //! with alpha (VP9), so the pill floats on the page without a frame. Each
 //! saying is one run; the site's loops join the runs of one language and theme
@@ -11,7 +12,7 @@
 use std::f32::consts::TAU;
 use std::io::Write;
 
-use kyrr_common::wave::{Mode, Wave};
+use kyrr_common::wave::{set_skin, Mode, Skin, Wave};
 
 const FPS: f32 = 25.0;
 
@@ -38,6 +39,29 @@ fn main() {
 
     let mut wave = Wave::default();
     wave.set_dark(dark);
+    // Omarchy's look: KYRR_OMARCHY names a theme's colors.toml, KYRR_FONT a
+    // font file.
+    if let Ok(path) = std::env::var("KYRR_OMARCHY") {
+        let text = std::fs::read_to_string(path).unwrap();
+        let color = |key: &str| {
+            let line = text
+                .lines()
+                .find(|l| l.split('=').next().is_some_and(|k| k.trim() == key))?;
+            let hex = line.split('"').nth(1)?.trim_start_matches('#');
+            let byte = |i: usize| u8::from_str_radix(hex.get(i..i + 2)?, 16).ok();
+            Some([byte(0)?, byte(2)?, byte(4)?])
+        };
+        let font = std::env::var("KYRR_FONT").ok().and_then(|f| std::fs::read(f).ok());
+        set_skin(Some(Skin {
+            background: color("background").unwrap(),
+            frame: color("accent").unwrap(),
+            bars: color("accent").unwrap(),
+            text: color("foreground").unwrap(),
+            yellow: color("yellow").unwrap(),
+            red: color("red").unwrap(),
+            font: font.and_then(Skin::font_from),
+        }));
+    }
     let mut file = std::io::BufWriter::new(std::fs::File::create(out).unwrap());
     let mut pixels = Vec::new();
     let mut size = (0, 0);

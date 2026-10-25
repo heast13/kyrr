@@ -2,7 +2,7 @@
 // first-run setup or the main panel. All texts are English source strings
 // translated through the bundled translations in ui/lang.
 
-import { Button, ComboBox, Switch, Slider, ProgressIndicator, ScrollView, LineEdit, Palette } from "std-widgets.slint";
+import { Button as SystemButton, ComboBox, Switch as SystemSwitch, Slider, ProgressIndicator as SystemProgress, ScrollView, LineEdit, Palette } from "std-widgets.slint";
 
 // detached: Windows (an update, a driver) took kyrr off the microphone.
 // unsupported: this PC cannot run the filter (Windows on ARM, Linux without
@@ -28,6 +28,204 @@ export struct MemoItem {
     text-progress: float,
     // "about 2 min. left", or "".
     text-left: string,
+}
+
+// How kyrr looks: like the system, or on Omarchy like Omarchy (its theme's
+// colours, square corners, its monospace font). The app sets the theme and
+// follows a change of it.
+export global Skin {
+    in property <bool> omarchy;
+    in property <color> theme-background;
+    in property <color> theme-foreground;
+    in property <color> theme-accent;
+    in property <color> theme-red;
+    in property <color> theme-yellow;
+    in property <color> theme-green;
+    in property <string> theme-font;
+    property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+    out property <brush> background: root.omarchy ? root.theme-background : Palette.background;
+    out property <brush> foreground: root.omarchy ? root.theme-foreground : Palette.foreground;
+    // Omarchy's cards and controls: a little of the text colour over the background.
+    out property <brush> alternate-background: root.omarchy ? root.theme-foreground.mix(root.theme-background, 0.04) : Palette.alternate-background;
+    out property <brush> control-background: root.omarchy ? root.theme-foreground.mix(root.theme-background, 0.08) : Palette.control-background;
+    out property <brush> control-foreground: root.omarchy ? root.theme-foreground : Palette.control-foreground;
+    out property <brush> accent-background: root.omarchy ? root.theme-accent : Palette.accent-background;
+    out property <brush> accent-foreground: root.omarchy ? root.theme-background : Palette.accent-foreground;
+    out property <brush> border: root.omarchy ? root.theme-foreground.with-alpha(0.4) : Palette.border;
+    // Cards get a frame on Omarchy, as its menus and panels have.
+    out property <length> card-frame: root.omarchy ? 1px : 0px;
+    // Notes: darker on a light system, so small text keeps its contrast.
+    out property <color> bad: root.omarchy ? root.theme-red : root.dark ? #ff6369 : #c62a2f;
+    out property <color> good: root.omarchy ? root.theme-green : root.dark ? #3fb950 : #1a7f37;
+    out property <color> picked: root.omarchy ? root.theme-accent : #2ea043;
+    out property <color> warning: root.omarchy ? root.theme-yellow : #d29922;
+    out property <color> refusal: root.omarchy ? root.theme-red : #e0604f;
+    out property <color> danger: root.omarchy ? root.theme-red : #e5484d;
+    out property <color> danger-hover: root.omarchy ? root.theme-red.darker(0.1) : #cf3338;
+    out property <color> danger-pressed: root.omarchy ? root.theme-red.darker(0.25) : #b4282c;
+    // The logo's colour, for the small wave by the status line.
+    out property <color> logo: root.omarchy ? root.theme-accent : root.dark ? #5eead4 : #14b8a6;
+    // Empty: the system's font.
+    out property <string> font: root.omarchy ? root.theme-font : "";
+    public pure function round(radius: length) -> length {
+        return root.omarchy ? 0px : radius;
+    }
+}
+
+// The system's controls, or on Omarchy square ones in its theme's colours.
+component SquareButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+    in property <bool> enabled: true;
+    callback clicked;
+    preferred-width: label.preferred-width + 24px;
+    min-width: label.min-width + 16px;
+    min-height: 32px;
+    border-width: 1px;
+    border-color: focus.has-focus ? Skin.theme-accent
+        : Skin.theme-foreground.with-alpha(root.primary ? 0 : 0.4);
+    background: root.primary ? (touch.has-hover && root.enabled ? Skin.theme-accent.brighter(0.1) : Skin.theme-accent)
+        : touch.pressed ? Skin.theme-foreground.with-alpha(0.16)
+        : touch.has-hover && root.enabled ? Skin.theme-foreground.with-alpha(0.08) : transparent;
+    opacity: root.enabled ? 1 : 0.45;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { root.clicked(); }
+    label := Text {
+        x: 12px;
+        width: parent.width - 24px;
+        height: parent.height;
+        text: root.text;
+        color: root.primary ? Skin.theme-background : Skin.theme-foreground;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+    focus := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+}
+
+component Button inherits HorizontalLayout {
+    in property <string> text;
+    in property <bool> primary;
+    in property <bool> enabled: true;
+    callback clicked;
+    // As the system's button: as wide as its text unless told otherwise.
+    horizontal-stretch: 0;
+    if !Skin.omarchy: SystemButton {
+        text: root.text;
+        primary: root.primary;
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+    if Skin.omarchy: SquareButton {
+        text: root.text;
+        primary: root.primary;
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+component SquareSwitch inherits Rectangle {
+    in-out property <bool> checked;
+    in property <bool> enabled: true;
+    callback toggled;
+    function flip() {
+        root.checked = !root.checked;
+        root.toggled();
+    }
+    min-width: 36px;
+    max-width: 36px;
+    min-height: 20px;
+    opacity: root.enabled ? 1 : 0.45;
+    accessible-role: checkbox;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { root.flip(); }
+    Rectangle {
+        y: (parent.height - self.height) / 2;
+        height: 20px;
+        background: root.checked ? Skin.theme-accent : transparent;
+        border-width: 1px;
+        border-color: root.checked ? Skin.theme-accent : Skin.theme-foreground.with-alpha(focus.has-focus ? 0.9 : 0.4);
+        Rectangle {
+            x: root.checked ? parent.width - 16px : 4px;
+            y: 4px;
+            width: 12px;
+            height: 12px;
+            background: root.checked ? Skin.theme-background : Skin.theme-foreground.with-alpha(0.7);
+            animate x { duration: 120ms; easing: ease-out; }
+        }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.flip(); }
+    }
+    focus := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " ") {
+                root.flip();
+                return accept;
+            }
+            return reject;
+        }
+    }
+}
+
+component Switch inherits HorizontalLayout {
+    in-out property <bool> checked;
+    in property <bool> enabled: true;
+    // For screen readers.
+    in property <string> label;
+    callback toggled;
+    horizontal-stretch: 0;
+    if !Skin.omarchy: SystemSwitch {
+        checked <=> root.checked;
+        enabled: root.enabled;
+        accessible-label: root.label;
+        toggled => { root.toggled(); }
+    }
+    if Skin.omarchy: SquareSwitch {
+        checked <=> root.checked;
+        enabled: root.enabled;
+        accessible-label: root.label;
+        toggled => { root.toggled(); }
+    }
+}
+
+// Omarchy's progress bar: the accent over a dim track, as in its on-screen display.
+component ProgressIndicator inherits Rectangle {
+    in property <float> progress;
+    if !Skin.omarchy: SystemProgress {
+        width: parent.width;
+        height: parent.height;
+        progress: root.progress;
+    }
+    if Skin.omarchy: Rectangle {
+        background: Skin.theme-foreground.with-alpha(0.25);
+        Rectangle {
+            x: 0;
+            width: parent.width * clamp(root.progress, 0, 1);
+            background: Skin.theme-accent;
+        }
+    }
 }
 
 export global AppState {
@@ -296,12 +494,6 @@ export global AppState {
     callback memo-open-folder();
 }
 
-// Colours for notes: darker on the light theme, so small text keeps its contrast.
-global Tone {
-    out property <color> bad: Palette.color-scheme == ColorScheme.dark ? #ff6369 : #c62a2f;
-    out property <color> good: Palette.color-scheme == ColorScheme.dark ? #3fb950 : #1a7f37;
-}
-
 // The tray has its own properties: globals are per component instance, so
 // the app wires tray and window separately.
 export component Tray inherits SystemTrayIcon {
@@ -371,7 +563,7 @@ export component Tray inherits SystemTrayIcon {
 }
 
 component Caption inherits Text {
-    color: Palette.foreground.with-alpha(0.65);
+    color: Skin.foreground.with-alpha(0.65);
     font-size: 12px;
     wrap: word-wrap;
 }
@@ -379,7 +571,7 @@ component Caption inherits Text {
 // A short, plain explanation of the option chosen above it.
 component Hint inherits Text {
     // 0.7 keeps small text readable (contrast), still quieter than captions.
-    color: Palette.foreground.with-alpha(0.7);
+    color: Skin.foreground.with-alpha(0.7);
     font-size: 12px;
     wrap: word-wrap;
 }
@@ -390,8 +582,10 @@ component Heading inherits Text {
 }
 
 component Card inherits Rectangle {
-    background: Palette.alternate-background;
-    border-radius: 10px;
+    background: Skin.alternate-background;
+    border-radius: Skin.round(10px);
+    border-width: Skin.card-frame;
+    border-color: Skin.foreground.with-alpha(0.2);
     VerticalLayout {
         padding: 14px;
         spacing: 8px;
@@ -401,7 +595,7 @@ component Card inherits Rectangle {
 
 component Separator inherits Rectangle {
     height: 1px;
-    background: Palette.border.with-alpha(0.6);
+    background: Skin.border.with-alpha(0.6);
 }
 
 // A row of choices, one selected. Tab focuses it, the arrow keys move the
@@ -441,10 +635,10 @@ component Segmented inherits FocusScope {
         spacing: 6px;
         for option[i] in root.options: Rectangle {
             height: 28px;
-            border-radius: 6px;
-            background: i == root.selected ? Palette.accent-background : Palette.control-background;
+            border-radius: Skin.round(6px);
+            background: i == root.selected ? Skin.accent-background : Skin.control-background;
             border-width: root.has-focus && i == root.selected ? 2px : 1px;
-            border-color: root.has-focus && i == root.selected ? Palette.foreground : Palette.border;
+            border-color: root.has-focus && i == root.selected ? Skin.foreground : Skin.border;
             opacity: root.enabled && i != root.unavailable ? 1 : 0.4;
             accessible-role: radio-button;
             accessible-label: option;
@@ -454,7 +648,7 @@ component Segmented inherits FocusScope {
             accessible-action-default => { root.choose(i); }
             Text {
                 text: option;
-                color: i == root.selected ? Palette.accent-foreground : Palette.control-foreground;
+                color: i == root.selected ? Skin.accent-foreground : Skin.control-foreground;
                 horizontal-alignment: center;
                 vertical-alignment: center;
             }
@@ -474,16 +668,16 @@ component Meter inherits Rectangle {
     in property <float> before;
     in property <float> after;
     height: 10px;
-    border-radius: 5px;
-    background: Palette.control-background;
+    border-radius: Skin.round(5px);
+    background: Skin.control-background;
     border-width: 1px;
-    border-color: Palette.border;
+    border-color: Skin.border;
     Rectangle {
         x: 0;
         width: parent.width * clamp(root.before, 0, 1);
         height: parent.height;
-        border-radius: 5px;
-        background: Palette.foreground.with-alpha(0.18);
+        border-radius: Skin.round(5px);
+        background: Skin.foreground.with-alpha(0.18);
         animate width { duration: 90ms; }
     }
     Rectangle {
@@ -491,8 +685,8 @@ component Meter inherits Rectangle {
         y: (parent.height - self.height) / 2;
         width: parent.width * clamp(root.after, 0, 1);
         height: 4px;
-        border-radius: 2px;
-        background: Palette.accent-background;
+        border-radius: Skin.round(2px);
+        background: Skin.accent-background;
         animate width { duration: 90ms; }
     }
 }
@@ -529,7 +723,7 @@ component Pulse inherits Rectangle {
     // Milliseconds per sway; slow on purpose, this is kyrr after all.
     property <float> period: root.working ? 2200 : 4500;
     property <float> depth: root.working ? 1 : 0.3;
-    property <color> tint: Palette.color-scheme == ColorScheme.dark ? #5eead4 : #14b8a6;
+    property <color> tint: Skin.logo;
     property <float> alpha: root.moving ? 0.85 : 0.4;
     width: 14px;
     height: 16px;
@@ -839,7 +1033,7 @@ component StatusLine inherits HorizontalLayout {
         text: root.status();
         font-size: 12px;
         font-italic: true;
-        color: Palette.foreground;
+        color: Skin.foreground;
         opacity: AppState.phrase-visible ? 0.6 : 0;
         animate opacity { duration: 450ms; easing: ease-in-out; }
         wrap: word-wrap;
@@ -865,15 +1059,15 @@ component GearButton inherits Rectangle {
     callback clicked();
     width: 30px;
     height: 30px;
-    border-radius: 8px;
-    background: touch.has-hover || key.has-focus ? Palette.foreground.with-alpha(0.12) : transparent;
+    border-radius: Skin.round(8px);
+    background: touch.has-hover || key.has-focus ? Skin.foreground.with-alpha(0.12) : transparent;
     forward-focus: key;
     accessible-role: button;
     accessible-label: root.label;
     accessible-action-default => { root.clicked(); }
     Image {
         source: @image-url("icons/gear.png");
-        colorize: Palette.foreground.with-alpha(0.75);
+        colorize: Skin.foreground.with-alpha(0.75);
         width: 18px;
         height: 18px;
         x: (parent.width - self.width) / 2;
@@ -912,7 +1106,7 @@ component RowHead inherits HorizontalLayout {
     Switch {
         checked <=> root.checked;
         enabled: root.enabled;
-        accessible-label: root.title;
+        label: root.title;
         toggled => { root.toggled(self.checked); }
     }
 }
@@ -1095,10 +1289,10 @@ component KeyPicker inherits HorizontalLayout {
         horizontal-stretch: 1;
         height: 28px;
         property <bool> picked: !root.custom && !root.listening;
-        border-radius: 6px;
-        background: self.picked ? Palette.accent-background : Palette.control-background;
+        border-radius: Skin.round(6px);
+        background: self.picked ? Skin.accent-background : Skin.control-background;
         border-width: 1px;
-        border-color: Palette.border;
+        border-color: Skin.border;
         accessible-role: radio-button;
         accessible-label: root.standard;
         accessible-checkable: true;
@@ -1106,7 +1300,7 @@ component KeyPicker inherits HorizontalLayout {
         accessible-action-default => { AppState.key-reset(root.slot); }
         Text {
             text: root.standard;
-            color: parent.picked ? Palette.accent-foreground : Palette.control-foreground;
+            color: parent.picked ? Skin.accent-foreground : Skin.control-foreground;
             horizontal-alignment: center;
             vertical-alignment: center;
         }
@@ -1131,10 +1325,10 @@ component KeyPicker inherits HorizontalLayout {
         }
         Rectangle {
             height: 28px;
-            border-radius: 6px;
-            background: root.custom && !root.listening ? Palette.accent-background : Palette.control-background;
+            border-radius: Skin.round(6px);
+            background: root.custom && !root.listening ? Skin.accent-background : Skin.control-background;
             border-width: root.listening || field.has-focus ? 2px : 1px;
-            border-color: root.listening || field.has-focus ? Palette.foreground : Palette.border;
+            border-color: root.listening || field.has-focus ? Skin.foreground : Skin.border;
             accessible-role: button;
             accessible-label: @tr("Set key");
             accessible-description: root.custom ? root.current : "";
@@ -1142,7 +1336,7 @@ component KeyPicker inherits HorizontalLayout {
             Text {
                 text: root.listening ? @tr("Press a key …")
                     : root.custom ? @tr("{} · change", root.current) : @tr("Set key");
-                color: root.custom && !root.listening ? Palette.accent-foreground : Palette.control-foreground;
+                color: root.custom && !root.listening ? Skin.accent-foreground : Skin.control-foreground;
                 horizontal-alignment: center;
                 vertical-alignment: center;
             }
@@ -1166,7 +1360,7 @@ component DictationSettings inherits Card {
         custom: AppState.key-custom;
         slot: 1;
     }
-    if !AppState.key-fixed && AppState.key-refusal != "": Hint { text: AppState.key-refusal; color: #e0604f; }
+    if !AppState.key-fixed && AppState.key-refusal != "": Hint { text: AppState.key-refusal; color: Skin.refusal; }
     if !AppState.key-fixed && AppState.key-warning != "": Hint { text: AppState.key-warning; }
     // Only where kyrr catches the key itself.
     if AppState.key-note == "": Hint { text: @tr("With Ctrl, Alt or Shift held, the key stays with your app."); }
@@ -1228,10 +1422,10 @@ component EffortOption inherits Rectangle {
     in property <bool> picked;
     callback clicked();
     forward-focus: key;
-    border-radius: 10px;
+    border-radius: Skin.round(10px);
     border-width: key.has-focus ? 2px : 1px;
-    border-color: key.has-focus ? Palette.foreground : root.picked ? #2ea043 : Palette.border;
-    background: root.picked ? #2ea043.with-alpha(0.12) : (touch.has-hover ? Palette.alternate-background : transparent);
+    border-color: key.has-focus ? Skin.foreground : root.picked ? Skin.picked : Skin.border;
+    background: root.picked ? Skin.picked.with-alpha(0.12) : (touch.has-hover ? Skin.alternate-background : transparent);
     accessible-role: radio-button;
     accessible-label: root.title + ". " + root.text;
     accessible-checkable: true;
@@ -1260,14 +1454,14 @@ component EffortOption inherits Rectangle {
             Rectangle {
                 width: 14px;
                 height: 14px;
-                border-radius: 7px;
+                border-radius: Skin.round(7px);
                 border-width: 1.5px;
-                border-color: root.picked ? #2ea043 : Palette.foreground.with-alpha(0.4);
+                border-color: root.picked ? Skin.picked : Skin.foreground.with-alpha(0.4);
                 Rectangle {
                     width: 8px;
                     height: 8px;
-                    border-radius: 4px;
-                    background: #2ea043;
+                    border-radius: Skin.round(4px);
+                    background: Skin.picked;
                     visible: root.picked;
                 }
             }
@@ -1275,7 +1469,7 @@ component EffortOption inherits Rectangle {
         VerticalLayout {
             spacing: 3px;
             Text { text: root.title; font-size: 13px; font-weight: 700; }
-            Text { text: root.text; font-size: 12px; wrap: word-wrap; color: Palette.foreground.with-alpha(0.75); }
+            Text { text: root.text; font-size: 12px; wrap: word-wrap; color: Skin.foreground.with-alpha(0.75); }
         }
     }
 }
@@ -1284,17 +1478,17 @@ component EffortOption inherits Rectangle {
 component NoteBanner inherits Rectangle {
     in property <string> text;
     callback closed();
-    background: #d29922.with-alpha(0.12);
-    border-color: #d29922.with-alpha(0.45);
+    background: Skin.warning.with-alpha(0.12);
+    border-color: Skin.warning.with-alpha(0.45);
     border-width: 1px;
-    border-radius: 10px;
+    border-radius: Skin.round(10px);
     HorizontalLayout {
         padding: 8px;
         padding-left: 12px;
         spacing: 8px;
         VerticalLayout {
             alignment: center;
-            Rectangle { width: 8px; height: 8px; border-radius: 4px; background: #d29922; }
+            Rectangle { width: 8px; height: 8px; border-radius: Skin.round(4px); background: Skin.warning; }
         }
         Text {
             text: root.text;
@@ -1308,8 +1502,8 @@ component NoteBanner inherits Rectangle {
             horizontal-stretch: 0;
             forward-focus: close-key;
             border-width: close-key.has-focus ? 2px : 0px;
-            border-color: Palette.foreground;
-            border-radius: 4px;
+            border-color: Skin.foreground;
+            border-radius: Skin.round(4px);
             accessible-role: button;
             accessible-label: @tr("Close");
             accessible-action-default => { root.closed(); }
@@ -1326,7 +1520,7 @@ component NoteBanner inherits Rectangle {
                 // × (not ✕): every font has it.
                 text: "×";
                 font-size: 20px;
-                color: close.has-hover ? Palette.foreground : Palette.foreground.with-alpha(0.55);
+                color: close.has-hover ? Skin.foreground : Skin.foreground.with-alpha(0.55);
             }
             close := TouchArea {
                 mouse-cursor: pointer;
@@ -1340,17 +1534,17 @@ component NoteBanner inherits Rectangle {
 // that installs it. Closing it hides it until the next version.
 component UpdateBanner inherits Rectangle {
     property <bool> busy: AppState.update-state == UpdateState.downloading || AppState.update-state == UpdateState.installing;
-    background: #2ea043.with-alpha(0.12);
-    border-color: #2ea043.with-alpha(0.45);
+    background: Skin.picked.with-alpha(0.12);
+    border-color: Skin.picked.with-alpha(0.45);
     border-width: 1px;
-    border-radius: 10px;
+    border-radius: Skin.round(10px);
     HorizontalLayout {
         padding: 8px;
         padding-left: 12px;
         spacing: 8px;
         VerticalLayout {
             alignment: center;
-            Rectangle { width: 8px; height: 8px; border-radius: 4px; background: #2ea043; }
+            Rectangle { width: 8px; height: 8px; border-radius: Skin.round(4px); background: Skin.picked; }
         }
         Text {
             text: AppState.update-state == UpdateState.downloading ? @tr("Downloading the update… {}%", round(AppState.update-progress * 100))
@@ -1383,8 +1577,8 @@ component UpdateBanner inherits Rectangle {
             horizontal-stretch: 0;
             forward-focus: close-key;
             border-width: close-key.has-focus ? 2px : 0px;
-            border-color: Palette.foreground;
-            border-radius: 4px;
+            border-color: Skin.foreground;
+            border-radius: Skin.round(4px);
             accessible-role: button;
             accessible-label: @tr("Not now");
             accessible-action-default => { AppState.dismiss-update(); }
@@ -1401,7 +1595,7 @@ component UpdateBanner inherits Rectangle {
                 // × (not ✕): every font has it.
                 text: "×";
                 font-size: 20px;
-                color: close.has-hover ? Palette.foreground : Palette.foreground.with-alpha(0.55);
+                color: close.has-hover ? Skin.foreground : Skin.foreground.with-alpha(0.55);
             }
             close := TouchArea {
                 mouse-cursor: pointer;
@@ -1420,10 +1614,10 @@ component AlertButton inherits Rectangle {
     forward-focus: key;
     min-height: 32px;
     min-width: label.preferred-width + 24px;
-    border-radius: 4px;
+    border-radius: Skin.round(4px);
     border-width: key.has-focus ? 2px : 0px;
-    border-color: Palette.foreground;
-    background: touch.pressed ? #b4282c : touch.has-hover ? #cf3338 : #e5484d;
+    border-color: Skin.foreground;
+    background: touch.pressed ? Skin.danger-pressed : touch.has-hover ? Skin.danger-hover : Skin.danger;
     accessible-role: button;
     accessible-label: root.text;
     accessible-action-default => { root.clicked(); }
@@ -1461,7 +1655,7 @@ component AlertLine inherits Text {
     }
     text: root.note();
     // The red notes are problems; a microphone coming back is good news.
-    color: AppState.alert == 7 ? Tone.good : Tone.bad;
+    color: AppState.alert == 7 ? Skin.good : Skin.bad;
     font-size: 12px;
     min-height: 16px;
     vertical-alignment: center;
@@ -1627,8 +1821,8 @@ component LevelSettings inherits Card {
         text: !AppState.mic-active ? @tr("Shows what it evens out while an app uses the mic.")
             : root.gain == 0 ? @tr("Right now unchanged: your mic is just right.")
             : @tr("Right now: {} dB", root.signed);
-        color: !AppState.mic-active || root.gain == 0 ? Palette.foreground.with-alpha(0.65)
-            : root.gain > 0 ? Tone.good : Tone.bad;
+        color: !AppState.mic-active || root.gain == 0 ? Skin.foreground.with-alpha(0.65)
+            : root.gain > 0 ? Skin.good : Skin.bad;
     }
 }
 
@@ -1648,10 +1842,10 @@ component ToolsSettings inherits Card {
     if root.filter: HorizontalLayout {
         spacing: 6px;
         alignment: start;
-        Rectangle { width: 10px; height: 10px; y: 3px; border-radius: 5px; background: Palette.foreground.with-alpha(0.18); }
+        Rectangle { width: 10px; height: 10px; y: 3px; border-radius: Skin.round(5px); background: Skin.foreground.with-alpha(0.18); }
         Hint { text: @tr("your mic"); horizontal-stretch: 0; }
         Rectangle { width: 14px; }
-        Rectangle { width: 14px; height: 4px; y: 6px; border-radius: 2px; background: Palette.accent-background; }
+        Rectangle { width: 14px; height: 4px; y: 6px; border-radius: Skin.round(2px); background: Skin.accent-background; }
         Hint { text: @tr("what your apps get"); horizontal-stretch: 0; }
     }
     if root.filter: Hint { text: @tr("Moves while an app uses the mic."); }
@@ -1696,7 +1890,7 @@ component ToolsSettings inherits Card {
         Rectangle { }
     }
     Hint { text: @tr("Your mic live in your headphones, the way your apps hear it. On speakers it squeals."); }
-    if AppState.probe-error != "": Caption { text: AppState.probe-error; color: Tone.bad; }
+    if AppState.probe-error != "": Caption { text: AppState.probe-error; color: Skin.bad; }
 }
 
 // Settings: the rest.
@@ -1856,7 +2050,7 @@ component SetupPage inherits VerticalLayout {
         enabled: AppState.filter-state != FilterState.setting-up && AppState.microphones.length > 0;
         clicked => { AppState.attach-microphone(AppState.mic-index); }
     }
-    if step == 0 && AppState.filter-state == FilterState.error: Caption { text: AppState.error-text; color: Tone.bad; }
+    if step == 0 && AppState.filter-state == FilterState.error: Caption { text: AppState.error-text; color: Skin.bad; }
     if step == 0: Button {
         text: @tr("Not now, just dictation");
         enabled: AppState.filter-state != FilterState.setting-up;
@@ -1941,6 +2135,8 @@ export component NewsWindow inherits Window {
     in property <int> mode;
     callback close();
     title: @tr("What's new");
+    background: Skin.background;
+    default-font-family: Skin.font;
     icon: @image-url("icons/kyrr-256.png");
     preferred-width: 380px;
     min-width: 320px;
@@ -1991,17 +2187,17 @@ component IconButton inherits Rectangle {
     in property <string> shape;
     in property <string> label;
     in property <bool> enabled: true;
-    in property <color> tint: Palette.foreground.with-alpha(0.8);
+    in property <color> tint: Skin.foreground.with-alpha(0.8);
     in property <length> size: 28px;
     callback clicked();
     forward-focus: key;
     width: root.size;
     height: root.size;
-    border-radius: root.size / 2;
+    border-radius: Skin.round(root.size / 2);
     border-width: key.has-focus ? 2px : 0px;
-    border-color: Palette.foreground;
-    background: !root.enabled ? transparent : touch.pressed ? Palette.foreground.with-alpha(0.16)
-        : touch.has-hover ? Palette.foreground.with-alpha(0.08) : transparent;
+    border-color: Skin.foreground;
+    background: !root.enabled ? transparent : touch.pressed ? Skin.foreground.with-alpha(0.16)
+        : touch.has-hover ? Skin.foreground.with-alpha(0.08) : transparent;
     opacity: root.enabled ? 1 : 0.35;
     accessible-role: button;
     accessible-label: root.label;
@@ -2043,12 +2239,12 @@ component Chip inherits Rectangle {
     forward-focus: key;
     height: 24px;
     width: label.preferred-width + 18px;
-    border-radius: 12px;
+    border-radius: Skin.round(12px);
     border-width: key.has-focus ? 2px : 0px;
-    border-color: Palette.foreground;
-    background: root.danger ? (touch.has-hover ? #cf3338 : #e5484d)
-        : root.strong ? Palette.accent-background
-        : touch.has-hover && root.enabled ? Palette.foreground.with-alpha(0.13) : Palette.foreground.with-alpha(0.07);
+    border-color: Skin.foreground;
+    background: root.danger ? (touch.has-hover ? Skin.danger-hover : Skin.danger)
+        : root.strong ? Skin.accent-background
+        : touch.has-hover && root.enabled ? Skin.foreground.with-alpha(0.13) : Skin.foreground.with-alpha(0.07);
     opacity: root.enabled ? 1 : 0.5;
     accessible-role: button;
     accessible-label: root.text;
@@ -2066,7 +2262,7 @@ component Chip inherits Rectangle {
     label := Text {
         text: root.text;
         font-size: 12px;
-        color: root.danger ? white : root.strong ? Palette.accent-foreground : Palette.foreground;
+        color: root.danger ? white : root.strong ? Skin.accent-foreground : Skin.foreground;
         horizontal-alignment: center;
         vertical-alignment: center;
     }
@@ -2114,8 +2310,8 @@ component RecordingCard inherits Card {
             Rectangle {
                 width: 10px;
                 height: 10px;
-                border-radius: 5px;
-                background: Palette.accent-background;
+                border-radius: Skin.round(5px);
+                background: Skin.accent-background;
                 accessible-role: text;
                 accessible-label: @tr("New recording");
             }
@@ -2138,8 +2334,8 @@ component MemoRow inherits Rectangle {
     property <bool> editing: AppState.memo-editing == root.index;
     property <bool> confirming: AppState.memo-confirm == root.index;
     property <bool> busy: root.item.text-state == 1 || root.item.text-state == 2;
-    background: Palette.alternate-background;
-    border-radius: 10px;
+    background: Skin.alternate-background;
+    border-radius: Skin.round(10px);
     VerticalLayout {
         padding: 8px;
         padding-left: 6px;
@@ -2151,7 +2347,7 @@ component MemoRow inherits Rectangle {
                 IconButton {
                     shape: root.playing ? Shapes.stop : Shapes.play;
                     label: root.playing ? @tr("Stop") : @tr("Play");
-                    tint: Palette.accent-background;
+                    tint: Skin.accent-background;
                     clicked => { AppState.memo-play(root.index); }
                 }
             }
@@ -2224,7 +2420,7 @@ component MemoRow inherits Rectangle {
                     Text {
                         text: root.playing ? AppState.memo-play-time : root.item.when;
                         font-size: 12px;
-                        color: Palette.foreground.with-alpha(0.65);
+                        color: Skin.foreground.with-alpha(0.65);
                         overflow: elide;
                         vertical-alignment: center;
                         horizontal-stretch: 1;
@@ -2246,13 +2442,13 @@ component MemoRow inherits Rectangle {
         }
         if root.playing: Rectangle {
             height: 3px;
-            border-radius: 1.5px;
-            background: Palette.foreground.with-alpha(0.1);
+            border-radius: Skin.round(1.5px);
+            background: Skin.foreground.with-alpha(0.1);
             Rectangle {
                 x: 0;
                 width: parent.width * clamp(AppState.memo-play-fraction, 0, 1);
-                border-radius: 1.5px;
-                background: Palette.accent-background;
+                border-radius: Skin.round(1.5px);
+                background: Skin.accent-background;
             }
         }
         if root.busy: HorizontalLayout {
@@ -2263,7 +2459,7 @@ component MemoRow inherits Rectangle {
                     : root.item.text-left != "" ? @tr("Writing… {}% · {}", round(root.item.text-progress * 100), root.item.text-left)
                     : @tr("Writing… {}%", round(root.item.text-progress * 100));
                 font-size: 12px;
-                color: Palette.foreground.with-alpha(0.7);
+                color: Skin.foreground.with-alpha(0.7);
                 overflow: elide;
                 vertical-alignment: center;
                 horizontal-stretch: 1;
@@ -2275,20 +2471,20 @@ component MemoRow inherits Rectangle {
         }
         if root.busy: Rectangle {
             height: 4px;
-            border-radius: 2px;
-            background: Palette.foreground.with-alpha(0.1);
+            border-radius: Skin.round(2px);
+            background: Skin.foreground.with-alpha(0.1);
             Rectangle {
                 x: 0;
                 width: parent.width * clamp(root.item.text-progress, 0, 1);
-                border-radius: 2px;
-                background: Tone.good;
+                border-radius: Skin.round(2px);
+                background: Skin.good;
                 animate width { duration: 400ms; easing: ease-out; }
             }
         }
         if root.item.text-state == 4: Text {
             text: AppState.memo-can-write ? @tr("That did not work. Try again?") : @tr("Needs the speech model: download it under Dictation.");
             font-size: 12px;
-            color: Tone.bad;
+            color: Skin.bad;
             wrap: word-wrap;
         }
         if root.confirming: HorizontalLayout {
@@ -2384,9 +2580,9 @@ component RecordingSettings inherits Card {
         custom: AppState.memo-key-custom;
         slot: 2;
     }
-    if !AppState.key-fixed && AppState.key-refusal != "": Hint { text: AppState.key-refusal; color: #e0604f; }
+    if !AppState.key-fixed && AppState.key-refusal != "": Hint { text: AppState.key-refusal; color: Skin.refusal; }
     if !AppState.key-fixed && AppState.key-warning != "": Hint { text: AppState.key-warning; }
-    if AppState.memo-key-note != "": Hint { text: AppState.memo-key-note; color: #e0604f; }
+    if AppState.memo-key-note != "": Hint { text: AppState.memo-key-note; color: Skin.refusal; }
     // Where the desktop owns the key, its own settings change it.
     if AppState.key-fixed: Hint { text: @tr("Your desktop sets this key, now {}.", AppState.memo-key-label); }
     if AppState.key-fixed && AppState.key-button != "": Button {
@@ -2429,7 +2625,7 @@ component RecordingSettings inherits Card {
 // field: it scrolls, takes a selection, and what is typed is saved.
 component TranscriptSheet inherits Rectangle {
     in property <bool> open;
-    background: Palette.background;
+    background: Skin.background;
     // Clicks stay here, not in the list below.
     TouchArea { }
     changed open => {
@@ -2469,7 +2665,7 @@ component TranscriptSheet inherits Rectangle {
                 IconButton {
                     shape: root.playing ? Shapes.stop : Shapes.play;
                     label: root.playing ? @tr("Stop") : @tr("Play");
-                    tint: Palette.accent-background;
+                    tint: Skin.accent-background;
                     size: 34px;
                     clicked => { AppState.memo-play(AppState.memo-sheet-index); }
                 }
@@ -2481,7 +2677,7 @@ component TranscriptSheet inherits Rectangle {
                 Text {
                     text: root.playing ? AppState.memo-play-time : AppState.memo-sheet-when;
                     font-size: 12px;
-                    color: Palette.foreground.with-alpha(0.65);
+                    color: Skin.foreground.with-alpha(0.65);
                 }
             }
         }
@@ -2490,7 +2686,7 @@ component TranscriptSheet inherits Rectangle {
             Text {
                 text: @tr("Times");
                 font-size: 12px;
-                color: Palette.foreground.with-alpha(0.65);
+                color: Skin.foreground.with-alpha(0.65);
                 vertical-alignment: center;
                 horizontal-stretch: 0;
             }
@@ -2505,16 +2701,16 @@ component TranscriptSheet inherits Rectangle {
             Text {
                 text: AppState.memo-sheet-saved ? "✓ " + @tr("Saved") : @tr("Saving …");
                 font-size: 12px;
-                color: Palette.foreground.with-alpha(0.65);
+                color: Skin.foreground.with-alpha(0.65);
                 vertical-alignment: center;
                 horizontal-stretch: 0;
             }
         }
         Rectangle {
-            background: Palette.alternate-background;
-            border-radius: 10px;
+            background: Skin.alternate-background;
+            border-radius: Skin.round(10px);
             border-width: input.has-focus ? 2px : 0px;
-            border-color: Palette.accent-background;
+            border-color: Skin.accent-background;
             vertical-stretch: 1;
             scroll := ScrollView {
                 x: 12px;
@@ -2528,9 +2724,9 @@ component TranscriptSheet inherits Rectangle {
                     single-line: false;
                     wrap: word-wrap;
                     font-size: 15px;
-                    color: Palette.foreground;
-                    selection-background-color: Palette.accent-background;
-                    selection-foreground-color: Palette.accent-foreground;
+                    color: Skin.foreground;
+                    selection-background-color: Skin.accent-background;
+                    selection-foreground-color: Skin.accent-foreground;
                     page-height: scroll.visible-height;
                     accessible-label: AppState.memo-sheet-title;
                     edited => { AppState.memo-sheet-edited(self.text); }
@@ -2601,6 +2797,8 @@ export component MainWindow inherits Window {
     out property <length> page-width: memos-page ? 520px : 380px;
     title: "kyrr";
     icon: @image-url("icons/kyrr-256.png");
+    background: Skin.background;
+    default-font-family: Skin.font;
     preferred-width: page-width;
     // A fixed width also keeps the window floating on tiling compositors
     // (Hyprland treats it like a dialog), which suits a small tool.
@@ -2626,6 +2824,11 @@ export component MainWindow inherits Window {
     // headless preview has no system theme to follow.
     public function use-dark-scheme() {
         Palette.color-scheme = ColorScheme.dark;
+    }
+
+    // Omarchy's theme is dark or light: the system's controls follow it.
+    public function use-scheme(dark: bool) {
+        Palette.color-scheme = dark ? ColorScheme.dark : ColorScheme.light;
     }
 
     property <bool> main-page: !setup-mode && AppState.page == 0;
@@ -2682,7 +2885,7 @@ export component MainWindow inherits Window {
                 AlertLine { }
                 if AppState.alert == 4: Text {
                     text: @tr("Switch it on");
-                    color: Tone.bad;
+                    color: Skin.bad;
                     font-size: 12px;
                     font-weight: 700;
                     horizontal-stretch: 0;

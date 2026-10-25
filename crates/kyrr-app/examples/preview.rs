@@ -1,5 +1,6 @@
 //! Renders the window headless into raw RGBA files for checking the layout
-//! without a display: `cargo run --example preview -- <out-dir> [de|en] [scale] [dark]`.
+//! without a display: `cargo run --example preview -- <out-dir> [de|en] [scale] [dark]
+//! [omarchy=<colors.toml> [font=<family>]]`.
 //! The README shots are `en` in `dark`.
 //! The scale defaults to 1.5 (the README shots); the social preview's window
 //! is 1.2711 (483 px wide).
@@ -219,6 +220,27 @@ fn main() {
     let ui = MainWindow::new().unwrap();
     if args.iter().any(|a| a == "dark") {
         ui.invoke_use_dark_scheme();
+    }
+    // Omarchy's look: `omarchy=<theme's colors.toml>`, `font=<family>`.
+    #[cfg(target_os = "linux")]
+    if let Some(path) = args.iter().find_map(|a| a.strip_prefix("omarchy=")) {
+        let text = std::fs::read_to_string(path).unwrap();
+        let t = kyrr_linux::omarchy::parse_theme(&text, false).expect("a theme");
+        let color = |rgb: [u8; 3]| slint::Color::from_rgb_u8(rgb[0], rgb[1], rgb[2]);
+        let skin = ui.global::<Skin>();
+        skin.set_theme_background(color(t.background));
+        skin.set_theme_foreground(color(t.foreground));
+        skin.set_theme_accent(color(t.accent));
+        skin.set_theme_red(color(t.red));
+        skin.set_theme_yellow(color(t.yellow));
+        skin.set_theme_green(color(t.green));
+        let font = args
+            .iter()
+            .find_map(|a| a.strip_prefix("font="))
+            .unwrap_or("JetBrains Mono");
+        skin.set_theme_font(font.into());
+        skin.set_omarchy(true);
+        ui.invoke_use_scheme(t.dark);
     }
     if let Err(e) = slint::select_bundled_translation(&lang) {
         eprintln!("translation {lang}: {e}");

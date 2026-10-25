@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "heast13.kyrr",
+  "name": "kyrr",
+  "version": "1.0.0",
+  "author": "heast13",
+  "license": "MIT",
+  "description": "kyrr in the bar: local noise suppression and dictation. Shows when kyrr listens, writes or records; a click opens it.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "kyrr",
+    "description": "Shows when kyrr listens, writes or records a voice memo. Click: open kyrr. Middle click: start or stop dictating.",
+    "category": "Audio",
+    "defaultSection": "right",
+    "allowMultiple": false
+  }
+}
