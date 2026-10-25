@@ -7,6 +7,9 @@ What kyrr brings for [Omarchy](https://omarchy.org) 4.
   dictation keys then use kyrr. kyrr writes `omarchy-dictation-kyrr` and
   `omarchy-install-dictation-kyrr` to `~/.local/bin` and a block between
   `>>> kyrr` and `<<< kyrr` to `~/.config/omarchy/extensions/omarchy-menu.jsonc`.
+  The first script hands each key press to the running kyrr over its socket
+  with `socat`, which Omarchy installs; without it each press starts kyrr,
+  which passes it on (slower).
 - **Look.** kyrr's window and dictation pill take the Omarchy theme in use:
   its colours, square corners and its monospace font
   (`crates/kyrr-app/src/skin.rs`).

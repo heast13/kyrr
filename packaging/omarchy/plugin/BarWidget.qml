@@ -5,15 +5,18 @@ import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 
-// kyrr in Omarchy's bar. While kyrr runs it keeps one word in
+// kyrr in Omarchy's bar. While kyrr runs it keeps what it does in
 // $XDG_RUNTIME_DIR/kyrr/state: idle, listening, writing or recording (a voice
-// memo). No file: kyrr does not run.
+// memo), then its process id. No file, or no such process: kyrr does not run.
 BarWidget {
   id: root
   moduleName: "heast13.kyrr"
 
-  readonly property string statePath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/kyrr/state"
-  property string kyrrState: ""
+  readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
+  property string word: ""
+  property string pid: ""
+  property bool alive: false
+  readonly property string kyrrState: alive ? word : ""
   readonly property bool german: Qt.locale().name.indexOf("de") === 0
   readonly property bool busy: kyrrState === "listening" || kyrrState === "writing" || kyrrState === "recording"
 
@@ -31,16 +34,31 @@ BarWidget {
 
   FileView {
     id: stateFile
-    path: root.statePath
+    path: root.runtimeDir !== "" ? root.runtimeDir + "/kyrr/state" : ""
     watchChanges: true
     printErrors: false
     onLoaded: {
-      var word = text().trim()
+      var parts = text().trim().split(" ")
       // A read in the middle of kyrr's write: keep what was there.
-      if (word !== "") root.kyrrState = word
+      if (parts[0] === "") return
+      root.word = parts[0]
+      root.pid = parts.length > 1 ? parts[1] : ""
     }
-    onLoadFailed: root.kyrrState = ""
+    onLoadFailed: {
+      root.word = ""
+      root.pid = ""
+      root.alive = false
+    }
     onFileChanged: reload()
+  }
+
+  // A kyrr that crashed leaves its file behind: its process is gone.
+  FileView {
+    id: processFile
+    path: root.pid !== "" ? "/proc/" + root.pid + "/comm" : ""
+    printErrors: false
+    onLoaded: root.alive = text().trim() === "kyrr"
+    onLoadFailed: root.alive = false
   }
 
   // The file comes and goes with kyrr, which a watch on it does not see.
@@ -48,7 +66,10 @@ BarWidget {
     interval: 2000
     running: true
     repeat: true
-    onTriggered: stateFile.reload()
+    onTriggered: {
+      stateFile.reload()
+      processFile.reload()
+    }
   }
 
   BarIconButton {

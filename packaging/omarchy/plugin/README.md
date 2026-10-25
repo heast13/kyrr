@@ -23,9 +23,10 @@ Or in the Omarchy menu: Setup > Plugins > Add. Remove it with
 
 ## How it works
 
-While kyrr runs on Omarchy it keeps one word in `$XDG_RUNTIME_DIR/kyrr/state`
-(`idle`, `listening`, `writing` or `recording`) and deletes the file when it
-quits. The widget reads that file; nothing else is read or sent.
+While kyrr runs on Omarchy it keeps what it does in
+`$XDG_RUNTIME_DIR/kyrr/state` (`idle`, `listening`, `writing` or `recording`,
+then its process id) and deletes the file when it quits. The widget reads that
+file and checks that the process is still kyrr; nothing else is read or sent.
 
 ## License
 

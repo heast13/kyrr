@@ -82,9 +82,8 @@ Either way kyrr adds itself to your app menu on its first start.
 - **Omarchy:** kyrr takes on the look of your Omarchy theme (colours, square
   corners, its font) and changes with it. On Omarchy 4.5 and newer it is also
   one of Omarchy's dictation programs (Setup > Defaults > Dictation), so
-  Omarchy's own dictation keys use kyrr; where no other dictation program is
-  set up, kyrr picks itself. A widget for Omarchy's bar shows when kyrr
-  listens or records: `omarchy plugin add https://github.com/heast13/omarchy-kyrr.git`.
+  Omarchy's own dictation keys use kyrr. With dictation on, kyrr picks itself
+  when no dictation program is chosen or the chosen one is not installed.
 - **X11 desktops (Linux Mint, XFCE):** the keys just work.
 - **Without a tray icon** the window's X minimizes kyrr where the desktop can
   bring it back (GNOME, say) and quits it on tiling ones; "Quit" always ends

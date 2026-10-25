@@ -28,6 +28,8 @@ use crate::binds::{config_home, sh_quoted, write_over};
 
 /// The name kyrr has among Omarchy's dictation programs.
 const NAME: &str = "kyrr";
+/// In each script kyrr writes, so it knows its own.
+const MARK: &str = "kyrr writes this file and keeps it up to";
 const MENU_START: &str = "// >>> kyrr (kyrr keeps this block up to date)";
 const MENU_END: &str = "// <<< kyrr";
 
@@ -95,14 +97,27 @@ pub fn join_dictation(program: &str, german: bool, choose: bool) -> bool {
     // AppImage kept elsewhere gets a link in ~/.local/bin (on the session's
     // PATH in Omarchy); a file of the user's there stays.
     let link = bin.join(NAME);
-    let ours = std::fs::symlink_metadata(&link).map_or(true, |m| m.file_type().is_symlink());
+    // No file there yet, or kyrr's own link: to a kyrr file, or to one
+    // that has gone (the AppImage moved).
+    let ours = match std::fs::symlink_metadata(&link) {
+        Err(_) => true,
+        Ok(m) if m.file_type().is_symlink() => std::fs::read_link(&link).is_ok_and(|to| {
+            !to.exists()
+                || to
+                    .file_name()
+                    .is_some_and(|n| n.to_string_lossy().to_ascii_lowercase().starts_with(NAME))
+        }),
+        Ok(_) => false,
+    };
     if Path::new(program).is_absolute() && Path::new(program) != link && ours && !on_path(NAME) {
         let _ = std::fs::remove_file(&link);
         if let Err(e) = std::os::unix::fs::symlink(program, &link) {
             eprintln!("kyrr: linking {}: {e}", link.display());
         }
     }
+    // A dotfile kept elsewhere and linked here: the file itself.
     let menu = config.join("omarchy/extensions/omarchy-menu.jsonc");
+    let menu = std::fs::canonicalize(&menu).unwrap_or(menu);
     let old = std::fs::read_to_string(&menu).ok();
     if let Some(new) = menu_with_kyrr(old.as_deref()) {
         if let Err(e) = write_over(&menu, &new) {
@@ -146,7 +161,12 @@ pub fn join_dictation(program: &str, german: bool, choose: bool) -> bool {
 /// Writes an executable file when it is new or changed.
 fn write_script(path: &Path, text: &str) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
-    let same = std::fs::read_to_string(path).is_ok_and(|old| old == text);
+    let old = std::fs::read_to_string(path).ok();
+    // A file of that name that kyrr did not write stays.
+    if old.as_deref().is_some_and(|old| !old.contains(MARK)) {
+        return Err(std::io::Error::other("a file of the user's is in the way"));
+    }
+    let same = old.is_some_and(|old| old == text);
     let executable = std::fs::metadata(path).is_ok_and(|m| m.permissions().mode() & 0o111 != 0);
     if same && executable {
         return Ok(());
@@ -176,11 +196,14 @@ if [[ -n ${{XDG_RUNTIME_DIR:-}} ]]; then
 else
   socket="${{TMPDIR:-/tmp}}/kyrr-$(id -u).sock"
 fi
-if [[ -S $socket ]] && command -v socat >/dev/null &&
-  printf %s "$request" | socat -u - "UNIX-CONNECT:$socket" 2>/dev/null; then
-  exit 0
-fi
-if [[ $request == dictate-stop && ! -S $socket ]]; then
+# socat comes with Omarchy; without it kyrr passes the word on itself.
+if command -v socat >/dev/null; then
+  if [[ -S $socket ]] && printf %s "$request" | socat -u - "UNIX-CONNECT:$socket" 2>/dev/null; then
+    exit 0
+  fi
+  # Nobody answers: kyrr does not run, and there is nothing to stop.
+  [[ $request == dictate-stop ]] && exit 0
+elif [[ $request == dictate-stop && ! -S $socket ]]; then
   exit 0
 fi
 setsid -f {program} "--$request" >/dev/null 2>&1 </dev/null
@@ -206,7 +229,7 @@ fn installer(program: &str, german: bool) -> String {
     format!(
         r#"#!/bin/bash
 # Makes kyrr the dictation program for Omarchy's keys (Setup > Defaults >
-# Dictation). kyrr writes this file and keeps it up to date.
+# Dictation); kyrr writes this file and keeps it up to date.
 
 set -e
 omarchy-dictation-use kyrr
@@ -276,8 +299,9 @@ fn menu_with_kyrr(old: Option<&str>) -> Option<String> {
     (kept != old).then_some(kept)
 }
 
-/// The file kyrr's widget in Omarchy's bar reads: one word, `idle`,
-/// `listening`, `writing` or `recording` (a voice memo), while kyrr runs.
+/// The file kyrr's widget in Omarchy's bar reads while kyrr runs: `idle`,
+/// `listening`, `writing` or `recording` (a voice memo), and kyrr's process
+/// id.
 fn state_file() -> Option<PathBuf> {
     let dir = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from)?;
     Some(dir.join("kyrr/state"))
@@ -297,8 +321,9 @@ pub fn set_state(state: &'static str) {
     if let Some(dir) = file.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    // In one write, in place: the widget watches the file itself.
-    let _ = std::fs::write(&file, format!("{state}\n"));
+    // In one write, in place: the widget watches the file itself. kyrr's
+    // process id lets it see a kyrr that ended without deleting the file.
+    let _ = std::fs::write(&file, format!("{state} {}\n", std::process::id()));
 }
 
 /// kyrr ends: the widget shows it as not running.
@@ -493,6 +518,36 @@ mod tests {
         let i = installer("/x/kyrr", true);
         assert!(i.contains("omarchy-dictation-use kyrr\n"));
         assert!(i.contains("'kyrr diktiert jetzt'"));
+    }
+
+    #[test]
+    fn scripts_are_marked_and_spare_other_files() {
+        assert!(adapter("kyrr").contains(MARK) && installer("kyrr", false).contains(MARK));
+        let dir = std::env::temp_dir().join(format!("kyrr-omarchy-scripts-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mine = dir.join("omarchy-dictation-kyrr");
+        std::fs::write(&mine, "#!/bin/sh\necho mine\n").unwrap();
+        assert!(write_script(&mine, &adapter("kyrr")).is_err());
+        assert_eq!(std::fs::read_to_string(&mine).unwrap(), "#!/bin/sh\necho mine\n");
+        let ours = dir.join("omarchy-install-dictation-kyrr");
+        write_script(&ours, &installer("kyrr", true)).unwrap();
+        write_script(&ours, &installer("kyrr", false)).unwrap();
+        assert!(std::fs::read_to_string(&ours).unwrap().contains("'kyrr dictates now'"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn scripts_parse() {
+        use std::io::Write;
+        for script in [adapter("/a b/kyrr"), installer("/a b/kyrr", true)] {
+            let mut bash = std::process::Command::new("bash")
+                .arg("-n")
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+                .unwrap();
+            bash.stdin.take().unwrap().write_all(script.as_bytes()).unwrap();
+            assert!(bash.wait().unwrap().success(), "{script}");
+        }
     }
 
     #[test]
