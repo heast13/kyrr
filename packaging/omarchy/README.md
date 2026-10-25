@@ -17,10 +17,10 @@ What kyrr brings for [Omarchy](https://omarchy.org) 4.
   [heast13/omarchy-kyrr](https://github.com/heast13/omarchy-kyrr) (Omarchy
   installs plugins from a git repository with `manifest.json` at its root),
   listed at [plugins.omarchy.org](https://plugins.omarchy.org). It shows what
-  kyrr does and has kyrr's tray menu; it installs kyrr when it is missing.
+  kyrr does and has the switches of kyrr's main page; it installs kyrr when it is missing.
   kyrr's side: the state file `$XDG_RUNTIME_DIR/kyrr/state` (one line of
   JSON), the socket words `toggle-filter`, `toggle-voice`,
-  `toggle-dictation`, `toggle-memo`, `open-memos`, `install-update` and `quit`
+  `toggle-dictation`, `toggle-memos`, `toggle-memo`, `open-memos`, `install-update`, `quit` and `page-1` to `page-5` (Setup, a card's settings)
   (`crates/kyrr-linux/src/instance.rs`), and `$XDG_RUNTIME_DIR/kyrr-widget`,
   which the widget renews while it is in the bar: then kyrr hides its tray
   icon and the window's buttons to hide or quit.

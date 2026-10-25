@@ -34,10 +34,11 @@ const MEMO_STOP: &[u8] = b"memo-stop";
 /// the compositor's both started it): nothing to do.
 const BACKGROUND: &[u8] = b"background";
 /// From Omarchy's bar widget: what the tray menu does elsewhere.
-const WIDGET: [(&[u8], Request); 7] = [
+const WIDGET: [(&[u8], Request); 8] = [
     (b"toggle-filter", Request::ToggleFilter),
     (b"toggle-voice", Request::ToggleVoice),
     (b"toggle-dictation", Request::ToggleDictation),
+    (b"toggle-memos", Request::ToggleMemos),
     (b"toggle-memo", Request::ToggleMemo),
     (b"open-memos", Request::OpenMemos),
     (b"install-update", Request::InstallUpdate),
@@ -201,12 +202,22 @@ fn serve(listener: UnixListener, show: mpsc::Sender<Request>) {
                 let request = WIDGET
                     .iter()
                     .find(|(word, _)| *word == other)
-                    .map_or(Request::Show, |(_, request)| *request);
+                    .map(|(_, request)| *request)
+                    .or_else(|| page(other))
+                    .unwrap_or(Request::Show);
                 if show.send(request).is_err() {
                     break;
                 }
             }
         }
+    }
+}
+
+/// `page-1` to `page-5`, from the widget's Setup row and its gears.
+fn page(word: &[u8]) -> Option<Request> {
+    match word.strip_prefix(b"page-")? {
+        [digit @ b'1'..=b'5'] => Some(Request::OpenPage(i32::from(digit - b'0'))),
+        _ => None,
     }
 }
 
@@ -231,6 +242,12 @@ mod tests {
             show_requests.recv_timeout(Duration::from_secs(2)),
             Ok(Request::ToggleVoice)
         );
+        UnixStream::connect(&path).unwrap().write_all(b"page-3").unwrap();
+        assert_eq!(
+            show_requests.recv_timeout(Duration::from_secs(2)),
+            Ok(Request::OpenPage(3))
+        );
+        assert_eq!(page(b"page-9"), None);
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
         std::fs::remove_dir_all(dir).unwrap();

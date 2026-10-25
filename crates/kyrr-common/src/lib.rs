@@ -15,9 +15,12 @@ pub enum Request {
     ToggleFilter,
     ToggleVoice,
     ToggleDictation,
+    ToggleMemos,
     ToggleMemo,
     OpenMemos,
     InstallUpdate,
+    /// A page of the window: 1 Setup, 2 to 5 a main card's settings.
+    OpenPage(i32),
     Quit,
 }
 

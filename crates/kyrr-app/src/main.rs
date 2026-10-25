@@ -2771,9 +2771,17 @@ fn answer(window: &MainWindow, request: Request) {
         (Request::ToggleFilter, Some(tray)) => tray.invoke_toggle_filter(),
         (Request::ToggleVoice, Some(tray)) => tray.invoke_toggle_voice(),
         (Request::ToggleDictation, Some(tray)) => tray.invoke_toggle_dictation(),
+        // The switch on the main page; the tray menu has none.
+        (Request::ToggleMemos, Some(tray)) => window
+            .global::<AppState>()
+            .invoke_memos_toggled(!tray.get_memos_enabled()),
         (Request::ToggleMemo, Some(tray)) => tray.invoke_toggle_memo(),
         (Request::OpenMemos, Some(tray)) => tray.invoke_open_memos(),
         (Request::InstallUpdate, Some(tray)) => tray.invoke_install_update(),
+        (Request::OpenPage(page), Some(_)) => {
+            show(window);
+            window.global::<AppState>().invoke_open_page(page);
+        }
         (Request::Quit, Some(tray)) => tray.invoke_quit(),
     }
     #[cfg(target_os = "linux")]
