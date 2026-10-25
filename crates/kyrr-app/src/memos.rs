@@ -35,6 +35,7 @@ const SAVE_AFTER: Duration = Duration::from_millis(700);
 /// How often the open text looks whether its file changed outside kyrr.
 const WATCH: Duration = Duration::from_secs(1);
 /// How much of a memo's text the menu of the widget in Omarchy's bar shows.
+#[cfg(target_os = "linux")]
 const WIDGET_TEXT: usize = 4000;
 
 /// Told when the list was looked at (seconds since 1970).
@@ -88,6 +89,7 @@ pub struct Memos {
     saving: slint::Timer,
     watching: slint::Timer,
     /// The memo whose text the widget in Omarchy's bar shows.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     widget_text: RefCell<Option<PathBuf>>,
 }
 
@@ -239,6 +241,7 @@ impl Memos {
 
     /// The list for the widget in Omarchy's bar, newest first; the memo it
     /// shows comes with its text.
+    #[cfg(target_os = "linux")]
     pub fn widget_list(&self) -> serde_json::Value {
         let all = self.all.borrow();
         let texts = self.texts.borrow();
@@ -284,6 +287,7 @@ impl Memos {
     }
 
     /// The folder the memos' folder is in, as people know it: "Dokumente".
+    #[cfg(target_os = "linux")]
     pub fn widget_folder(&self) -> String {
         self.folder_name()
     }
