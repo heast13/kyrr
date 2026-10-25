@@ -34,9 +34,6 @@ const BRIEF: Duration = Duration::from_secs(5);
 const SAVE_AFTER: Duration = Duration::from_millis(700);
 /// How often the open text looks whether its file changed outside kyrr.
 const WATCH: Duration = Duration::from_secs(1);
-/// How much of a memo's text the menu of the widget in Omarchy's bar shows.
-#[cfg(target_os = "linux")]
-const WIDGET_TEXT: usize = 4000;
 
 /// Told when the list was looked at (seconds since 1970).
 type SeenHook = Box<dyn Fn(u64)>;
@@ -88,9 +85,6 @@ pub struct Memos {
     brief: slint::Timer,
     saving: slint::Timer,
     watching: slint::Timer,
-    /// The memo whose text the widget in Omarchy's bar shows.
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-    widget_text: RefCell<Option<PathBuf>>,
 }
 
 thread_local! {
@@ -143,7 +137,6 @@ impl Memos {
             brief: slint::Timer::default(),
             saving: slint::Timer::default(),
             watching: slint::Timer::default(),
-            widget_text: RefCell::new(None),
         });
         MEMOS.set(Some(Rc::clone(&memos)));
         window
@@ -233,22 +226,51 @@ impl Memos {
             .map(|i| i as i32)
     }
 
-    /// The memo whose text the widget's menu shows, by its file's name.
-    pub fn show_in_widget(&self, name: Option<&str>) {
-        let path = name.and_then(|n| self.index_of(n)).and_then(|i| self.path(i));
-        *self.widget_text.borrow_mut() = path;
+    /// The memo whose text the widget's menu shows, by its file's name:
+    /// the same text view as in the window, which the menu draws instead.
+    pub fn show_in_widget(self: &Rc<Self>, name: Option<&str>) {
+        match name.and_then(|n| self.index_of(n)) {
+            Some(i) => self.show_text(i),
+            None => {
+                self.close_text();
+                *self.sheet.borrow_mut() = None;
+                self.show_list();
+            }
+        }
     }
 
-    /// The list for the widget in Omarchy's bar, newest first; the memo it
-    /// shows comes with its text.
+    /// The file name of the memo whose text is open.
+    pub fn sheet_name(&self) -> Option<String> {
+        self.sheet
+            .borrow()
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+    }
+
+    /// The same, "" for none.
+    #[cfg(target_os = "linux")]
+    pub fn sheet_id(&self) -> String {
+        self.sheet_name().unwrap_or_default()
+    }
+
+    /// Whether the memo with this file name plays now.
+    #[cfg(target_os = "linux")]
+    fn playing(&self, path: &Path) -> bool {
+        self.player.borrow().as_ref().is_some_and(|p| p.path() == path)
+    }
+
+    /// The list for the widget in Omarchy's bar, newest first, as the search
+    /// finds it.
     #[cfg(target_os = "linux")]
     pub fn widget_list(&self) -> serde_json::Value {
         let all = self.all.borrow();
         let texts = self.texts.borrow();
         let titling = self.titling.borrow();
-        let open = self.widget_text.borrow();
+        let shown = self.shown.borrow();
         let list: Vec<serde_json::Value> = all
             .iter()
+            .filter(|m| shown.contains(&m.path))
             .map(|m| {
                 let (text, progress, left) = match texts.get(&m.path) {
                     Some(Text::Waiting) => ("writing", 0.0, String::new()),
@@ -259,7 +281,7 @@ impl Memos {
                     _ if m.text.is_some() => ("ready", 1.0, String::new()),
                     _ => ("none", 0.0, String::new()),
                 };
-                let mut item = serde_json::json!({
+                serde_json::json!({
                     "id": m.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
                     "title": m.title,
                     "when": self.date(m.when),
@@ -269,18 +291,9 @@ impl Memos {
                     "progress": progress,
                     "left": left,
                     "isNew": m.saved > self.seen.get(),
-                });
-                if open.as_ref() == Some(&m.path) {
-                    let paragraphs: Vec<&str> = m.text.iter().flatten().map(|p| p.text.as_str()).collect();
-                    let mut transcript = paragraphs.join("\n\n");
-                    // The menu shows the start; the whole text is in the file.
-                    if let Some((cut, _)) = transcript.char_indices().nth(WIDGET_TEXT) {
-                        transcript.truncate(cut);
-                        transcript.push('…');
-                    }
-                    item["transcript"] = transcript.into();
-                }
-                item
+                    "waiting": matches!(texts.get(&m.path), Some(Text::Waiting)),
+                    "playing": self.playing(&m.path),
+                })
             })
             .collect();
         list.into()
@@ -439,8 +452,12 @@ impl Memos {
         let query = state.get_memo_query().to_lowercase();
         let query = query.trim();
         let all = self.all.borrow();
+        let sheet = self.sheet.borrow().clone();
+        // The one whose text is open stays, also when a correction or a new
+        // title no longer matches the search.
         let fits = |m: &Memo| {
             query.is_empty()
+                || sheet.as_ref() == Some(&m.path)
                 || m.title.to_lowercase().contains(query)
                 || m.text
                     .as_ref()
@@ -917,7 +934,10 @@ impl Memos {
             return;
         };
         w.global::<AppState>().set_memo_sheet_open(true);
-        crate::fit_sheet(&w, true);
+        // In Omarchy's bar the menu shows it; the window stays as it is.
+        if !crate::headless() {
+            crate::fit_sheet(&w, true);
+        }
     }
 
     /// Fills the big text view with the memo it is open for.
@@ -957,7 +977,9 @@ impl Memos {
         self.watching.stop();
         if let Some(w) = self.window.upgrade() {
             w.global::<AppState>().set_memo_sheet_open(false);
-            crate::fit_sheet(&w, false);
+            if !crate::headless() {
+                crate::fit_sheet(&w, false);
+            }
         }
     }
 

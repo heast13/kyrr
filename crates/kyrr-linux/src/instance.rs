@@ -196,7 +196,7 @@ fn serve(listener: UnixListener, show: mpsc::Sender<Request>) {
         };
         let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
         let mut request = Vec::new();
-        let _ = stream.take(1024).read_to_end(&mut request);
+        let _ = stream.take(4096).read_to_end(&mut request);
         // The widget ends its lines with a newline.
         while request.last().is_some_and(u8::is_ascii_whitespace) {
             request.pop();

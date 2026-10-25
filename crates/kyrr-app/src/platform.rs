@@ -375,6 +375,10 @@ mod imp {
         false
     }
 
+    pub fn take_widget_edit() -> Option<(String, String)> {
+        None
+    }
+
     pub fn can_minimize() -> bool {
         true
     }
@@ -819,6 +823,11 @@ mod imp {
     /// of kyrr, which has no window or tray icon there.
     pub fn headless() -> bool {
         kyrr_linux::omarchy::plugin_on()
+    }
+
+    /// What the widget's menu typed into the open recording's text.
+    pub fn take_widget_edit() -> Option<(String, String)> {
+        kyrr_linux::omarchy::take_edit()
     }
 
     /// Whether the desktop minimizes windows. Tiling compositors (Hyprland,

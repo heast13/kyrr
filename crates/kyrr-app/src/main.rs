@@ -687,6 +687,9 @@ thread_local! {
     /// kyrr runs without a window or tray icon of its own: on Omarchy, with
     /// its widget turned on in the bar, whose menu is all of kyrr.
     static HEADLESS: Cell<bool> = const { Cell::new(false) };
+    /// Where the cursor stands in the text open in the widget's menu, as a
+    /// byte offset: "Play from here" says from when.
+    static SHEET_CURSOR: Cell<i32> = const { Cell::new(0) };
 }
 
 fn headless() -> bool {
@@ -1208,6 +1211,21 @@ impl App {
     /// A line from the menu of kyrr's widget in Omarchy's bar, which is all
     /// of kyrr there (the widget's README, "Commands"): does what the same
     /// click in the window does.
+    /// Takes what the widget's menu typed into the open text, as typing in
+    /// the window's text view would.
+    fn omarchy_edit(&self, state: &AppState) {
+        let Some((id, text)) = platform::take_widget_edit() else {
+            return;
+        };
+        // Typed into the recording that is still open, not one left since.
+        let open = state.get_memo_sheet_open()
+            && memos::memos().is_some_and(|m| m.sheet_name().as_deref() == Some(id.as_str()));
+        if open && state.get_memo_sheet_text() != text.as_str() {
+            state.set_memo_sheet_text(text.as_str().into());
+            state.invoke_memo_sheet_edited(text.into());
+        }
+    }
+
     fn omarchy_command(self: &Rc<Self>, line: &str) {
         let Some(w) = self.window.upgrade() else {
             return;
@@ -1243,6 +1261,9 @@ impl App {
             ("toggle", "general.updateCheck") => flip!(get_update_auto, set_update_auto, invoke_update_auto_toggled),
             ("toggle", "listen") => state.invoke_listen_toggled(),
             ("set", setting) => self.omarchy_set(&state, setting, value),
+            ("mic", "unmute") => state.invoke_unmute(),
+            ("mic", "repair") => state.invoke_repair(),
+            ("mic", "default") => state.invoke_move_to_default(),
             ("mic", index) => {
                 let Ok(index) = index.parse::<i32>() else {
                     return;
@@ -1272,7 +1293,59 @@ impl App {
                 }
             }
             ("memo", "folder") => state.invoke_memo_open_folder(),
+            ("memo", "reveal") => {
+                if let Some(i) = memo() {
+                    state.invoke_memo_show(i);
+                }
+            }
+            ("memo", "cancel") => {
+                if let Some(i) = memo() {
+                    state.invoke_memo_cancel_text(i);
+                }
+            }
+            ("memo", "rename") => {
+                // ["file name", "new title"]: both may hold spaces.
+                let Ok((name, title)) = serde_json::from_str::<(String, String)>(value) else {
+                    return;
+                };
+                // Typed into its text under the old name: saved first.
+                self.omarchy_edit(&state);
+                if let Some(i) = memos::memos().and_then(|m| m.index_of(&name)) {
+                    state.invoke_memo_rename(i, title.into());
+                }
+            }
+            ("memo", "search") => {
+                state.set_memo_query(value.into());
+                state.invoke_memo_search(value.into());
+            }
+            // The open text: what the menu typed comes first, so each of
+            // these works on the text as it is on the screen.
+            ("memo", "edit") => self.omarchy_edit(&state),
+            ("memo", "copy") => {
+                self.omarchy_edit(&state);
+                let mut at = value.split(' ').map(|n| n.parse::<i32>().unwrap_or(0));
+                let (a, b) = (at.next().unwrap_or(0), at.next().unwrap_or(0));
+                state.invoke_memo_copy_text(a, b);
+            }
+            ("memo", "cursor") => SHEET_CURSOR.set(value.parse().unwrap_or(0)),
+            ("memo", "here") => {
+                self.omarchy_edit(&state);
+                state.invoke_memo_play_here(value.parse().unwrap_or(0));
+            }
+            ("memo", "stamps") => {
+                self.omarchy_edit(&state);
+                let i = value.parse::<i32>().unwrap_or(0).clamp(0, 2);
+                state.set_memo_sheet_stamps(i);
+                state.invoke_memo_sheet_stamps_changed(i);
+            }
+            ("memo", "opentext") => {
+                self.omarchy_edit(&state);
+                state.invoke_memo_open_text();
+            }
             ("memo", "show") => {
+                // What was typed into the one open before stays with it.
+                self.omarchy_edit(&state);
+                SHEET_CURSOR.set(0);
                 if let Some(m) = memos::memos() {
                     m.show_in_widget((!value.is_empty()).then_some(value));
                 }
@@ -1284,9 +1357,12 @@ impl App {
             }
             ("update", "install") => state.invoke_install_update(),
             ("update", "check") => state.invoke_check_updates(),
+            ("update", "dismiss") => state.invoke_dismiss_update(),
+            ("update", "page") => state.invoke_open_update(),
             ("test", "start") => state.invoke_probe_record(),
             ("test", "before") => state.invoke_probe_play(false),
             ("test", "after") => state.invoke_probe_play(true),
+            ("test", "delete") => state.invoke_probe_reset(),
             ("model", "download") => state.invoke_download_model(),
             ("model", "cancel") => state.invoke_cancel_download(),
             ("model", "retry") => state.invoke_dictation_retry(),
@@ -1303,8 +1379,11 @@ impl App {
                 _ => {}
             },
             ("setup", "skip") => state.invoke_skip_setup(),
+            ("setup", "keybutton") => state.invoke_key_button_clicked(),
+            ("setup", "overloadSeen") => state.set_overload_note(OverloadNote::None),
             ("setup", "done") => state.invoke_finish_setup(),
             ("open", "feedback") => state.invoke_send_feedback(),
+            ("open", "licenses") => state.invoke_open_licenses(),
             _ => {}
         }
         #[cfg(target_os = "linux")]
@@ -1345,6 +1424,9 @@ impl App {
                     state.invoke_look_changed(i);
                 }
             }
+            "voice.reset" => state.invoke_voice_reset(),
+            "dictation.keyReset" => state.invoke_key_reset(1),
+            "memos.keyReset" => state.invoke_key_reset(2),
             "voice.body" => band(0),
             "voice.presence" => band(1),
             "voice.air" => band(2),
@@ -3220,6 +3302,28 @@ fn tell_widget(window: &MainWindow) {
     let waiting = (state.get_filter_enabled() || state.get_voice_enabled())
         && matches!(filter_state, FilterState::Running | FilterState::Checking);
     let memos = memos::memos();
+    // The recording whose text the menu shows: the text itself goes to a
+    // file of its own, so the state stays small while it plays.
+    let sheet_id = memos.as_ref().map(|m| m.sheet_id()).unwrap_or_default();
+    let sheet_open = state.get_memo_sheet_open() && !sheet_id.is_empty();
+    let sheet_text = state.get_memo_sheet_text();
+    kyrr_linux::omarchy::set_sheet(sheet_open.then_some((sheet_id.as_str(), sheet_text.as_str())));
+    let sheet = if sheet_open {
+        json!({
+            "id": sheet_id,
+            "title": state.get_memo_sheet_title().as_str(),
+            "when": state.get_memo_sheet_when().as_str(),
+            "stamps": state.get_memo_sheet_stamps(),
+            "saved": state.get_memo_sheet_saved(),
+            "copied": state.get_memo_copied(),
+            "empty": sheet_text.trim().is_empty(),
+            "here": state
+                .invoke_memo_here_label(sheet_text.clone(), SHEET_CURSOR.get())
+                .as_str(),
+        })
+    } else {
+        serde_json::Value::Null
+    };
     let status = json!({
         "lang": if german { "de" } else { "en" },
         "version": env!("CARGO_PKG_VERSION"),
@@ -3227,6 +3331,19 @@ fn tell_widget(window: &MainWindow) {
         "note": state.invoke_alert_note().as_str(),
         // The red notes are problems; a microphone coming back is good news.
         "noteGood": state.get_alert() == 7,
+        "alert": state.get_alert(),
+        "overloadNote": match state.get_overload_note() {
+            OverloadNote::None => "",
+            OverloadNote::Switched => "switched",
+            OverloadNote::Pauses => "pauses",
+        },
+        "oldCpu": state.get_old_cpu(),
+        // The meters on the Setup page, moving while the menu is open.
+        "levels": {
+            "active": state.get_mic_active(),
+            "before": (state.get_level_before() * 50.0).round() / 50.0,
+            "after": (state.get_level_after() * 50.0).round() / 50.0,
+        },
         "pulse": if working { "working" } else if waiting { "waiting" } else { "" },
         "setupDone": !window.get_setup_mode(),
         "setupStep": window.get_setup_step() + 1,
@@ -3240,6 +3357,21 @@ fn tell_widget(window: &MainWindow) {
                 FilterState::NotAttached | FilterState::NotInstalled | FilterState::Unsupported
             ),
             "error": state.get_error_text().as_str(),
+            "state": match filter_state {
+                FilterState::Checking => "checking",
+                FilterState::Running => "running",
+                FilterState::Off => "off",
+                FilterState::Passthrough => "passthrough",
+                FilterState::NotAttached => "notAttached",
+                FilterState::NotInstalled => "notInstalled",
+                FilterState::SettingUp => "settingUp",
+                FilterState::Error => "error",
+                FilterState::Detached => "detached",
+                FilterState::Unsupported => "unsupported",
+            },
+            "mic": state.get_attached_mic().as_str(),
+            "moveTo": state.get_move_to().as_str(),
+            "moveUnplugged": state.get_move_unplugged(),
         },
         "voice": {
             "on": tray.get_voice_enabled(),
@@ -3255,6 +3387,7 @@ fn tell_widget(window: &MainWindow) {
             "distance": state.get_distance(),
             "autoLevel": state.get_auto_level(),
             "levelDb": state.get_auto_level().then(|| (state.get_level_gain() * 10.0).round() / 10.0),
+            "isDefault": state.get_voice_is_default(),
         },
         "dictation": {
             "on": tray.get_dictation_enabled(),
@@ -3262,6 +3395,21 @@ fn tell_widget(window: &MainWindow) {
             "key": tray.get_key_name().as_str(),
             "hold": !state.get_key_toggle(),
             "note": key_note.as_str(),
+            "state": match state.get_dictation_state() {
+                DictationState::Off => "off",
+                DictationState::NoModel => "noModel",
+                DictationState::Downloading => "downloading",
+                DictationState::Loading => "loading",
+                DictationState::Ready => "ready",
+                DictationState::Recording => "recording",
+                DictationState::Transcribing => "transcribing",
+                DictationState::Error => "error",
+            },
+            "message": state.get_dictation_message().as_str(),
+            "keyCustom": state.get_key_custom(),
+            "keyFixed": state.get_key_fixed(),
+            "keyUnbound": state.get_key_unbound(),
+            "keyButton": state.get_key_button().as_str(),
         },
         "memos": {
             "on": tray.get_memos_enabled(),
@@ -3271,7 +3419,17 @@ fn tell_widget(window: &MainWindow) {
             "autoText": state.get_memo_auto_text(),
             "folder": memos.as_ref().map(|m| m.widget_folder()).unwrap_or_default(),
             "message": state.get_memo_message().as_str(),
+            "elapsed": state.get_memo_elapsed().as_str(),
+            "canWrite": state.get_memo_can_write(),
+            "canHold": state.get_memo_can_hold(),
+            "keyNote": state.get_memo_key_note().as_str(),
+            "keyCustom": state.get_memo_key_custom(),
+            "query": state.get_memo_query().as_str(),
+            "count": state.get_memo_count(),
+            "playTime": state.get_memo_play_time().as_str(),
+            "playFraction": state.get_memo_play_fraction(),
             "list": memos.as_ref().map(|m| m.widget_list()).unwrap_or_else(|| json!([])),
+            "sheet": sheet,
         },
         "general": {
             "language": pick(&["de", "en", "multi"], state.get_language_index()),
@@ -3301,9 +3459,17 @@ fn tell_widget(window: &MainWindow) {
             "version": tray.get_update_version().as_str(),
             "progress": state.get_update_progress(),
             "news": news(pending_news().lock().unwrap_or_else(|e| e.into_inner()).clone()),
+            "phase": match state.get_update_state() {
+                UpdateState::Installing => "installing",
+                UpdateState::DownloadFailed => "downloadFailed",
+                _ => "",
+            },
+            "installable": state.get_update_installable(),
+            "dismissed": state.get_update_dismissed(),
         },
         "probe": probe,
         "hasProbe": state.get_has_probe(),
+        "probeError": state.get_probe_error().as_str(),
         "listen": state.get_listening(),
         "news": news(bundled_news().clone()),
     });

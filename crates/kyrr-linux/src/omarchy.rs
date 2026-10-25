@@ -368,8 +368,71 @@ fn state_json(mode: &str, status: &str, pid: u32) -> String {
     format!("{{\"v\":2,\"pid\":{pid},\"mode\":\"{mode}\"{comma}{rest}\n")
 }
 
+/// Beside the state: the text of the recording the widget's menu shows, as
+/// kyrr's text view has it (stamps and all), and what the menu typed into
+/// it, which kyrr takes from there. Both start with a line naming the
+/// recording (its file name), so a text never lands on another one.
+fn side_file(name: &str) -> Option<PathBuf> {
+    state_file().map(|f| f.with_file_name(name))
+}
+
+static SHEET: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// The recording open in the widget's menu (its file name) and its text,
+/// `None` for none; written only when it changed.
+pub fn set_sheet(sheet: Option<(&str, &str)>) {
+    let text = sheet.map(|(id, text)| format!("{id}\n{text}"));
+    let text = text.as_deref();
+    if path().is_none() {
+        return;
+    }
+    let mut sheet = SHEET.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if sheet.as_deref() == text {
+        return;
+    }
+    let Some(file) = side_file("sheet") else {
+        return;
+    };
+    match text {
+        Some(text) => {
+            if let Some(dir) = file.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            let _ = std::fs::write(&file, text);
+        }
+        None => {
+            let _ = std::fs::remove_file(&file);
+        }
+    }
+    *sheet = text.map(str::to_string);
+}
+
+/// What the widget's menu typed into the open text since kyrr last looked:
+/// the recording's file name and the text. One left from before (kyrr
+/// ended in between) is old news.
+pub fn take_edit() -> Option<(String, String)> {
+    let file = side_file("edit")?;
+    let fresh = std::fs::metadata(&file)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|age| age < std::time::Duration::from_secs(10));
+    let text = std::fs::read_to_string(&file).ok();
+    let _ = std::fs::remove_file(&file);
+    let (id, text) = text
+        .filter(|_| fresh)?
+        .split_once('\n')
+        .map(|(i, t)| (i.to_string(), t.to_string()))?;
+    Some((id, text))
+}
+
 /// kyrr ends: the widget shows it as not running.
 pub fn clear_state() {
+    for name in ["sheet", "edit"] {
+        if let Some(file) = side_file(name) {
+            let _ = std::fs::remove_file(file);
+        }
+    }
     if let Some(file) = state_file() {
         let _ = std::fs::remove_file(&file);
         if let Some(dir) = file.parent() {
