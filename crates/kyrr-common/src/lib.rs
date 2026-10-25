@@ -19,6 +19,8 @@ pub enum Request {
     ToggleMemo,
     OpenMemos,
     InstallUpdate,
+    /// The widget's menu opened (true, repeated while open) or closed.
+    WidgetOpen(bool),
     /// A page of the window: 1 Setup, 2 to 5 a main card's settings.
     OpenPage(i32),
     Quit,

@@ -34,7 +34,7 @@ const MEMO_STOP: &[u8] = b"memo-stop";
 /// the compositor's both started it): nothing to do.
 const BACKGROUND: &[u8] = b"background";
 /// From Omarchy's bar widget: what the tray menu does elsewhere.
-const WIDGET: [(&[u8], Request); 8] = [
+const WIDGET: [(&[u8], Request); 10] = [
     (b"toggle-filter", Request::ToggleFilter),
     (b"toggle-voice", Request::ToggleVoice),
     (b"toggle-dictation", Request::ToggleDictation),
@@ -43,6 +43,8 @@ const WIDGET: [(&[u8], Request); 8] = [
     (b"open-memos", Request::OpenMemos),
     (b"install-update", Request::InstallUpdate),
     (b"quit", Request::Quit),
+    (b"menu-open", Request::WidgetOpen(true)),
+    (b"menu-closed", Request::WidgetOpen(false)),
 ];
 /// How long a running kyrr gets to hand back the microphone and end.
 const REPLACE_WAIT: Duration = Duration::from_secs(20);

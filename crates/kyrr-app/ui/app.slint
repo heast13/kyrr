@@ -229,6 +229,275 @@ component ProgressIndicator inherits Rectangle {
 }
 
 export global AppState {
+    pure function pick(list: [string]) -> string {
+        return list[AppState.phrase.mod(list.length)];
+    }
+    property <float> percent: round(AppState.download-progress * 100);
+
+    // The line under kyrr's name: what kyrr does, in word creations that
+    // change with `phrase`. kyrr's widget in Omarchy's bar shows it too.
+    public pure function status-line() -> string {
+        if (AppState.filter-state == FilterState.setting-up) { return @tr("Setting things up… sound takes a short break."); }
+        if (AppState.mic-active && AppState.mic-silent) { return @tr("Your mic delivers pure silence. Muted?"); }
+        if (AppState.probe-state == ProbeState.recording) {
+            return pick([
+                @tr("Ten seconds of fame."),
+                @tr("Noise for science."),
+                @tr("Open-mic night, short edition."),
+                @tr("Shopping-list reading hour."),
+                @tr("Say anything."),
+                @tr("Tongue-twister warm-up."),
+                @tr("Voicemail audition."),
+                @tr("Phone-book recital."),
+                @tr("Interview with yourself."),
+                @tr("Nobody's judging. Much."),
+                @tr("Humming allowed."),
+                @tr("Podcast career, take one."),
+                @tr("Cough on cue."),
+                @tr("Talking to the void."),
+                @tr("Improvised weather report."),
+                @tr("Karaoke, no music."),
+                @tr("Speech of your life."),
+                @tr("Reading the room aloud."),
+                @tr("Toast rehearsal."),
+                @tr("Self-introduction, awkward edition."),
+            ]);
+        }
+        if (AppState.probe-state == ProbeState.before) { return @tr("Before: this is you without kyrr."); }
+        if (AppState.probe-state == ProbeState.after) { return @tr("After: same take, with kyrr."); }
+        if (AppState.dictation-state == DictationState.recording) {
+            return pick([
+                @tr("All ears."),
+                @tr("Mumbling permitted."),
+                @tr("Listening intently."),
+                @tr("Spill the words."),
+                @tr("Take your time."),
+                @tr("Rambling welcome."),
+                @tr("Tape rolling."),
+                @tr("Ears pricked."),
+                @tr("Stage is yours."),
+                @tr("Typing is overrated."),
+                @tr("Mouth-to-text resuscitation."),
+                @tr("Thinking out loud, recorded."),
+                @tr("Eavesdropping, officially."),
+                @tr("Ums included."),
+                @tr("Throat clearing accepted."),
+                @tr("Fingers on holiday."),
+                @tr("Blab away."),
+                @tr("Notepad with ears."),
+                @tr("Words wanted."),
+                @tr("Sentence harvest."),
+            ]);
+        }
+        if (AppState.memo-recording) {
+            return pick([
+                @tr("Tape is rolling."),
+                @tr("Recording for posterity."),
+                @tr("Memory backup in progress."),
+                @tr("Said and saved."),
+                @tr("Voice note, freshly pressed."),
+                @tr("Bright ideas into the archive."),
+                @tr("Thoughts to go."),
+                @tr("Talk now, listen later."),
+                @tr("Off the record? Nope."),
+                @tr("Your private radio show."),
+                @tr("Every word into the drawer."),
+                @tr("The archive is listening."),
+                @tr("Sticky note with a voice."),
+                @tr("Memoirs, chapter one."),
+                @tr("Voice into the vault."),
+                @tr("Forgetting is cancelled."),
+                @tr("Dictaphone, only prettier."),
+                @tr("Thinking aloud, saved."),
+                @tr("Minutes for one."),
+                @tr("Ideas in the can."),
+            ]);
+        }
+        if (AppState.dictation-state == DictationState.transcribing) {
+            return pick([
+                @tr("Mumble translation."),
+                @tr("Speed typing."),
+                @tr("Word sorting."),
+                @tr("Decoding the ums."),
+                @tr("Syllable shuffling."),
+                @tr("Air into letters."),
+                @tr("Comma distribution."),
+                @tr("Sentence construction site."),
+                @tr("Grammar ironing."),
+                @tr("Ghostwriting."),
+                @tr("Ramble polishing."),
+                @tr("Sense-making."),
+                @tr("Letter assembly line."),
+                @tr("Typo hunt."),
+                @tr("Punctuation roulette."),
+                @tr("Sound in, text out."),
+                @tr("Hold on, typing."),
+                @tr("Word wrangling."),
+                @tr("Spelling bee."),
+                @tr("Syntax tinkering."),
+            ]);
+        }
+        if (AppState.dictation-state == DictationState.downloading) {
+            return pick([
+                @tr("{}% · Patience test.", percent),
+                @tr("{}% · Coffee-break length.", percent),
+                @tr("{}% · Progress-bar hypnosis.", percent),
+                @tr("{}% · Chunky delivery.", percent),
+                @tr("{}% · Bits on the way.", percent),
+                @tr("{}% · Watching paint dry.", percent),
+                @tr("{}% · Brain by post.", percent),
+                @tr("{}% · Slow but trying.", percent),
+                @tr("{}% · Bytes marching in.", percent),
+                @tr("{}% · Kettle time.", percent),
+                @tr("{}% · Internet doing its best.", percent),
+                @tr("{}% · Stretch your legs.", percent),
+                @tr("{}% · Heavy freight.", percent),
+                @tr("{}% · Don't stare at it.", percent),
+                @tr("{}% · Pigeon post, upgraded.", percent),
+                @tr("{}% · Brain filling up.", percent),
+                @tr("{}% · Worth the wait. Probably.", percent),
+                @tr("{}% · Byte by byte.", percent),
+                @tr("{}% · Slow-motion magic.", percent),
+                @tr("{}% · Staring contest with a bar.", percent),
+            ]);
+        }
+        if (AppState.model-switching) {
+            return pick([
+                @tr("Brain transplant."),
+                @tr("Neuron relocation."),
+                @tr("Model swap break."),
+                @tr("Head swap."),
+                @tr("Mid-flight engine swap."),
+                @tr("Brain surgery, no anaesthetic."),
+                @tr("Grey-matter reboot."),
+                @tr("New knowledge loading."),
+                @tr("Thinking-cap fitting."),
+                @tr("Change of mind."),
+                @tr("Blackboard wiping."),
+                @tr("Synapse shuffle."),
+                @tr("Light brainwashing."),
+                @tr("Wits swap."),
+                @tr("Out with the old IQ."),
+                @tr("Brief stupidity."),
+                @tr("Musical neurons."),
+                @tr("Mind reshuffle."),
+                @tr("Upgrade pending."),
+                @tr("Opening the skull gently."),
+            ]);
+        }
+        if (AppState.filter-state == FilterState.not-installed) { return @tr("The kyrr filter is missing. Reinstall, please."); }
+        if (AppState.filter-state == FilterState.detached) { return @tr("Windows took kyrr off the mic. Repair below."); }
+        if (AppState.filter-state == FilterState.not-attached) { return @tr("Pick a microphone and off we go."); }
+        if (AppState.filter-state == FilterState.error) { return @tr("Oops, something went wrong. Details below."); }
+        if (AppState.filter-state == FilterState.passthrough) { return @tr("Oops, the filter is stuck. Your mic passes through as it is."); }
+        if (!AppState.filter-enabled && !AppState.voice-enabled && AppState.filter-state != FilterState.unsupported) {
+            return pick([
+                @tr("Day off. Everything is off."),
+                @tr("Hammock mode."),
+                @tr("Nothing to do. Wonderful."),
+                @tr("Lights out, kyrr snoozes."),
+                @tr("Out of office."),
+                @tr("Vacation, do not disturb."),
+                @tr("Feet up."),
+                @tr("Doing absolutely nothing."),
+                @tr("Sabbatical in progress."),
+                @tr("Off, but smiling."),
+                @tr("All quiet on the kyrr front."),
+                @tr("Sleeping in."),
+                @tr("Pyjama day."),
+                @tr("Couch time."),
+                @tr("Taking five. Or fifty."),
+                @tr("Mic left alone."),
+                @tr("Binge break."),
+                @tr("Off the clock."),
+                @tr("Zero-effort mode."),
+                @tr("Recharging by doing nothing."),
+            ]);
+        }
+        if (AppState.mic-active) {
+            if (!AppState.filter-enabled) {
+                return pick([
+                    @tr("Noise allowed, voice polished."),
+                    @tr("Voice makeover only."),
+                    @tr("Let the dog bark."),
+                    @tr("Vacuum may sing."),
+                    @tr("Background chaos, untouched."),
+                    @tr("Voice shines, room doesn't."),
+                    @tr("Noise gets a free pass."),
+                    @tr("Neighbour's drill included."),
+                    @tr("Keyboard clatter stays."),
+                    @tr("Voice on the red carpet."),
+                    @tr("Hair and make-up for voices."),
+                    @tr("Studio voice, garage room."),
+                    @tr("Noise in the front row."),
+                    @tr("Voice spa, noise welcome."),
+                    @tr("Background keeps its charm."),
+                    @tr("Voice upgrade, noise policy: none."),
+                    @tr("Noise on the guest list."),
+                    @tr("Chaos tolerance, voice care."),
+                    @tr("Coughs stay in."),
+                    @tr("Squeaky chair, shiny voice."),
+                ]);
+            }
+            return pick([
+                @tr("Slurpless."),
+                @tr("Barkblocked."),
+                @tr("Vacuumexiled."),
+                @tr("Drillnope."),
+                @tr("Chewproof."),
+                @tr("Burpinsured."),
+                @tr("Fanmuzzled."),
+                @tr("Keyclackfree."),
+                @tr("Coworkerpuffstop."),
+                @tr("Snoreproof."),
+                @tr("Flushfree."),
+                @tr("Doorbelldeaf."),
+                @tr("Sneezeswallowed."),
+                @tr("Stomachgrowlmuted."),
+                @tr("Tootproof."),
+                @tr("Creakcancelled."),
+                @tr("Dishclatterdeleted."),
+                @tr("Throatclearbanned."),
+                @tr("Hornhushed."),
+                @tr("Penclickproof."),
+            ]);
+        }
+        return pick([
+            @tr("On-call napping."),
+            @tr("Mic waiting room."),
+            @tr("Thumb-twiddling mode."),
+            @tr("Idle serenity."),
+            @tr("Alert nap."),
+            @tr("Stockpiling silence."),
+            @tr("Waiting for noise."),
+            @tr("Ears on standby."),
+            @tr("Bored but ready."),
+            @tr("Sheep counting."),
+            @tr("Nothing on the line."),
+            @tr("Gathering dust."),
+            @tr("Silence tasting."),
+            @tr("Tumbleweed passing."),
+            @tr("Polite lurking."),
+            @tr("Humming along quietly."),
+            @tr("Quiet job, steady pay."),
+            @tr("Standing by, sort of."),
+            @tr("Crickets in the room."),
+            @tr("Quiet before the noise."),
+        ]);
+    }
+
+    // The small note at the bottom of the main page (and in the widget).
+    public pure function alert-note() -> string {
+        if (AppState.alert == 1) { return (AppState.linux ? @tr("Mic very quiet. Turn it up in your sound settings.") : @tr("Mic very quiet. Turn it up in Windows.")); }
+        if (AppState.alert == 2) { return (AppState.linux ? @tr("Mic too loud. Turn it down in your sound settings.") : @tr("Mic too loud. Turn it down in Windows.")); }
+        if (AppState.alert == 3) { return @tr("Still listening to you. Headphones only!"); }
+        if (AppState.alert == 4) { return AppState.linux ? @tr("Your mic is muted.") : @tr("Your mic is muted in Windows."); }
+        if (AppState.alert == 6) { return @tr("No microphone found. kyrr keeps looking."); }
+        if (AppState.alert == 7) { return @tr("Microphone connected: {}", AppState.connected-name); }
+        if (AppState.alert == 8) { return @tr("Sounds like a gym. Move a bit closer?"); }
+        return "";
+    }
+
     // Noise removal
     in-out property <bool> filter-enabled: true;
     in-out property <int> strength-index: 1; // 0 gentle, 1 medium, 2 strong
@@ -246,8 +515,12 @@ export global AppState {
     // the desktop may have no tray.
     in property <bool> linux;
     in property <bool> tray: true;
-    // kyrr's widget sits in Omarchy's bar: its menu opens and quits kyrr.
+    // kyrr's widget sits in Omarchy's bar: its menu opens kyrr, turning the
+    // plugin off quits it.
     in property <bool> widget;
+    // The widget's menu opened (and says so every few seconds while open)
+    // or closed: the status line and the notes run for it.
+    callback widget-open(bool);
     // Without a tray, closing minimizes where the desktop can (not tiling ones).
     in property <bool> can-minimize: true;
     in property <FilterState> filter-state: FilterState.checking;
@@ -762,261 +1035,6 @@ component Pulse inherits Rectangle {
 // and in italics so it reads as a remark, not a setting. Long-lasting states
 // rotate through a few phrases to pass the time; errors and setup stay put.
 component StatusLine inherits HorizontalLayout {
-    pure function pick(list: [string]) -> string {
-        return list[AppState.phrase.mod(list.length)];
-    }
-    property <float> percent: round(AppState.download-progress * 100);
-
-    pure function status() -> string {
-        if (AppState.filter-state == FilterState.setting-up) { return @tr("Setting things up… sound takes a short break."); }
-        if (AppState.mic-active && AppState.mic-silent) { return @tr("Your mic delivers pure silence. Muted?"); }
-        if (AppState.probe-state == ProbeState.recording) {
-            return pick([
-                @tr("Ten seconds of fame."),
-                @tr("Noise for science."),
-                @tr("Open-mic night, short edition."),
-                @tr("Shopping-list reading hour."),
-                @tr("Say anything."),
-                @tr("Tongue-twister warm-up."),
-                @tr("Voicemail audition."),
-                @tr("Phone-book recital."),
-                @tr("Interview with yourself."),
-                @tr("Nobody's judging. Much."),
-                @tr("Humming allowed."),
-                @tr("Podcast career, take one."),
-                @tr("Cough on cue."),
-                @tr("Talking to the void."),
-                @tr("Improvised weather report."),
-                @tr("Karaoke, no music."),
-                @tr("Speech of your life."),
-                @tr("Reading the room aloud."),
-                @tr("Toast rehearsal."),
-                @tr("Self-introduction, awkward edition."),
-            ]);
-        }
-        if (AppState.probe-state == ProbeState.before) { return @tr("Before: this is you without kyrr."); }
-        if (AppState.probe-state == ProbeState.after) { return @tr("After: same take, with kyrr."); }
-        if (AppState.dictation-state == DictationState.recording) {
-            return pick([
-                @tr("All ears."),
-                @tr("Mumbling permitted."),
-                @tr("Listening intently."),
-                @tr("Spill the words."),
-                @tr("Take your time."),
-                @tr("Rambling welcome."),
-                @tr("Tape rolling."),
-                @tr("Ears pricked."),
-                @tr("Stage is yours."),
-                @tr("Typing is overrated."),
-                @tr("Mouth-to-text resuscitation."),
-                @tr("Thinking out loud, recorded."),
-                @tr("Eavesdropping, officially."),
-                @tr("Ums included."),
-                @tr("Throat clearing accepted."),
-                @tr("Fingers on holiday."),
-                @tr("Blab away."),
-                @tr("Notepad with ears."),
-                @tr("Words wanted."),
-                @tr("Sentence harvest."),
-            ]);
-        }
-        if (AppState.memo-recording) {
-            return pick([
-                @tr("Tape is rolling."),
-                @tr("Recording for posterity."),
-                @tr("Memory backup in progress."),
-                @tr("Said and saved."),
-                @tr("Voice note, freshly pressed."),
-                @tr("Bright ideas into the archive."),
-                @tr("Thoughts to go."),
-                @tr("Talk now, listen later."),
-                @tr("Off the record? Nope."),
-                @tr("Your private radio show."),
-                @tr("Every word into the drawer."),
-                @tr("The archive is listening."),
-                @tr("Sticky note with a voice."),
-                @tr("Memoirs, chapter one."),
-                @tr("Voice into the vault."),
-                @tr("Forgetting is cancelled."),
-                @tr("Dictaphone, only prettier."),
-                @tr("Thinking aloud, saved."),
-                @tr("Minutes for one."),
-                @tr("Ideas in the can."),
-            ]);
-        }
-        if (AppState.dictation-state == DictationState.transcribing) {
-            return pick([
-                @tr("Mumble translation."),
-                @tr("Speed typing."),
-                @tr("Word sorting."),
-                @tr("Decoding the ums."),
-                @tr("Syllable shuffling."),
-                @tr("Air into letters."),
-                @tr("Comma distribution."),
-                @tr("Sentence construction site."),
-                @tr("Grammar ironing."),
-                @tr("Ghostwriting."),
-                @tr("Ramble polishing."),
-                @tr("Sense-making."),
-                @tr("Letter assembly line."),
-                @tr("Typo hunt."),
-                @tr("Punctuation roulette."),
-                @tr("Sound in, text out."),
-                @tr("Hold on, typing."),
-                @tr("Word wrangling."),
-                @tr("Spelling bee."),
-                @tr("Syntax tinkering."),
-            ]);
-        }
-        if (AppState.dictation-state == DictationState.downloading) {
-            return pick([
-                @tr("{}% · Patience test.", percent),
-                @tr("{}% · Coffee-break length.", percent),
-                @tr("{}% · Progress-bar hypnosis.", percent),
-                @tr("{}% · Chunky delivery.", percent),
-                @tr("{}% · Bits on the way.", percent),
-                @tr("{}% · Watching paint dry.", percent),
-                @tr("{}% · Brain by post.", percent),
-                @tr("{}% · Slow but trying.", percent),
-                @tr("{}% · Bytes marching in.", percent),
-                @tr("{}% · Kettle time.", percent),
-                @tr("{}% · Internet doing its best.", percent),
-                @tr("{}% · Stretch your legs.", percent),
-                @tr("{}% · Heavy freight.", percent),
-                @tr("{}% · Don't stare at it.", percent),
-                @tr("{}% · Pigeon post, upgraded.", percent),
-                @tr("{}% · Brain filling up.", percent),
-                @tr("{}% · Worth the wait. Probably.", percent),
-                @tr("{}% · Byte by byte.", percent),
-                @tr("{}% · Slow-motion magic.", percent),
-                @tr("{}% · Staring contest with a bar.", percent),
-            ]);
-        }
-        if (AppState.model-switching) {
-            return pick([
-                @tr("Brain transplant."),
-                @tr("Neuron relocation."),
-                @tr("Model swap break."),
-                @tr("Head swap."),
-                @tr("Mid-flight engine swap."),
-                @tr("Brain surgery, no anaesthetic."),
-                @tr("Grey-matter reboot."),
-                @tr("New knowledge loading."),
-                @tr("Thinking-cap fitting."),
-                @tr("Change of mind."),
-                @tr("Blackboard wiping."),
-                @tr("Synapse shuffle."),
-                @tr("Light brainwashing."),
-                @tr("Wits swap."),
-                @tr("Out with the old IQ."),
-                @tr("Brief stupidity."),
-                @tr("Musical neurons."),
-                @tr("Mind reshuffle."),
-                @tr("Upgrade pending."),
-                @tr("Opening the skull gently."),
-            ]);
-        }
-        if (AppState.filter-state == FilterState.not-installed) { return @tr("The kyrr filter is missing. Reinstall, please."); }
-        if (AppState.filter-state == FilterState.detached) { return @tr("Windows took kyrr off the mic. Repair below."); }
-        if (AppState.filter-state == FilterState.not-attached) { return @tr("Pick a microphone and off we go."); }
-        if (AppState.filter-state == FilterState.error) { return @tr("Oops, something went wrong. Details below."); }
-        if (AppState.filter-state == FilterState.passthrough) { return @tr("Oops, the filter is stuck. Your mic passes through as it is."); }
-        if (!AppState.filter-enabled && !AppState.voice-enabled && AppState.filter-state != FilterState.unsupported) {
-            return pick([
-                @tr("Day off. Everything is off."),
-                @tr("Hammock mode."),
-                @tr("Nothing to do. Wonderful."),
-                @tr("Lights out, kyrr snoozes."),
-                @tr("Out of office."),
-                @tr("Vacation, do not disturb."),
-                @tr("Feet up."),
-                @tr("Doing absolutely nothing."),
-                @tr("Sabbatical in progress."),
-                @tr("Off, but smiling."),
-                @tr("All quiet on the kyrr front."),
-                @tr("Sleeping in."),
-                @tr("Pyjama day."),
-                @tr("Couch time."),
-                @tr("Taking five. Or fifty."),
-                @tr("Mic left alone."),
-                @tr("Binge break."),
-                @tr("Off the clock."),
-                @tr("Zero-effort mode."),
-                @tr("Recharging by doing nothing."),
-            ]);
-        }
-        if (AppState.mic-active) {
-            if (!AppState.filter-enabled) {
-                return pick([
-                    @tr("Noise allowed, voice polished."),
-                    @tr("Voice makeover only."),
-                    @tr("Let the dog bark."),
-                    @tr("Vacuum may sing."),
-                    @tr("Background chaos, untouched."),
-                    @tr("Voice shines, room doesn't."),
-                    @tr("Noise gets a free pass."),
-                    @tr("Neighbour's drill included."),
-                    @tr("Keyboard clatter stays."),
-                    @tr("Voice on the red carpet."),
-                    @tr("Hair and make-up for voices."),
-                    @tr("Studio voice, garage room."),
-                    @tr("Noise in the front row."),
-                    @tr("Voice spa, noise welcome."),
-                    @tr("Background keeps its charm."),
-                    @tr("Voice upgrade, noise policy: none."),
-                    @tr("Noise on the guest list."),
-                    @tr("Chaos tolerance, voice care."),
-                    @tr("Coughs stay in."),
-                    @tr("Squeaky chair, shiny voice."),
-                ]);
-            }
-            return pick([
-                @tr("Slurpless."),
-                @tr("Barkblocked."),
-                @tr("Vacuumexiled."),
-                @tr("Drillnope."),
-                @tr("Chewproof."),
-                @tr("Burpinsured."),
-                @tr("Fanmuzzled."),
-                @tr("Keyclackfree."),
-                @tr("Coworkerpuffstop."),
-                @tr("Snoreproof."),
-                @tr("Flushfree."),
-                @tr("Doorbelldeaf."),
-                @tr("Sneezeswallowed."),
-                @tr("Stomachgrowlmuted."),
-                @tr("Tootproof."),
-                @tr("Creakcancelled."),
-                @tr("Dishclatterdeleted."),
-                @tr("Throatclearbanned."),
-                @tr("Hornhushed."),
-                @tr("Penclickproof."),
-            ]);
-        }
-        return pick([
-            @tr("On-call napping."),
-            @tr("Mic waiting room."),
-            @tr("Thumb-twiddling mode."),
-            @tr("Idle serenity."),
-            @tr("Alert nap."),
-            @tr("Stockpiling silence."),
-            @tr("Waiting for noise."),
-            @tr("Ears on standby."),
-            @tr("Bored but ready."),
-            @tr("Sheep counting."),
-            @tr("Nothing on the line."),
-            @tr("Gathering dust."),
-            @tr("Silence tasting."),
-            @tr("Tumbleweed passing."),
-            @tr("Polite lurking."),
-            @tr("Humming along quietly."),
-            @tr("Quiet job, steady pay."),
-            @tr("Standing by, sort of."),
-            @tr("Crickets in the room."),
-            @tr("Quiet before the noise."),
-        ]);
-    }
-
     // The text lines up with the name and sits close under it (pulled up
     // into the page layout's spacing, less than the Setup button's height
     // needs); the wave follows right after it.
@@ -1032,7 +1050,7 @@ component StatusLine inherits HorizontalLayout {
         && (AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking);
     Text {
         horizontal-stretch: 0;
-        text: root.status();
+        text: AppState.status-line();
         font-size: 12px;
         font-italic: true;
         color: Skin.foreground;
@@ -1043,7 +1061,7 @@ component StatusLine inherits HorizontalLayout {
         // One line always, so the cards below do not move when it is empty;
         // two for a long message (Slint measures wrapped text in this row as
         // one line, so the room is made here).
-        min-height: root.status().character-count > 44 ? 32px : 16px;
+        min-height: AppState.status-line().character-count > 44 ? 32px : 16px;
     }
     Pulse {
         working: root.working;
@@ -1645,17 +1663,7 @@ component AlertButton inherits Rectangle {
 // The small red note at the bottom of the main page. Always one line high,
 // empty or not, so the window keeps its height however many notes there are.
 component AlertLine inherits Text {
-    pure function note() -> string {
-        if (AppState.alert == 1) { return (AppState.linux ? @tr("Mic very quiet. Turn it up in your sound settings.") : @tr("Mic very quiet. Turn it up in Windows.")); }
-        if (AppState.alert == 2) { return (AppState.linux ? @tr("Mic too loud. Turn it down in your sound settings.") : @tr("Mic too loud. Turn it down in Windows.")); }
-        if (AppState.alert == 3) { return @tr("Still listening to you. Headphones only!"); }
-        if (AppState.alert == 4) { return AppState.linux ? @tr("Your mic is muted.") : @tr("Your mic is muted in Windows."); }
-        if (AppState.alert == 6) { return @tr("No microphone found. kyrr keeps looking."); }
-        if (AppState.alert == 7) { return @tr("Microphone connected: {}", AppState.connected-name); }
-        if (AppState.alert == 8) { return @tr("Sounds like a gym. Move a bit closer?"); }
-        return "";
-    }
-    text: root.note();
+    text: AppState.alert-note();
     // The red notes are problems; a microphone coming back is good news.
     color: AppState.alert == 7 ? Skin.good : Skin.bad;
     font-size: 12px;

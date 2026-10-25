@@ -20,7 +20,10 @@ What kyrr brings for [Omarchy](https://omarchy.org) 4.
   kyrr does and has the switches of kyrr's main page; it installs kyrr when it is missing.
   kyrr's side: the state file `$XDG_RUNTIME_DIR/kyrr/state` (one line of
   JSON), the socket words `toggle-filter`, `toggle-voice`,
-  `toggle-dictation`, `toggle-memos`, `toggle-memo`, `open-memos`, `install-update`, `quit` and `page-1` to `page-5` (Setup, a card's settings)
+  `toggle-dictation`, `toggle-memos`, `toggle-memo`, `open-memos`, `install-update`, `quit`, `page-1` to `page-5` (Setup, a card's settings) and
+  `menu-open`/`menu-closed` (while the menu is open, kyrr keeps its status and
+  note lines live in the state file)
   (`crates/kyrr-linux/src/instance.rs`), and `$XDG_RUNTIME_DIR/kyrr-widget`,
   which the widget renews while it is in the bar: then kyrr hides its tray
-  icon and the window's buttons to hide or quit.
+  icon and the window's buttons to hide or quit, and quits once the widget
+  is gone (the plugin turned off).

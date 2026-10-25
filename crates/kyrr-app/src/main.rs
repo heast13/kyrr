@@ -618,8 +618,11 @@ struct App {
     /// Endpoint GUID of the microphone the filter is on.
     attached: RefCell<Option<String>>,
     monitor: RefCell<Option<platform::Monitor>>,
-    /// Runs `tick` while the window is open; nobody sees the meter otherwise.
+    /// Runs `tick` while the window is open, or the menu of kyrr's widget in
+    /// Omarchy's bar; nobody sees the meter otherwise.
     meter: slint::Timer,
+    /// When the widget's menu last said it is open.
+    widget_open: Cell<Option<Instant>>,
     /// In the setup, shows the desktop's answers and the first press of the
     /// key at once; runs with the window like the meter.
     guide: slint::Timer,
@@ -1057,8 +1060,8 @@ impl App {
         let Some(w) = self.window.upgrade() else {
             return;
         };
-        // Minimized, nobody looks either.
-        if w.window().is_minimized() {
+        // Minimized, nobody looks either (unless the widget's menu does).
+        if w.window().is_minimized() && self.widget_open.get().is_none() {
             return;
         }
         let ticks = self.ticks.get().wrapping_add(1);
@@ -1144,6 +1147,40 @@ impl App {
         state.set_model_switching(switching);
         if !switching {
             self.model_changed.set(None);
+        }
+        #[cfg(target_os = "linux")]
+        if self.widget_open.get().is_some() {
+            tell_widget(&w);
+        }
+    }
+
+    /// The menu of kyrr's widget in Omarchy's bar opened (it says so every
+    /// few seconds while it stays open) or closed. The status line and the
+    /// notes run for it as for the window.
+    fn widget_looks(self: &Rc<Self>, open: bool) {
+        if open {
+            self.widget_open.set(Some(Instant::now()));
+            self.start_meter();
+            return;
+        }
+        self.widget_open.set(None);
+        let Some(w) = self.window.upgrade() else {
+            return;
+        };
+        let state = w.global::<AppState>();
+        if !state.get_window_shown() {
+            self.meter.stop();
+            self.guide.stop();
+            state.set_mic_active(false);
+            state.set_alert(0);
+        }
+    }
+
+    /// A menu that stopped saying it is open (the shell went away) counts
+    /// as closed.
+    fn widget_still_looks(self: &Rc<Self>) {
+        if self.widget_open.get().is_some_and(|at| at.elapsed() > WIDGET_GONE) {
+            self.widget_looks(false);
         }
     }
 
@@ -1999,6 +2036,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
         attached: RefCell::new(None),
         monitor: RefCell::new(None),
         meter: slint::Timer::default(),
+        widget_open: Cell::new(None),
         guide: slint::Timer::default(),
         heartbeat: Cell::new(0),
         ticks: Cell::new(0),
@@ -2495,6 +2533,10 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
             let _ = slint::quit_event_loop();
         }
     });
+    state.on_widget_open({
+        let app = Rc::clone(&app);
+        move |open| app.widget_looks(open)
+    });
     window.on_shown({
         let app = Rc::clone(&app);
         move || app.start_meter()
@@ -2636,6 +2678,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
             app.check_mute();
             app.follow_default();
             app.refresh_key_note();
+            app.widget_still_looks();
             if let Some(w) = app.window.upgrade() {
                 follow_widget(&w);
                 #[cfg(target_os = "linux")]
@@ -2720,6 +2763,9 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
     // the window saying "no tray" next to a visible icon.
     window.global::<AppState>().set_tray(tray_at_start);
     window.global::<AppState>().set_widget(widget);
+    if widget {
+        WIDGET_SEEN.set(Some(Instant::now()));
+    }
     drop(tray);
     #[cfg(target_os = "linux")]
     tell_widget(&window);
@@ -2778,6 +2824,7 @@ fn answer(window: &MainWindow, request: Request) {
         (Request::ToggleMemo, Some(tray)) => tray.invoke_toggle_memo(),
         (Request::OpenMemos, Some(tray)) => tray.invoke_open_memos(),
         (Request::InstallUpdate, Some(tray)) => tray.invoke_install_update(),
+        (Request::WidgetOpen(open), Some(_)) => window.global::<AppState>().invoke_widget_open(open),
         (Request::OpenPage(page), Some(_)) => {
             show(window);
             window.global::<AppState>().invoke_open_page(page);
@@ -2788,22 +2835,39 @@ fn answer(window: &MainWindow, request: Request) {
     tell_widget(window);
 }
 
+thread_local! {
+    /// When kyrr last saw its widget in Omarchy's bar.
+    static WIDGET_SEEN: Cell<Option<Instant>> = const { Cell::new(None) };
+}
+
+/// How long the widget may be away before kyrr counts it as turned off.
+const WIDGET_GONE: Duration = Duration::from_secs(30);
+
 /// kyrr's widget came into Omarchy's bar or left it. Its menu takes the
 /// tray icon's place, and the window needs no buttons to hide or quit.
+/// Turning the plugin off in Omarchy's menu turns kyrr off with it.
 fn follow_widget(window: &MainWindow) {
     let shown = platform::widget_shown();
+    if shown {
+        WIDGET_SEEN.set(Some(Instant::now()));
+    }
     let state = window.global::<AppState>();
     if state.get_widget() == shown {
         return;
     }
-    state.set_widget(shown);
     let Some(tray) = tray() else {
         return;
     };
     if shown {
+        state.set_widget(true);
+        state.set_tray(false);
         let _ = tray.hide();
-    } else {
-        state.set_tray(platform::has_tray() && tray.show().is_ok());
+        return;
+    }
+    // Gone by kyrr's own clock, which stands still while the computer
+    // sleeps: after waking up the widget gets its moment to renew the file.
+    if WIDGET_SEEN.get().is_some_and(|seen| seen.elapsed() > WIDGET_GONE) {
+        tray.invoke_quit();
     }
 }
 
@@ -2813,8 +2877,9 @@ fn tell_widget(window: &MainWindow) {
     let Some(tray) = tray() else {
         return;
     };
+    let state = window.global::<AppState>();
     kyrr_linux::omarchy::set_status(kyrr_linux::omarchy::Status {
-        german: window.global::<AppState>().get_language_index() == 0,
+        german: state.get_language_index() == 0,
         filter: tray.get_filter_enabled(),
         voice: tray.get_voice_enabled(),
         dictation: tray.get_dictation_enabled(),
@@ -2824,6 +2889,10 @@ fn tell_widget(window: &MainWindow) {
         memo: tray.get_memo_recording(),
         memo_key: tray.get_memo_key_name().into(),
         update: tray.get_update_version().into(),
+        line: state.invoke_status_line().into(),
+        note: state.invoke_alert_note().into(),
+        // The red notes are problems; a microphone coming back is good news.
+        note_good: state.get_alert() == 7,
     });
 }
 

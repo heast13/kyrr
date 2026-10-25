@@ -326,6 +326,12 @@ pub struct Status {
     pub memo_key: String,
     /// A newer version kyrr found, "" for none.
     pub update: String,
+    /// The line under kyrr's name in its window.
+    pub line: String,
+    /// The note at the bottom of the window, "" for none.
+    pub note: String,
+    /// The note is good news (a microphone came back), not a problem.
+    pub note_good: bool,
 }
 
 struct Shown {
@@ -379,7 +385,7 @@ fn show(change: impl FnOnce(&mut Shown)) {
 
 fn state_json(mode: &str, s: &Status, pid: u32) -> String {
     format!(
-        "{{\"pid\":{pid},\"mode\":{},\"lang\":{},\"filter\":{},\"voice\":{},\"dictation\":{},\"ready\":{},\"key\":{},\"memos\":{},\"memo\":{},\"memoKey\":{},\"update\":{}}}\n",
+        "{{\"pid\":{pid},\"mode\":{},\"lang\":{},\"filter\":{},\"voice\":{},\"dictation\":{},\"ready\":{},\"key\":{},\"memos\":{},\"memo\":{},\"memoKey\":{},\"update\":{},\"line\":{},\"note\":{},\"noteGood\":{}}}\n",
         json_text(mode),
         json_text(if s.german { "de" } else { "en" }),
         s.filter,
@@ -391,6 +397,9 @@ fn state_json(mode: &str, s: &Status, pid: u32) -> String {
         s.memo,
         json_text(&s.memo_key),
         json_text(&s.update),
+        json_text(&s.line),
+        json_text(&s.note),
+        s.note_good,
     )
 }
 
@@ -567,7 +576,7 @@ mod tests {
         };
         assert_eq!(
             state_json("listening", &status, 42),
-            "{\"pid\":42,\"mode\":\"listening\",\"lang\":\"de\",\"filter\":true,\"voice\":false,\"dictation\":false,\"ready\":false,\"key\":\"Strg \\\"rechts\\\"\",\"memos\":false,\"memo\":false,\"memoKey\":\"\",\"update\":\"\"}\n"
+            "{\"pid\":42,\"mode\":\"listening\",\"lang\":\"de\",\"filter\":true,\"voice\":false,\"dictation\":false,\"ready\":false,\"key\":\"Strg \\\"rechts\\\"\",\"memos\":false,\"memo\":false,\"memoKey\":\"\",\"update\":\"\",\"line\":\"\",\"note\":\"\",\"noteGood\":false}\n"
         );
     }
 
