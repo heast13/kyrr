@@ -7,6 +7,20 @@ pub mod keys;
 pub mod mic_move;
 pub mod wave;
 
+/// What a second start of kyrr, or Omarchy's bar widget, asks the running
+/// kyrr for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Request {
+    Show,
+    ToggleFilter,
+    ToggleVoice,
+    ToggleDictation,
+    ToggleMemo,
+    OpenMemos,
+    InstallUpdate,
+    Quit,
+}
+
 /// COM class of kyrr's audio processing object.
 pub const APO_CLSID: u128 = 0xfce4df8f_fc7f_4164_be4a_c3e4a078cfb2;
 

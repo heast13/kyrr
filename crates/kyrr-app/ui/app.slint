@@ -246,6 +246,8 @@ export global AppState {
     // the desktop may have no tray.
     in property <bool> linux;
     in property <bool> tray: true;
+    // kyrr's widget sits in Omarchy's bar: its menu opens and quits kyrr.
+    in property <bool> widget;
     // Without a tray, closing minimizes where the desktop can (not tiling ones).
     in property <bool> can-minimize: true;
     in property <FilterState> filter-state: FilterState.checking;
@@ -2905,7 +2907,9 @@ export component MainWindow inherits Window {
                     TouchArea { clicked => { AppState.unmute(); } mouse-cursor: pointer; }
                 }
             }
-            if main-page: HideRow { }
+            // With kyrr's widget in Omarchy's bar, the window is only
+            // kyrr's settings: the widget opens and quits it.
+            if main-page && !AppState.widget: HideRow { }
 
             // Settings pages: global, then one for each card's gear.
             if settings-page: HorizontalLayout {

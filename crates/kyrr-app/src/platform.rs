@@ -367,6 +367,10 @@ mod imp {
         true
     }
 
+    pub fn widget_shown() -> bool {
+        false
+    }
+
     pub fn can_minimize() -> bool {
         true
     }
@@ -797,10 +801,14 @@ mod imp {
         kyrr_linux::overlay::open()
     }
 
-    /// Whether the desktop shows kyrr's tray icon: a tray host is on the
-    /// bus.
+    /// Whether something in the panel brings kyrr back once its window is
+    /// closed: a tray, or kyrr's widget in Omarchy's bar.
     pub fn has_tray() -> bool {
-        kyrr_linux::tray::available()
+        widget_shown() || kyrr_linux::tray::available()
+    }
+
+    pub fn widget_shown() -> bool {
+        kyrr_linux::omarchy::widget_shown()
     }
 
     /// Whether the desktop minimizes windows. Tiling compositors (Hyprland,

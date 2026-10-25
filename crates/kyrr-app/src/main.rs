@@ -33,7 +33,7 @@ use std::time::{Duration, Instant};
 
 use kyrr_common::keys;
 use kyrr_common::wave::{Mode, Overlay};
-use kyrr_common::{Amount, FilterSettings, Look, VoiceSettings};
+use kyrr_common::{Amount, FilterSettings, Look, Request, VoiceSettings};
 use kyrr_dictate::Language;
 use slint::{ComponentHandle, LogicalSize, ModelRc, PhysicalPosition, SharedString, VecModel, Weak};
 
@@ -1801,7 +1801,7 @@ fn dictation_state(s: State) -> DictationState {
     }
 }
 
-fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<(), slint::PlatformError> {
+fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Result<(), slint::PlatformError> {
     let config = Config::load();
     let language = config.language();
     // An installer downloaded for the last update is done with.
@@ -2636,20 +2636,24 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
             app.check_mute();
             app.follow_default();
             app.refresh_key_note();
-            #[cfg(target_os = "linux")]
             if let Some(w) = app.window.upgrade() {
-                skin::refresh(&w);
+                follow_widget(&w);
+                #[cfg(target_os = "linux")]
+                {
+                    skin::refresh(&w);
+                    tell_widget(&w);
+                }
             }
         }
     });
     if let Some(requests) = show_requests {
         let weak = window.as_weak();
         std::thread::spawn(move || {
-            while requests.recv().is_ok() {
+            while let Ok(request) = requests.recv() {
                 let weak = weak.clone();
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(w) = weak.upgrade() {
-                        show(&w);
+                        answer(&w, request);
                     }
                 });
             }
@@ -2708,11 +2712,17 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     // Without a tray host Slint would only log a complaint: wait for one
     // (the retry below) instead of shouting at start. One that is there but
     // takes no icon is waited for the same way, not the end of kyrr.
-    let tray_at_start = platform::has_tray() && tray.show().map_err(|e| eprintln!("kyrr: tray: {e}")).is_ok();
+    // kyrr's widget in Omarchy's bar has the tray menu: no icon besides it.
+    let widget = platform::widget_shown();
+    let tray_at_start =
+        !widget && platform::has_tray() && tray.show().map_err(|e| eprintln!("kyrr: tray: {e}")).is_ok();
     // One lookup for both, so a host that turns up in between cannot leave
     // the window saying "no tray" next to a visible icon.
     window.global::<AppState>().set_tray(tray_at_start);
+    window.global::<AppState>().set_widget(widget);
     drop(tray);
+    #[cfg(target_os = "linux")]
+    tell_widget(&window);
     // A panel that hosts tray icons may start after kyrr (both at login).
     // An icon can only register once one is there: make a new one then.
     let tray_retry = slint::Timer::default();
@@ -2721,7 +2731,11 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
         let started = Instant::now();
         let done = Cell::new(false);
         tray_retry.start(slint::TimerMode::Repeated, Duration::from_secs(3), move || {
-            if done.get() || started.elapsed() > Duration::from_secs(120) || !platform::has_tray() {
+            if done.get()
+                || started.elapsed() > Duration::from_secs(120)
+                || !platform::has_tray()
+                || platform::widget_shown()
+            {
                 return;
             }
             if let Some(app) = app.upgrade() {
@@ -2746,6 +2760,63 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<()>>) -> Result<()
     }
     TRAY.take();
     result
+}
+
+/// Does what another start of kyrr or kyrr's widget in Omarchy's bar asks
+/// for: what the tray menu does.
+fn answer(window: &MainWindow, request: Request) {
+    match (request, tray()) {
+        (Request::Show, _) => show(window),
+        (_, None) => {}
+        (Request::ToggleFilter, Some(tray)) => tray.invoke_toggle_filter(),
+        (Request::ToggleVoice, Some(tray)) => tray.invoke_toggle_voice(),
+        (Request::ToggleDictation, Some(tray)) => tray.invoke_toggle_dictation(),
+        (Request::ToggleMemo, Some(tray)) => tray.invoke_toggle_memo(),
+        (Request::OpenMemos, Some(tray)) => tray.invoke_open_memos(),
+        (Request::InstallUpdate, Some(tray)) => tray.invoke_install_update(),
+        (Request::Quit, Some(tray)) => tray.invoke_quit(),
+    }
+    #[cfg(target_os = "linux")]
+    tell_widget(window);
+}
+
+/// kyrr's widget came into Omarchy's bar or left it. Its menu takes the
+/// tray icon's place, and the window needs no buttons to hide or quit.
+fn follow_widget(window: &MainWindow) {
+    let shown = platform::widget_shown();
+    let state = window.global::<AppState>();
+    if state.get_widget() == shown {
+        return;
+    }
+    state.set_widget(shown);
+    let Some(tray) = tray() else {
+        return;
+    };
+    if shown {
+        let _ = tray.hide();
+    } else {
+        state.set_tray(platform::has_tray() && tray.show().is_ok());
+    }
+}
+
+/// What the tray menu shows, for kyrr's widget in Omarchy's bar.
+#[cfg(target_os = "linux")]
+fn tell_widget(window: &MainWindow) {
+    let Some(tray) = tray() else {
+        return;
+    };
+    kyrr_linux::omarchy::set_status(kyrr_linux::omarchy::Status {
+        german: window.global::<AppState>().get_language_index() == 0,
+        filter: tray.get_filter_enabled(),
+        voice: tray.get_voice_enabled(),
+        dictation: tray.get_dictation_enabled(),
+        ready: tray.get_dictation_ready(),
+        key: tray.get_key_name().into(),
+        memos: tray.get_memos_enabled(),
+        memo: tray.get_memo_recording(),
+        memo_key: tray.get_memo_key_name().into(),
+        update: tray.get_update_version().into(),
+    });
 }
 
 /// A tray icon wired to the app.

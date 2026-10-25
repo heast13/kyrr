@@ -11,7 +11,7 @@ pub enum Instance {
     /// This is the first instance. `show_requests` fires when another start
     /// wants the window shown.
     First {
-        show_requests: std::sync::mpsc::Receiver<()>,
+        show_requests: std::sync::mpsc::Receiver<kyrr_common::Request>,
     },
     /// Another instance runs and was asked to show itself.
     Other,
@@ -38,7 +38,7 @@ pub fn claim() -> Instance {
             let event = event;
             loop {
                 unsafe { WaitForSingleObject(event.0, INFINITE) };
-                if tx.send(()).is_err() {
+                if tx.send(kyrr_common::Request::Show).is_err() {
                     break;
                 }
             }

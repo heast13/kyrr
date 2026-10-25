@@ -19,6 +19,9 @@
 //!   Omarchy draws everything with square corners, 2 px borders in the window
 //!   border's colour and the system's monospace font. Source: Omarchy's
 //!   `docs/theming.md` and `default/themed/shell.toml.tpl`.
+//! - Bar widget (its own repository, `heast13/omarchy-kyrr`): it reads what
+//!   kyrr does from a file kyrr keeps, flips kyrr's switches over kyrr's
+//!   socket and renews a file of its own while it sits in the bar.
 //!
 //! Only the standard library is used here.
 
@@ -299,22 +302,69 @@ fn menu_with_kyrr(old: Option<&str>) -> Option<String> {
     (kept != old).then_some(kept)
 }
 
-/// The file kyrr's widget in Omarchy's bar reads while kyrr runs: `idle`,
-/// `listening`, `writing` or `recording` (a voice memo), and kyrr's process
-/// id.
+/// The file kyrr's widget in Omarchy's bar reads while kyrr runs: one line
+/// of JSON with what kyrr does, its switches and its process id.
 fn state_file() -> Option<PathBuf> {
     let dir = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from)?;
     Some(dir.join("kyrr/state"))
 }
 
-/// Tells the bar widget what kyrr does; only on Omarchy, and only a change.
-pub fn set_state(state: &'static str) {
-    static LAST: std::sync::Mutex<Option<&str>> = std::sync::Mutex::new(None);
-    let mut last = LAST.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    if *last == Some(state) || path().is_none() {
+/// The switches of kyrr's tray menu, for the bar widget's menu.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Status {
+    /// kyrr speaks German; else English.
+    pub german: bool,
+    pub filter: bool,
+    pub voice: bool,
+    pub dictation: bool,
+    /// The dictation key works now (model there, key set).
+    pub ready: bool,
+    pub key: String,
+    pub memos: bool,
+    /// A voice memo is being recorded.
+    pub memo: bool,
+    pub memo_key: String,
+    /// A newer version kyrr found, "" for none.
+    pub update: String,
+}
+
+struct Shown {
+    mode: &'static str,
+    status: Option<Status>,
+    written: String,
+}
+
+static SHOWN: std::sync::Mutex<Shown> = std::sync::Mutex::new(Shown {
+    mode: "idle",
+    status: None,
+    written: String::new(),
+});
+
+/// Tells the bar widget what kyrr does: `idle`, `listening`, `writing` or
+/// `recording` (a voice memo).
+pub fn set_state(mode: &'static str) {
+    show(|shown| shown.mode = mode);
+}
+
+/// Tells the bar widget kyrr's switches.
+pub fn set_status(status: Status) {
+    show(|shown| shown.status = Some(status));
+}
+
+/// Only on Omarchy, and only a change.
+fn show(change: impl FnOnce(&mut Shown)) {
+    if path().is_none() {
         return;
     }
-    *last = Some(state);
+    let mut shown = SHOWN.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    change(&mut shown);
+    let Some(status) = &shown.status else {
+        return;
+    };
+    let text = state_json(shown.mode, status, std::process::id());
+    if text == shown.written {
+        return;
+    }
     let Some(file) = state_file() else {
         return;
     };
@@ -323,7 +373,40 @@ pub fn set_state(state: &'static str) {
     }
     // In one write, in place: the widget watches the file itself. kyrr's
     // process id lets it see a kyrr that ended without deleting the file.
-    let _ = std::fs::write(&file, format!("{state} {}\n", std::process::id()));
+    let _ = std::fs::write(&file, &text);
+    shown.written = text;
+}
+
+fn state_json(mode: &str, s: &Status, pid: u32) -> String {
+    format!(
+        "{{\"pid\":{pid},\"mode\":{},\"lang\":{},\"filter\":{},\"voice\":{},\"dictation\":{},\"ready\":{},\"key\":{},\"memos\":{},\"memo\":{},\"memoKey\":{},\"update\":{}}}\n",
+        json_text(mode),
+        json_text(if s.german { "de" } else { "en" }),
+        s.filter,
+        s.voice,
+        s.dictation,
+        s.ready,
+        json_text(&s.key),
+        s.memos,
+        s.memo,
+        json_text(&s.memo_key),
+        json_text(&s.update),
+    )
+}
+
+fn json_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// kyrr ends: the widget shows it as not running.
@@ -334,6 +417,17 @@ pub fn clear_state() {
             let _ = std::fs::remove_dir(dir);
         }
     }
+}
+
+/// Whether kyrr's widget sits in Omarchy's bar: while it does, it renews
+/// this file every few seconds. Then the widget's menu is kyrr's tray menu.
+pub fn widget_shown() -> bool {
+    let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from) else {
+        return false;
+    };
+    std::fs::metadata(dir.join("kyrr-widget"))
+        .and_then(|m| m.modified())
+        .is_ok_and(|t| t.elapsed().is_ok_and(|age| age < std::time::Duration::from_secs(30)))
 }
 
 /// A colour as red, green and blue, 0..255.
@@ -462,6 +556,20 @@ mod tests {
     use super::*;
 
     const TOKYO: &str = "mode = \"dark\"\n\naccent = \"#7aa2f7\"\nbackground = \"#1a1b26\"\nforeground = \"#a9b1d6\"\nred = \"#f7768e\"\nyellow = \"#e0af68\"\ngreen = \"#9ece6a\"\n";
+
+    #[test]
+    fn state_for_the_widget() {
+        let status = Status {
+            german: true,
+            filter: true,
+            key: "Strg \"rechts\"".into(),
+            ..Status::default()
+        };
+        assert_eq!(
+            state_json("listening", &status, 42),
+            "{\"pid\":42,\"mode\":\"listening\",\"lang\":\"de\",\"filter\":true,\"voice\":false,\"dictation\":false,\"ready\":false,\"key\":\"Strg \\\"rechts\\\"\",\"memos\":false,\"memo\":false,\"memoKey\":\"\",\"update\":\"\"}\n"
+        );
+    }
 
     #[test]
     fn reads_a_theme() {
