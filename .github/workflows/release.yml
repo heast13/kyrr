@@ -189,8 +189,11 @@ jobs:
           # and .../kyrr-x86_64.AppImage always fetch the newest one.
           cp "dist/kyrr-setup-$version.exe" dist/kyrr-setup.exe
           cp "dist/kyrr-$version-x86_64.AppImage" dist/kyrr-x86_64.AppImage
+          # Its own checksum file too: Omarchy's bar widget checks the
+          # unversioned AppImage before it installs it.
+          (cd dist && sha256sum kyrr-x86_64.AppImage > kyrr-x86_64.AppImage.sha256)
           gh release create "$TAG" --draft --title "kyrr $TAG" --notes-file dist/notes.md \
             "dist/kyrr-setup-$version.exe" "dist/kyrr-setup-$version.exe.sha256" dist/kyrr-setup.exe \
             "dist/kyrr-$version-x86_64.AppImage" "dist/kyrr-$version-x86_64.AppImage.sha256" \
-            dist/kyrr-x86_64.AppImage \
+            dist/kyrr-x86_64.AppImage dist/kyrr-x86_64.AppImage.sha256 \
             "dist/kyrr-$version-linux-x86_64.tar.gz" "dist/kyrr-$version-linux-x86_64.tar.gz.sha256"

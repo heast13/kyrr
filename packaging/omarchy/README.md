@@ -20,7 +20,7 @@ What kyrr brings for [Omarchy](https://omarchy.org) 4.
   all of kyrr on Omarchy: switches, settings, recordings and the first-run
   setup, walked with the keyboard; it installs kyrr when it is missing.
   While the plugin is installed and turned on (`~/.config/omarchy/shell.json`
-  names `heast13.kyrr`), kyrr runs without a window and without a tray icon:
+  names `io.github.heast13.kyrr`), kyrr runs without a window and without a tray icon:
   a start from the app menu opens the widget's menu instead, and kyrr quits
   once the widget is gone (the plugin turned off). kyrr's side: the state
   file `$XDG_RUNTIME_DIR/kyrr/state` (one line of JSON, `tell_widget` in

@@ -379,7 +379,7 @@ pub fn clear_state() {
 }
 
 /// The id of kyrr's widget among Omarchy's plugins.
-const PLUGIN: &str = "heast13.kyrr";
+const PLUGIN: &str = "io.github.heast13.kyrr";
 
 /// Whether kyrr's widget is in Omarchy's bar for good: installed, and
 /// turned on, which is its id in the bar's layout in `shell.json` (turning
@@ -398,11 +398,19 @@ fn plugin_in(shell_json: &str) -> bool {
 
 /// Opens the widget's menu, where kyrr's window would come up elsewhere.
 pub fn open_menu() {
-    let program = path()
-        .map(|p| p.join("bin/omarchy-shell"))
-        .filter(|p| p.is_file())
-        .unwrap_or_else(|| PathBuf::from("omarchy-shell"));
+    let Some(omarchy) = path() else {
+        return;
+    };
+    let program = omarchy.join("bin/omarchy-shell");
+    let program = if program.is_file() {
+        program
+    } else {
+        PathBuf::from("omarchy-shell")
+    };
+    // omarchy-shell gives up without it, and a kyrr started at sign-in may
+    // not have it.
     let _ = std::process::Command::new(program)
+        .env("OMARCHY_PATH", &omarchy)
         .args(["-q", PLUGIN, "open"])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
@@ -560,8 +568,9 @@ mod tests {
 
     #[test]
     fn plugin_turned_on() {
-        assert!(plugin_in("{\"bar\":{\"right\":[{\"id\":\"heast13.kyrr\"}]}}"));
+        assert!(plugin_in("{\"bar\":{\"right\":[{\"id\":\"io.github.heast13.kyrr\"}]}}"));
         assert!(!plugin_in("{\"bar\":{\"right\":[{\"id\":\"heast13.kyrr-old\"}]}}"));
+        assert!(!plugin_in("{\"bar\":{\"right\":[{\"id\":\"heast13.kyrr\"}]}}"));
     }
 
     #[test]

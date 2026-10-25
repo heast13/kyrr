@@ -210,14 +210,18 @@ fn serve(listener: UnixListener, show: mpsc::Sender<Request>) {
             MEMO_STOP => crate::hotkey::memo_up(),
             BACKGROUND => {}
             other => {
-                let request = WIDGET
-                    .iter()
-                    .find(|(word, _)| *word == other)
-                    .map(|(_, request)| request.clone())
-                    .or_else(|| page(other))
-                    .or_else(|| line(other))
-                    .unwrap_or(Request::Show);
-                if show.send(request).is_err() {
+                // Anything else is a mistake, not a reason to pop up.
+                let request = if other == SHOW {
+                    Some(Request::Show)
+                } else {
+                    WIDGET
+                        .iter()
+                        .find(|(word, _)| *word == other)
+                        .map(|(_, request)| request.clone())
+                        .or_else(|| page(other))
+                        .or_else(|| line(other))
+                };
+                if request.is_some_and(|request| show.send(request).is_err()) {
                     break;
                 }
             }
@@ -283,6 +287,13 @@ mod tests {
             Ok(Request::WidgetOpen(true))
         );
         assert_eq!(line(b"settle"), None);
+        // A word nobody knows does nothing; the next one still arrives.
+        UnixStream::connect(&path).unwrap().write_all(b"shwo").unwrap();
+        UnixStream::connect(&path).unwrap().write_all(b"toggle-filter").unwrap();
+        assert_eq!(
+            show_requests.recv_timeout(Duration::from_secs(2)),
+            Ok(Request::ToggleFilter)
+        );
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
         std::fs::remove_dir_all(dir).unwrap();

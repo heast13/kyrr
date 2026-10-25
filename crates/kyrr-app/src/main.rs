@@ -629,6 +629,9 @@ struct App {
     meter: slint::Timer,
     /// When the widget's menu last said it is open.
     widget_open: Cell<Option<Instant>>,
+    /// When the open menu last got kyrr's state from the meter's ticks.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    widget_told: Cell<Option<Instant>>,
     /// In the setup, shows the desktop's answers and the first press of the
     /// key at once; runs with the window like the meter.
     guide: slint::Timer,
@@ -1164,8 +1167,10 @@ impl App {
         if !switching {
             self.model_changed.set(None);
         }
+        // The open menu follows the status line, a few times a second.
         #[cfg(target_os = "linux")]
-        if self.widget_open.get().is_some() {
+        if self.widget_open.get().is_some() && self.widget_told.get().is_none_or(|at| at.elapsed() >= WIDGET_EVERY) {
+            self.widget_told.set(Some(Instant::now()));
             tell_widget(&w);
         }
     }
@@ -2237,6 +2242,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
         monitor: RefCell::new(None),
         meter: slint::Timer::default(),
         widget_open: Cell::new(None),
+        widget_told: Cell::new(None),
         guide: slint::Timer::default(),
         heartbeat: Cell::new(0),
         ticks: Cell::new(0),
@@ -2943,15 +2949,8 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
     }
     if headless() {
         // The widget's menu stands in for the window, the first-run setup
-        // included: open it once the state file says what to show.
-        if !setup_done || !background {
-            let weak = window.as_weak();
-            slint::Timer::single_shot(Duration::from_secs(2), move || {
-                if let Some(w) = weak.upgrade() {
-                    show(&w);
-                }
-            });
-        }
+        // included: it opens once the widget is there (see follow_widget).
+        OPEN_WHEN_SEEN.set(!setup_done || !background);
     } else if !setup_done || !background {
         show(&window);
     } else if !platform::has_tray() && cfg!(windows) {
@@ -3059,10 +3058,19 @@ fn answer(window: &MainWindow, request: Request) {
 thread_local! {
     /// When kyrr last saw its widget in Omarchy's bar.
     static WIDGET_SEEN: Cell<Option<Instant>> = const { Cell::new(None) };
+    /// Whether it saw the widget at all since it started.
+    static EVER_SEEN: Cell<bool> = const { Cell::new(false) };
+    /// Open the widget's menu once the widget is there: the first-run setup,
+    /// or kyrr started from the app menu.
+    static OPEN_WHEN_SEEN: Cell<bool> = const { Cell::new(false) };
 }
 
 /// How long the widget may be away before kyrr counts it as turned off.
 const WIDGET_GONE: Duration = Duration::from_secs(30);
+
+/// How often the meter's ticks tell the open menu the state.
+#[cfg(target_os = "linux")]
+const WIDGET_EVERY: Duration = Duration::from_millis(300);
 
 /// kyrr's widget came into Omarchy's bar or left it. Its menu takes the
 /// tray icon's place, and the window needs no buttons to hide or quit.
@@ -3076,10 +3084,41 @@ fn follow_widget(window: &MainWindow) {
     let Some(tray) = tray() else {
         return;
     };
-    // Without the widget kyrr has nothing to show itself in: turning the
-    // plugin off turns kyrr off.
     if headless() {
-        if !shown && WIDGET_SEEN.get().is_some_and(|seen| seen.elapsed() > WIDGET_GONE) {
+        if shown {
+            if !EVER_SEEN.replace(true) {
+                // Give the widget a moment to read the state file.
+                if OPEN_WHEN_SEEN.replace(false) {
+                    let weak = window.as_weak();
+                    slint::Timer::single_shot(Duration::from_secs(1), move || {
+                        if let Some(w) = weak.upgrade() {
+                            show(&w);
+                        }
+                    });
+                }
+            }
+            return;
+        }
+        if !WIDGET_SEEN.get().is_some_and(|seen| seen.elapsed() > WIDGET_GONE) {
+            return;
+        }
+        if !EVER_SEEN.get() {
+            // The plugin is on but its widget never came (the shell broke,
+            // say): kyrr as everywhere else, rather than nowhere.
+            eprintln!("kyrr: Omarchy's bar shows no kyrr widget, so kyrr opens its window");
+            HEADLESS.set(false);
+            state.set_widget(false);
+            show(window);
+            return;
+        }
+        // Without the widget kyrr has nothing to show itself in: turning the
+        // plugin off turns kyrr off, once nothing is being recorded.
+        let busy = memos::memos().is_some_and(|m| m.recording())
+            || matches!(
+                state.get_dictation_state(),
+                DictationState::Recording | DictationState::Transcribing
+            );
+        if !busy {
             tray.invoke_quit();
         }
         return;
@@ -3116,6 +3155,10 @@ fn tell_widget(window: &MainWindow) {
         return;
     };
     let state = window.global::<AppState>();
+    // Nobody to tell.
+    if !state.get_widget() {
+        return;
+    }
     let pick = |names: &[&'static str], i: i32| names[usize::try_from(i).unwrap_or(0).min(names.len() - 1)];
     let german = state.get_language_index() == 0;
     let model = match state.get_dictation_state() {
@@ -3233,6 +3276,12 @@ fn tell_widget(window: &MainWindow) {
         },
         "mic": {
             "name": state.get_attached_mic().as_str(),
+            // The one in use, in the list (-1: none of them).
+            "current": state
+                .get_microphones()
+                .iter()
+                .position(|name| name == state.get_attached_mic())
+                .map_or(-1, |i| i as i64),
             "index": state.get_mic_index(),
             "list": microphones,
         },

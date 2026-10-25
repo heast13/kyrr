@@ -126,6 +126,6 @@ Omarchy, also delete `~/.local/bin/omarchy-dictation-kyrr` and
 `~/.local/bin/omarchy-install-dictation-kyrr`, the block between `>>> kyrr`
 and `<<< kyrr` in `~/.config/omarchy/extensions/omarchy-menu.jsonc`, pick
 another program under Setup > Defaults > Dictation and remove the bar widget
-with `omarchy plugin remove heast13.kyrr`; on GNOME,
+with `omarchy plugin remove io.github.heast13.kyrr`; on GNOME,
 delete the "kyrr" and "kyrr: voice memo" entries under Custom Shortcuts in
 the keyboard settings. Your voice memos stay in Documents/kyrr.
