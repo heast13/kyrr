@@ -493,8 +493,7 @@ impl Memos {
                 self.active.store(true, Ordering::Relaxed);
                 self.tell("");
                 self.wave.set(Mode::Recording);
-                self.wave
-                    .set_words(vec![self.say("Aufnahme", "Recording"), self.say("läuft", "on")]);
+                self.wave.set_clock(0.0);
                 let weak = Rc::downgrade(self);
                 self.timer.start(slint::TimerMode::Repeated, TICK, move || {
                     if let Some(m) = weak.upgrade() {
@@ -609,6 +608,9 @@ impl Memos {
         let state = w.global::<AppState>();
         if self.recording() {
             state.set_memo_elapsed(self.elapsed().into());
+        }
+        if let Some(r) = self.recording.borrow().as_ref() {
+            self.wave.set_clock(r.elapsed().as_secs_f32());
         }
         let finished = self.player.borrow().as_ref().is_some_and(Player::finished);
         if finished {

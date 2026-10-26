@@ -11,6 +11,9 @@
 //! letter fading in slowly after it, and the oldest run out on the left side. The text is only shown here: what gets typed is
 //! still the whole recording, recognised once the key is let go.
 //!
+//! A voice memo shows the time it has been recording instead of words, and
+//! counts it on (see [`Wave::set_clock`]).
+//!
 //! Towards the end of the longest dictation the bars turn yellow, then
 //! red; at the end kyrr types what it has and the pill says so in red.
 //!
@@ -210,6 +213,39 @@ fn alike(a: &str, b: &str) -> bool {
     letters(a) == letters(b)
 }
 
+/// The time of a voice memo: 4:07, or 1:04:07 from an hour on.
+fn clock_text(seconds: u32) -> String {
+    let (h, m, s) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m}:{s:02}")
+    }
+}
+
+/// The room of one digit of the time: that of the widest.
+fn digit_room() -> f32 {
+    let font = FONT.as_scaled(PxScale::from(TEXT_SIZE));
+    ('0'..='9')
+        .map(|c| font.h_advance(font.glyph_id(c)))
+        .fold(0.0, f32::max)
+}
+
+/// Width of the time in logical pixels.
+fn clock_width(seconds: u32) -> f32 {
+    let font = FONT.as_scaled(PxScale::from(TEXT_SIZE));
+    clock_text(seconds)
+        .chars()
+        .map(|c| {
+            if c.is_ascii_digit() {
+                digit_room()
+            } else {
+                font.h_advance(font.glyph_id(c))
+            }
+        })
+        .sum()
+}
+
 /// Width of `text` in logical pixels.
 fn measure(text: &str) -> f32 {
     let font = FONT.as_scaled(PxScale::from(TEXT_SIZE));
@@ -290,6 +326,10 @@ pub struct Wave {
     pen_pace: f32,
     /// Where the pen was when, newest last: how long ago it passed a letter.
     trail: Vec<(f32, f32)>,
+    /// Seconds a voice memo has been recording; None for a dictation.
+    clock: Option<f32>,
+    /// The whole seconds the clock showed last: it never goes back.
+    clock_shown: u32,
     /// When the running dictation reaches its limit.
     end: Option<Instant>,
     /// The limit was reached: the line is the note about it, in red.
@@ -318,6 +358,8 @@ impl Default for Wave {
             pen_speed: 0.0,
             pen_pace: 0.0,
             trail: Vec::new(),
+            clock: None,
+            clock_shown: 0,
             end: None,
             limit: false,
             warn: [0.0; 2],
@@ -404,6 +446,8 @@ impl Wave {
             self.pen_speed = 0.0;
             self.pen_pace = 0.0;
             self.trail.clear();
+            self.clock = None;
+            self.clock_shown = 0;
             self.end = None;
             self.limit = false;
             self.warn = [0.0; 2];
@@ -456,6 +500,17 @@ impl Wave {
         self.pen_pace += (after - before).max(0.0) / PEN_AVERAGE;
     }
 
+    /// A voice memo has been recording for `seconds`: the pill shows the
+    /// time and counts it on by itself until told again.
+    pub fn set_clock(&mut self, seconds: f32) {
+        self.clock = Some(seconds.max(0.0));
+    }
+
+    /// The time on the pill, in whole seconds; None without a clock.
+    fn clock_seconds(&self) -> Option<u32> {
+        self.clock.map(|c| (c as u32).max(self.clock_shown))
+    }
+
     /// The running dictation ends at `at` at the latest.
     pub fn set_end(&mut self, at: Instant) {
         self.end = Some(at);
@@ -476,6 +531,7 @@ impl Wave {
         self.pen_speed = 0.0;
         self.pen_pace = 0.0;
         self.trail.clear();
+        self.clock = None;
         self.set_words(&[note]);
         self.look = Mode::Listening;
         self.limit = false;
@@ -535,6 +591,10 @@ impl Wave {
             let rate = if target > *bar { 12.0 } else { 3.5 };
             *bar += (target.min(1.0) - *bar) * (rate * dt).min(1.0);
         }
+        if let (Mode::Recording, Some(clock)) = (self.mode, self.clock.as_mut()) {
+            *clock += dt;
+        }
+        self.clock_shown = self.clock_seconds().unwrap_or(0);
         self.step_words(dt);
         // Yellow, then red towards the limit while recording; red from
         // the limit on. Back to green once the key is let go in time.
@@ -602,7 +662,13 @@ impl Wave {
         // runs on with it.
         let end = written.min(self.pen + PEN_AHEAD);
         self.leaving.retain(|w| t - w.since < LEAVE);
-        let (open, pill, scroll) = if self.words.is_empty() {
+        let (open, pill, scroll) = if let Some(seconds) = self.clock_seconds() {
+            (
+                1.0,
+                PILL.max(BARS_PAD + bars_span(1.0) + BARS_TEXT_GAP + clock_width(seconds) + TEXT_PAD),
+                0.0,
+            )
+        } else if self.words.is_empty() {
             (0.0, PILL, 0.0)
         } else {
             let pill = (WIDTH as f32 - 2.0).min(PILL.max(end + (WIDTH as f32 - line_room(WIDTH as f32))));
@@ -760,7 +826,8 @@ impl Wave {
     /// The words between `left` and `right` (logical pixels) as ink, 0..1 for
     /// each physical pixel; None without words.
     fn paint_words(&self, scale: f32, width: u32, height: u32, left: f32, right: f32) -> Option<Vec<f32>> {
-        if self.words.is_empty() && self.leaving.is_empty() {
+        let clock = self.clock_seconds();
+        if self.words.is_empty() && self.leaving.is_empty() && clock.is_none() {
             return None;
         }
         let mut ink = vec![0.0f32; (width * height) as usize];
@@ -768,6 +835,34 @@ impl Wave {
         let font = FONT.as_scaled(PxScale::from(TEXT_SIZE));
         // Capitals sit in the middle of the pill.
         let baseline = HEIGHT as f32 / 2.0 + (font.ascent() + font.descent()) / 2.0;
+        if let Some(seconds) = clock {
+            let mut pen = left;
+            for c in clock_text(seconds).chars() {
+                let id = font.glyph_id(c);
+                // Every digit gets the same room, so the time does not
+                // wobble as it counts.
+                let room = if c.is_ascii_digit() {
+                    digit_room()
+                } else {
+                    font.h_advance(id)
+                };
+                let at = pen + (room - font.h_advance(id)) / 2.0;
+                pen += room;
+                let glyph = id.with_scale_and_position(size, point(at * scale, baseline * scale));
+                let Some(outline) = FONT.outline_glyph(glyph) else {
+                    continue;
+                };
+                let bounds = outline.px_bounds();
+                outline.draw(|gx, gy, c| {
+                    let px = bounds.min.x as i32 + gx as i32;
+                    let py = bounds.min.y as i32 + gy as i32;
+                    if px >= 0 && py >= 0 && px < width as i32 && py < height as i32 {
+                        ink[(py as u32 * width + px as u32) as usize] += c;
+                    }
+                });
+            }
+            return Some(ink);
+        }
         // The line fades out on the left once it runs out there.
         let fade_left = (self.scroll / EDGE_FADE).clamp(0.0, 1.0);
         let t = self.t;
@@ -871,6 +966,7 @@ enum Message {
     End(Instant),
     Limit(String),
     Note(String),
+    Clock(f32),
 }
 
 impl Wave {
@@ -881,6 +977,7 @@ impl Wave {
             Message::End(at) => self.set_end(at),
             Message::Limit(note) => self.set_limit(note),
             Message::Note(note) => self.set_note(note),
+            Message::Clock(seconds) => self.set_clock(seconds),
         }
     }
 }
@@ -919,6 +1016,12 @@ impl Overlay {
     /// The running dictation ends at `at` at the latest.
     pub fn set_end(&self, at: Instant) {
         let _ = self.tx.send(Message::End(at));
+    }
+
+    /// A voice memo has been recording for `seconds`: the pill shows the
+    /// time (and counts on until told again).
+    pub fn set_clock(&self, seconds: f32) {
+        let _ = self.tx.send(Message::Clock(seconds));
     }
 
     /// The dictation reached its limit: `note` shows in red.
@@ -1131,6 +1234,45 @@ mod tests {
         let loud = shown(Mode::Recording, 1.0, &[0.8; BANDS]);
         assert!(loud.visible() && loud.bars[BARS / 2] > quiet.bars[BARS / 2] + 0.3);
         assert!(loud.words.is_empty());
+    }
+
+    #[test]
+    fn a_voice_memo_shows_the_time_it_runs() {
+        let mut wave = shown(Mode::Recording, 0.5, &QUIET);
+        wave.set_clock(0.0);
+        run_for(&mut wave, 2.5);
+        assert!(wave.open > 0.99 && wave.pill > PILL);
+        assert_eq!(wave.clock_seconds(), Some(2));
+        let mut pixels = Vec::new();
+        wave.paint(1.0, &mut pixels);
+        // The app says what time it is: the clock follows, and never goes back.
+        wave.set_clock(9.0);
+        run_for(&mut wave, 0.1);
+        assert_eq!(wave.clock_seconds(), Some(9));
+        wave.set_clock(8.9);
+        assert_eq!(wave.clock_seconds(), Some(9));
+        // After it stops, the time stands while the pill fades out.
+        wave.set_mode(Mode::Hidden);
+        run_for(&mut wave, 0.1);
+        assert_eq!(wave.clock_seconds(), Some(9));
+    }
+
+    #[test]
+    fn the_time_is_written_short() {
+        assert_eq!(clock_text(7), "0:07");
+        assert_eq!(clock_text(754), "12:34");
+        assert_eq!(clock_text(3723), "1:02:03");
+        // The pill does not wobble: every digit takes the same room.
+        assert_eq!(clock_width(11), clock_width(80));
+    }
+
+    #[test]
+    fn a_dictation_has_no_time() {
+        let mut wave = shown(Mode::Recording, 0.5, &QUIET);
+        wave.set_clock(5.0);
+        wave.set_mode(Mode::Hidden);
+        wave.set_mode(Mode::Listening);
+        assert_eq!(wave.clock_seconds(), None);
     }
 
     #[test]
