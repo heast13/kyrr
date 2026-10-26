@@ -73,7 +73,7 @@ impl Recording {
         };
         let mut resampler = Converter::new(rate, file_rate)?;
         if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+            super::library::create_folder(dir).map_err(|e| e.to_string())?;
         }
         let mut writer = Writer::create(path, file_rate).map_err(|e| e.to_string())?;
 

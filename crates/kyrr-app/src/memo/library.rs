@@ -43,6 +43,74 @@ pub fn folder() -> PathBuf {
     documents().join("kyrr")
 }
 
+/// Creates the folder for its owner alone, as recordings and their texts are
+/// private (on Linux a new folder is 0700, a new file 0600; Windows keeps the
+/// rights Documents gives).
+pub fn create_folder(dir: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        // Only the memo folder is closed, not Documents above it.
+        if let Some(parent) = dir.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        match std::fs::DirBuilder::new().mode(0o700).create(dir) {
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
+            other => other,
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::create_dir_all(dir)
+    }
+}
+
+/// Closes a folder and memos made before they were private (Linux): the
+/// folder to the owner, each memo and text readable and writable by the owner
+/// alone. Nothing happens where the folder is not there.
+pub fn make_private(dir: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let limit = |path: &Path, mode: u32| {
+            // A link is left alone: it would change what it points to.
+            let Ok(meta) = std::fs::symlink_metadata(path) else {
+                return;
+            };
+            if !meta.is_symlink() && meta.permissions().mode() & 0o777 != mode {
+                let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode));
+            }
+        };
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        limit(dir, 0o700);
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let ours = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "opus" | "txt" | "part"));
+            if ours && std::fs::symlink_metadata(&path).is_ok_and(|m| m.is_file()) {
+                limit(&path, 0o600);
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = dir;
+}
+
+/// Writes `data` to a new file at `path` for its owner alone (Linux: 0600).
+fn write_private(path: &Path, data: &[u8]) -> io::Result<()> {
+    use std::io::Write;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)?.write_all(data)
+}
+
 #[cfg(windows)]
 fn documents() -> PathBuf {
     use windows::Win32::System::Com::CoTaskMemFree;
@@ -277,7 +345,7 @@ pub fn write_text(path: &Path, paragraphs: &[Paragraph]) -> io::Result<PathBuf> 
         .collect();
     let to = text_path(path);
     let part = to.with_extension("txt.part");
-    std::fs::write(&part, body.join("\n\n") + "\n")?;
+    write_private(&part, (body.join("\n\n") + "\n").as_bytes())?;
     std::fs::rename(&part, &to)?;
     Ok(to)
 }
@@ -528,6 +596,41 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn memos_are_private_to_their_owner() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        let base = temp("private");
+        let dir = base.join("Documents").join("kyrr");
+        create_folder(&dir).unwrap();
+        assert_eq!(mode(&dir), 0o700);
+
+        // A text is written for its owner alone.
+        let memo = dir.join("2026-10-21 18-05 Milch.opus");
+        let path = write_text(
+            &memo,
+            &[Paragraph {
+                seconds: 0,
+                text: "Milch".into(),
+            }],
+        )
+        .unwrap();
+        assert_eq!(mode(&path), 0o600);
+
+        // An older folder and its memos are closed.
+        let old = dir.join("2026-10-20 09-00 Alt.opus");
+        std::fs::write(&old, b"x").unwrap();
+        std::fs::write(text_path(&old), "[0:00] alt\n").unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::set_permissions(&old, std::fs::Permissions::from_mode(0o644)).unwrap();
+        make_private(&dir);
+        assert_eq!(mode(&dir), 0o700);
+        assert_eq!(mode(&old), 0o600);
+        assert_eq!(mode(&text_path(&old)), 0o600);
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
