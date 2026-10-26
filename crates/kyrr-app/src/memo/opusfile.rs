@@ -56,7 +56,15 @@ impl Writer {
         encoder.set_signal(opus::Signal::Voice).map_err(err)?;
         let lookahead = encoder.get_lookahead().map_err(err)?.max(0) as usize;
         let pre_skip = lookahead as u64 * GRANULE_RATE as u64 / rate as u64;
-        let file = std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        // A recording is private: the owner alone may read it.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let file = options.open(path)?;
         let serial = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(1, |d| d.subsec_nanos() ^ d.as_secs() as u32);

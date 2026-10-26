@@ -107,11 +107,13 @@ impl Memos {
         dictating: Arc<AtomicBool>,
         auto_text: bool,
     ) -> Rc<Memos> {
+        let dir = library::folder();
+        library::make_private(&dir);
         let memos = Rc::new(Memos {
             window: window.as_weak(),
             worker,
             wave,
-            dir: library::folder(),
+            dir,
             language: Cell::new(language),
             active,
             dictating,
@@ -763,7 +765,7 @@ impl Memos {
     }
 
     fn open_folder(&self) {
-        let _ = std::fs::create_dir_all(&self.dir);
+        let _ = library::create_folder(&self.dir);
         let dir = self.dir.clone();
         std::thread::spawn(move || library::open(&dir));
     }
