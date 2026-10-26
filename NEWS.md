@@ -16,6 +16,16 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
+## 0.7.1
+
+- (Windows) General bug fixes.
+- (Linux) Omarchy: during a voice memo the pill shows the recording time again, not odd letters.
+
+### Deutsch
+
+- (Windows) Allgemeine Fehlerbehebungen.
+- (Linux) Omarchy: bei einer Sprachaufzeichnung zeigt die Pille wieder die Aufnahmezeit statt seltsamer Buchstaben.
+
 ## 0.7.0
 
 - Voice memos: the pill shows how long the recording has been running.

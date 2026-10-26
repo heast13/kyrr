@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1 (2026-10-26)
+
+- Omarchy: the voice memo time in the pill showed wrong letters in the
+  theme's font; it is drawn in the theme's font now.
+
 ## 0.7.0 (2026-10-26)
 
 - Omarchy: kyrr becomes one of Omarchy's dictation programs (Omarchy 4.5+).
