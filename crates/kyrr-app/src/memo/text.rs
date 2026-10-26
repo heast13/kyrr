@@ -76,10 +76,10 @@ pub fn write(
                 return Ok(Done::Cancelled);
             }
             let started = Instant::now();
-            let paragraph = model.paragraph(&mut paragraphs);
+            let piece = model.paragraph(&mut paragraphs);
             busy += started.elapsed();
-            let Some(paragraph) = paragraph else { break };
-            found.push(paragraph);
+            let Some(piece) = piece else { break };
+            found.extend(piece);
             heard = true;
         }
         working += busy;

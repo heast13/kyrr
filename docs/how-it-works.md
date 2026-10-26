@@ -144,8 +144,11 @@ The list plays, renames, shows in the folder or deletes memos. A dot beside
 "Recordings" on the main page shows a recording you have not looked at yet.
 
 "Write text" transcribes the whole memo in pieces of half a minute, cut at a
-pause, and saves the text beside it as `… Title.txt`, one paragraph per piece
-with where it starts and when it was said (`[1:30 · 14:06] …`). The text
+pause, puts the words back into one stream and saves the text beside it as
+`… Title.txt`. A new paragraph starts only where a sentence ends and you
+paused (after a longer pause even a short paragraph ends, and a paragraph of
+25 seconds ends at the next sentence end), not in the middle of a sentence (only a speech of a minute without any sentence end is cut at its longest pause).
+Each paragraph has where it starts and when it was said (`[1:30 · 14:06] …`). The text
 opens in a field: select and copy as you like (the times never go along),
 correct it (it saves itself, in the file too), show the times as position,
 time of day or not at all, and "Play from here" plays from the paragraph the
