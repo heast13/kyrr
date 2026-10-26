@@ -75,6 +75,14 @@
     <keyword>speech to text</keyword>
   </keywords>
   <releases>
+    <release version="0.7.1" date="2026-10-26">
+      <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.7.1</url>
+      <description>
+        <ul>
+          <li>Omarchy: the pill shows the voice memo time again, not odd letters</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.7.0" date="2026-10-26">
       <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.7.0</url>
       <description>
