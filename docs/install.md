@@ -9,6 +9,7 @@ the requirements, notes for each Linux desktop, updates and uninstalling.
   - [Desktop notes](#desktop-notes)
   - [Start at sign-in and updates](#start-at-sign-in-and-updates)
   - [Uninstall on Linux](#uninstall-on-linux)
+- [Omarchy](#omarchy)
 
 ## Windows
 
@@ -36,7 +37,8 @@ speech models.
 ## Linux
 
 The Linux version works, but has been tested on fewer systems than the
-Windows version. One file, an AppImage, for every distribution.
+Windows version. One file, an AppImage, for every distribution. On Omarchy, use the
+[Omarchy plugin](#omarchy) instead.
 
 **With a terminal.** Paste this; it downloads kyrr, makes it executable and
 starts it:
@@ -129,3 +131,12 @@ another program under Setup > Defaults > Dictation and remove the bar widget
 with `omarchy plugin remove io.github.heast13.kyrr`; on GNOME,
 delete the "kyrr" and "kyrr: voice memo" entries under Custom Shortcuts in
 the keyboard settings. Your voice memos stay in Documents/kyrr.
+
+## Omarchy
+
+On Omarchy 4.0 or newer kyrr is a plugin for the bar. It has no window and
+no tray icon there: the bar's menu does everything the window does. Install
+it with the one command in the [README](../README.md#omarchy). The plugin
+lives in [omarchy-kyrr](https://github.com/heast13/omarchy-kyrr); it fetches
+kyrr's AppImage from the latest release, checks it against that release's
+`.sha256` file and starts it.

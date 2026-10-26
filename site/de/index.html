@@ -93,7 +93,7 @@
     <section class="steps" aria-labelledby="h-how">
       <h2 class="section-title" id="h-how">Funktionsweise</h2>
       <ol>
-        <li><b>Installation.</b> Windows: ein Installationsprogramm, das Administratorrechte braucht. Linux: eine einzelne AppImage-Datei, ohne Administratorrechte. Beim ersten Start richtet sich kyrr selbst ein.</li>
+        <li><b>Installation.</b> Windows: ein Installationsprogramm, das Administratorrechte braucht. Linux: eine einzelne AppImage-Datei, ohne Administratorrechte. Omarchy: ein Plugin für die Leiste, mit einem Befehl. Beim ersten Start richtet sich kyrr selbst ein.</li>
         <li><b>Ton.</b> Unter Windows fügt kyrr dem Windows-Audiosystem einen Filter hinzu, der direkt am Mikrofon arbeitet. Unter Linux legt kyrr ein PipeWire-Mikrofon namens „kyrr“ an und macht es zum Standard. Deine Apps brauchen keine Änderung. Wechselst du das Mikrofon, wechselt kyrr mit.</li>
         <li><b>Diktierfunktion.</b> Beim ersten Diktieren lädt kyrr einmalig das Sprachmodell für deine Sprache herunter (Deutsch 900 MB, Englisch 663 MB, andere europäische Sprachen 900 MB). Danach funktioniert das Diktieren offline.</li>
         <li><b>Updates.</b> kyrr sucht einmal täglich nach einer neuen Version und zeigt sie an. Unter Windows installiert „Aktualisieren“ sie. Unter Linux führst du die Installationsbefehle erneut aus; ein laufendes kyrr wird durch die neue Version ersetzt.</li>
@@ -138,7 +138,7 @@
 <section class="download" id="download" aria-labelledby="h-download">
   <div class="wrap">
     <h2 id="h-download">Herunterladen</h2>
-    <p class="lead">Kostenlos. Quellcode auf GitHub unter MIT oder Apache 2.0.</p>
+    <p class="lead">Kostenlos. Drei Versionen: Windows, Linux und Omarchy. Quellcode auf GitHub unter MIT oder Apache 2.0.</p>
     <div data-tabs>
       <div class="panel" id="windows" data-label="Windows">
         <h3>Windows</h3>
@@ -154,7 +154,7 @@
 
       <div class="panel" id="appimage" data-label="Linux (Beta)">
         <h3>Linux (Beta)</h3>
-        <p class="small">Die Linux-Version ist noch eine Beta: Sie läuft, ist aber auf weniger Systemen getestet als die Windows-Version.</p>
+        <p class="small">Die Linux-Version ist noch eine Beta: Sie läuft, ist aber auf weniger Systemen getestet als die Windows-Version. Auf Omarchy stattdessen den Reiter Omarchy nutzen.</p>
         <p>Kopier das in ein Terminal. Es lädt kyrr nach <code>~/.local/bin</code>, macht es ausführbar und startet es. Für ein Update einfach nochmal einfügen: ein laufendes kyrr schließt sich und die neue Version startet.</p>
         <div class="codebox"><pre tabindex="0"><code>mkdir -p ~/.local/bin
 curl -fL -o ~/.local/bin/kyrr.new https://github.com/heast13/kyrr/releases/latest/download/kyrr-x86_64.AppImage && chmod +x ~/.local/bin/kyrr.new && mv -f ~/.local/bin/kyrr.new ~/.local/bin/kyrr
@@ -177,6 +177,13 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
             <p class="small">Die letzte Zeile löscht auch deine Einstellungen und die Sprachmodelle. Lass sie weg, wenn du sie behalten willst.</p>
           </details>
         </div>
+      </div>
+
+      <div class="panel" id="omarchy" data-label="Omarchy">
+        <h3>Omarchy</h3>
+        <p>Für Omarchy ab Version 4.0. kyrr ist dort ein Plugin für die Leiste: dieselbe App, mit einem Menü im Omarchy-Stil und ohne eigenes Fenster. Kopier das in ein Terminal:</p>
+        <div class="codebox"><pre tabindex="0"><code>omarchy plugin add https://github.com/heast13/omarchy-kyrr.git --enable</code></pre></div>
+        <p class="small">Danach auf das kyrr-Symbol in der Leiste klicken. Das Menü installiert kyrr für dich und startet die Einrichtung. <a href="https://github.com/heast13/omarchy-kyrr">Details auf GitHub (Englisch)</a></p>
       </div>
     </div>
     <p class="made-with"><a href="https://slint.dev"><img src="../made-with-slint.png" width="141" height="65" alt="Made with Slint"></a></p>
@@ -221,6 +228,7 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
       <a href="https://github.com/heast13/kyrr">GitHub</a>
       <a href="https://github.com/heast13/kyrr#readme">README</a>
       <a href="https://github.com/heast13/kyrr/releases/latest">Releases</a>
+      <a href="https://github.com/heast13/omarchy-kyrr">Omarchy</a>
       <a href="https://github.com/heast13/kyrr#privacy">Datenschutz</a>
     </p>
     <p>Freie Software unter MIT oder Apache 2.0. Diese Website setzt keine Cookies und verwendet keine Tracker; eine Sprachwahl wird nur in deinem Browser gespeichert.</p>

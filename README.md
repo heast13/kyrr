@@ -40,6 +40,14 @@ and there is no account.
 
 More about each part in [How kyrr works](docs/how-it-works.md).
 
+## Three versions
+
+kyrr is the same app in three versions:
+
+- **Windows:** the installer, see [Windows](#windows) below.
+- **Linux:** one AppImage for most desktops (beta), see [Linux](#install-on-linux).
+- **Omarchy:** a plugin for Omarchy's bar, see [Omarchy](#omarchy).
+
 ## Install
 
 ### Windows
@@ -75,6 +83,18 @@ Needs a 64-bit Intel or AMD PC with Ubuntu 24.04, Fedora 40, Debian 13, Linux
 Mint 22, Arch or newer, and PipeWire. Notes for GNOME, KDE, Hyprland and other
 desktops, updates and uninstalling: [installation
 details](docs/install.md).
+
+### Omarchy
+
+For Omarchy 4.0 or newer, kyrr is a plugin for the bar, with its menu in
+Omarchy's own style and no window of its own. One command in a terminal:
+
+```sh
+omarchy plugin add https://github.com/heast13/omarchy-kyrr.git --enable
+```
+
+Then click the kyrr icon in the bar. The menu installs kyrr for you. Details
+in [kyrr for Omarchy](https://github.com/heast13/omarchy-kyrr).
 
 ## Getting started
 
