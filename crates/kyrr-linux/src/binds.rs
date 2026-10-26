@@ -386,7 +386,7 @@ fn quoted(s: &str) -> String {
 }
 
 /// `s` as one word for a shell.
-fn sh_quoted(s: &str) -> String {
+pub(crate) fn sh_quoted(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
@@ -573,7 +573,7 @@ fn put_block(target: &Target, block: Block, lines: Option<&str>) -> Result<bool,
 
 /// Replaces the file's content in one step, so a crash leaves the old file.
 /// A new file (sway's first own config) gets the folder made.
-fn write_over(path: &Path, text: &str) -> std::io::Result<()> {
+pub(crate) fn write_over(path: &Path, text: &str) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }

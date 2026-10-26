@@ -53,6 +53,19 @@ pub fn xkb_name(vk: u32) -> Option<String> {
     }
 }
 
+/// The key an X keysym name stands for, the other way round from
+/// [`xkb_name`]: allowed keys only.
+pub fn from_xkb_name(name: &str) -> Option<u32> {
+    let vk = match name {
+        "Pause" => PAUSE,
+        "Scroll_Lock" => SCROLL_LOCK,
+        "Control_R" => RIGHT_CTRL,
+        "Menu" => MENU,
+        _ => FIRST_F + name.strip_prefix('F')?.parse::<u32>().ok()?.checked_sub(1)?,
+    };
+    allowed(vk).then_some(vk)
+}
+
 /// What the key is called on screen. `german` for the German names.
 pub fn label(vk: u32, german: bool) -> String {
     match vk {
@@ -77,6 +90,16 @@ pub fn busy(vk: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_both_ways() {
+        for vk in (FIRST_F..=LAST_F).chain([PAUSE, SCROLL_LOCK, RIGHT_CTRL, MENU]) {
+            assert_eq!(from_xkb_name(&xkb_name(vk).unwrap()), Some(vk));
+        }
+        assert_eq!(from_xkb_name("F25"), None);
+        assert_eq!(from_xkb_name("F0"), None);
+        assert_eq!(from_xkb_name("a"), None);
+    }
 
     #[test]
     fn the_tables_agree() {

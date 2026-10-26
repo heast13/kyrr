@@ -17,6 +17,9 @@
 //! Towards the end of the longest dictation the bars turn yellow, then
 //! red; at the end kyrr types what it has and the pill says so in red.
 //!
+//! On Omarchy the pill takes its look (see [`Skin`]): a square box in the
+//! theme's colours with a frame, like Omarchy's own on-screen display.
+//!
 //! The drawing is done here, in plain Rust, so Windows and Linux show the
 //! same picture; each system only puts the pixels on the screen (a
 //! [`Surface`]). The surface is opened for each dictation and closed after
@@ -24,10 +27,10 @@
 
 use std::f32::consts::TAU;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock, RwLock};
 use std::time::{Duration, Instant};
 
-use ab_glyph::{point, Font, FontRef, PxScale, ScaleFont};
+use ab_glyph::{point, Font, FontArc, FontRef, PxScale, ScaleFont};
 
 /// The picture's size in logical pixels: room for the pill at its widest,
 /// with words in it. Around the pill it is clear.
@@ -56,9 +59,55 @@ const BAR_MIN_SMALL: f32 = 5.0;
 const BAR_MAX_SMALL: f32 = 28.0;
 
 /// Inter Medium, cut down to the Latin letters (see `fonts/OFL.txt`).
-static FONT: LazyLock<FontRef<'static>> = LazyLock::new(|| {
-    FontRef::try_from_slice(include_bytes!("../fonts/Inter-Medium.ttf")).expect("the bundled font is valid")
+static FONT: LazyLock<FontArc> = LazyLock::new(|| {
+    FontArc::new(
+        FontRef::try_from_slice(include_bytes!("../fonts/Inter-Medium.ttf")).expect("the bundled font is valid"),
+    )
 });
+
+/// The desktop's look instead of kyrr's own (Omarchy): its theme's colours,
+/// square corners with a 2 px frame, as its on-screen display has, and its
+/// font. Colours as red, green and blue, 0..255.
+#[derive(Clone)]
+pub struct Skin {
+    pub background: [u8; 3],
+    pub frame: [u8; 3],
+    pub bars: [u8; 3],
+    pub text: [u8; 3],
+    pub yellow: [u8; 3],
+    pub red: [u8; 3],
+    pub font: Option<FontArc>,
+}
+
+impl Skin {
+    /// A font file's bytes as the words' font; None when it does not read.
+    pub fn font_from(bytes: Vec<u8>) -> Option<FontArc> {
+        FontArc::try_from_vec(bytes).ok()
+    }
+}
+
+static SKIN: RwLock<Option<Arc<Skin>>> = RwLock::new(None);
+
+/// Sets the look from the next picture on; None for kyrr's own.
+pub fn set_skin(skin: Option<Skin>) {
+    *SKIN.write().unwrap_or_else(std::sync::PoisonError::into_inner) = skin.map(Arc::new);
+}
+
+fn skin() -> Option<Arc<Skin>> {
+    SKIN.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
+}
+
+static MODE_HOOK: std::sync::OnceLock<fn(Mode)> = std::sync::OnceLock::new();
+
+/// Tells `hook` each mode the wave is set to (Omarchy's bar shows it); once.
+pub fn on_mode(hook: fn(Mode)) {
+    let _ = MODE_HOOK.set(hook);
+}
+
+/// The words' font: the look's, or kyrr's own.
+fn font() -> FontArc {
+    skin().and_then(|l| l.font.clone()).unwrap_or_else(|| FONT.clone())
+}
 
 /// Size of the words, logical pixels.
 const TEXT_SIZE: f32 = 16.0;
@@ -248,7 +297,8 @@ fn clock_width(seconds: u32) -> f32 {
 
 /// Width of `text` in logical pixels.
 fn measure(text: &str) -> f32 {
-    let font = FONT.as_scaled(PxScale::from(TEXT_SIZE));
+    let font = font();
+    let font = font.as_scaled(PxScale::from(TEXT_SIZE));
     let mut width = 0.0;
     let mut last = None;
     for c in text.chars() {
@@ -702,7 +752,23 @@ impl Wave {
         pixels.clear();
         pixels.resize((width * height) as usize, 0);
         let (w, h) = (WIDTH as f32, HEIGHT as f32);
-        let colors = if self.dark { &DARK } else { &LIGHT };
+        let skin = skin();
+        let themed = skin.as_ref().map(|l| {
+            let c = |rgb: [u8; 3], a: f32| [rgb[0] as f32 / 255.0, rgb[1] as f32 / 255.0, rgb[2] as f32 / 255.0, a];
+            Colors {
+                background: c(l.background, 0.97),
+                edge: c(l.frame, 1.0),
+                bar: c(l.bars, 1.0),
+                text: c(l.text, 1.0),
+                yellow: c(l.yellow, 1.0),
+                red: c(l.red, 1.0),
+            }
+        });
+        let colors = themed.as_ref().unwrap_or(if self.dark { &DARK } else { &LIGHT });
+        // kyrr's own pill is round with a hairline; Omarchy's is square
+        // with its frame, and square bars.
+        let square = skin.is_some();
+        let frame = if square { 2.0 } else { 1.0 };
         let bar_color = if self.look == Mode::Recording {
             colors.red
         } else {
@@ -738,10 +804,9 @@ impl Wave {
         // The pill's body, as it is without bars and words, is the same along
         // a row wherever the ends are not round: worked out once per row.
         let (half_width, half_height) = (pill / 2.0, h / 2.0);
-        let radius = half_height.min(half_width);
-        // Deep inside the pill, away from the hairline, every pixel is the
-        // same.
-        let deep = -(1.0 + 0.5 / scale) - 1e-3;
+        let radius = if square { 0.0 } else { half_height.min(half_width) };
+        // Deep inside the pill, away from the frame, every pixel is the same.
+        let deep = -(frame + 0.5 / scale) - 1e-3;
         let shell = |d: f32| {
             let inside = coverage(d, scale);
             if inside <= 0.0 {
@@ -749,8 +814,8 @@ impl Wave {
             }
             let mut color = [0.0f32; 4];
             over(&mut color, colors.background, inside);
-            // A hairline just inside the edge.
-            over(&mut color, colors.edge, inside - coverage(d + 1.0, scale));
+            // A line just inside the edge.
+            over(&mut color, colors.edge, inside - coverage(d + frame, scale));
             Some((color, inside))
         };
         let (interior, _) = shell(-100.0).unwrap_or_default();
@@ -787,15 +852,15 @@ impl Wave {
                 mask | u16::from((cy.abs() - half) * scale < 0.5) << i
             });
             // Straight stretch of the pill: its distance is the same all along.
-            let body = (cy.abs() - half_height + radius >= 0.0)
-                .then(|| rounded_box(0.0, cy, half_width, half_height, half_height));
+            let body =
+                (cy.abs() - half_height + radius >= 0.0).then(|| rounded_box(0.0, cy, half_width, half_height, radius));
             for px in near.clone() {
                 // The pixel's centre in logical pixels, from the middle.
                 let x = columns[px as usize];
                 let cx = x - w / 2.0;
                 let d = match body {
                     Some(d) if straight[px as usize] => d,
-                    _ => rounded_box(cx, cy, half_width, half_height, half_height),
+                    _ => rounded_box(cx, cy, half_width, half_height, radius),
                 };
                 let (first, last, mask) = touched[px as usize];
                 let ink = text.as_ref().map_or(0.0, |text| text[(py * width + px) as usize]);
@@ -812,7 +877,7 @@ impl Wave {
                         continue;
                     }
                     let r = bar_width / 2.0;
-                    let bar = coverage(rounded_box(x - bx, cy, r, half, r), scale);
+                    let bar = coverage(rounded_box(x - bx, cy, r, half, if square { 0.0 } else { r }), scale);
                     over(&mut color, bar_color, bar);
                 }
                 if ink > 0.0 {
@@ -833,7 +898,8 @@ impl Wave {
         }
         let mut ink = vec![0.0f32; (width * height) as usize];
         let size = PxScale::from(TEXT_SIZE * scale);
-        let font = FONT.as_scaled(PxScale::from(TEXT_SIZE));
+        let face = font();
+        let font = face.as_scaled(PxScale::from(TEXT_SIZE));
         // Capitals sit in the middle of the pill.
         let baseline = HEIGHT as f32 / 2.0 + (font.ascent() + font.descent()) / 2.0;
         if let Some(seconds) = clock {
@@ -888,7 +954,7 @@ impl Wave {
                 };
                 let glyph = id.with_scale_and_position(size, point(pen * scale, (baseline + rise) * scale));
                 pen += font.h_advance(id);
-                let Some(outline) = FONT.outline_glyph(glyph) else {
+                let Some(outline) = face.outline_glyph(glyph) else {
                     continue;
                 };
                 let bounds = outline.px_bounds();
@@ -1006,6 +1072,9 @@ impl Overlay {
     }
 
     pub fn set(&self, mode: Mode) {
+        if let Some(hook) = MODE_HOOK.get() {
+            hook(mode);
+        }
         let _ = self.tx.send(Message::Mode(mode));
     }
 

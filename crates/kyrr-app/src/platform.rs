@@ -300,6 +300,8 @@ mod imp {
 
     pub fn set_key_wanted(_wanted: bool) {}
 
+    pub fn join_omarchy(_german: bool, _wanted: bool) {}
+
     pub fn enable_autostart() {
         if !autostart::is_enabled() {
             let _ = autostart::enable();
@@ -363,6 +365,18 @@ mod imp {
 
     pub fn has_tray() -> bool {
         true
+    }
+
+    pub fn widget_shown() -> bool {
+        false
+    }
+
+    pub fn headless() -> bool {
+        false
+    }
+
+    pub fn take_widget_edit() -> Option<(String, String)> {
+        None
     }
 
     pub fn can_minimize() -> bool {
@@ -737,6 +751,7 @@ mod imp {
 
     /// Gives the default microphone back before kyrr ends.
     pub fn shutdown() {
+        kyrr_linux::omarchy::clear_state();
         let filter = std::mem::replace(&mut state().filter, Filter::Off);
         // Without the lock: this waits for PipeWire a moment.
         drop(filter);
@@ -794,10 +809,25 @@ mod imp {
         kyrr_linux::overlay::open()
     }
 
-    /// Whether the desktop shows kyrr's tray icon: a tray host is on the
-    /// bus.
+    /// Whether something in the panel brings kyrr back once its window is
+    /// closed: a tray, or kyrr's widget in Omarchy's bar.
     pub fn has_tray() -> bool {
-        kyrr_linux::tray::available()
+        widget_shown() || kyrr_linux::tray::available()
+    }
+
+    pub fn widget_shown() -> bool {
+        kyrr_linux::omarchy::widget_shown()
+    }
+
+    /// On Omarchy with kyrr's widget in the bar: the widget's menu is all
+    /// of kyrr, which has no window or tray icon there.
+    pub fn headless() -> bool {
+        kyrr_linux::omarchy::plugin_on()
+    }
+
+    /// What the widget's menu typed into the open recording's text.
+    pub fn take_widget_edit() -> Option<(String, String)> {
+        kyrr_linux::omarchy::take_edit()
     }
 
     /// Whether the desktop minimizes windows. Tiling compositors (Hyprland,
@@ -1134,6 +1164,30 @@ mod imp {
     }
 
     static KEY_WANTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+    /// Puts kyrr among Omarchy's dictation programs (Omarchy 4.5 on), in
+    /// the background: its menu row and scripts speak the user's language,
+    /// and with dictation on kyrr takes Omarchy's keys where nothing has
+    /// them. Once per language and switch, not on each refresh.
+    pub fn join_omarchy(german: bool, wanted: bool) {
+        static DONE: std::sync::Mutex<Option<(bool, bool)>> = std::sync::Mutex::new(None);
+        if Compositor::detect() != Some(Compositor::Hyprland) || !kyrr_linux::omarchy::takes_dictation() {
+            return;
+        }
+        {
+            let mut done = DONE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            if *done == Some((german, wanted)) {
+                return;
+            }
+            *done = Some((german, wanted));
+        }
+        let program = program().remove(0);
+        std::thread::spawn(move || {
+            if kyrr_linux::omarchy::join_dictation(&program, german, wanted) {
+                eprintln!("kyrr: Omarchy's dictation keys now use kyrr");
+            }
+        });
+    }
     type Memo<K, O> = std::sync::Mutex<Option<(K, O)>>;
     static COMPOSITOR: Memo<(Compositor, binds::Keys), binds::Outcome> = std::sync::Mutex::new(None);
     static GNOME: Memo<(String, String), gnome::Outcome> = std::sync::Mutex::new(None);

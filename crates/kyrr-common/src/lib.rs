@@ -7,6 +7,29 @@ pub mod keys;
 pub mod mic_move;
 pub mod wave;
 
+/// What a second start of kyrr, or Omarchy's bar widget, asks the running
+/// kyrr for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Request {
+    Show,
+    ToggleFilter,
+    ToggleVoice,
+    ToggleDictation,
+    ToggleMemos,
+    ToggleMemo,
+    OpenMemos,
+    InstallUpdate,
+    /// The widget's menu opened (true, repeated while open) or closed.
+    WidgetOpen(bool),
+    /// A page of the window: 1 Setup, 2 to 5 a main card's settings.
+    OpenPage(i32),
+    Quit,
+    /// A line from the menu of kyrr's widget in Omarchy's bar, which is all
+    /// of kyrr there: a setting to change or a step to take, such as
+    /// `set filter.strength 2` or `memo play <name>`.
+    Line(String),
+}
+
 /// COM class of kyrr's audio processing object.
 pub const APO_CLSID: u128 = 0xfce4df8f_fc7f_4164_be4a_c3e4a078cfb2;
 

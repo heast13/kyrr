@@ -11,6 +11,7 @@ pub mod gnome;
 pub mod hotkey;
 pub mod instance;
 pub mod mic;
+pub mod omarchy;
 pub mod overlay;
 pub mod pipewire_setup;
 pub mod signals;

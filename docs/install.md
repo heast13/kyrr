@@ -79,6 +79,16 @@ Either way kyrr adds itself to your app menu on its first start.
   your key bindings itself, in a block of its own that it keeps up to date,
   and the start at sign-in too where the session does not start XDG
   autostart entries.
+- **Omarchy:** kyrr takes on the look of your Omarchy theme (colours, square
+  corners, its font) and changes with it. On Omarchy 4.5 and newer it is also
+  one of Omarchy's dictation programs (Setup > Defaults > Dictation), so
+  Omarchy's own dictation keys use kyrr. With dictation on, kyrr picks itself
+  when no dictation program is chosen or the chosen one is not installed.
+  For Omarchy's bar there is a widget with kyrr's menu, which also installs
+  kyrr: `omarchy plugin add https://github.com/heast13/omarchy-kyrr.git
+  --enable`. While it is in the bar, kyrr has no tray icon and its window no
+  buttons to hide or quit: the widget's menu opens it, and turning the plugin
+  off in Omarchy's menu (Setup > Plugins) quits kyrr too.
 - **X11 desktops (Linux Mint, XFCE):** the keys just work.
 - **Without a tray icon** the window's X minimizes kyrr where the desktop can
   bring it back (GNOME, say) and quits it on tiling ones; "Quit" always ends
@@ -111,6 +121,11 @@ leave it out to keep them. Used a different place for the file? Delete that
 instead of `~/.local/bin/kyrr`.
 
 On Hyprland, Sway, river and niri, delete the blocks between the `>>> kyrr`
-and `<<< kyrr` lines (keys and start at sign-in) from your config; on GNOME,
+and `<<< kyrr` lines (keys and start at sign-in) from your config. On
+Omarchy, also delete `~/.local/bin/omarchy-dictation-kyrr` and
+`~/.local/bin/omarchy-install-dictation-kyrr`, the block between `>>> kyrr`
+and `<<< kyrr` in `~/.config/omarchy/extensions/omarchy-menu.jsonc`, pick
+another program under Setup > Defaults > Dictation and remove the bar widget
+with `omarchy plugin remove io.github.heast13.kyrr`; on GNOME,
 delete the "kyrr" and "kyrr: voice memo" entries under Custom Shortcuts in
 the keyboard settings. Your voice memos stay in Documents/kyrr.

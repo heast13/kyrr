@@ -216,6 +216,95 @@ impl Memos {
         }
     }
 
+    /// Which memo the commands of the widget in Omarchy's bar mean: they
+    /// name it by its file, which stays put while the list changes.
+    pub fn index_of(&self, name: &str) -> Option<i32> {
+        self.shown
+            .borrow()
+            .iter()
+            .position(|p| p.file_name().is_some_and(|n| n.to_string_lossy() == name))
+            .map(|i| i as i32)
+    }
+
+    /// The memo whose text the widget's menu shows, by its file's name:
+    /// the same text view as in the window, which the menu draws instead.
+    pub fn show_in_widget(self: &Rc<Self>, name: Option<&str>) {
+        match name.and_then(|n| self.index_of(n)) {
+            Some(i) => self.show_text(i),
+            None => {
+                self.close_text();
+                *self.sheet.borrow_mut() = None;
+                self.show_list();
+            }
+        }
+    }
+
+    /// The file name of the memo whose text is open.
+    pub fn sheet_name(&self) -> Option<String> {
+        self.sheet
+            .borrow()
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+    }
+
+    /// The same, "" for none.
+    #[cfg(target_os = "linux")]
+    pub fn sheet_id(&self) -> String {
+        self.sheet_name().unwrap_or_default()
+    }
+
+    /// Whether the memo with this file name plays now.
+    #[cfg(target_os = "linux")]
+    fn playing(&self, path: &Path) -> bool {
+        self.player.borrow().as_ref().is_some_and(|p| p.path() == path)
+    }
+
+    /// The list for the widget in Omarchy's bar, newest first, as the search
+    /// finds it.
+    #[cfg(target_os = "linux")]
+    pub fn widget_list(&self) -> serde_json::Value {
+        let all = self.all.borrow();
+        let texts = self.texts.borrow();
+        let titling = self.titling.borrow();
+        let shown = self.shown.borrow();
+        let list: Vec<serde_json::Value> = all
+            .iter()
+            .filter(|m| shown.contains(&m.path))
+            .map(|m| {
+                let (text, progress, left) = match texts.get(&m.path) {
+                    Some(Text::Waiting) => ("writing", 0.0, String::new()),
+                    Some(Text::Writing(done, left)) => {
+                        ("writing", *done, left.map(|l| self.left(l)).unwrap_or_default())
+                    }
+                    Some(Text::Failed | Text::NoModel) => ("failed", 0.0, String::new()),
+                    _ if m.text.is_some() => ("ready", 1.0, String::new()),
+                    _ => ("none", 0.0, String::new()),
+                };
+                serde_json::json!({
+                    "id": m.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                    "title": m.title,
+                    "when": self.date(m.when),
+                    "length": library::clock(m.seconds.round() as u32),
+                    "pending": titling.contains(&m.path),
+                    "text": text,
+                    "progress": progress,
+                    "left": left,
+                    "isNew": m.saved > self.seen.get(),
+                    "waiting": matches!(texts.get(&m.path), Some(Text::Waiting)),
+                    "playing": self.playing(&m.path),
+                })
+            })
+            .collect();
+        list.into()
+    }
+
+    /// The folder the memos' folder is in, as people know it: "Dokumente".
+    #[cfg(target_os = "linux")]
+    pub fn widget_folder(&self) -> String {
+        self.folder_name()
+    }
+
     /// Whether texts can be written: the speech model is on the computer.
     pub fn set_can_write(&self, can: bool) {
         if let Some(w) = self.window.upgrade() {
@@ -363,8 +452,12 @@ impl Memos {
         let query = state.get_memo_query().to_lowercase();
         let query = query.trim();
         let all = self.all.borrow();
+        let sheet = self.sheet.borrow().clone();
+        // The one whose text is open stays, also when a correction or a new
+        // title no longer matches the search.
         let fits = |m: &Memo| {
             query.is_empty()
+                || sheet.as_ref() == Some(&m.path)
                 || m.title.to_lowercase().contains(query)
                 || m.text
                     .as_ref()
@@ -841,7 +934,10 @@ impl Memos {
             return;
         };
         w.global::<AppState>().set_memo_sheet_open(true);
-        crate::fit_sheet(&w, true);
+        // In Omarchy's bar the menu shows it; the window stays as it is.
+        if !crate::headless() {
+            crate::fit_sheet(&w, true);
+        }
     }
 
     /// Fills the big text view with the memo it is open for.
@@ -881,7 +977,9 @@ impl Memos {
         self.watching.stop();
         if let Some(w) = self.window.upgrade() {
             w.global::<AppState>().set_memo_sheet_open(false);
-            crate::fit_sheet(&w, false);
+            if !crate::headless() {
+                crate::fit_sheet(&w, false);
+            }
         }
     }
 

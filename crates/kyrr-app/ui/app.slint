@@ -2,7 +2,7 @@
 // first-run setup or the main panel. All texts are English source strings
 // translated through the bundled translations in ui/lang.
 
-import { Button, ComboBox, Switch, Slider, ProgressIndicator, ScrollView, LineEdit, Palette } from "std-widgets.slint";
+import { Button as SystemButton, ComboBox, Switch as SystemSwitch, Slider, ProgressIndicator as SystemProgress, ScrollView, LineEdit, Palette } from "std-widgets.slint";
 
 // detached: Windows (an update, a driver) took kyrr off the microphone.
 // unsupported: this PC cannot run the filter (Windows on ARM, Linux without
@@ -30,548 +30,213 @@ export struct MemoItem {
     text-left: string,
 }
 
-export global AppState {
-    // Noise removal
-    in-out property <bool> filter-enabled: true;
-    in-out property <int> strength-index: 1; // 0 gentle, 1 medium, 2 strong
-    in property <bool> model-switching;
-    // The filter fell back to ONNX Runtime: the CPU lacks AVX2, Lean suits it.
-    in property <bool> old-cpu;
-    // The computer could not keep up with the noise model (see OverloadNote).
-    in-out property <OverloadNote> overload-note;
-    // Switch to Lean by itself then.
-    in-out property <bool> auto-lean: true;
-    // Lean and best quality set the noise model and the words while you
-    // talk at once: 0 lean, 1 best quality, 2 a mix of the two.
-    in-out property <int> effort-index: 1;
-    // Linux: the filter is kyrr's own microphone, there is no installer, and
-    // the desktop may have no tray.
-    in property <bool> linux;
-    in property <bool> tray: true;
-    // Without a tray, closing minimizes where the desktop can (not tiling ones).
-    in property <bool> can-minimize: true;
-    in property <FilterState> filter-state: FilterState.checking;
-    in property <string> filter-detail; // technical, not translated
-    in property <[string]> microphones;
-    in-out property <int> mic-index;
-    in property <string> attached-mic;
-    // The filtered microphone is unplugged; this one could take over ("" if none).
-    in property <string> move-to;
-    in property <bool> move-unplugged;
-
-    // The window is up (not hidden in the tray): what only it shows stops
-    // moving while it is away.
-    in property <bool> window-shown;
-    // Live: level and the before/after probe
-    in property <bool> mic-active;
-    // The microphone is in use but delivers nothing at all: muted, most likely.
-    in property <bool> mic-silent;
-    // Windows has the microphone muted.
-    in-out property <bool> mic-muted;
-    // A microphone that just showed up.
-    in property <string> connected-name;
-    in property <float> level-before; // 0..1
-    in property <float> level-after;
-    in property <ProbeState> probe-state: ProbeState.idle;
-    in property <bool> has-probe;
-    in property <string> probe-error;
-    // The mic plays live on the headphones.
-    in property <bool> listening;
-    // The red note at the bottom of the main page, one at a time:
-    // 0 none, 1 mic too quiet, 2 mic too loud, 3 still listening.
-    in property <int> alert;
-
-    // Voice: sound, S sounds and volume, shaped in the audio filter
-    in-out property <bool> voice-enabled: true;
-    in-out property <int> look-index;    // neutral, warm, clear, bright, custom
-    in-out property <float> body-db;     // the custom sound, -6..6 dB
-    in-out property <float> presence-db;
-    in-out property <float> air-db;
-    in-out property <bool> low-cut: true;
-    in-out property <bool> pops;
-    in-out property <bool> distance;
-    in-out property <bool> auto-level;
-    in property <float> level-gain; // what it adds right now, dB
-    // The settings page shows everything, not just the basics.
-    in-out property <int> deesser-index;       // off, light, medium, strong
-    in-out property <int> compressor-index: 2; // off, light, medium, strong
-    in property <bool> voice-is-default: true;
-
-    // Dictation
-    in-out property <bool> dictation-enabled: true;
-    in-out property <int> language-index; // 0 German, 1 English, 2 multilingual
-    in property <DictationState> dictation-state: DictationState.off;
-    in property <float> download-progress;
-    in property <string> download-size;
-    in property <string> last-text;
-    // What dictation has to say (an error, a hint); "" for nothing.
-    in property <string> dictation-message;
-    in-out property <bool> key-toggle;  // tap to start and stop instead of holding
-    in-out property <bool> live-words;  // the wave shows the words while you talk
-    in property <string> key-name: "F9";
-    // Which key field waits for a key: 0 none, 1 dictation, 2 voice memos.
-    in property <int> key-capture;
-    // The key is not the standard one (F9, F8).
-    in property <bool> key-custom;
-    in property <bool> memo-key-custom;
-    // Why the key just pressed was not taken, and a word of warning about one
-    // that was; "" for nothing.
-    in property <string> key-refusal;
-    in property <string> key-warning;
-    // A key field starts (1, 2) or stops (0) waiting; the standard key back.
-    callback capture-key(int);
-    callback key-reset(int);
-    // What the user has to do so the key reaches kyrr (Linux); "" for nothing.
-    in property <string> key-note;
-    // The desktop owns the key (GNOME, KDE): kyrr's choice of key does nothing.
-    in property <bool> key-fixed;
-    // The desktop could own the key but has not bound it (dialog cancelled).
-    in property <bool> key-unbound;
-    // A button for the key in the settings ("Set up key", "Change key"); "" for none.
-    in property <string> key-button;
-    callback key-button-clicked();
-    // The setup walks through the desktop's two questions (GNOME, KDE): the
-    // key and the permission to type.
-    in property <bool> guide;
-    // 0 not asked, 1 the desktop is asking, 2 set up, 3 cancelled.
-    in property <int> key-state;
-    // The key was pressed since it was set up.
-    in property <bool> key-tried;
-    // 0 not asked, 1 the desktop is asking, 2 allowed, 3 not allowed.
-    in property <int> typing-state;
-    callback setup-key();
-    callback allow-typing();
-    // "Check for updates", on request only.
-    in property <UpdateState> update-state;
-    in property <string> update-version;
-    // The new version comes with a short summary of what changed.
-    in property <bool> update-has-news;
-    // The release's installer; "" when it has none (then only the page).
-    in property <bool> update-installable;
-    in property <float> update-progress; // 0..1
-    // The daily check is on; the user closed the note for this version.
-    in-out property <bool> update-auto: true;
-    in property <bool> update-dismissed;
-
-    in-out property <bool> autostart;
-    // PipeWire is missing (Linux): a button that installs it, and what to
-    // say about it ("" for nothing).
-    in property <bool> pipewire-button;
-    in property <string> pipewire-note;
-    callback install-pipewire();
-    // How installing it went, a PipewireStep from Rust.
-    callback pipewire-step(int);
-    in property <string> error-text;
-    in property <string> version;
-
-    // 0 is the main view, 1 the setup, then the settings of each
-    // card: 2 noise, 3 voice, 4 dictation, 5 voice memos; 6 the voice memos
-    // themselves.
-    in-out property <int> page;
-    // Counts up every few seconds; the status line picks its next phrase
-    // from it, so one state does not repeat the same sentence.
-    in property <int> phrase;
-    // False for a moment before the next phrase, so it fades out and in.
-    in property <bool> phrase-visible: true;
-
-    callback filter-toggled(bool);
-    callback strength-changed(int);
-    callback probe-record();
-    callback probe-play(bool); // false before, true after
-    callback probe-reset();
-    callback listen-toggled();
-    callback voice-toggled(bool);
-    callback look-changed(int);
-    callback band-changed(int, float); // 0 body, 1 presence, 2 air
-    callback low-cut-toggled(bool);
-    callback pops-toggled(bool);
-    callback distance-toggled(bool);
-    callback auto-level-toggled(bool);
-    callback deesser-changed(int);
-    callback compressor-changed(int);
-    callback voice-reset();
-    callback attach-microphone(int);
-    callback dictation-toggled(bool);
-    callback language-changed(int);
-    callback download-model();
-    callback cancel-download();
-    callback finish-setup();
-    callback change-microphone();
-    callback autostart-toggled(bool);
-    // Puts the window away, like its close button; kyrr keeps running in the tray.
-    callback hide();
-    // Ends kyrr for good, like the tray menu's "Quit".
-    callback quit-app();
-    // Switches Windows' mute off the microphone.
-    callback unmute();
-    callback page-changed();
-    // A card's gear: its own settings page.
-    public function open-page(p: int) {
-        root.page = p;
-        root.page-changed();
-    }
-    callback dictation-retry();
-    callback repair();
-    callback move-to-default();
-    callback key-toggle-changed(bool);
-    callback live-words-toggled(bool);
-    callback auto-lean-toggled(bool);
-    callback effort-changed(int);
-    callback open-licenses();
-    callback check-updates();
-    callback open-update();
-    callback send-feedback();
-    callback show-news();
-    // What the running version brought (from the NEWS built into the app).
-    callback show-current-news();
-    callback install-update();
-    callback update-auto-toggled(bool);
-    callback dismiss-update();
-    callback skip-setup();
-    callback next-setup();
-
-    // Voice memos
-    in-out property <bool> memos-enabled: true;
-    in property <string> memo-key-name: "F8"; // "" while no key is taken
-    // The memo key whether it is taken or not, for the settings.
-    in property <string> memo-key-label: "F8";
-    // Another shortcut of the user's has the memo key; "" for none.
-    in property <string> memo-key-note;
-    in property <bool> memo-toggle: false;     // tap to start and stop instead of holding
-    // The key's release is reported (not on GNOME 46 and 47, niri).
-    in property <bool> memo-can-hold: true;
-    in property <bool> memo-recording;
-    in property <string> memo-elapsed;
-    in property <[MemoItem]> memo-items;
-    // All memos in the folder, whatever the search shows.
-    in property <int> memo-count;
-    in-out property <string> memo-query;
-    in property <int> memo-playing: -1;
-    in property <float> memo-play-fraction;
-    in property <string> memo-play-time;
-    in-out property <int> memo-confirm: -1;
-    in-out property <int> memo-editing: -1;
-    // The speech model is on the computer: texts can be written.
-    in property <bool> memo-can-write;
-    in-out property <bool> memo-auto-text;
-    in property <string> memo-message;
-    // The big text view: open, for which memo, and what it shows.
-    in-out property <bool> memo-sheet-open;
-    in property <int> memo-sheet-index: -1;
-    in property <string> memo-sheet-title;
-    in property <string> memo-sheet-when;
-    // The text field: the paragraphs, each with the stamp asked for.
-    in-out property <string> memo-sheet-text;
-    // What goes before each paragraph: 0 nothing, 1 how far into the memo,
-    // 2 the time of day.
-    in-out property <int> memo-sheet-stamps;
-    // Every change is on disk.
-    in property <bool> memo-sheet-saved: true;
-    in-out property <bool> memo-copied;
-    // A recording the user has not looked at yet: the dot on the main page.
-    in property <bool> memo-new;
-    callback memos-toggled(bool);
-    callback memo-toggle-changed(bool);
-    callback memo-auto-text-toggled(bool);
-    callback memo-record();
-    callback memo-open-list();
-    callback memo-play(int);
-    // Plays from the paragraph at this place of the text field (a byte offset).
-    callback memo-play-here(int);
-    // Where that paragraph starts, as 1:30; "" when it has no time.
-    pure callback memo-here-label(string, int) -> string;
-    callback memo-sheet-edited(string);
-    callback memo-sheet-stamps-changed(int);
-    callback memo-show(int);
-    callback memo-delete(int);
-    callback memo-rename(int, string);
-    callback memo-write-text(int);
-    callback memo-cancel-text(int);
-    callback memo-show-text(int);
-    callback memo-close-text();
-    // The selection (byte offsets), or all when they are the same.
-    callback memo-copy-text(int, int);
-    callback memo-open-text();
-    callback memo-search(string);
-    callback memo-open-folder();
-}
-
-// Colours for notes: darker on the light theme, so small text keeps its contrast.
-global Tone {
-    out property <color> bad: Palette.color-scheme == ColorScheme.dark ? #ff6369 : #c62a2f;
-    out property <color> good: Palette.color-scheme == ColorScheme.dark ? #3fb950 : #1a7f37;
-}
-
-// The tray has its own properties: globals are per component instance, so
-// the app wires tray and window separately.
-export component Tray inherits SystemTrayIcon {
-    in property <bool> recording;
-    in property <bool> active;
-    in property <bool> filter-enabled;
-    in property <bool> voice-enabled;
-    in property <bool> dictation-enabled;
-    in property <bool> dictation-ready;
-    in property <string> key-name: "F9";
-    in property <bool> memos-enabled;
-    in property <bool> memo-recording;
-    in property <string> memo-key-name;
-    // A newer version found ("" for none).
-    in property <string> update-version;
-    callback open();
-    callback toggle-memo();
-    callback open-memos();
-    callback install-update();
-    callback toggle-filter();
-    callback toggle-voice();
-    callback toggle-dictation();
-    callback quit();
-    icon: recording || memo-recording ? @image-url("icons/kyrr-recording-32.png") : active ? @image-url("icons/kyrr-32.png") : @image-url("icons/kyrr-off-32.png");
-    tooltip: "kyrr · " + (root.memo-recording ? @tr("recording") + " · " : "")
-        + (root.filter-enabled ? @tr("noise filter on") : @tr("noise filter off"))
-        + (root.dictation-ready ? " · " + @tr("{} ready", root.key-name) : "")
-        + (root.update-version != "" ? " · " + @tr("update available") : "");
-    // Some panels list tray icons by title.
-    title: "kyrr";
-    clicked => { root.open(); }
-    Menu {
-        MenuItem {
-            title: @tr("Open kyrr");
-            activated => { root.open(); }
-        }
-        MenuItem {
-            title: root.filter-enabled ? @tr("Isolate your voice: on") : @tr("Isolate your voice: off");
-            activated => { root.toggle-filter(); }
-        }
-        MenuItem {
-            title: root.voice-enabled ? @tr("Improve voice: on") : @tr("Improve voice: off");
-            activated => { root.toggle-voice(); }
-        }
-        MenuItem {
-            title: root.dictation-enabled ? @tr("Dictation: on") : @tr("Dictation: off");
-            activated => { root.toggle-dictation(); }
-        }
-        if root.memos-enabled: MenuItem {
-            title: (root.memo-recording ? @tr("Stop recording") : @tr("Start recording"))
-                + (root.memo-key-name != "" ? " (" + root.memo-key-name + ")" : "");
-            activated => { root.toggle-memo(); }
-        }
-        if root.memos-enabled: MenuItem {
-            title: @tr("Open recordings");
-            activated => { root.open-memos(); }
-        }
-        if root.update-version != "": MenuItem {
-            title: @tr("Install update {}", root.update-version);
-            activated => { root.install-update(); }
-        }
-        MenuItem {
-            title: @tr("Quit");
-            activated => { root.quit(); }
-        }
+// How kyrr looks: like the system, or on Omarchy like Omarchy (its theme's
+// colours, square corners, its monospace font). The app sets the theme and
+// follows a change of it.
+export global Skin {
+    in property <bool> omarchy;
+    in property <color> theme-background;
+    in property <color> theme-foreground;
+    in property <color> theme-accent;
+    in property <color> theme-red;
+    in property <color> theme-yellow;
+    in property <color> theme-green;
+    in property <string> theme-font;
+    property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+    out property <brush> background: root.omarchy ? root.theme-background : Palette.background;
+    out property <brush> foreground: root.omarchy ? root.theme-foreground : Palette.foreground;
+    // Omarchy's cards and controls: a little of the text colour over the background.
+    out property <brush> alternate-background: root.omarchy ? root.theme-foreground.mix(root.theme-background, 0.04) : Palette.alternate-background;
+    out property <brush> control-background: root.omarchy ? root.theme-foreground.mix(root.theme-background, 0.08) : Palette.control-background;
+    out property <brush> control-foreground: root.omarchy ? root.theme-foreground : Palette.control-foreground;
+    out property <brush> accent-background: root.omarchy ? root.theme-accent : Palette.accent-background;
+    out property <brush> accent-foreground: root.omarchy ? root.theme-background : Palette.accent-foreground;
+    out property <brush> border: root.omarchy ? root.theme-foreground.with-alpha(0.4) : Palette.border;
+    // Cards get a frame on Omarchy, as its menus and panels have.
+    out property <length> card-frame: root.omarchy ? 1px : 0px;
+    // Notes: darker on a light system, so small text keeps its contrast.
+    out property <color> bad: root.omarchy ? root.theme-red : root.dark ? #ff6369 : #c62a2f;
+    out property <color> good: root.omarchy ? root.theme-green : root.dark ? #3fb950 : #1a7f37;
+    out property <color> picked: root.omarchy ? root.theme-accent : #2ea043;
+    out property <color> warning: root.omarchy ? root.theme-yellow : #d29922;
+    out property <color> refusal: root.omarchy ? root.theme-red : #e0604f;
+    out property <color> danger: root.omarchy ? root.theme-red : #e5484d;
+    out property <color> danger-hover: root.omarchy ? root.theme-red.darker(0.1) : #cf3338;
+    out property <color> danger-pressed: root.omarchy ? root.theme-red.darker(0.25) : #b4282c;
+    // The logo's colour, for the small wave by the status line.
+    out property <color> logo: root.omarchy ? root.theme-accent : root.dark ? #5eead4 : #14b8a6;
+    // Empty: the system's font.
+    out property <string> font: root.omarchy ? root.theme-font : "";
+    public pure function round(radius: length) -> length {
+        return root.omarchy ? 0px : radius;
     }
 }
 
-component Caption inherits Text {
-    color: Palette.foreground.with-alpha(0.65);
-    font-size: 12px;
-    wrap: word-wrap;
-}
-
-// A short, plain explanation of the option chosen above it.
-component Hint inherits Text {
-    // 0.7 keeps small text readable (contrast), still quieter than captions.
-    color: Palette.foreground.with-alpha(0.7);
-    font-size: 12px;
-    wrap: word-wrap;
-}
-
-component Heading inherits Text {
-    font-size: 15px;
-    font-weight: 600;
-}
-
-component Card inherits Rectangle {
-    background: Palette.alternate-background;
-    border-radius: 10px;
-    VerticalLayout {
-        padding: 14px;
-        spacing: 8px;
-        @children
-    }
-}
-
-component Separator inherits Rectangle {
-    height: 1px;
-    background: Palette.border.with-alpha(0.6);
-}
-
-// A row of choices, one selected. Tab focuses it, the arrow keys move the
-// choice; screen readers hear each option as a radio button.
-component Segmented inherits FocusScope {
-    in property <[string]> options;
-    in-out property <int> selected;
-    // An option that cannot be picked (taken elsewhere); -1 for none.
-    in property <int> unavailable: -1;
-    callback changed(int);
-
-    function choose(i: int) {
-        if (root.enabled && i >= 0 && i < root.options.length && i != root.selected && i != root.unavailable) {
-            root.selected = i;
-            root.changed(i);
-        }
-    }
-
-    // The next option that way, over one that cannot be picked.
-    function step(by: int) {
-        root.choose(root.selected + by == root.unavailable ? root.selected + 2 * by : root.selected + by);
-    }
-
-    key-pressed(event) => {
-        if (event.text == Key.LeftArrow) {
-            root.step(-1);
-            return accept;
-        }
-        if (event.text == Key.RightArrow) {
-            root.step(1);
-            return accept;
-        }
-        return reject;
-    }
-
-    HorizontalLayout {
-        spacing: 6px;
-        for option[i] in root.options: Rectangle {
-            height: 28px;
-            border-radius: 6px;
-            background: i == root.selected ? Palette.accent-background : Palette.control-background;
-            border-width: root.has-focus && i == root.selected ? 2px : 1px;
-            border-color: root.has-focus && i == root.selected ? Palette.foreground : Palette.border;
-            opacity: root.enabled && i != root.unavailable ? 1 : 0.4;
-            accessible-role: radio-button;
-            accessible-label: option;
-            accessible-checkable: true;
-            accessible-checked: i == root.selected;
-            accessible-enabled: root.enabled && i != root.unavailable;
-            accessible-action-default => { root.choose(i); }
-            Text {
-                text: option;
-                color: i == root.selected ? Palette.accent-foreground : Palette.control-foreground;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
-            TouchArea {
-                enabled: root.enabled && i != root.unavailable;
-                clicked => {
-                    root.focus();
-                    root.choose(i);
-                }
-            }
-        }
-    }
-}
-
-// Grey: what the microphone hears. Accent line: what apps get.
-component Meter inherits Rectangle {
-    in property <float> before;
-    in property <float> after;
-    height: 10px;
-    border-radius: 5px;
-    background: Palette.control-background;
+// The system's controls, or on Omarchy square ones in its theme's colours.
+component SquareButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+    in property <bool> enabled: true;
+    callback clicked;
+    preferred-width: label.preferred-width + 24px;
+    min-width: label.min-width + 16px;
+    min-height: 32px;
     border-width: 1px;
-    border-color: Palette.border;
-    Rectangle {
-        x: 0;
-        width: parent.width * clamp(root.before, 0, 1);
+    border-color: focus.has-focus ? Skin.theme-accent
+        : Skin.theme-foreground.with-alpha(root.primary ? 0 : 0.4);
+    background: root.primary ? (touch.has-hover && root.enabled ? Skin.theme-accent.brighter(0.1) : Skin.theme-accent)
+        : touch.pressed ? Skin.theme-foreground.with-alpha(0.16)
+        : touch.has-hover && root.enabled ? Skin.theme-foreground.with-alpha(0.08) : transparent;
+    opacity: root.enabled ? 1 : 0.45;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { root.clicked(); }
+    label := Text {
+        x: 12px;
+        width: parent.width - 24px;
         height: parent.height;
-        border-radius: 5px;
-        background: Palette.foreground.with-alpha(0.18);
-        animate width { duration: 90ms; }
+        text: root.text;
+        color: root.primary ? Skin.theme-background : Skin.theme-foreground;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
     }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+    focus := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+}
+
+component Button inherits HorizontalLayout {
+    in property <string> text;
+    in property <bool> primary;
+    in property <bool> enabled: true;
+    callback clicked;
+    // As the system's button: as wide as its text unless told otherwise.
+    horizontal-stretch: 0;
+    if !Skin.omarchy: SystemButton {
+        text: root.text;
+        primary: root.primary;
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+    if Skin.omarchy: SquareButton {
+        text: root.text;
+        primary: root.primary;
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+component SquareSwitch inherits Rectangle {
+    in-out property <bool> checked;
+    in property <bool> enabled: true;
+    callback toggled;
+    function flip() {
+        root.checked = !root.checked;
+        root.toggled();
+    }
+    min-width: 36px;
+    max-width: 36px;
+    min-height: 20px;
+    opacity: root.enabled ? 1 : 0.45;
+    accessible-role: checkbox;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { root.flip(); }
     Rectangle {
-        x: 0;
         y: (parent.height - self.height) / 2;
-        width: parent.width * clamp(root.after, 0, 1);
-        height: 4px;
-        border-radius: 2px;
-        background: Palette.accent-background;
-        animate width { duration: 90ms; }
-    }
-}
-
-// A small wave in the logo's colour next to the status line: it sways
-// slowly while kyrr works, barely breathes while it waits, and lies still
-// when everything is off (then nothing is redrawn at all). It steps on a
-// timer instead of every frame: a frame-by-frame wave kept a whole core of
-// an older laptop busy redrawing the window. The sway follows the clock, not
-// the number of ticks, so a late tick makes a bigger step instead of a
-// stumble, and the bars' ends fade in by the pixel, so at a window scale of
-// 100% they glide instead of hopping a pixel at a time.
-component Pulse inherits Rectangle {
-    in property <bool> working;
-    in property <bool> waiting;
-    // Nobody sees it while the window is hidden: no ticks then.
-    in property <bool> shown;
-    property <bool> moving: root.working || root.waiting;
-    // Sways so far (1 = one full sway).
-    property <float> phase: 0;
-    property <duration> last-tick;
-    Timer {
-        interval: root.working ? 33ms : 66ms;
-        running: root.moving && root.shown;
-        triggered => {
-            // A tick that comes much too late counts as at most a short step.
-            root.phase = mod(root.phase + min((animation-tick() - root.last-tick) / 1ms, 100) / root.period, 1);
-            root.last-tick = animation-tick();
+        height: 20px;
+        background: root.checked ? Skin.theme-accent : transparent;
+        border-width: 1px;
+        border-color: root.checked ? Skin.theme-accent : Skin.theme-foreground.with-alpha(focus.has-focus ? 0.9 : 0.4);
+        Rectangle {
+            x: root.checked ? parent.width - 16px : 4px;
+            y: 4px;
+            width: 12px;
+            height: 12px;
+            background: root.checked ? Skin.theme-background : Skin.theme-foreground.with-alpha(0.7);
+            animate x { duration: 120ms; easing: ease-out; }
         }
     }
-    // The clock restarts with the movement, so a pause is not counted.
-    changed moving => { root.last-tick = animation-tick(); }
-    changed shown => { root.last-tick = animation-tick(); }
-    // Milliseconds per sway; slow on purpose, this is kyrr after all.
-    property <float> period: root.working ? 2200 : 4500;
-    property <float> depth: root.working ? 1 : 0.3;
-    property <color> tint: Palette.color-scheme == ColorScheme.dark ? #5eead4 : #14b8a6;
-    property <float> alpha: root.moving ? 0.85 : 0.4;
-    width: 14px;
-    height: 16px;
-    for bar[i] in 4: Rectangle {
-        property <float> level: root.moving ? root.depth * (0.5 + 0.5 * sin(root.phase * 360deg + i * 75deg)) : 0;
-        // The bar's height in pixels: whole pixels (an even number, so it
-        // stays centred) as a solid middle, the rest as a fading pixel at
-        // each end.
-        property <float> size: 2 + 10 * self.level;
-        property <float> middle: 2 * floor(self.size / 2);
-        property <float> rest: (self.size - self.middle) / 2;
-        x: i * 4px;
-        width: 2px;
-        height: root.height;
-        Rectangle {
-            y: (parent.height - self.height) / 2;
-            height: parent.middle * 1px;
-            background: root.tint.with-alpha(root.alpha);
-        }
-        Rectangle {
-            y: (parent.height - parent.middle * 1px) / 2 - 1px;
-            height: 1px;
-            background: root.tint.with-alpha(root.alpha * parent.rest);
-        }
-        Rectangle {
-            y: (parent.height + parent.middle * 1px) / 2;
-            height: 1px;
-            background: root.tint.with-alpha(root.alpha * parent.rest);
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.flip(); }
+    }
+    focus := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " ") {
+                root.flip();
+                return accept;
+            }
+            return reject;
         }
     }
 }
 
-// What kyrr is up to right now, in one loose sentence under the name, small
-// and in italics so it reads as a remark, not a setting. Long-lasting states
-// rotate through a few phrases to pass the time; errors and setup stay put.
-component StatusLine inherits HorizontalLayout {
+component Switch inherits HorizontalLayout {
+    in-out property <bool> checked;
+    in property <bool> enabled: true;
+    // For screen readers.
+    in property <string> label;
+    callback toggled;
+    horizontal-stretch: 0;
+    if !Skin.omarchy: SystemSwitch {
+        checked <=> root.checked;
+        enabled: root.enabled;
+        accessible-label: root.label;
+        toggled => { root.toggled(); }
+    }
+    if Skin.omarchy: SquareSwitch {
+        checked <=> root.checked;
+        enabled: root.enabled;
+        accessible-label: root.label;
+        toggled => { root.toggled(); }
+    }
+}
+
+// Omarchy's progress bar: the accent over a dim track, as in its on-screen display.
+component ProgressIndicator inherits Rectangle {
+    in property <float> progress;
+    if !Skin.omarchy: SystemProgress {
+        width: parent.width;
+        height: parent.height;
+        progress: root.progress;
+    }
+    if Skin.omarchy: Rectangle {
+        background: Skin.theme-foreground.with-alpha(0.25);
+        Rectangle {
+            x: 0;
+            width: parent.width * clamp(root.progress, 0, 1);
+            background: Skin.theme-accent;
+        }
+    }
+}
+
+export global AppState {
     pure function pick(list: [string]) -> string {
         return list[AppState.phrase.mod(list.length)];
     }
     property <float> percent: round(AppState.download-progress * 100);
 
-    pure function status() -> string {
+    // The line under kyrr's name: what kyrr does, in word creations that
+    // change with `phrase`. kyrr's widget in Omarchy's bar shows it too.
+    public pure function status-line() -> string {
         if (AppState.filter-state == FilterState.setting-up) { return @tr("Setting things up… sound takes a short break."); }
         if (AppState.mic-active && AppState.mic-silent) { return @tr("Your mic delivers pure silence. Muted?"); }
         if (AppState.probe-state == ProbeState.recording) {
@@ -821,6 +486,564 @@ component StatusLine inherits HorizontalLayout {
         ]);
     }
 
+    // The small note at the bottom of the main page (and in the widget).
+    public pure function alert-note() -> string {
+        if (AppState.alert == 1) { return (AppState.linux ? @tr("Mic very quiet. Turn it up in your sound settings.") : @tr("Mic very quiet. Turn it up in Windows.")); }
+        if (AppState.alert == 2) { return (AppState.linux ? @tr("Mic too loud. Turn it down in your sound settings.") : @tr("Mic too loud. Turn it down in Windows.")); }
+        if (AppState.alert == 3) { return @tr("Still listening to you. Headphones only!"); }
+        if (AppState.alert == 4) { return AppState.linux ? @tr("Your mic is muted.") : @tr("Your mic is muted in Windows."); }
+        if (AppState.alert == 6) { return @tr("No microphone found. kyrr keeps looking."); }
+        if (AppState.alert == 7) { return @tr("Microphone connected: {}", AppState.connected-name); }
+        if (AppState.alert == 8) { return @tr("Sounds like a gym. Move a bit closer?"); }
+        return "";
+    }
+
+    // Noise removal
+    in-out property <bool> filter-enabled: true;
+    in-out property <int> strength-index: 1; // 0 gentle, 1 medium, 2 strong
+    in property <bool> model-switching;
+    // The filter fell back to ONNX Runtime: the CPU lacks AVX2, Lean suits it.
+    in property <bool> old-cpu;
+    // The computer could not keep up with the noise model (see OverloadNote).
+    in-out property <OverloadNote> overload-note;
+    // Switch to Lean by itself then.
+    in-out property <bool> auto-lean: true;
+    // Lean and best quality set the noise model and the words while you
+    // talk at once: 0 lean, 1 best quality, 2 a mix of the two.
+    in-out property <int> effort-index: 1;
+    // Linux: the filter is kyrr's own microphone, there is no installer, and
+    // the desktop may have no tray.
+    in property <bool> linux;
+    in property <bool> tray: true;
+    // kyrr's widget sits in Omarchy's bar: its menu opens kyrr, turning the
+    // plugin off quits it.
+    in property <bool> widget;
+    // The widget's menu opened (and says so every few seconds while open)
+    // or closed: the status line and the notes run for it.
+    callback widget-open(bool);
+    // A line from the widget's menu, which is all of kyrr on Omarchy: a
+    // setting to change or a step to take ("set voice.tone warm").
+    callback omarchy-command(string);
+    // Without a tray, closing minimizes where the desktop can (not tiling ones).
+    in property <bool> can-minimize: true;
+    in property <FilterState> filter-state: FilterState.checking;
+    in property <string> filter-detail; // technical, not translated
+    in property <[string]> microphones;
+    in-out property <int> mic-index;
+    in property <string> attached-mic;
+    // The filtered microphone is unplugged; this one could take over ("" if none).
+    in property <string> move-to;
+    in property <bool> move-unplugged;
+
+    // The window is up (not hidden in the tray): what only it shows stops
+    // moving while it is away.
+    in property <bool> window-shown;
+    // Live: level and the before/after probe
+    in property <bool> mic-active;
+    // The microphone is in use but delivers nothing at all: muted, most likely.
+    in property <bool> mic-silent;
+    // Windows has the microphone muted.
+    in-out property <bool> mic-muted;
+    // A microphone that just showed up.
+    in property <string> connected-name;
+    in property <float> level-before; // 0..1
+    in property <float> level-after;
+    in property <ProbeState> probe-state: ProbeState.idle;
+    in property <bool> has-probe;
+    in property <string> probe-error;
+    // The mic plays live on the headphones.
+    in property <bool> listening;
+    // The red note at the bottom of the main page, one at a time:
+    // 0 none, 1 mic too quiet, 2 mic too loud, 3 still listening.
+    in property <int> alert;
+
+    // Voice: sound, S sounds and volume, shaped in the audio filter
+    in-out property <bool> voice-enabled: true;
+    in-out property <int> look-index;    // neutral, warm, clear, bright, custom
+    in-out property <float> body-db;     // the custom sound, -6..6 dB
+    in-out property <float> presence-db;
+    in-out property <float> air-db;
+    in-out property <bool> low-cut: true;
+    in-out property <bool> pops;
+    in-out property <bool> distance;
+    in-out property <bool> auto-level;
+    in property <float> level-gain; // what it adds right now, dB
+    // The settings page shows everything, not just the basics.
+    in-out property <int> deesser-index;       // off, light, medium, strong
+    in-out property <int> compressor-index: 2; // off, light, medium, strong
+    in property <bool> voice-is-default: true;
+
+    // Dictation
+    in-out property <bool> dictation-enabled: true;
+    in-out property <int> language-index; // 0 German, 1 English, 2 multilingual
+    in property <DictationState> dictation-state: DictationState.off;
+    in property <float> download-progress;
+    in property <string> download-size;
+    in property <string> last-text;
+    // What dictation has to say (an error, a hint); "" for nothing.
+    in property <string> dictation-message;
+    in-out property <bool> key-toggle;  // tap to start and stop instead of holding
+    in-out property <bool> live-words;  // the wave shows the words while you talk
+    in property <string> key-name: "F9";
+    // Which key field waits for a key: 0 none, 1 dictation, 2 voice memos.
+    in property <int> key-capture;
+    // The key is not the standard one (F9, F8).
+    in property <bool> key-custom;
+    in property <bool> memo-key-custom;
+    // Why the key just pressed was not taken, and a word of warning about one
+    // that was; "" for nothing.
+    in property <string> key-refusal;
+    in property <string> key-warning;
+    // A key field starts (1, 2) or stops (0) waiting; the standard key back.
+    callback capture-key(int);
+    callback key-reset(int);
+    // What the user has to do so the key reaches kyrr (Linux); "" for nothing.
+    in property <string> key-note;
+    // The desktop owns the key (GNOME, KDE): kyrr's choice of key does nothing.
+    in property <bool> key-fixed;
+    // The desktop could own the key but has not bound it (dialog cancelled).
+    in property <bool> key-unbound;
+    // A button for the key in the settings ("Set up key", "Change key"); "" for none.
+    in property <string> key-button;
+    callback key-button-clicked();
+    // The setup walks through the desktop's two questions (GNOME, KDE): the
+    // key and the permission to type.
+    in property <bool> guide;
+    // 0 not asked, 1 the desktop is asking, 2 set up, 3 cancelled.
+    in property <int> key-state;
+    // The key was pressed since it was set up.
+    in property <bool> key-tried;
+    // 0 not asked, 1 the desktop is asking, 2 allowed, 3 not allowed.
+    in property <int> typing-state;
+    callback setup-key();
+    callback allow-typing();
+    // "Check for updates", on request only.
+    in property <UpdateState> update-state;
+    in property <string> update-version;
+    // The new version comes with a short summary of what changed.
+    in property <bool> update-has-news;
+    // The release's installer; "" when it has none (then only the page).
+    in property <bool> update-installable;
+    in property <float> update-progress; // 0..1
+    // The daily check is on; the user closed the note for this version.
+    in-out property <bool> update-auto: true;
+    in property <bool> update-dismissed;
+
+    in-out property <bool> autostart;
+    // PipeWire is missing (Linux): a button that installs it, and what to
+    // say about it ("" for nothing).
+    in property <bool> pipewire-button;
+    in property <string> pipewire-note;
+    callback install-pipewire();
+    // How installing it went, a PipewireStep from Rust.
+    callback pipewire-step(int);
+    in property <string> error-text;
+    in property <string> version;
+
+    // 0 is the main view, 1 the setup, then the settings of each
+    // card: 2 noise, 3 voice, 4 dictation, 5 voice memos; 6 the voice memos
+    // themselves.
+    in-out property <int> page;
+    // Counts up every few seconds; the status line picks its next phrase
+    // from it, so one state does not repeat the same sentence.
+    in property <int> phrase;
+    // False for a moment before the next phrase, so it fades out and in.
+    in property <bool> phrase-visible: true;
+
+    callback filter-toggled(bool);
+    callback strength-changed(int);
+    callback probe-record();
+    callback probe-play(bool); // false before, true after
+    callback probe-reset();
+    callback listen-toggled();
+    callback voice-toggled(bool);
+    callback look-changed(int);
+    callback band-changed(int, float); // 0 body, 1 presence, 2 air
+    callback low-cut-toggled(bool);
+    callback pops-toggled(bool);
+    callback distance-toggled(bool);
+    callback auto-level-toggled(bool);
+    callback deesser-changed(int);
+    callback compressor-changed(int);
+    callback voice-reset();
+    callback attach-microphone(int);
+    callback dictation-toggled(bool);
+    callback language-changed(int);
+    callback download-model();
+    callback cancel-download();
+    callback finish-setup();
+    callback change-microphone();
+    callback autostart-toggled(bool);
+    // Puts the window away, like its close button; kyrr keeps running in the tray.
+    callback hide();
+    // Ends kyrr for good, like the tray menu's "Quit".
+    callback quit-app();
+    // Switches Windows' mute off the microphone.
+    callback unmute();
+    callback page-changed();
+    // A card's gear: its own settings page.
+    public function open-page(p: int) {
+        root.page = p;
+        root.page-changed();
+    }
+    callback dictation-retry();
+    callback repair();
+    callback move-to-default();
+    callback key-toggle-changed(bool);
+    callback live-words-toggled(bool);
+    callback auto-lean-toggled(bool);
+    callback effort-changed(int);
+    callback open-licenses();
+    callback check-updates();
+    callback open-update();
+    callback send-feedback();
+    callback show-news();
+    // What the running version brought (from the NEWS built into the app).
+    callback show-current-news();
+    callback install-update();
+    callback update-auto-toggled(bool);
+    callback dismiss-update();
+    callback skip-setup();
+    callback next-setup();
+
+    // Voice memos
+    in-out property <bool> memos-enabled: true;
+    in property <string> memo-key-name: "F8"; // "" while no key is taken
+    // The memo key whether it is taken or not, for the settings.
+    in property <string> memo-key-label: "F8";
+    // Another shortcut of the user's has the memo key; "" for none.
+    in property <string> memo-key-note;
+    in property <bool> memo-toggle: false;     // tap to start and stop instead of holding
+    // The key's release is reported (not on GNOME 46 and 47, niri).
+    in property <bool> memo-can-hold: true;
+    in property <bool> memo-recording;
+    in property <string> memo-elapsed;
+    in property <[MemoItem]> memo-items;
+    // All memos in the folder, whatever the search shows.
+    in property <int> memo-count;
+    in-out property <string> memo-query;
+    in property <int> memo-playing: -1;
+    in property <float> memo-play-fraction;
+    in property <string> memo-play-time;
+    in-out property <int> memo-confirm: -1;
+    in-out property <int> memo-editing: -1;
+    // The speech model is on the computer: texts can be written.
+    in property <bool> memo-can-write;
+    in-out property <bool> memo-auto-text;
+    in property <string> memo-message;
+    // The big text view: open, for which memo, and what it shows.
+    in-out property <bool> memo-sheet-open;
+    in property <int> memo-sheet-index: -1;
+    in property <string> memo-sheet-title;
+    in property <string> memo-sheet-when;
+    // The text field: the paragraphs, each with the stamp asked for.
+    in-out property <string> memo-sheet-text;
+    // What goes before each paragraph: 0 nothing, 1 how far into the memo,
+    // 2 the time of day.
+    in-out property <int> memo-sheet-stamps;
+    // Every change is on disk.
+    in property <bool> memo-sheet-saved: true;
+    in-out property <bool> memo-copied;
+    // A recording the user has not looked at yet: the dot on the main page.
+    in property <bool> memo-new;
+    callback memos-toggled(bool);
+    callback memo-toggle-changed(bool);
+    callback memo-auto-text-toggled(bool);
+    callback memo-record();
+    callback memo-open-list();
+    callback memo-play(int);
+    // Plays from the paragraph at this place of the text field (a byte offset).
+    callback memo-play-here(int);
+    // Where that paragraph starts, as 1:30; "" when it has no time.
+    pure callback memo-here-label(string, int) -> string;
+    callback memo-sheet-edited(string);
+    callback memo-sheet-stamps-changed(int);
+    callback memo-show(int);
+    callback memo-delete(int);
+    callback memo-rename(int, string);
+    callback memo-write-text(int);
+    callback memo-cancel-text(int);
+    callback memo-show-text(int);
+    callback memo-close-text();
+    // The selection (byte offsets), or all when they are the same.
+    callback memo-copy-text(int, int);
+    callback memo-open-text();
+    callback memo-search(string);
+    callback memo-open-folder();
+}
+
+// The tray has its own properties: globals are per component instance, so
+// the app wires tray and window separately.
+export component Tray inherits SystemTrayIcon {
+    in property <bool> recording;
+    in property <bool> active;
+    in property <bool> filter-enabled;
+    in property <bool> voice-enabled;
+    in property <bool> dictation-enabled;
+    in property <bool> dictation-ready;
+    in property <string> key-name: "F9";
+    in property <bool> memos-enabled;
+    in property <bool> memo-recording;
+    in property <string> memo-key-name;
+    // A newer version found ("" for none).
+    in property <string> update-version;
+    callback open();
+    callback toggle-memo();
+    callback open-memos();
+    callback install-update();
+    callback toggle-filter();
+    callback toggle-voice();
+    callback toggle-dictation();
+    callback quit();
+    // No icon at all where kyrr's widget in Omarchy's bar stands in for it:
+    // Slint registers the icon with the panel as soon as it has an image,
+    // whatever `visible` says, so the image is what keeps it away.
+    in property <bool> off;
+    property <image> no-icon;
+    visible: !root.off;
+    icon: root.off ? root.no-icon : recording || memo-recording ? @image-url("icons/kyrr-recording-32.png") : active ? @image-url("icons/kyrr-32.png") : @image-url("icons/kyrr-off-32.png");
+    tooltip: "kyrr · " + (root.memo-recording ? @tr("recording") + " · " : "")
+        + (root.filter-enabled ? @tr("noise filter on") : @tr("noise filter off"))
+        + (root.dictation-ready ? " · " + @tr("{} ready", root.key-name) : "")
+        + (root.update-version != "" ? " · " + @tr("update available") : "");
+    // Some panels list tray icons by title.
+    title: "kyrr";
+    clicked => { root.open(); }
+    Menu {
+        MenuItem {
+            title: @tr("Open kyrr");
+            activated => { root.open(); }
+        }
+        MenuItem {
+            title: root.filter-enabled ? @tr("Isolate your voice: on") : @tr("Isolate your voice: off");
+            activated => { root.toggle-filter(); }
+        }
+        MenuItem {
+            title: root.voice-enabled ? @tr("Improve voice: on") : @tr("Improve voice: off");
+            activated => { root.toggle-voice(); }
+        }
+        MenuItem {
+            title: root.dictation-enabled ? @tr("Dictation: on") : @tr("Dictation: off");
+            activated => { root.toggle-dictation(); }
+        }
+        if root.memos-enabled: MenuItem {
+            title: (root.memo-recording ? @tr("Stop recording") : @tr("Start recording"))
+                + (root.memo-key-name != "" ? " (" + root.memo-key-name + ")" : "");
+            activated => { root.toggle-memo(); }
+        }
+        if root.memos-enabled: MenuItem {
+            title: @tr("Open recordings");
+            activated => { root.open-memos(); }
+        }
+        if root.update-version != "": MenuItem {
+            title: @tr("Install update {}", root.update-version);
+            activated => { root.install-update(); }
+        }
+        MenuItem {
+            title: @tr("Quit");
+            activated => { root.quit(); }
+        }
+    }
+}
+
+component Caption inherits Text {
+    color: Skin.foreground.with-alpha(0.65);
+    font-size: 12px;
+    wrap: word-wrap;
+}
+
+// A short, plain explanation of the option chosen above it.
+component Hint inherits Text {
+    // 0.7 keeps small text readable (contrast), still quieter than captions.
+    color: Skin.foreground.with-alpha(0.7);
+    font-size: 12px;
+    wrap: word-wrap;
+}
+
+component Heading inherits Text {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+component Card inherits Rectangle {
+    background: Skin.alternate-background;
+    border-radius: Skin.round(10px);
+    border-width: Skin.card-frame;
+    border-color: Skin.foreground.with-alpha(0.2);
+    VerticalLayout {
+        padding: 14px;
+        spacing: 8px;
+        @children
+    }
+}
+
+component Separator inherits Rectangle {
+    height: 1px;
+    background: Skin.border.with-alpha(0.6);
+}
+
+// A row of choices, one selected. Tab focuses it, the arrow keys move the
+// choice; screen readers hear each option as a radio button.
+component Segmented inherits FocusScope {
+    in property <[string]> options;
+    in-out property <int> selected;
+    // An option that cannot be picked (taken elsewhere); -1 for none.
+    in property <int> unavailable: -1;
+    callback changed(int);
+
+    function choose(i: int) {
+        if (root.enabled && i >= 0 && i < root.options.length && i != root.selected && i != root.unavailable) {
+            root.selected = i;
+            root.changed(i);
+        }
+    }
+
+    // The next option that way, over one that cannot be picked.
+    function step(by: int) {
+        root.choose(root.selected + by == root.unavailable ? root.selected + 2 * by : root.selected + by);
+    }
+
+    key-pressed(event) => {
+        if (event.text == Key.LeftArrow) {
+            root.step(-1);
+            return accept;
+        }
+        if (event.text == Key.RightArrow) {
+            root.step(1);
+            return accept;
+        }
+        return reject;
+    }
+
+    HorizontalLayout {
+        spacing: 6px;
+        for option[i] in root.options: Rectangle {
+            height: 28px;
+            border-radius: Skin.round(6px);
+            background: i == root.selected ? Skin.accent-background : Skin.control-background;
+            border-width: root.has-focus && i == root.selected ? 2px : 1px;
+            border-color: root.has-focus && i == root.selected ? Skin.foreground : Skin.border;
+            opacity: root.enabled && i != root.unavailable ? 1 : 0.4;
+            accessible-role: radio-button;
+            accessible-label: option;
+            accessible-checkable: true;
+            accessible-checked: i == root.selected;
+            accessible-enabled: root.enabled && i != root.unavailable;
+            accessible-action-default => { root.choose(i); }
+            Text {
+                text: option;
+                color: i == root.selected ? Skin.accent-foreground : Skin.control-foreground;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            TouchArea {
+                enabled: root.enabled && i != root.unavailable;
+                clicked => {
+                    root.focus();
+                    root.choose(i);
+                }
+            }
+        }
+    }
+}
+
+// Grey: what the microphone hears. Accent line: what apps get.
+component Meter inherits Rectangle {
+    in property <float> before;
+    in property <float> after;
+    height: 10px;
+    border-radius: Skin.round(5px);
+    background: Skin.control-background;
+    border-width: 1px;
+    border-color: Skin.border;
+    Rectangle {
+        x: 0;
+        width: parent.width * clamp(root.before, 0, 1);
+        height: parent.height;
+        border-radius: Skin.round(5px);
+        background: Skin.foreground.with-alpha(0.18);
+        animate width { duration: 90ms; }
+    }
+    Rectangle {
+        x: 0;
+        y: (parent.height - self.height) / 2;
+        width: parent.width * clamp(root.after, 0, 1);
+        height: 4px;
+        border-radius: Skin.round(2px);
+        background: Skin.accent-background;
+        animate width { duration: 90ms; }
+    }
+}
+
+// A small wave in the logo's colour next to the status line: it sways
+// slowly while kyrr works, barely breathes while it waits, and lies still
+// when everything is off (then nothing is redrawn at all). It steps on a
+// timer instead of every frame: a frame-by-frame wave kept a whole core of
+// an older laptop busy redrawing the window. The sway follows the clock, not
+// the number of ticks, so a late tick makes a bigger step instead of a
+// stumble, and the bars' ends fade in by the pixel, so at a window scale of
+// 100% they glide instead of hopping a pixel at a time.
+component Pulse inherits Rectangle {
+    in property <bool> working;
+    in property <bool> waiting;
+    // Nobody sees it while the window is hidden: no ticks then.
+    in property <bool> shown;
+    property <bool> moving: root.working || root.waiting;
+    // Sways so far (1 = one full sway).
+    property <float> phase: 0;
+    property <duration> last-tick;
+    Timer {
+        interval: root.working ? 33ms : 66ms;
+        running: root.moving && root.shown;
+        triggered => {
+            // A tick that comes much too late counts as at most a short step.
+            root.phase = mod(root.phase + min((animation-tick() - root.last-tick) / 1ms, 100) / root.period, 1);
+            root.last-tick = animation-tick();
+        }
+    }
+    // The clock restarts with the movement, so a pause is not counted.
+    changed moving => { root.last-tick = animation-tick(); }
+    changed shown => { root.last-tick = animation-tick(); }
+    // Milliseconds per sway; slow on purpose, this is kyrr after all.
+    property <float> period: root.working ? 2200 : 4500;
+    property <float> depth: root.working ? 1 : 0.3;
+    property <color> tint: Skin.logo;
+    property <float> alpha: root.moving ? 0.85 : 0.4;
+    width: 14px;
+    height: 16px;
+    for bar[i] in 4: Rectangle {
+        property <float> level: root.moving ? root.depth * (0.5 + 0.5 * sin(root.phase * 360deg + i * 75deg)) : 0;
+        // The bar's height in pixels: whole pixels (an even number, so it
+        // stays centred) as a solid middle, the rest as a fading pixel at
+        // each end.
+        property <float> size: 2 + 10 * self.level;
+        property <float> middle: 2 * floor(self.size / 2);
+        property <float> rest: (self.size - self.middle) / 2;
+        x: i * 4px;
+        width: 2px;
+        height: root.height;
+        Rectangle {
+            y: (parent.height - self.height) / 2;
+            height: parent.middle * 1px;
+            background: root.tint.with-alpha(root.alpha);
+        }
+        Rectangle {
+            y: (parent.height - parent.middle * 1px) / 2 - 1px;
+            height: 1px;
+            background: root.tint.with-alpha(root.alpha * parent.rest);
+        }
+        Rectangle {
+            y: (parent.height + parent.middle * 1px) / 2;
+            height: 1px;
+            background: root.tint.with-alpha(root.alpha * parent.rest);
+        }
+    }
+}
+
+// What kyrr is up to right now, in one loose sentence under the name, small
+// and in italics so it reads as a remark, not a setting. Long-lasting states
+// rotate through a few phrases to pass the time; errors and setup stay put.
+component StatusLine inherits HorizontalLayout {
     // The text lines up with the name and sits close under it (pulled up
     // into the page layout's spacing, less than the Setup button's height
     // needs); the wave follows right after it.
@@ -836,10 +1059,10 @@ component StatusLine inherits HorizontalLayout {
         && (AppState.filter-state == FilterState.running || AppState.filter-state == FilterState.checking);
     Text {
         horizontal-stretch: 0;
-        text: root.status();
+        text: AppState.status-line();
         font-size: 12px;
         font-italic: true;
-        color: Palette.foreground;
+        color: Skin.foreground;
         opacity: AppState.phrase-visible ? 0.6 : 0;
         animate opacity { duration: 450ms; easing: ease-in-out; }
         wrap: word-wrap;
@@ -847,7 +1070,7 @@ component StatusLine inherits HorizontalLayout {
         // One line always, so the cards below do not move when it is empty;
         // two for a long message (Slint measures wrapped text in this row as
         // one line, so the room is made here).
-        min-height: root.status().character-count > 44 ? 32px : 16px;
+        min-height: AppState.status-line().character-count > 44 ? 32px : 16px;
     }
     Pulse {
         working: root.working;
@@ -865,15 +1088,15 @@ component GearButton inherits Rectangle {
     callback clicked();
     width: 30px;
     height: 30px;
-    border-radius: 8px;
-    background: touch.has-hover || key.has-focus ? Palette.foreground.with-alpha(0.12) : transparent;
+    border-radius: Skin.round(8px);
+    background: touch.has-hover || key.has-focus ? Skin.foreground.with-alpha(0.12) : transparent;
     forward-focus: key;
     accessible-role: button;
     accessible-label: root.label;
     accessible-action-default => { root.clicked(); }
     Image {
         source: @image-url("icons/gear.png");
-        colorize: Palette.foreground.with-alpha(0.75);
+        colorize: Skin.foreground.with-alpha(0.75);
         width: 18px;
         height: 18px;
         x: (parent.width - self.width) / 2;
@@ -912,7 +1135,7 @@ component RowHead inherits HorizontalLayout {
     Switch {
         checked <=> root.checked;
         enabled: root.enabled;
-        accessible-label: root.title;
+        label: root.title;
         toggled => { root.toggled(self.checked); }
     }
 }
@@ -1095,10 +1318,10 @@ component KeyPicker inherits HorizontalLayout {
         horizontal-stretch: 1;
         height: 28px;
         property <bool> picked: !root.custom && !root.listening;
-        border-radius: 6px;
-        background: self.picked ? Palette.accent-background : Palette.control-background;
+        border-radius: Skin.round(6px);
+        background: self.picked ? Skin.accent-background : Skin.control-background;
         border-width: 1px;
-        border-color: Palette.border;
+        border-color: Skin.border;
         accessible-role: radio-button;
         accessible-label: root.standard;
         accessible-checkable: true;
@@ -1106,7 +1329,7 @@ component KeyPicker inherits HorizontalLayout {
         accessible-action-default => { AppState.key-reset(root.slot); }
         Text {
             text: root.standard;
-            color: parent.picked ? Palette.accent-foreground : Palette.control-foreground;
+            color: parent.picked ? Skin.accent-foreground : Skin.control-foreground;
             horizontal-alignment: center;
             vertical-alignment: center;
         }
@@ -1131,10 +1354,10 @@ component KeyPicker inherits HorizontalLayout {
         }
         Rectangle {
             height: 28px;
-            border-radius: 6px;
-            background: root.custom && !root.listening ? Palette.accent-background : Palette.control-background;
+            border-radius: Skin.round(6px);
+            background: root.custom && !root.listening ? Skin.accent-background : Skin.control-background;
             border-width: root.listening || field.has-focus ? 2px : 1px;
-            border-color: root.listening || field.has-focus ? Palette.foreground : Palette.border;
+            border-color: root.listening || field.has-focus ? Skin.foreground : Skin.border;
             accessible-role: button;
             accessible-label: @tr("Set key");
             accessible-description: root.custom ? root.current : "";
@@ -1142,7 +1365,7 @@ component KeyPicker inherits HorizontalLayout {
             Text {
                 text: root.listening ? @tr("Press a key …")
                     : root.custom ? @tr("{} · change", root.current) : @tr("Set key");
-                color: root.custom && !root.listening ? Palette.accent-foreground : Palette.control-foreground;
+                color: root.custom && !root.listening ? Skin.accent-foreground : Skin.control-foreground;
                 horizontal-alignment: center;
                 vertical-alignment: center;
             }
@@ -1166,7 +1389,7 @@ component DictationSettings inherits Card {
         custom: AppState.key-custom;
         slot: 1;
     }
-    if !AppState.key-fixed && AppState.key-refusal != "": Hint { text: AppState.key-refusal; color: #e0604f; }
+    if !AppState.key-fixed && AppState.key-refusal != "": Hint { text: AppState.key-refusal; color: Skin.refusal; }
     if !AppState.key-fixed && AppState.key-warning != "": Hint { text: AppState.key-warning; }
     // Only where kyrr catches the key itself.
     if AppState.key-note == "": Hint { text: @tr("With Ctrl, Alt or Shift held, the key stays with your app."); }
@@ -1228,10 +1451,10 @@ component EffortOption inherits Rectangle {
     in property <bool> picked;
     callback clicked();
     forward-focus: key;
-    border-radius: 10px;
+    border-radius: Skin.round(10px);
     border-width: key.has-focus ? 2px : 1px;
-    border-color: key.has-focus ? Palette.foreground : root.picked ? #2ea043 : Palette.border;
-    background: root.picked ? #2ea043.with-alpha(0.12) : (touch.has-hover ? Palette.alternate-background : transparent);
+    border-color: key.has-focus ? Skin.foreground : root.picked ? Skin.picked : Skin.border;
+    background: root.picked ? Skin.picked.with-alpha(0.12) : (touch.has-hover ? Skin.alternate-background : transparent);
     accessible-role: radio-button;
     accessible-label: root.title + ". " + root.text;
     accessible-checkable: true;
@@ -1260,14 +1483,14 @@ component EffortOption inherits Rectangle {
             Rectangle {
                 width: 14px;
                 height: 14px;
-                border-radius: 7px;
+                border-radius: Skin.round(7px);
                 border-width: 1.5px;
-                border-color: root.picked ? #2ea043 : Palette.foreground.with-alpha(0.4);
+                border-color: root.picked ? Skin.picked : Skin.foreground.with-alpha(0.4);
                 Rectangle {
                     width: 8px;
                     height: 8px;
-                    border-radius: 4px;
-                    background: #2ea043;
+                    border-radius: Skin.round(4px);
+                    background: Skin.picked;
                     visible: root.picked;
                 }
             }
@@ -1275,7 +1498,7 @@ component EffortOption inherits Rectangle {
         VerticalLayout {
             spacing: 3px;
             Text { text: root.title; font-size: 13px; font-weight: 700; }
-            Text { text: root.text; font-size: 12px; wrap: word-wrap; color: Palette.foreground.with-alpha(0.75); }
+            Text { text: root.text; font-size: 12px; wrap: word-wrap; color: Skin.foreground.with-alpha(0.75); }
         }
     }
 }
@@ -1284,17 +1507,17 @@ component EffortOption inherits Rectangle {
 component NoteBanner inherits Rectangle {
     in property <string> text;
     callback closed();
-    background: #d29922.with-alpha(0.12);
-    border-color: #d29922.with-alpha(0.45);
+    background: Skin.warning.with-alpha(0.12);
+    border-color: Skin.warning.with-alpha(0.45);
     border-width: 1px;
-    border-radius: 10px;
+    border-radius: Skin.round(10px);
     HorizontalLayout {
         padding: 8px;
         padding-left: 12px;
         spacing: 8px;
         VerticalLayout {
             alignment: center;
-            Rectangle { width: 8px; height: 8px; border-radius: 4px; background: #d29922; }
+            Rectangle { width: 8px; height: 8px; border-radius: Skin.round(4px); background: Skin.warning; }
         }
         Text {
             text: root.text;
@@ -1308,8 +1531,8 @@ component NoteBanner inherits Rectangle {
             horizontal-stretch: 0;
             forward-focus: close-key;
             border-width: close-key.has-focus ? 2px : 0px;
-            border-color: Palette.foreground;
-            border-radius: 4px;
+            border-color: Skin.foreground;
+            border-radius: Skin.round(4px);
             accessible-role: button;
             accessible-label: @tr("Close");
             accessible-action-default => { root.closed(); }
@@ -1326,7 +1549,7 @@ component NoteBanner inherits Rectangle {
                 // × (not ✕): every font has it.
                 text: "×";
                 font-size: 20px;
-                color: close.has-hover ? Palette.foreground : Palette.foreground.with-alpha(0.55);
+                color: close.has-hover ? Skin.foreground : Skin.foreground.with-alpha(0.55);
             }
             close := TouchArea {
                 mouse-cursor: pointer;
@@ -1340,17 +1563,17 @@ component NoteBanner inherits Rectangle {
 // that installs it. Closing it hides it until the next version.
 component UpdateBanner inherits Rectangle {
     property <bool> busy: AppState.update-state == UpdateState.downloading || AppState.update-state == UpdateState.installing;
-    background: #2ea043.with-alpha(0.12);
-    border-color: #2ea043.with-alpha(0.45);
+    background: Skin.picked.with-alpha(0.12);
+    border-color: Skin.picked.with-alpha(0.45);
     border-width: 1px;
-    border-radius: 10px;
+    border-radius: Skin.round(10px);
     HorizontalLayout {
         padding: 8px;
         padding-left: 12px;
         spacing: 8px;
         VerticalLayout {
             alignment: center;
-            Rectangle { width: 8px; height: 8px; border-radius: 4px; background: #2ea043; }
+            Rectangle { width: 8px; height: 8px; border-radius: Skin.round(4px); background: Skin.picked; }
         }
         Text {
             text: AppState.update-state == UpdateState.downloading ? @tr("Downloading the update… {}%", round(AppState.update-progress * 100))
@@ -1383,8 +1606,8 @@ component UpdateBanner inherits Rectangle {
             horizontal-stretch: 0;
             forward-focus: close-key;
             border-width: close-key.has-focus ? 2px : 0px;
-            border-color: Palette.foreground;
-            border-radius: 4px;
+            border-color: Skin.foreground;
+            border-radius: Skin.round(4px);
             accessible-role: button;
             accessible-label: @tr("Not now");
             accessible-action-default => { AppState.dismiss-update(); }
@@ -1401,7 +1624,7 @@ component UpdateBanner inherits Rectangle {
                 // × (not ✕): every font has it.
                 text: "×";
                 font-size: 20px;
-                color: close.has-hover ? Palette.foreground : Palette.foreground.with-alpha(0.55);
+                color: close.has-hover ? Skin.foreground : Skin.foreground.with-alpha(0.55);
             }
             close := TouchArea {
                 mouse-cursor: pointer;
@@ -1420,10 +1643,10 @@ component AlertButton inherits Rectangle {
     forward-focus: key;
     min-height: 32px;
     min-width: label.preferred-width + 24px;
-    border-radius: 4px;
+    border-radius: Skin.round(4px);
     border-width: key.has-focus ? 2px : 0px;
-    border-color: Palette.foreground;
-    background: touch.pressed ? #b4282c : touch.has-hover ? #cf3338 : #e5484d;
+    border-color: Skin.foreground;
+    background: touch.pressed ? Skin.danger-pressed : touch.has-hover ? Skin.danger-hover : Skin.danger;
     accessible-role: button;
     accessible-label: root.text;
     accessible-action-default => { root.clicked(); }
@@ -1449,19 +1672,9 @@ component AlertButton inherits Rectangle {
 // The small red note at the bottom of the main page. Always one line high,
 // empty or not, so the window keeps its height however many notes there are.
 component AlertLine inherits Text {
-    pure function note() -> string {
-        if (AppState.alert == 1) { return (AppState.linux ? @tr("Mic very quiet. Turn it up in your sound settings.") : @tr("Mic very quiet. Turn it up in Windows.")); }
-        if (AppState.alert == 2) { return (AppState.linux ? @tr("Mic too loud. Turn it down in your sound settings.") : @tr("Mic too loud. Turn it down in Windows.")); }
-        if (AppState.alert == 3) { return @tr("Still listening to you. Headphones only!"); }
-        if (AppState.alert == 4) { return AppState.linux ? @tr("Your mic is muted.") : @tr("Your mic is muted in Windows."); }
-        if (AppState.alert == 6) { return @tr("No microphone found. kyrr keeps looking."); }
-        if (AppState.alert == 7) { return @tr("Microphone connected: {}", AppState.connected-name); }
-        if (AppState.alert == 8) { return @tr("Sounds like a gym. Move a bit closer?"); }
-        return "";
-    }
-    text: root.note();
+    text: AppState.alert-note();
     // The red notes are problems; a microphone coming back is good news.
-    color: AppState.alert == 7 ? Tone.good : Tone.bad;
+    color: AppState.alert == 7 ? Skin.good : Skin.bad;
     font-size: 12px;
     min-height: 16px;
     vertical-alignment: center;
@@ -1627,8 +1840,8 @@ component LevelSettings inherits Card {
         text: !AppState.mic-active ? @tr("Shows what it evens out while an app uses the mic.")
             : root.gain == 0 ? @tr("Right now unchanged: your mic is just right.")
             : @tr("Right now: {} dB", root.signed);
-        color: !AppState.mic-active || root.gain == 0 ? Palette.foreground.with-alpha(0.65)
-            : root.gain > 0 ? Tone.good : Tone.bad;
+        color: !AppState.mic-active || root.gain == 0 ? Skin.foreground.with-alpha(0.65)
+            : root.gain > 0 ? Skin.good : Skin.bad;
     }
 }
 
@@ -1648,10 +1861,10 @@ component ToolsSettings inherits Card {
     if root.filter: HorizontalLayout {
         spacing: 6px;
         alignment: start;
-        Rectangle { width: 10px; height: 10px; y: 3px; border-radius: 5px; background: Palette.foreground.with-alpha(0.18); }
+        Rectangle { width: 10px; height: 10px; y: 3px; border-radius: Skin.round(5px); background: Skin.foreground.with-alpha(0.18); }
         Hint { text: @tr("your mic"); horizontal-stretch: 0; }
         Rectangle { width: 14px; }
-        Rectangle { width: 14px; height: 4px; y: 6px; border-radius: 2px; background: Palette.accent-background; }
+        Rectangle { width: 14px; height: 4px; y: 6px; border-radius: Skin.round(2px); background: Skin.accent-background; }
         Hint { text: @tr("what your apps get"); horizontal-stretch: 0; }
     }
     if root.filter: Hint { text: @tr("Moves while an app uses the mic."); }
@@ -1696,7 +1909,7 @@ component ToolsSettings inherits Card {
         Rectangle { }
     }
     Hint { text: @tr("Your mic live in your headphones, the way your apps hear it. On speakers it squeals."); }
-    if AppState.probe-error != "": Caption { text: AppState.probe-error; color: Tone.bad; }
+    if AppState.probe-error != "": Caption { text: AppState.probe-error; color: Skin.bad; }
 }
 
 // Settings: the rest.
@@ -1856,7 +2069,7 @@ component SetupPage inherits VerticalLayout {
         enabled: AppState.filter-state != FilterState.setting-up && AppState.microphones.length > 0;
         clicked => { AppState.attach-microphone(AppState.mic-index); }
     }
-    if step == 0 && AppState.filter-state == FilterState.error: Caption { text: AppState.error-text; color: Tone.bad; }
+    if step == 0 && AppState.filter-state == FilterState.error: Caption { text: AppState.error-text; color: Skin.bad; }
     if step == 0: Button {
         text: @tr("Not now, just dictation");
         enabled: AppState.filter-state != FilterState.setting-up;
@@ -1941,6 +2154,8 @@ export component NewsWindow inherits Window {
     in property <int> mode;
     callback close();
     title: @tr("What's new");
+    background: Skin.background;
+    default-font-family: Skin.font;
     icon: @image-url("icons/kyrr-256.png");
     preferred-width: 380px;
     min-width: 320px;
@@ -1991,17 +2206,17 @@ component IconButton inherits Rectangle {
     in property <string> shape;
     in property <string> label;
     in property <bool> enabled: true;
-    in property <color> tint: Palette.foreground.with-alpha(0.8);
+    in property <color> tint: Skin.foreground.with-alpha(0.8);
     in property <length> size: 28px;
     callback clicked();
     forward-focus: key;
     width: root.size;
     height: root.size;
-    border-radius: root.size / 2;
+    border-radius: Skin.round(root.size / 2);
     border-width: key.has-focus ? 2px : 0px;
-    border-color: Palette.foreground;
-    background: !root.enabled ? transparent : touch.pressed ? Palette.foreground.with-alpha(0.16)
-        : touch.has-hover ? Palette.foreground.with-alpha(0.08) : transparent;
+    border-color: Skin.foreground;
+    background: !root.enabled ? transparent : touch.pressed ? Skin.foreground.with-alpha(0.16)
+        : touch.has-hover ? Skin.foreground.with-alpha(0.08) : transparent;
     opacity: root.enabled ? 1 : 0.35;
     accessible-role: button;
     accessible-label: root.label;
@@ -2043,12 +2258,12 @@ component Chip inherits Rectangle {
     forward-focus: key;
     height: 24px;
     width: label.preferred-width + 18px;
-    border-radius: 12px;
+    border-radius: Skin.round(12px);
     border-width: key.has-focus ? 2px : 0px;
-    border-color: Palette.foreground;
-    background: root.danger ? (touch.has-hover ? #cf3338 : #e5484d)
-        : root.strong ? Palette.accent-background
-        : touch.has-hover && root.enabled ? Palette.foreground.with-alpha(0.13) : Palette.foreground.with-alpha(0.07);
+    border-color: Skin.foreground;
+    background: root.danger ? (touch.has-hover ? Skin.danger-hover : Skin.danger)
+        : root.strong ? Skin.accent-background
+        : touch.has-hover && root.enabled ? Skin.foreground.with-alpha(0.13) : Skin.foreground.with-alpha(0.07);
     opacity: root.enabled ? 1 : 0.5;
     accessible-role: button;
     accessible-label: root.text;
@@ -2066,7 +2281,7 @@ component Chip inherits Rectangle {
     label := Text {
         text: root.text;
         font-size: 12px;
-        color: root.danger ? white : root.strong ? Palette.accent-foreground : Palette.foreground;
+        color: root.danger ? white : root.strong ? Skin.accent-foreground : Skin.foreground;
         horizontal-alignment: center;
         vertical-alignment: center;
     }
@@ -2114,8 +2329,8 @@ component RecordingCard inherits Card {
             Rectangle {
                 width: 10px;
                 height: 10px;
-                border-radius: 5px;
-                background: Palette.accent-background;
+                border-radius: Skin.round(5px);
+                background: Skin.accent-background;
                 accessible-role: text;
                 accessible-label: @tr("New recording");
             }
@@ -2138,8 +2353,8 @@ component MemoRow inherits Rectangle {
     property <bool> editing: AppState.memo-editing == root.index;
     property <bool> confirming: AppState.memo-confirm == root.index;
     property <bool> busy: root.item.text-state == 1 || root.item.text-state == 2;
-    background: Palette.alternate-background;
-    border-radius: 10px;
+    background: Skin.alternate-background;
+    border-radius: Skin.round(10px);
     VerticalLayout {
         padding: 8px;
         padding-left: 6px;
@@ -2151,7 +2366,7 @@ component MemoRow inherits Rectangle {
                 IconButton {
                     shape: root.playing ? Shapes.stop : Shapes.play;
                     label: root.playing ? @tr("Stop") : @tr("Play");
-                    tint: Palette.accent-background;
+                    tint: Skin.accent-background;
                     clicked => { AppState.memo-play(root.index); }
                 }
             }
@@ -2224,7 +2439,7 @@ component MemoRow inherits Rectangle {
                     Text {
                         text: root.playing ? AppState.memo-play-time : root.item.when;
                         font-size: 12px;
-                        color: Palette.foreground.with-alpha(0.65);
+                        color: Skin.foreground.with-alpha(0.65);
                         overflow: elide;
                         vertical-alignment: center;
                         horizontal-stretch: 1;
@@ -2246,13 +2461,13 @@ component MemoRow inherits Rectangle {
         }
         if root.playing: Rectangle {
             height: 3px;
-            border-radius: 1.5px;
-            background: Palette.foreground.with-alpha(0.1);
+            border-radius: Skin.round(1.5px);
+            background: Skin.foreground.with-alpha(0.1);
             Rectangle {
                 x: 0;
                 width: parent.width * clamp(AppState.memo-play-fraction, 0, 1);
-                border-radius: 1.5px;
-                background: Palette.accent-background;
+                border-radius: Skin.round(1.5px);
+                background: Skin.accent-background;
             }
         }
         if root.busy: HorizontalLayout {
@@ -2263,7 +2478,7 @@ component MemoRow inherits Rectangle {
                     : root.item.text-left != "" ? @tr("Writing… {}% · {}", round(root.item.text-progress * 100), root.item.text-left)
                     : @tr("Writing… {}%", round(root.item.text-progress * 100));
                 font-size: 12px;
-                color: Palette.foreground.with-alpha(0.7);
+                color: Skin.foreground.with-alpha(0.7);
                 overflow: elide;
                 vertical-alignment: center;
                 horizontal-stretch: 1;
@@ -2275,20 +2490,20 @@ component MemoRow inherits Rectangle {
         }
         if root.busy: Rectangle {
             height: 4px;
-            border-radius: 2px;
-            background: Palette.foreground.with-alpha(0.1);
+            border-radius: Skin.round(2px);
+            background: Skin.foreground.with-alpha(0.1);
             Rectangle {
                 x: 0;
                 width: parent.width * clamp(root.item.text-progress, 0, 1);
-                border-radius: 2px;
-                background: Tone.good;
+                border-radius: Skin.round(2px);
+                background: Skin.good;
                 animate width { duration: 400ms; easing: ease-out; }
             }
         }
         if root.item.text-state == 4: Text {
             text: AppState.memo-can-write ? @tr("That did not work. Try again?") : @tr("Needs the speech model: download it under Dictation.");
             font-size: 12px;
-            color: Tone.bad;
+            color: Skin.bad;
             wrap: word-wrap;
         }
         if root.confirming: HorizontalLayout {
@@ -2384,9 +2599,9 @@ component RecordingSettings inherits Card {
         custom: AppState.memo-key-custom;
         slot: 2;
     }
-    if !AppState.key-fixed && AppState.key-refusal != "": Hint { text: AppState.key-refusal; color: #e0604f; }
+    if !AppState.key-fixed && AppState.key-refusal != "": Hint { text: AppState.key-refusal; color: Skin.refusal; }
     if !AppState.key-fixed && AppState.key-warning != "": Hint { text: AppState.key-warning; }
-    if AppState.memo-key-note != "": Hint { text: AppState.memo-key-note; color: #e0604f; }
+    if AppState.memo-key-note != "": Hint { text: AppState.memo-key-note; color: Skin.refusal; }
     // Where the desktop owns the key, its own settings change it.
     if AppState.key-fixed: Hint { text: @tr("Your desktop sets this key, now {}.", AppState.memo-key-label); }
     if AppState.key-fixed && AppState.key-button != "": Button {
@@ -2429,7 +2644,7 @@ component RecordingSettings inherits Card {
 // field: it scrolls, takes a selection, and what is typed is saved.
 component TranscriptSheet inherits Rectangle {
     in property <bool> open;
-    background: Palette.background;
+    background: Skin.background;
     // Clicks stay here, not in the list below.
     TouchArea { }
     changed open => {
@@ -2469,7 +2684,7 @@ component TranscriptSheet inherits Rectangle {
                 IconButton {
                     shape: root.playing ? Shapes.stop : Shapes.play;
                     label: root.playing ? @tr("Stop") : @tr("Play");
-                    tint: Palette.accent-background;
+                    tint: Skin.accent-background;
                     size: 34px;
                     clicked => { AppState.memo-play(AppState.memo-sheet-index); }
                 }
@@ -2481,7 +2696,7 @@ component TranscriptSheet inherits Rectangle {
                 Text {
                     text: root.playing ? AppState.memo-play-time : AppState.memo-sheet-when;
                     font-size: 12px;
-                    color: Palette.foreground.with-alpha(0.65);
+                    color: Skin.foreground.with-alpha(0.65);
                 }
             }
         }
@@ -2490,7 +2705,7 @@ component TranscriptSheet inherits Rectangle {
             Text {
                 text: @tr("Times");
                 font-size: 12px;
-                color: Palette.foreground.with-alpha(0.65);
+                color: Skin.foreground.with-alpha(0.65);
                 vertical-alignment: center;
                 horizontal-stretch: 0;
             }
@@ -2505,16 +2720,16 @@ component TranscriptSheet inherits Rectangle {
             Text {
                 text: AppState.memo-sheet-saved ? "✓ " + @tr("Saved") : @tr("Saving …");
                 font-size: 12px;
-                color: Palette.foreground.with-alpha(0.65);
+                color: Skin.foreground.with-alpha(0.65);
                 vertical-alignment: center;
                 horizontal-stretch: 0;
             }
         }
         Rectangle {
-            background: Palette.alternate-background;
-            border-radius: 10px;
+            background: Skin.alternate-background;
+            border-radius: Skin.round(10px);
             border-width: input.has-focus ? 2px : 0px;
-            border-color: Palette.accent-background;
+            border-color: Skin.accent-background;
             vertical-stretch: 1;
             scroll := ScrollView {
                 x: 12px;
@@ -2528,9 +2743,9 @@ component TranscriptSheet inherits Rectangle {
                     single-line: false;
                     wrap: word-wrap;
                     font-size: 15px;
-                    color: Palette.foreground;
-                    selection-background-color: Palette.accent-background;
-                    selection-foreground-color: Palette.accent-foreground;
+                    color: Skin.foreground;
+                    selection-background-color: Skin.accent-background;
+                    selection-foreground-color: Skin.accent-foreground;
                     page-height: scroll.visible-height;
                     accessible-label: AppState.memo-sheet-title;
                     edited => { AppState.memo-sheet-edited(self.text); }
@@ -2601,6 +2816,8 @@ export component MainWindow inherits Window {
     out property <length> page-width: memos-page ? 520px : 380px;
     title: "kyrr";
     icon: @image-url("icons/kyrr-256.png");
+    background: Skin.background;
+    default-font-family: Skin.font;
     preferred-width: page-width;
     // A fixed width also keeps the window floating on tiling compositors
     // (Hyprland treats it like a dialog), which suits a small tool.
@@ -2626,6 +2843,11 @@ export component MainWindow inherits Window {
     // headless preview has no system theme to follow.
     public function use-dark-scheme() {
         Palette.color-scheme = ColorScheme.dark;
+    }
+
+    // Omarchy's theme is dark or light: the system's controls follow it.
+    public function use-scheme(dark: bool) {
+        Palette.color-scheme = dark ? ColorScheme.dark : ColorScheme.light;
     }
 
     property <bool> main-page: !setup-mode && AppState.page == 0;
@@ -2682,7 +2904,7 @@ export component MainWindow inherits Window {
                 AlertLine { }
                 if AppState.alert == 4: Text {
                     text: @tr("Switch it on");
-                    color: Tone.bad;
+                    color: Skin.bad;
                     font-size: 12px;
                     font-weight: 700;
                     horizontal-stretch: 0;
@@ -2702,7 +2924,9 @@ export component MainWindow inherits Window {
                     TouchArea { clicked => { AppState.unmute(); } mouse-cursor: pointer; }
                 }
             }
-            if main-page: HideRow { }
+            // With kyrr's widget in Omarchy's bar, the window is only
+            // kyrr's settings: the widget opens and quits it.
+            if main-page && !AppState.widget: HideRow { }
 
             // Settings pages: global, then one for each card's gear.
             if settings-page: HorizontalLayout {
