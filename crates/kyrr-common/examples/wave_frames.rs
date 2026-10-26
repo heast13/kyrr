@@ -28,7 +28,13 @@ fn main() {
         "Hi Anna, I just wanted to quickly say that the meeting starts tomorrow at ten o'clock."
     };
     let text = args.get(5).map_or(default, String::as_str);
-    let words: Vec<String> = text.split(' ').map(str::to_string).collect();
+    // The text `memo`: a voice memo with its time running, no words.
+    let memo = text == "memo";
+    let words: Vec<String> = if memo {
+        Vec::new()
+    } else {
+        text.split(' ').map(str::to_string).collect()
+    };
 
     let mut wave = Wave::default();
     wave.set_dark(dark);
@@ -39,16 +45,24 @@ fn main() {
     // Seconds: wave appears, words come in, the key is let go, writing, gone.
     let start = 0.5;
     let pace = 0.3;
-    let release = start + 0.4 + pace * words.len() as f32 + 1.2;
+    let release = if memo {
+        6.0
+    } else {
+        start + 0.4 + pace * words.len() as f32 + 1.2
+    };
     let write_end = release + 1.0;
     let end = write_end + 0.8;
     let mut t = 0.0;
     let mut shown = 0;
-    wave.set_mode(Mode::Listening);
+    wave.set_mode(if memo { Mode::Recording } else { Mode::Listening });
+    if memo {
+        // Just before ten minutes, so the pill is seen to grow by a digit.
+        wave.set_clock(595.0);
+    }
     while t < end {
         if t >= write_end {
             wave.set_mode(Mode::Hidden);
-        } else if t >= release {
+        } else if t >= release && !memo {
             wave.set_mode(Mode::Writing);
         }
         let due = (((t - start - 0.4) / pace).floor() + 1.0).clamp(0.0, words.len() as f32) as usize;
