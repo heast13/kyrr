@@ -16,6 +16,18 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
+## 0.7.0
+
+- Voice memos: the pill shows how long the recording has been running.
+- Voice memos: the text is split into paragraphs where a sentence ends and you paused, instead of every 30 seconds, often in the middle of a sentence. "Play from here" starts at the beginning of the paragraph. Texts written before stay as they are until you have them written again.
+- (Linux) Omarchy: kyrr comes as a plugin for the Omarchy bar. Its menu does everything the window does, with mouse or keyboard, and kyrr then needs no window or tray icon. kyrr takes on Omarchy's colours and font and can be picked as Omarchy's dictation program (Omarchy 4.5 and newer), so Omarchy's own dictation keys work with kyrr.
+
+### Deutsch
+
+- Sprachaufzeichnungen: Die Pille zeigt, wie lange die Aufnahme schon läuft.
+- Sprachaufzeichnungen: Der Text wird dort in Absätze geteilt, wo ein Satz endet und du kurz Pause gemacht hast, statt alle 30 Sekunden, oft mitten im Satz. „Ab hier abspielen“ springt an den Absatzanfang. Bisherige Texte bleiben, wie sie sind, bis du sie neu schreiben lässt.
+- (Linux) Omarchy: kyrr gibt es als Plugin für die Omarchy-Leiste. Sein Menü kann alles, was das Fenster kann, mit Maus oder Tastatur, und kyrr braucht dann weder Fenster noch Tray-Symbol. kyrr übernimmt Omarchys Farben und Schrift und lässt sich als Diktierfunktion von Omarchy wählen (ab Omarchy 4.5), sodass Omarchys eigene Diktiertasten mit kyrr gehen.
+
 ## 0.6.2
 
 - A new dictation model for German and Multilingual: it understands short sentences and everyday speech better, copes better with noise and writes "ß" correctly. kyrr downloads it once (about 900 MB) and then removes the old model; English stays as it is.

@@ -75,6 +75,16 @@
     <keyword>speech to text</keyword>
   </keywords>
   <releases>
+    <release version="0.7.0" date="2026-10-26">
+      <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.7.0</url>
+      <description>
+        <ul>
+          <li>Voice memos: the pill shows how long the recording has been running</li>
+          <li>Voice memo texts get paragraphs where a sentence ends after a pause, not one every 30 seconds</li>
+          <li>Omarchy: a plugin for the bar whose menu does everything the window does, Omarchy's look, and kyrr as Omarchy's dictation program</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.6.2" date="2026-10-23">
       <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.6.2</url>
       <description>

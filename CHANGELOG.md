@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.7.0 (2026-10-26)
+
+- Omarchy: kyrr becomes one of Omarchy's dictation programs (Omarchy 4.5+).
+  It adds itself to Setup > Defaults > Dictation, and Omarchy's own keys then
+  dictate with kyrr, unless another program already has them. On Omarchy the
+  window and the pill take the theme in use (colours, square corners,
+  monospace font).
+- Omarchy plugin (heast13/omarchy-kyrr, id io.github.heast13.kyrr): while it
+  is on, kyrr has no window and no tray icon. The bar menu does everything
+  the window does, by mouse and keyboard. kyrr talks to it through socket
+  lines and a state file (format v2); without the widget kyrr falls back to
+  its window. Releases carry an unversioned kyrr-x86_64.AppImage.sha256 that
+  the plugin checks before installing.
+- Voice memos: the pill shows the running recording time instead of
+  "Recording on".
+- Voice memo texts: the model still hears pieces of about 30 s, but all
+  words go into one stream with their times. A paragraph starts only where a
+  sentence ends and the speaker paused (after 25 s at the next sentence end);
+  a minute without one is cut at its longest pause. Full stops the model
+  wrote at a piece's cut are mended. Old texts stay until they are written
+  again.
+
 ## 0.6.2 (2026-10-23)
 
 - Dictation model: parakeet-ultra (about 900 MB) replaces the German
