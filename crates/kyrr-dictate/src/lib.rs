@@ -8,6 +8,7 @@
 pub mod download;
 pub mod live;
 mod model;
+mod stitch;
 
 use std::path::Path;
 
@@ -17,6 +18,7 @@ use sherpa_onnx::{OfflineRecognizer, OfflineRecognizerConfig, OfflineTransducerM
 
 pub use live::{Live, Word};
 pub use model::{european, Language, ModelFile, ModelSpec};
+use stitch::{Rules, Stitcher};
 
 /// Shortest recording worth decoding; shorter ones are accidental key taps.
 pub const MIN_SECONDS: f32 = 0.3;
@@ -147,22 +149,26 @@ impl Dictation {
         tidy(&texts.join(" "))
     }
 
-    /// The next paragraph of a long recording once its piece is complete:
-    /// where it starts, in seconds, and its text (empty for a stretch
-    /// without speech). See [`Paragraphs`].
-    pub fn paragraph(&self, paragraphs: &mut Paragraphs) -> Option<(f32, String)> {
+    /// The paragraphs of a long recording that are complete once its next
+    /// piece is: where each starts, in seconds, and its text. None while
+    /// there is no complete piece, maybe empty when a piece ends no
+    /// paragraph. See [`Paragraphs`].
+    pub fn paragraph(&self, paragraphs: &mut Paragraphs) -> Option<Vec<(f32, String)>> {
         let transcript = &mut paragraphs.transcript;
         let piece = transcript.complete_piece()?;
-        let text = self.recognize(&transcript.audio[..piece]).unwrap_or_default();
+        let words = self.piece_words(&transcript.audio[..piece], paragraphs.done);
         transcript.audio.drain(..piece);
-        let start = paragraphs.done as f32 / MODEL_RATE as f32;
         paragraphs.done += piece;
-        Some((start, tidy(&text)))
+        Some(paragraphs.stitcher.push(words, false))
     }
 
     /// The paragraphs left once the whole recording is pushed.
     pub fn last_paragraphs(&self, paragraphs: Paragraphs) -> Vec<(f32, String)> {
-        let Paragraphs { mut transcript, done } = paragraphs;
+        let Paragraphs {
+            mut transcript,
+            done,
+            mut stitcher,
+        } = paragraphs;
         let Some(resampler) = transcript.resampler.take() else {
             return Vec::new();
         };
@@ -170,16 +176,49 @@ impl Dictation {
             resampler.finish(&mut transcript.audio);
         }
         let shortest = (MIN_SECONDS * MODEL_RATE as f32) as usize;
+        let pieces = pieces(&transcript.audio);
         let mut at = done;
         let mut out = Vec::new();
-        for piece in pieces(&transcript.audio) {
+        for (i, piece) in pieces.iter().enumerate() {
             if piece.len() >= shortest {
-                let text = self.recognize(piece).unwrap_or_default();
-                out.push((at as f32 / MODEL_RATE as f32, tidy(&text)));
+                let words = self.piece_words(piece, at);
+                out.extend(stitcher.push(words, i + 1 == pieces.len()));
             }
             at += piece.len();
         }
+        out.extend(stitcher.finish());
         out
+    }
+
+    /// The words of a piece of 16 kHz audio that starts `at` samples into
+    /// the recording, with their times from the start of the recording.
+    fn piece_words(&self, audio: &[f32], at: usize) -> Vec<Word> {
+        let stream = self.recognizer.create_stream();
+        stream.accept_waveform(MODEL_RATE as i32, audio);
+        self.recognizer.decode(&stream);
+        let offset = at as f32 / MODEL_RATE as f32;
+        let mut words = stream.get_result().map_or_else(Vec::new, |r| {
+            let timed = spoken_words(
+                &r.tokens,
+                r.timestamps.as_deref().unwrap_or_default(),
+                r.durations.as_deref(),
+            );
+            // A model without times gives its text as one stretch of words.
+            if timed.is_empty() && !r.text.trim().is_empty() {
+                let end = audio.len() as f32 / MODEL_RATE as f32;
+                return vec![Word {
+                    text: r.text.trim().to_string(),
+                    start: 0.0,
+                    end,
+                }];
+            }
+            timed
+        });
+        for word in &mut words {
+            word.start += offset;
+            word.end += offset;
+        }
+        words
     }
 
     fn recognize(&self, audio: &[f32]) -> Option<String> {
@@ -214,7 +253,20 @@ impl Dictation {
 /// before. A word ends where its last token does; models without token
 /// durations give each token one step.
 fn words(tokens: &[String], starts: &[f32], durations: Option<&[f32]>) -> Vec<Word> {
+    join(tokens, starts, durations, false)
+}
+
+/// The same, but a word ends where its last letter does, not the stop
+/// after it. The model writes a stop late, in the pause that follows, and
+/// the pause would be gone.
+fn spoken_words(tokens: &[String], starts: &[f32], durations: Option<&[f32]>) -> Vec<Word> {
+    join(tokens, starts, durations, true)
+}
+
+fn join(tokens: &[String], starts: &[f32], durations: Option<&[f32]>, letters_only: bool) -> Vec<Word> {
     let mut out: Vec<Word> = Vec::new();
+    // A token of only a space: the next token starts a word, too.
+    let mut space = false;
     for (i, token) in tokens.iter().enumerate() {
         let Some(&start) = starts.get(i) else {
             break;
@@ -227,12 +279,18 @@ fn words(tokens: &[String], starts: &[f32], durations: Option<&[f32]>) -> Vec<Wo
                 .max(STEP_SECONDS);
         let text = token.trim();
         if text.is_empty() {
+            space = letters_only && !token.is_empty();
             continue;
         }
+        let stop = letters_only && !text.chars().any(char::is_alphanumeric);
+        let new_word = (token.starts_with(' ') || space) && !stop;
+        space = false;
         match out.last_mut() {
-            Some(word) if !token.starts_with(' ') => {
+            Some(word) if !new_word => {
                 word.text.push_str(text);
-                word.end = word.end.max(end);
+                if !stop {
+                    word.end = word.end.max(end);
+                }
             }
             _ => out.push(Word {
                 text: text.to_string(),
@@ -311,14 +369,17 @@ impl Transcript {
     }
 }
 
-/// A long recording (a voice memo) on its way to text, a paragraph for
-/// each piece: the pieces end at the quietest spot, mostly a pause, so a
+/// A long recording (a voice memo) on its way to text, in paragraphs. The
+/// model hears it in pieces of about 30 s that end at the quietest spot;
+/// the words of all pieces are put together again and a paragraph starts
+/// where a sentence ends and the speaker paused (see the `stitch` module), so a
 /// paragraph knows where in the recording it starts. Pushed bit by bit,
-/// only the newest piece waits in memory.
+/// only the newest piece and the paragraph under way wait in memory.
 pub struct Paragraphs {
     transcript: Transcript,
-    /// Samples at the model's rate that are text already.
+    /// Samples at the model's rate that are words already.
     done: usize,
+    stitcher: Stitcher,
 }
 
 impl Paragraphs {
@@ -326,6 +387,7 @@ impl Paragraphs {
         Paragraphs {
             transcript: Transcript::new(sample_rate),
             done: 0,
+            stitcher: Stitcher::new(Rules::default()),
         }
     }
 
@@ -671,6 +733,15 @@ mod tests {
         // No duration: one step.
         assert!((timed[2].end - 1.24).abs() < 1e-6);
         assert_eq!(words(&tokens, &starts, None)[0].end, STEP_SECONDS);
+        // The stop comes late, in the pause after the word: not part of it.
+        let spoken = spoken_words(&tokens, &starts, Some(&durations));
+        assert_eq!((spoken[1].start, spoken[1].end), (0.4, 0.8));
+        // A lone space and a stop with a space before it.
+        let tokens: Vec<String> = [" Hallo", " ", "Welt", " ."].map(String::from).to_vec();
+        let said = spoken_words(&tokens, &[0.0, 0.3, 0.4, 0.8], Some(&[0.3, 0.1, 0.3, 0.1]));
+        let text: Vec<&str> = said.iter().map(|w| w.text.as_str()).collect();
+        assert_eq!(text, ["Hallo", "Welt."]);
+        assert!((said[1].end - 0.7).abs() < 1e-6);
     }
 
     #[test]
