@@ -274,7 +274,8 @@ fn clock_text(seconds: u32) -> String {
 
 /// The room of one digit of the time: that of the widest.
 fn digit_room() -> f32 {
-    let font = FONT.as_scaled(PxScale::from(TEXT_SIZE));
+    let font = font();
+    let font = font.as_scaled(PxScale::from(TEXT_SIZE));
     ('0'..='9')
         .map(|c| font.h_advance(font.glyph_id(c)))
         .fold(0.0, f32::max)
@@ -282,7 +283,8 @@ fn digit_room() -> f32 {
 
 /// Width of the time in logical pixels.
 fn clock_width(seconds: u32) -> f32 {
-    let font = FONT.as_scaled(PxScale::from(TEXT_SIZE));
+    let font = font();
+    let font = font.as_scaled(PxScale::from(TEXT_SIZE));
     clock_text(seconds)
         .chars()
         .map(|c| {
@@ -916,7 +918,7 @@ impl Wave {
                 let at = pen + (room - font.h_advance(id)) / 2.0;
                 pen += room;
                 let glyph = id.with_scale_and_position(size, point(at * scale, baseline * scale));
-                let Some(outline) = FONT.outline_glyph(glyph) else {
+                let Some(outline) = face.outline_glyph(glyph) else {
                     continue;
                 };
                 let bounds = outline.px_bounds();
