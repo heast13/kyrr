@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.2 (2026-10-26)
+
+- Linux: voice memos are private to their owner. The folder is 0700 and
+  recordings and texts are 0600 (they were 0755 and 0644, so other accounts
+  on the machine could read them); memos made before are closed when kyrr
+  starts.
+- Omarchy: one command installs the plugin or updates it.
+
 ## 0.7.1 (2026-10-26)
 
 - Omarchy: the voice memo time in the pill showed wrong letters in the
