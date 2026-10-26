@@ -16,6 +16,18 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
+## 0.7.2
+
+- (Windows) General bug fixes.
+- (Linux) Your voice memos and their texts can now be read by you alone, not by other accounts on the same computer. Memos you made before are closed the first time kyrr starts.
+- (Linux) Omarchy: the one install command now also updates the plugin later.
+
+### Deutsch
+
+- (Windows) Allgemeine Fehlerbehebungen.
+- (Linux) Deine Sprachaufzeichnungen und ihre Texte kann nur noch du lesen, nicht andere Konten auf demselben Rechner. Frühere Aufzeichnungen werden beim ersten Start von kyrr geschlossen.
+- (Linux) Omarchy: Der eine Installationsbefehl aktualisiert das Plugin jetzt auch später.
+
 ## 0.7.1
 
 - (Windows) General bug fixes.
