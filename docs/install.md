@@ -87,10 +87,11 @@ Either way kyrr adds itself to your app menu on its first start.
   Omarchy's own dictation keys use kyrr. With dictation on, kyrr picks itself
   when no dictation program is chosen or the chosen one is not installed.
   For Omarchy's bar there is a widget with kyrr's menu, which also installs
-  kyrr: `omarchy plugin add https://github.com/heast13/omarchy-kyrr.git
-  --enable`. While it is in the bar, kyrr has no tray icon and its window no
-  buttons to hide or quit: the widget's menu opens it, and turning the plugin
-  off in Omarchy's menu (Setup > Plugins) quits kyrr too.
+  kyrr: `omarchy plugin update io.github.heast13.kyrr --yes || omarchy
+  plugin add https://github.com/heast13/omarchy-kyrr.git --enable`. While it
+  is in the bar, kyrr has no tray icon and its window no buttons to hide or
+  quit: the widget's menu opens it, and turning the plugin off in Omarchy's
+  menu (Setup > Plugins) quits kyrr too.
 - **X11 desktops (Linux Mint, XFCE):** the keys just work.
 - **Without a tray icon** the window's X minimizes kyrr where the desktop can
   bring it back (GNOME, say) and quits it on tiling ones; "Quit" always ends
