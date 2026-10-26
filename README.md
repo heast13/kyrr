@@ -87,10 +87,11 @@ details](docs/install.md).
 ### Omarchy
 
 For Omarchy 4.0 or newer, kyrr is a plugin for the bar, with its menu in
-Omarchy's own style and no window of its own. One command in a terminal:
+Omarchy's own style and no window of its own. One command in a terminal; the
+same command updates the plugin later:
 
 ```sh
-omarchy plugin add https://github.com/heast13/omarchy-kyrr.git --enable
+omarchy plugin update io.github.heast13.kyrr --yes || omarchy plugin add https://github.com/heast13/omarchy-kyrr.git --enable
 ```
 
 Then click the kyrr icon in the bar. The menu installs kyrr for you. Details
