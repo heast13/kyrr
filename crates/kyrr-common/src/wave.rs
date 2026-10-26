@@ -501,7 +501,8 @@ impl Wave {
     }
 
     /// A voice memo has been recording for `seconds`: the pill shows the
-    /// time and counts it on by itself until told again.
+    /// time and counts it on by itself while the memo records, until told
+    /// again.
     pub fn set_clock(&mut self, seconds: f32) {
         self.clock = Some(seconds.max(0.0));
     }
@@ -1093,9 +1094,11 @@ fn run(rx: &Receiver<Message>, open: fn() -> Option<Box<dyn Surface>>, tail: fn(
             }
         }
         // Closed (`surface` goes here); the next dictation starts afresh.
-        let mode = wave.mode;
+        let (mode, clock) = (wave.mode, wave.clock);
         wave = Wave::default();
         wave.set_mode(mode);
+        // A memo still running keeps its time.
+        wave.clock = clock.filter(|_| mode == Mode::Recording);
     }
 }
 
