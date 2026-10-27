@@ -23,7 +23,7 @@ use crate::memo::library::{self, Memo, Stamps};
 use crate::memo::player::Player;
 use crate::memo::recorder::{Ending, Recording};
 use crate::memo::title;
-use crate::{AppState, MainWindow, MemoItem};
+use crate::{AppState, ComparePair, MainWindow, MemoItem};
 
 /// Shorter memos are a key pressed twice by accident: not kept.
 const SHORTEST: f64 = 3.0;
@@ -1124,20 +1124,24 @@ impl Memos {
             .unwrap_or_default()
     }
 
-    /// The text before and after the language model, marked, paragraph by
-    /// paragraph.
-    fn comparison(&self, before: &[library::Paragraph], memo: &Memo) -> ModelRc<slint::StyledText> {
+    /// The text before and after the language model, marked, paragraph
+    /// beside paragraph.
+    fn comparison(&self, before: &[library::Paragraph], memo: &Memo) -> ModelRc<ComparePair> {
         let after = memo.text.as_deref().unwrap_or_default();
-        let paragraphs: Vec<slint::StyledText> = compare::markdown(before, after)
+        let styled = |markdown: &str| {
+            slint::StyledText::from_markdown(markdown).unwrap_or_else(|e| {
+                eprintln!("kyrr: memo: comparing the text of {}: {e}", memo.path.display());
+                slint::StyledText::from_plain_text(markdown)
+            })
+        };
+        let pairs: Vec<ComparePair> = compare::markdown(before, after)
             .iter()
-            .map(|markdown| {
-                slint::StyledText::from_markdown(markdown).unwrap_or_else(|e| {
-                    eprintln!("kyrr: memo: comparing the text of {}: {e}", memo.path.display());
-                    slint::StyledText::from_plain_text(markdown)
-                })
+            .map(|(then, now)| ComparePair {
+                before: styled(then),
+                after: styled(now),
             })
             .collect();
-        ModelRc::new(VecModel::from(paragraphs))
+        ModelRc::new(VecModel::from(pairs))
     }
 
     /// The comparison opens: what was typed counts in it.

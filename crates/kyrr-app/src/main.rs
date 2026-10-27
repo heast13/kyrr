@@ -470,6 +470,10 @@ fn fit_sheet(w: &MainWindow, open: bool) {
         return;
     }
     let win = w.window();
+    // Two columns, side by side, fit on the screen.
+    if let Some((left, _, right, _)) = screen(w) {
+        w.set_widest(((right - left) as f32 / win.scale_factor() - FRAME_SIDES).max(520.0));
+    }
     let cap = screen(w).map_or(FALLBACK_HEIGHT, |(_, top, _, bottom)| {
         ((bottom - top) as f32 / win.scale_factor() - FRAME).clamp(MIN_HEIGHT, MAX_HEIGHT)
     });
@@ -2784,6 +2788,22 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
     window.on_content_height_changed({
         let weak = window.as_weak();
         move || grow(&weak)
+    });
+    // A memo compared with the text before widens the window for a second
+    // column, and it narrows again after; the height stays.
+    window.on_page_width_changed({
+        let weak = window.as_weak();
+        move || {
+            let weak = weak.clone();
+            slint::Timer::single_shot(Duration::from_millis(10), move || {
+                let Some(w) = weak.upgrade() else { return };
+                let win = w.window();
+                if headless() || !win.is_visible() || win.is_minimized() {
+                    return;
+                }
+                resize(&w, win.size().to_logical(win.scale_factor()).height);
+            });
+        }
     });
     // Closing only hides the window; listening and the meter end with it.
     // The button in the window does the same; quitting is in the tray menu.

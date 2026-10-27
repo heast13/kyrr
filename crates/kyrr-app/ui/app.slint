@@ -30,6 +30,12 @@ export struct MemoItem {
     text-left: string,
 }
 
+// One paragraph of a memo before and after the language model, marked.
+export struct ComparePair {
+    before: styled-text,
+    after: styled-text,
+}
+
 // How kyrr looks: like the system, or on Omarchy like Omarchy (its theme's
 // colours, square corners, its monospace font). The app sets the theme and
 // follows a change of it.
@@ -782,7 +788,7 @@ export global AppState {
     in property <bool> memo-sheet-original;
     // The text as it is (0) or compared with the one before (1).
     in-out property <int> memo-sheet-view;
-    in property <[styled-text]> memo-sheet-compare;
+    in property <[ComparePair]> memo-sheet-compare;
     callback memo-show-compare();
     callback memo-rework(int, int);
     callback memo-stop-rework();
@@ -3116,7 +3122,10 @@ component TranscriptSheet inherits Rectangle {
                 model: AppState.rework-options;
                 current-index <=> AppState.memo-rework-action;
                 enabled: !AppState.memo-rework-busy;
+                // As wide as in the narrow window, also beside the comparison.
+                max-width: 370px;
             }
+            Rectangle { }
         }
         if AppState.memo-rework-ready: HorizontalLayout {
             spacing: 8px;
@@ -3131,7 +3140,9 @@ component TranscriptSheet inherits Rectangle {
                 model: AppState.translate-options;
                 current-index <=> AppState.memo-rework-target;
                 enabled: !AppState.memo-rework-busy;
+                max-width: 370px;
             }
+            Rectangle { }
         }
         if AppState.memo-rework-ready || AppState.memo-sheet-original: HorizontalLayout {
             spacing: 8px;
@@ -3222,23 +3233,61 @@ component TranscriptSheet inherits Rectangle {
                     }
                 }
             }
-            // Before and after: what went struck through, what came in
-            // colour; a translation under the paragraph as said.
-            if AppState.memo-sheet-view == 1 && AppState.memo-sheet-original && !AppState.memo-rework-busy: ScrollView {
+            // Before on the left, after on the right, paragraph beside
+            // paragraph: what went in red, what came in green.
+            if AppState.memo-sheet-view == 1 && AppState.memo-sheet-original && !AppState.memo-rework-busy: VerticalLayout {
                 x: 12px;
                 y: 12px;
                 width: parent.width - 24px;
                 height: parent.height - 24px;
-                content-width: self.visible-width;
-                content-height: max(self.visible-height, compare.preferred-height);
-                compare := VerticalLayout {
-                    width: parent.width;
-                    alignment: start;
-                    spacing: 14px;
-                    for paragraph in AppState.memo-sheet-compare: StyledText {
-                        text: paragraph;
-                        default-color: Skin.foreground;
-                        default-font-size: 15px;
+                spacing: 8px;
+                HorizontalLayout {
+                    spacing: 25px;
+                    Text {
+                        text: @tr("Original");
+                        font-size: 12px;
+                        font-weight: 600;
+                        color: Skin.foreground.with-alpha(0.65);
+                        width: (parent.width - 25px) / 2;
+                    }
+                    Text {
+                        text: @tr("New version");
+                        font-size: 12px;
+                        font-weight: 600;
+                        color: Skin.foreground.with-alpha(0.65);
+                        width: (parent.width - 25px) / 2;
+                    }
+                }
+                ScrollView {
+                    content-width: self.visible-width;
+                    content-height: max(self.visible-height, compare.preferred-height);
+                    // The line between the two columns.
+                    Rectangle {
+                        x: (parent.width - 1px) / 2;
+                        y: 0;
+                        width: 1px;
+                        height: max(parent.height, compare.preferred-height);
+                        background: Skin.foreground.with-alpha(0.12);
+                    }
+                    compare := VerticalLayout {
+                        width: parent.width;
+                        alignment: start;
+                        spacing: 14px;
+                        for pair in AppState.memo-sheet-compare: HorizontalLayout {
+                            spacing: 25px;
+                            StyledText {
+                                text: pair.before;
+                                default-color: Skin.foreground;
+                                default-font-size: 15px;
+                                width: (parent.width - 25px) / 2;
+                            }
+                            StyledText {
+                                text: pair.after;
+                                default-color: Skin.foreground;
+                                default-font-size: 15px;
+                                width: (parent.width - 25px) / 2;
+                            }
+                        }
                     }
                 }
             }
@@ -3266,9 +3315,11 @@ component TranscriptSheet inherits Rectangle {
             }
             Hint {
                 text: AppState.memo-sheet-view == 1 && AppState.memo-sheet-original && !AppState.memo-rework-busy
-                    ? @tr("Red, struck through: before. Green: new. Grey: what was said, where almost all of it is new.")
+                    ? @tr("Red: changed in the original. Green: worded anew. A translation stays unmarked.")
                     : @tr("Select and copy: the times stay behind. What you type is saved by itself.");
                 vertical-alignment: center;
+                // The room a wide window has goes to the hint, not the button.
+                horizontal-stretch: 1;
             }
         }
     }
@@ -3284,8 +3335,13 @@ export component MainWindow inherits Window {
     callback shown();
     changed content-height => { root.content-height-changed(); }
     // One column, 380 px, on every page; the recordings are wider, so a
-    // text reads comfortably.
-    out property <length> page-width: memos-page ? 520px : 380px;
+    // text reads comfortably, and twice as wide while a memo is compared
+    // with the text before (as wide as the screen allows, the app says).
+    out property <length> page-width: memos-page && comparing ? min(1040px, root.widest) : memos-page ? 520px : 380px;
+    in property <length> widest: 1040px;
+    property <bool> comparing: AppState.memo-sheet-open && AppState.memo-sheet-view == 1 && AppState.memo-sheet-original;
+    callback page-width-changed();
+    changed page-width => { root.page-width-changed(); }
     title: "kyrr";
     icon: @image-url("icons/kyrr-256.png");
     background: Skin.background;

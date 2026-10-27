@@ -207,10 +207,14 @@ fn memos(window: &MinimalSoftwareWindow, ui: &MainWindow, out: &str, lang: &str)
     render_at(window, ui, 820.0, &format!("{out}/memos-ai-done-{lang}.rgba"));
     // Compared with the text before: fixed and made professional, then one
     // paragraph translated.
+    let styled = |m: &str| slint::StyledText::from_markdown(m).unwrap();
     state.set_memo_sheet_compare(ModelRc::new(VecModel::from(
         compare_preview(lang == "de")
-            .split("\n\n")
-            .map(|p| slint::StyledText::from_markdown(p).unwrap_or_default())
+            .iter()
+            .map(|(before, after)| ComparePair {
+                before: styled(before),
+                after: styled(after),
+            })
             .collect::<Vec<_>>(),
     )));
     state.set_memo_sheet_view(1);
@@ -237,25 +241,41 @@ fn memos(window: &MinimalSoftwareWindow, ui: &MainWindow, out: &str, lang: &str)
     state.set_memo_new(false);
 }
 
-/// What the comparison in the memo text shows (as `memo::compare` writes it).
-fn compare_preview(german: bool) -> String {
-    let (gone, came, said) = ("#d9534f", "#2e9e5b", "#8a8a8a");
+/// What the comparison in the memo text shows (as `memo::compare` writes it):
+/// fixed and made professional, then one paragraph translated.
+fn compare_preview(german: bool) -> Vec<(String, String)> {
+    let (gone, came) = ("#d9534f", "#2e9e5b");
+    let pair = |a: String, b: String| (a, b);
     if german {
-        format!(
-            "<font color=\"{gone}\">~~Gedanken zur neuen Startseite. Oben soll sofort klar sein, was kyrr macht, ohne Werbesprech.~~</font> \
-             <font color=\"{came}\">Überlegungen zur neuen Startseite: Oben muss sofort erkennbar sein, was kyrr leistet, ohne Werbesprache.</font>\n\n\
-             Darunter <font color=\"{gone}\">~~der Download, groß, und gleich daneben~~</font> <font color=\"{came}\">folgt gut sichtbar der Download, direkt daneben</font> die Befehle für Linux zum Kopieren\\.\n\n\
-             <font color=\"{said}\">Die Beispiel\\-Pille als kurze Schleife, nicht als Video, das lädt sonst ewig\\.</font>\n\
-             The example pill as a short loop rather than a video, which would take too long to load\\.\n\n\
-             Und unten nur noch die häufigen Fragen, zusammengeklappt\\."
-        )
+        vec![
+            pair(
+                format!("<font color=\"{gone}\">Gedanken zur neuen Startseite. Oben soll sofort klar sein, was kyrr macht, ohne Werbesprech.</font>"),
+                format!("<font color=\"{came}\">Überlegungen zur neuen Startseite: Oben muss sofort erkennbar sein, was kyrr leistet, ohne Werbesprache.</font>"),
+            ),
+            pair(
+                format!("Darunter <font color=\"{gone}\">der Download, groß, und gleich daneben</font> die Befehle für Linux zum Kopieren\\."),
+                format!("Darunter <font color=\"{came}\">folgt gut sichtbar der Download, direkt daneben</font> die Befehle für Linux zum Kopieren\\."),
+            ),
+            pair(
+                "Die Beispiel\\-Pille als kurze Schleife, nicht als Video, das lädt sonst ewig\\.".into(),
+                "The example pill as a short loop rather than a video, which would take too long to load\\.".into(),
+            ),
+            pair(
+                "Und unten nur noch die häufigen Fragen, zusammengeklappt\\.".into(),
+                "Und unten nur noch die häufigen Fragen, zusammengeklappt\\.".into(),
+            ),
+        ]
     } else {
-        format!(
-            "<font color=\"{gone}\">~~Thoughts on the new home page.~~</font> <font color=\"{came}\">Notes on the new home page:</font> \
-             the top must make clear at once what kyrr does\\.\n\n\
-             <font color=\"{said}\">Die Beispiel\\-Pille als kurze Schleife\\.</font>\n\
-             The example pill as a short loop\\."
-        )
+        vec![
+            pair(
+                format!("<font color=\"{gone}\">Thoughts on the new home page.</font> the top must make clear at once what kyrr does\\."),
+                format!("<font color=\"{came}\">Notes on the new home page:</font> the top must make clear at once what kyrr does\\."),
+            ),
+            pair(
+                "Die Beispiel\\-Pille als kurze Schleife\\.".into(),
+                "The example pill as a short loop\\.".into(),
+            ),
+        ]
     }
 }
 

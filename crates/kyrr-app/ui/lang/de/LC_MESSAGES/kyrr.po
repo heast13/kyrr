@@ -1685,5 +1685,11 @@ msgstr "Vergleich"
 msgid "Text"
 msgstr "Text"
 
-msgid "Red, struck through: before. Green: new. Grey: what was said, where almost all of it is new."
-msgstr "Rot durchgestrichen: vorher. Grün: neu. Grau: das Gesagte, wo fast alles neu ist."
+msgid "Red: changed in the original. Green: worded anew. A translation stays unmarked."
+msgstr "Rot: im Original geändert. Grün: neu formuliert. Eine Übersetzung bleibt unmarkiert."
+
+msgid "Original"
+msgstr "Original"
+
+msgid "New version"
+msgstr "Neue Fassung"
