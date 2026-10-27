@@ -368,7 +368,7 @@ fn numbers(s: &str) -> Vec<String> {
 }
 
 const STOP: [(&str, &str); 17] = [
-    ("de", "der die das und ist nicht ich du er sie wir ihr es ein eine zu mit auf für von den dem des im sind war hat haben auch noch wie aber oder wenn dass"),
+    ("de", "der die das und ist nicht ich du er sie wir ihr es ein eine zu mit auf für von den dem des im mich mir sich bei nach sind war hat haben auch noch wie aber oder wenn dass"),
     ("en", "the and is not you he she we they it a an to with on for of in was were has have also still how but or if that this"),
     ("fr", "le la les et est pas je tu il elle nous vous un une des du de en pour avec sur que qui"),
     ("es", "el la los las y es no yo tú él ella nosotros un una de en para con que por del se"),
@@ -401,15 +401,35 @@ pub fn language_of(s: &str) -> Option<&'static str> {
     if ws.is_empty() {
         return None;
     }
-    let count = |list: &str| ws.iter().filter(|w| list.split(' ').any(|s| s == w.as_str())).count();
     let mut best = ("", 0);
-    for (code, list) in STOP {
-        let n = count(list);
+    for (code, _) in STOP {
+        let n = small_words(&ws, code);
         if n > best.1 {
             best = (code, n);
         }
     }
     (best.1 >= (ws.len() / 12).max(1)).then_some(best.0)
+}
+
+/// How many of `ws` are small words of the language with `code`.
+fn small_words(ws: &[String], code: &str) -> usize {
+    let list = STOP.iter().find(|(c, _)| *c == code).map_or("", |(_, l)| l);
+    ws.iter().filter(|w| list.split(' ').any(|s| s == w.as_str())).count()
+}
+
+/// Whether `s` is clearly in another language than `wanted`: the small
+/// words of another one win by two, or `wanted` has none of them. Short
+/// sentences share small words ("die", "in") and are not judged by one.
+fn other_language(s: &str, wanted: &str) -> bool {
+    let Some(found) = language_of(s) else {
+        return false;
+    };
+    if kin(found, wanted) {
+        return false;
+    }
+    let ws = words(s);
+    let (theirs, ours) = (small_words(&ws, found), small_words(&ws, wanted));
+    ours == 0 || theirs >= ours + 2
 }
 
 /// Languages whose small words are too alike to tell apart by them.
@@ -503,17 +523,16 @@ pub fn reworded(orig: &str, out: &str, language: Option<&str>) -> Result<(), Ref
 }
 
 /// Whether text put into business language may be typed instead: it may
-/// change more words and grow a little more than plain rewording.
+/// change more words and grow a little more than plain rewording ("viel zu
+/// lang" becomes "unzureichend").
 pub fn formal(orig: &str, out: &str, language: Option<&str>) -> Result<(), Refusal> {
-    rewritten(orig, out, language, (0.5, 1.8), 0.25)
+    rewritten(orig, out, language, (0.5, 1.8), 0.15)
 }
 
 fn rewritten(orig: &str, out: &str, language: Option<&str>, length: (f32, f32), kept: f32) -> Result<(), Refusal> {
     whole(orig, out, length)?;
-    if let (Some(found), Some(wanted)) = (language_of(out), language) {
-        if found != wanted {
-            return Err(Refusal::Language);
-        }
+    if language.is_some_and(|wanted| other_language(out, wanted)) {
+        return Err(Refusal::Language);
     }
     let (before, after) = (persons(orig), persons(out));
     let lost = (0..3).any(|i| before[i] && !after[i]);
@@ -522,7 +541,15 @@ fn rewritten(orig: &str, out: &str, language: Option<&str>, length: (f32, f32), 
         return Err(Refusal::Person);
     }
     let (before, after) = (stems(orig), stems(out));
-    if !before.is_empty() && (before.intersection(&after).count() as f32) < kept * before.len() as f32 {
+    if before.len() > 3 && (before.intersection(&after).count() as f32) < kept * before.len() as f32 {
+        return Err(Refusal::Content);
+    }
+    // Three longer words or fewer: one of them must stay, by its start
+    // ("Danke fürs Zuhören", "Vielen Dank für Ihre Aufmerksamkeit").
+    let starts = |s: &str| -> std::collections::HashSet<String> {
+        stems(s).into_iter().map(|w| w.chars().take(4).collect()).collect()
+    };
+    if (1..=3).contains(&before.len()) && starts(orig).is_disjoint(&starts(out)) {
         return Err(Refusal::Content);
     }
     Ok(())
@@ -732,6 +759,70 @@ mod tests {
                 long,
                 "We meet on Monday at nine in the office, please bring the documents along.",
                 "en"
+            ),
+            Err(Refusal::Numbers)
+        );
+    }
+
+    #[test]
+    fn business_wording_from_the_measurements_passes() {
+        let de = Some("de");
+        // Real answers of Gemma 4 26B that were refused before.
+        for (said, answer) in [
+            ("Die Entscheidung fällt in zwei Wochen.", "Die Entscheidung wird in zwei Wochen fallen."),
+            ("Kurze Erinnerung an mich selbst.", "Kurze Erinnerung an mich selbst."),
+            ("Danke fürs Zuhören.", "Vielen Dank für Ihre Aufmerksamkeit."),
+            (
+                "Die Ladezeit ist viel zu lang, vor allem auf dem Handy.",
+                "Die Ladezeit ist unzureichend, insbesondere auf mobilen Endgeräten.",
+            ),
+            (
+                "Was ist da eigentlich los mit der Buchhaltung, warum dauert das so lange?",
+                "Könnten Sie bitte erläutern, weshalb die Bearbeitung durch die Buchhaltung so viel Zeit in Anspruch nimmt?",
+            ),
+        ] {
+            assert_eq!(formal(said, answer, de), Ok(()), "{answer}");
+        }
+        assert_eq!(
+            formal(
+                "sorry for the late reply, I was sick all week, I'll look into it first thing on Monday",
+                "Please excuse my delayed response; I was on sick leave all week. I will look into this first thing on Monday.",
+                Some("en")
+            ),
+            Ok(())
+        );
+        // Still refused: another language, a number gone or written out
+        // (the second try asks for digits), another sentence altogether.
+        assert_eq!(
+            formal("Ruf mich in einer Stunde an.", "Call me in an hour.", de),
+            Err(Refusal::Language)
+        );
+        assert_eq!(
+            formal(
+                "Wir brauchen 2 Leute für 5 Tage.",
+                "Wir brauchen 5 Leute für zwei Tage.",
+                de
+            ),
+            Err(Refusal::Numbers)
+        );
+        assert_eq!(
+            formal(
+                "Das Meeting ist morgen.",
+                "Ich habe gestern im Garten Tomaten geerntet.",
+                de
+            ),
+            Err(Refusal::Content)
+        );
+        assert_eq!(super::language_of("Lunch in Berlin?"), Some("en"));
+        assert_eq!(
+            formal("Dann zum Auto", "Regarding the vehicle.", de),
+            Err(Refusal::Language)
+        );
+        assert_eq!(
+            formal(
+                "Das kostet 349 Euro im Monat.",
+                "Das kostet monatlich einen Betrag.",
+                de
             ),
             Err(Refusal::Numbers)
         );

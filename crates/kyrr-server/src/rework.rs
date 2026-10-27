@@ -177,7 +177,7 @@ fn feedback(preset: Preset, refusal: &Refusal) -> String {
         Refusal::Length => {
             format!("Your version is much shorter or longer than the dictation. {again}, keeping all of its content and about its length.")
         }
-        Refusal::Numbers => format!("Your version lost or changed a number. {again} and keep every number exactly as it is."),
+        Refusal::Numbers => format!("Your version lost or changed a number. {again} and keep every number exactly as it is, in digits."),
         Refusal::Language if target.is_empty() => format!("Your version is in another language. {again} in its own language."),
         Refusal::Language => format!("Your version is not in {target}. {again}, into {target}."),
         Refusal::Person => format!(
