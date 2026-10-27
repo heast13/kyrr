@@ -33,6 +33,8 @@ pub enum Error {
     Refused(u16),
     /// An answer kyrr could not read.
     Answer,
+    /// The model thought aloud and gave no answer: its thinking is on.
+    Thinks,
 }
 
 /// The address as typed, made usable: "192.168.1.5:1234/v1/" becomes
@@ -196,10 +198,20 @@ pub fn chat(server: &Server, body: &serde_json::Value, timeout: Duration) -> Res
     )
     .content_type("application/json");
     let json = read(request.send(body.to_string().as_bytes()))?;
-    json["choices"][0]["message"]["content"]
-        .as_str()
-        .map(str::to_string)
-        .ok_or(Error::Answer)
+    let message = &json["choices"][0]["message"];
+    let content = message["content"].as_str().unwrap_or_default();
+    // Thinking that a server hands back on its own (llama.cpp, vLLM,
+    // LM Studio, Ollama each name it differently).
+    let thought = ["reasoning_content", "reasoning", "thinking"]
+        .iter()
+        .any(|k| message[k].as_str().is_some_and(|t| !t.trim().is_empty()));
+    if content.trim().is_empty() && thought {
+        return Err(Error::Thinks);
+    }
+    if message["content"].is_null() && !thought {
+        return Err(Error::Answer);
+    }
+    Ok(content.to_string())
 }
 
 /// A mono recording at 16 kHz as a WAV file, 16 bits.

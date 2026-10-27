@@ -73,14 +73,20 @@ pub struct Config {
     /// `kyrr_server`): its address ("" for none) and model.
     pub rework_url: String,
     pub rework_model: String,
+    /// Local AI on the main page: the language model reworks and
+    /// translates dictations (with AI features on and a model set up).
+    pub local_ai: bool,
     /// What it does with a dictation: 0 nothing, 1 fix what was misheard,
-    /// 2 reword it.
+    /// 2 reword it, 3 make it professional.
     pub rework: u8,
     /// The language it then translates into, a code; "" for none.
     pub translate_into: String,
     /// Test builds before had translating as rework 3, into this.
     #[serde(rename = "rework_target", skip_serializing)]
     pub old_target: String,
+    /// The user's own instructions for the language model, in the order of
+    /// `kyrr_server::rework::DEFAULT_PROMPTS`; "" for kyrr's own.
+    pub prompts: Vec<String>,
     /// Dictation through the user's own speech server instead of the
     /// built-in model, its address and model.
     pub asr_server: bool,
@@ -122,9 +128,11 @@ impl Default for Config {
             ai_features: false,
             rework_url: String::new(),
             rework_model: String::new(),
+            local_ai: false,
             rework: 0,
             translate_into: String::new(),
             old_target: String::new(),
+            prompts: Vec::new(),
             asr_server: false,
             asr_url: String::new(),
             asr_model: String::new(),
@@ -150,10 +158,14 @@ impl Config {
             }
         };
         let (mut config, whole) = parse(&bytes);
-        if config.rework > 2 {
+        // Translating was rework 3 in test builds before; there the
+        // target came along.
+        if config.rework == 3 && !config.old_target.is_empty() {
             config.rework = 0;
             config.translate_into = std::mem::take(&mut config.old_target);
+            config.local_ai = true;
         }
+        config.rework = config.rework.min(3);
         if !config.memo_hold_default {
             config.memo_toggle = false;
             config.memo_hold_default = true;
@@ -430,6 +442,10 @@ mod tests {
         std::fs::write(&path, br#"{"rework": 2, "rework_target": "en"}"#).unwrap();
         let config = Config::load_from(&path);
         assert_eq!((config.rework, config.translate_into.as_str()), (2, ""));
+        // Business language is rework 3 now.
+        std::fs::write(&path, br#"{"rework": 3}"#).unwrap();
+        let config = Config::load_from(&path);
+        assert_eq!((config.rework, config.translate_into.as_str()), (3, ""));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

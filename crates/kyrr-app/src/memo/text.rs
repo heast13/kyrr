@@ -106,6 +106,7 @@ pub fn write(
         return Ok(Done::Cancelled);
     }
     let written = library::write_text(path, &paragraphs).map_err(|e| e.to_string())?;
+    library::drop_original(path);
     // Deleted or renamed while it was written: no text without its memo.
     if !path.exists() {
         let _ = std::fs::remove_file(written);

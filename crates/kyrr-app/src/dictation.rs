@@ -331,6 +331,14 @@ fn say(language: Language, what: &str) -> String {
         ("fixing+translating", true) => "Korrigiere und übersetze…",
         ("fixing+translating", false) => "Fixing and translating…",
         ("polishing+translating", true) => "Formuliere und übersetze…",
+        ("formalizing", true) => "Formuliere professionell…",
+        ("formalizing", false) => "Making it professional…",
+        ("formalizing+translating", true) => "Formuliere professionell und übersetze…",
+        ("formalizing+translating", false) => "Making it professional and translating…",
+        ("formalized", true) => "Professionell formuliert",
+        ("formalized", false) => "Made professional",
+        ("not formalized", true) => "nicht professionell formuliert",
+        ("not formalized", false) => "not made professional",
         ("polishing+translating", false) => "Rewording and translating…",
         ("and", true) => "und",
         ("and", false) => "and",
@@ -346,8 +354,10 @@ fn say(language: Language, what: &str) -> String {
         ("translating", false) => "Translating…",
         ("rework asleep", true) => "Server schläft, Original getippt",
         ("rework asleep", false) => "Server asleep, typed as said",
-        ("rework refused", true) => "Server sagt nein, Original getippt",
-        ("rework refused", false) => "Server says no, typed as said",
+        ("rework thinks", true) => "Modell denkt nach, Original getippt",
+        ("rework thinks", false) => "Model is thinking, typed as said",
+        ("rework refused", true) => "Server lehnt ab, Original getippt",
+        ("rework refused", false) => "Server refused, typed as said",
         ("rework free", true) => "Abgelehnt, Original getippt",
         ("rework free", false) => "Refused, typed as said",
         ("fixed", true) => "Ausgebessert",
@@ -374,11 +384,13 @@ fn rework_note(language: Language, steps: &[Preset], outcomes: &[Outcome]) -> Op
     let done = |p: &Preset| match p {
         Preset::Fix => "fixed",
         Preset::Polish => "polished",
+        Preset::Business => "formalized",
         Preset::Translate(_) => "translated",
     };
     let not_done = |p: &Preset| match p {
         Preset::Fix => "not fixed",
         Preset::Polish => "not polished",
+        Preset::Business => "not formalized",
         Preset::Translate(_) => "not translated",
     };
     let (mut good, mut bad, mut plain) = (Vec::new(), Vec::new(), false);
@@ -389,6 +401,7 @@ fn rework_note(language: Language, steps: &[Preset], outcomes: &[Outcome]) -> Op
                 Why::Server(kyrr_server::Error::Refused(_) | kyrr_server::Error::NotLocal) => {
                     bad.push((step, "rework refused"))
                 }
+                Why::Server(kyrr_server::Error::Thinks) => bad.push((step, "rework thinks")),
                 Why::Server(_) => bad.push((step, "rework asleep")),
                 Why::Checked(_) => bad.push((step, "rework free")),
                 Why::Nothing => plain = true,
@@ -1289,8 +1302,10 @@ impl Worker {
         let busy = match steps.as_slice() {
             [Preset::Fix, Preset::Translate(_)] => "fixing+translating",
             [Preset::Polish, Preset::Translate(_)] => "polishing+translating",
+            [Preset::Business, Preset::Translate(_)] => "formalizing+translating",
             [Preset::Fix, ..] => "fixing",
             [Preset::Polish, ..] => "polishing",
+            [Preset::Business, ..] => "formalizing",
             _ => "translating",
         };
         (self.notify)(Event::Heard(vec![say(self.language, busy)]));

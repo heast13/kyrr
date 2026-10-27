@@ -190,6 +190,25 @@ fn memos(window: &MinimalSoftwareWindow, ui: &MainWindow, out: &str, lang: &str)
         );
     }
     state.set_memo_sheet_stamps(0);
+    state.set_memo_sheet_text(field(0));
+    // The language model on the text: at work, then done with the original kept.
+    state.set_memo_rework_ready(true);
+    state.set_memo_rework_action(3);
+    state.set_memo_rework_target(0);
+    state.set_memo_rework_busy(true);
+    state.set_memo_rework_progress(0.4);
+    render_at(window, ui, 820.0, &format!("{out}/memos-ai-busy-{lang}.rgba"));
+    state.set_memo_rework_busy(false);
+    state.set_memo_rework_action(2);
+    state.set_memo_sheet_original(true);
+    state.set_memo_rework_note(t(
+        "Professionell formuliert. 1 von 4 Absätzen unverändert. Das Original ist gesichert.",
+        "Made professional. 1 of 4 paragraphs unchanged. The original is kept.",
+    ));
+    render_at(window, ui, 820.0, &format!("{out}/memos-ai-done-{lang}.rgba"));
+    state.set_memo_rework_ready(false);
+    state.set_memo_sheet_original(false);
+    state.set_memo_rework_note("".into());
     state.set_memo_sheet_open(false);
     // Let the text slide away before the next pictures.
     std::thread::sleep(std::time::Duration::from_millis(450));
@@ -426,9 +445,9 @@ fn main() {
     state.set_rework_ready(true);
     state.set_rework_note(
         if lang == "de" {
-            "Geht, 1,1 s: „Ich habe heute die Bremsbeläge am Auto gewechselt.“"
+            "Funktioniert (1,1 s): „Ich habe heute die Bremsbeläge am Auto gewechselt.“"
         } else {
-            "Works, 1.1 s: “Ich habe heute die Bremsbeläge am Auto gewechselt.”"
+            "Works (1.1 s): “Ich habe heute die Bremsbeläge am Auto gewechselt.”"
         }
         .into(),
     );
@@ -436,26 +455,44 @@ fn main() {
     state.set_asr_url("http://192.168.88.118:8081".into());
     state.set_asr_note(
         if lang == "de" {
-            "Geht, 0,4 s für eine Sekunde Stille."
+            "Funktioniert (0,4 s für eine Sekunde Stille)."
         } else {
-            "Works, 0.4 s for a second of silence."
+            "Works (0.4 s for a second of silence)."
         }
         .into(),
     );
     state.set_page(7);
     render(&window, &ui, &format!("{out}/own-models-{lang}.rgba"));
+    state.set_page(8);
+    state.set_prompt_text(kyrr_server::rework::DEFAULT_PROMPTS[0].into());
+    state.set_prompt_saved(kyrr_server::rework::DEFAULT_PROMPTS[0].into());
+    render(&window, &ui, &format!("{out}/local-ai-{lang}.rgba"));
     state.set_rework_tips(false);
-    state.set_rework_index(2);
+    state.set_local_ai(true);
+    state.set_rework_index(3);
     state.set_translate_index(3);
     state.set_page(0);
-    render(&window, &ui, &format!("{out}/main-rework-{lang}.rgba"));
+    render(&window, &ui, &format!("{out}/main-local-ai-{lang}.rgba"));
     state.set_page(1);
     render(&window, &ui, &format!("{out}/own-models-on-{lang}.rgba"));
+    // Switched on, nothing set up yet, Ollama found.
     state.set_rework_ready(false);
+    state.set_rework_url("".into());
+    state.set_rework_models(ModelRc::new(VecModel::from(Vec::<slint::SharedString>::new())));
+    state.set_rework_note("".into());
+    state.set_rework_found("Ollama".into());
+    state.set_page(0);
+    render(&window, &ui, &format!("{out}/main-local-ai-new-{lang}.rgba"));
+    state.set_page(8);
+    render(&window, &ui, &format!("{out}/local-ai-found-{lang}.rgba"));
+    state.set_rework_found("".into());
+    state.set_local_ai(false);
+    state.set_page(0);
+    render(&window, &ui, &format!("{out}/main-local-ai-off-{lang}.rgba"));
     state.set_asr_on(false);
     state.set_ai_features(false);
     state.set_translate_index(0);
-    state.set_page(7);
+    state.set_page(1);
     render(&window, &ui, &format!("{out}/own-models-off-{lang}.rgba"));
 
     // Windows on ARM: no filter, dictation only.

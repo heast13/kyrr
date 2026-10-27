@@ -499,7 +499,17 @@ pub enum Refusal {
 /// Whether reworded text may be typed instead of the dictation, which is in
 /// `language` (a code, None when unknown).
 pub fn reworded(orig: &str, out: &str, language: Option<&str>) -> Result<(), Refusal> {
-    whole(orig, out, (0.6, 1.5))?;
+    rewritten(orig, out, language, (0.6, 1.5), 0.4)
+}
+
+/// Whether text put into business language may be typed instead: it may
+/// change more words and grow a little more than plain rewording.
+pub fn formal(orig: &str, out: &str, language: Option<&str>) -> Result<(), Refusal> {
+    rewritten(orig, out, language, (0.5, 1.8), 0.25)
+}
+
+fn rewritten(orig: &str, out: &str, language: Option<&str>, length: (f32, f32), kept: f32) -> Result<(), Refusal> {
+    whole(orig, out, length)?;
     if let (Some(found), Some(wanted)) = (language_of(out), language) {
         if found != wanted {
             return Err(Refusal::Language);
@@ -512,7 +522,7 @@ pub fn reworded(orig: &str, out: &str, language: Option<&str>) -> Result<(), Ref
         return Err(Refusal::Person);
     }
     let (before, after) = (stems(orig), stems(out));
-    if !before.is_empty() && (before.intersection(&after).count() as f32) < 0.4 * before.len() as f32 {
+    if !before.is_empty() && (before.intersection(&after).count() as f32) < kept * before.len() as f32 {
         return Err(Refusal::Content);
     }
     Ok(())

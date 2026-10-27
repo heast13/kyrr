@@ -15,6 +15,7 @@ use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
 use crate::config::{Config, Keys};
 use crate::dictation::{Command, Recognizer, Reworker};
+use crate::memos::{memos, MemoRework};
 use crate::{tray, App, AppState, MainWindow, Tray};
 
 thread_local! {
@@ -26,13 +27,14 @@ thread_local! {
 /// "Bremsbeläge".
 const TEST: &str = "Ich habe heute die Brainsbelege am Auto gewechselt";
 
-/// What the settings ask the language model to do: fix or reword, then
-/// translate, or one of them.
+/// What the settings ask the language model to do: fix, reword or make
+/// professional, then translate, or one of them.
 fn steps(config: &Config) -> Vec<Preset> {
     let mut steps = Vec::new();
     match config.rework {
         1 => steps.push(Preset::Fix),
         2 => steps.push(Preset::Polish),
+        3 => steps.push(Preset::Business),
         _ => {}
     }
     if let Some((code, _)) = TARGETS.iter().find(|(c, _)| *c == config.translate_into) {
@@ -76,10 +78,72 @@ fn rework_server(config: &Config, keys: &Keys) -> Option<(Server, String)> {
     })
 }
 
+/// What reworks dictations: only with local AI switched on on the main
+/// page.
 fn reworker(config: &Config, keys: &Keys) -> Option<Reworker> {
-    let (server, model) = rework_server(config, keys)?;
+    let (server, model) = rework_server(config, keys).filter(|_| config.local_ai)?;
     let steps = steps(config);
     (!steps.is_empty()).then_some(Reworker { server, model, steps })
+}
+
+/// What reworks the text of a voice memo, when asked to.
+fn memo_rework(app: &App, config: &Config, keys: &Keys) -> Option<MemoRework> {
+    let (server, model) = rework_server(config, keys).filter(|_| config.local_ai)?;
+    let language = (!config.more_languages()).then(|| app.language().code());
+    Some(MemoRework {
+        server,
+        model,
+        language,
+    })
+}
+
+/// The user's own instructions for the language model, in the order of
+/// `rework::DEFAULT_PROMPTS` ("" for kyrr's own).
+fn own_prompts(config: &Config) -> [String; 4] {
+    std::array::from_fn(|i| config.prompts.get(i).cloned().unwrap_or_default())
+}
+
+/// The instruction the language model gets now for `kind`.
+fn prompt_text(config: &Config, kind: usize) -> String {
+    let own = own_prompts(config)[kind].clone();
+    if own.trim().is_empty() {
+        rework::DEFAULT_PROMPTS[kind].to_string()
+    } else {
+        own
+    }
+}
+
+fn show_prompt(app: &App, kind: i32) {
+    let Some(w) = app.window.upgrade() else { return };
+    let state = w.global::<AppState>();
+    let kind = kind.clamp(0, 3) as usize;
+    let config = app.config.borrow();
+    let text = prompt_text(&config, kind);
+    state.set_prompt_index(kind as i32);
+    state.set_prompt_text(text.as_str().into());
+    state.set_prompt_saved(text.as_str().into());
+    state.set_prompt_own(!own_prompts(&config)[kind].trim().is_empty());
+}
+
+fn save_prompt(app: &App, kind: i32, text: &str) {
+    let kind = kind.clamp(0, 3) as usize;
+    {
+        let mut config = app.config.borrow_mut();
+        let mut own = own_prompts(&config);
+        // kyrr's own, typed back in, is kyrr's own again: it follows updates.
+        own[kind] = if text.trim() == rework::DEFAULT_PROMPTS[kind].trim() {
+            String::new()
+        } else {
+            text.to_string()
+        };
+        rework::set_prompts(own.clone());
+        config.prompts = own.into();
+        if config.prompts.iter().all(|p| p.is_empty()) {
+            config.prompts.clear();
+        }
+        config.save();
+    }
+    show_prompt(app, kind as i32);
 }
 
 fn recognizer(config: &Config, keys: &Keys) -> Option<Recognizer> {
@@ -96,22 +160,31 @@ fn recognizer(config: &Config, keys: &Keys) -> Option<Recognizer> {
 }
 
 /// What went wrong with a server, in the window's language.
-fn problem(german: bool, e: &Error) -> String {
+pub(crate) fn problem(german: bool, e: &Error) -> String {
     match (e, german) {
-        (Error::NotLocal, true) => "Ohne https geht nur ein Server auf diesem PC oder im Heimnetz.".into(),
-        (Error::NotLocal, false) => "Without https, only a server on this computer or in your home network.".into(),
-        (Error::Offline, true) => "Keine Antwort. Stimmt die Adresse, läuft der Server?".into(),
-        (Error::Offline, false) => "No answer. Is the address right, is the server running?".into(),
+        (Error::NotLocal, true) => "Ohne https sind nur Server auf diesem PC oder im Heimnetz möglich.".into(),
+        (Error::NotLocal, false) => "Without https, only servers on this computer or in your home network.".into(),
+        (Error::Offline, true) => "Keine Antwort. Bitte Adresse prüfen und ob der Server läuft.".into(),
+        (Error::Offline, false) => "No answer. Please check the address and whether the server is running.".into(),
         (Error::Timeout, true) => "Der Server antwortet zu langsam.".into(),
         (Error::Timeout, false) => "The server answers too slowly.".into(),
-        (Error::Refused(401 | 403), true) => "Der Server will einen (anderen) Schlüssel.".into(),
-        (Error::Refused(401 | 403), false) => "The server wants a (different) key.".into(),
-        (Error::Refused(404), true) => "Dort ist kein passender Server, oder er kennt das Modell nicht.".into(),
-        (Error::Refused(404), false) => "No fitting server there, or it does not know the model.".into(),
-        (Error::Refused(code), true) => format!("Der Server sagt nein (Fehler {code})."),
-        (Error::Refused(code), false) => format!("The server says no (error {code})."),
-        (Error::Answer, true) => "Der Server antwortet, aber nicht verständlich.".into(),
-        (Error::Answer, false) => "The server answers, but not in a way kyrr understands.".into(),
+        (Error::Refused(401 | 403), true) => "Der Server verlangt einen (anderen) Schlüssel.".into(),
+        (Error::Refused(401 | 403), false) => "The server requires a (different) key.".into(),
+        (Error::Refused(404), true) => {
+            "Kein passender Server unter dieser Adresse, oder das Modell ist dort unbekannt.".into()
+        }
+        (Error::Refused(404), false) => "No suitable server at this address, or it does not know the model.".into(),
+        (Error::Refused(code), true) => format!("Der Server lehnt ab (Fehler {code})."),
+        (Error::Refused(code), false) => format!("The server refused (error {code})."),
+        (Error::Answer, true) => "Die Antwort des Servers ist nicht lesbar.".into(),
+        (Error::Answer, false) => "The server's answer cannot be read.".into(),
+        (Error::Thinks, true) => {
+            "Das Modell denkt nach, statt zu antworten. Denkmodus am Server ausschalten oder ein anderes Modell wählen."
+                .into()
+        }
+        (Error::Thinks, false) => {
+            "The model thinks instead of answering. Switch thinking off on the server or pick another model.".into()
+        }
     }
 }
 
@@ -140,16 +213,71 @@ pub fn setup(app: &Rc<App>, window: &MainWindow) {
         state.set_rework_model(config.rework_model.as_str().into());
         state.set_rework_key(keys.rework.as_str().into());
         state.set_ai_features(config.ai_features);
-        state.set_rework_index(config.rework.min(2) as i32);
+        state.set_local_ai(config.local_ai);
+        state.set_rework_index(config.rework.min(3) as i32);
         state.set_translate_index(translate_index(&config));
         state.set_rework_ready(rework_server(&config, &keys).is_some());
+        // A memo is translated into the language dictations go into, else
+        // into the other one.
+        let target = match config.translate_into.as_str() {
+            "" if app.language() == Language::English => "de",
+            "" => "en",
+            code => code,
+        };
+        state.set_memo_rework_target(TARGETS.iter().position(|(c, _)| *c == target).unwrap_or(0) as i32);
+        rework::set_prompts(own_prompts(&config));
         state.set_asr_on(config.asr_server);
         state.set_asr_url(config.asr_url.as_str().into());
         state.set_asr_model(config.asr_model.as_str().into());
         state.set_asr_key(keys.asr.as_str().into());
         let _ = app.worker.send(Command::Rework(reworker(&config, &keys)));
         let _ = app.worker.send(Command::Recognizer(recognizer(&config, &keys)));
+        if let Some(m) = memos() {
+            m.set_rework(memo_rework(app, &config, &keys));
+        }
     }
+    show_prompt(app, 0);
+    state.on_local_ai_toggled({
+        let app = Rc::clone(app);
+        move |on| {
+            app.config.borrow_mut().local_ai = on;
+            app.config.borrow().save();
+            send(&app);
+            crate::fit(&app.window);
+        }
+    });
+    state.on_prompt_picked({
+        let app = Rc::clone(app);
+        move |i| show_prompt(&app, i)
+    });
+    state.on_prompt_save({
+        let app = Rc::clone(app);
+        move |i, text| save_prompt(&app, i, &text)
+    });
+    state.on_prompt_reset({
+        let app = Rc::clone(app);
+        move |i| save_prompt(&app, i, "")
+    });
+    state.on_rework_take_found({
+        let app = Rc::clone(app);
+        move || {
+            let Some(w) = app.window.upgrade() else { return };
+            let state = w.global::<AppState>();
+            state.set_rework_url(state.get_rework_found_url());
+            state.set_rework_found("".into());
+            connect_rework(&app);
+        }
+    });
+    state.on_asr_take_found({
+        let app = Rc::clone(app);
+        move || {
+            let Some(w) = app.window.upgrade() else { return };
+            let state = w.global::<AppState>();
+            state.set_asr_url(state.get_asr_found_url());
+            state.set_asr_found("".into());
+            connect_asr(&app);
+        }
+    });
     state.on_ai_features_toggled({
         let app = Rc::clone(app);
         move |on| {
@@ -162,7 +290,7 @@ pub fn setup(app: &Rc<App>, window: &MainWindow) {
     state.on_rework_changed({
         let app = Rc::clone(app);
         move |i| {
-            app.config.borrow_mut().rework = i.clamp(0, 2) as u8;
+            app.config.borrow_mut().rework = i.clamp(0, 3) as u8;
             app.config.borrow().save();
             send(&app);
         }
@@ -231,7 +359,7 @@ pub fn wire_tray(app: &Rc<App>, tray: &Tray) {
         move |i| {
             {
                 let mut config = app.config.borrow_mut();
-                config.rework = i.clamp(0, 2) as u8;
+                config.rework = i.clamp(0, 3) as u8;
                 config.save();
             }
             send(&app);
@@ -252,8 +380,8 @@ pub fn wire_tray(app: &Rc<App>, tray: &Tray) {
 
 fn show_tray(app: &App, tray: &Tray) {
     let config = app.config.borrow();
-    tray.set_rework_ready(rework_server(&config, &Keys::load()).is_some());
-    tray.set_rework_index(config.rework.min(2) as i32);
+    tray.set_rework_ready(config.local_ai && rework_server(&config, &Keys::load()).is_some());
+    tray.set_rework_index(config.rework.min(3) as i32);
     tray.set_translate_index(translate_index(&config));
     if let Some(w) = app.window.upgrade() {
         tray.set_translate_options(w.global::<AppState>().get_translate_options());
@@ -266,10 +394,14 @@ fn send(app: &App) {
     let keys = Keys::load();
     let _ = app.worker.send(Command::Rework(reworker(&config, &keys)));
     let _ = app.worker.send(Command::Recognizer(recognizer(&config, &keys)));
+    if let Some(m) = memos() {
+        m.set_rework(memo_rework(app, &config, &keys));
+    }
     if let Some(w) = app.window.upgrade() {
         let state = w.global::<AppState>();
         state.set_ai_features(config.ai_features);
-        state.set_rework_index(config.rework.min(2) as i32);
+        state.set_local_ai(config.local_ai);
+        state.set_rework_index(config.rework.min(3) as i32);
         state.set_translate_index(translate_index(&config));
         state.set_rework_ready(rework_server(&config, &keys).is_some());
     }
@@ -303,9 +435,9 @@ fn connect_rework(app: &Rc<App>) {
     let Some(url) = kyrr_server::address(&state.get_rework_url()) else {
         state.set_rework_note(
             if german {
-                "Erst eine Adresse eintragen."
+                "Bitte zuerst eine Adresse eintragen."
             } else {
-                "First an address."
+                "Please enter an address first."
             }
             .into(),
         );
@@ -362,15 +494,15 @@ fn connect_rework(app: &Rc<App>) {
             state.set_rework_model(model.as_str().into());
             let note = match tested {
                 Err(e) => problem(german, &e),
-                Ok((Outcome::Reworked(text), took)) if german => format!("Geht, {} s: „{text}“", seconds(german, took)),
-                Ok((Outcome::Reworked(text), took)) => format!("Works, {} s: “{text}”", seconds(german, took)),
+                Ok((Outcome::Reworked(text), took)) if german => format!("Funktioniert ({} s): „{text}“", seconds(german, took)),
+                Ok((Outcome::Reworked(text), took)) => format!("Works ({} s): “{text}”", seconds(german, took)),
                 Ok((Outcome::Original(Why::Server(e)), _)) => problem(german, &e),
                 Ok((Outcome::Original(_), took)) if german => format!(
-                    "Verbunden ({} s), aber der Testsatz kam unverändert zurück. Ein anderes Modell probieren?",
+                    "Verbunden ({} s), aber der Testsatz kam unverändert zurück. Ein anderes Modell könnte besser passen.",
                     seconds(german, took)
                 ),
                 Ok((Outcome::Original(_), took)) => format!(
-                    "Connected ({} s), but the test sentence came back unchanged. Try another model?",
+                    "Connected ({} s), but the test sentence came back unchanged. Another model may suit better.",
                     seconds(german, took)
                 ),
             };
@@ -394,9 +526,9 @@ fn connect_asr(app: &Rc<App>) {
     let Some(url) = kyrr_server::address(&state.get_asr_url()) else {
         state.set_asr_note(
             if german {
-                "Erst eine Adresse eintragen."
+                "Bitte zuerst eine Adresse eintragen."
             } else {
-                "First an address."
+                "Please enter an address first."
             }
             .into(),
         );
@@ -439,8 +571,8 @@ fn connect_asr(app: &Rc<App>) {
             state.set_asr_model_index(names.iter().position(|n| *n == model).map_or(-1, |i| i as i32));
             state.set_asr_model(model.as_str().into());
             let note = match tested {
-                Ok(took) if german => format!("Geht, {} s für eine Sekunde Stille.", seconds(german, took)),
-                Ok(took) => format!("Works, {} s for a second of silence.", seconds(german, took)),
+                Ok(took) if german => format!("Funktioniert ({} s für eine Sekunde Stille).", seconds(german, took)),
+                Ok(took) => format!("Works ({} s for a second of silence).", seconds(german, took)),
                 Err(e) => problem(german, &e),
             };
             state.set_asr_note(note.into());
@@ -452,34 +584,29 @@ fn connect_asr(app: &Rc<App>) {
     );
 }
 
-/// The own-models page opened with AI features on and no language model
-/// set up: kyrr looks for servers on this computer and fills in what it
-/// finds.
+/// A server settings page opened with nothing set up: kyrr looks for
+/// servers on this computer and offers what it finds.
 pub fn look_around(app: &Rc<App>) {
     let Some(w) = app.window.upgrade() else { return };
     let state = w.global::<AppState>();
-    if state.get_page() != 7 || !state.get_ai_features() || !state.get_rework_url().is_empty() {
+    let speech = state.get_page() == 7 && state.get_asr_on() && state.get_asr_url().is_empty();
+    let language = state.get_page() == 8 && state.get_ai_features() && state.get_rework_url().is_empty();
+    if !speech && !language {
         return;
     }
-    let german = app.language() == Language::German;
     beside(kyrr_server::find_local, move |app, found| {
         let Some(w) = app.window.upgrade() else { return };
         let state = w.global::<AppState>();
-        if !state.get_rework_url().is_empty() {
-            return;
+        let mut speech_found = found.iter().filter(|(name, _)| *name == "speaches");
+        let mut language_found = found.iter().filter(|(name, _)| *name != "speaches");
+        if let (true, Some((name, url))) = (speech && state.get_asr_url().is_empty(), speech_found.next()) {
+            state.set_asr_found((*name).into());
+            state.set_asr_found_url(url.as_str().into());
         }
-        let Some((name, url)) = found.into_iter().find(|(name, _)| *name != "speaches") else {
-            return;
-        };
-        state.set_rework_url(url.into());
-        state.set_rework_note(
-            if german {
-                format!("{name} läuft auf diesem PC. „Verbinden und testen“ übernimmt es.")
-            } else {
-                format!("{name} runs on this computer. “Connect and test” takes it.")
-            }
-            .into(),
-        );
+        if let (true, Some((name, url))) = (language && state.get_rework_url().is_empty(), language_found.next()) {
+            state.set_rework_found((*name).into());
+            state.set_rework_found_url(url.as_str().into());
+        }
         crate::fit(&app.window);
     });
 }
