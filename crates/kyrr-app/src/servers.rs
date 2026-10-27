@@ -223,14 +223,13 @@ pub fn setup(app: &Rc<App>, window: &MainWindow) {
         state.set_rework_index(config.rework.min(3) as i32);
         state.set_translate_index(translate_index(&config));
         state.set_rework_ready(rework_server(&config, &keys).is_some());
-        // A memo is translated into the language dictations go into, else
-        // into the other one.
-        let target = match config.translate_into.as_str() {
-            "" if app.language() == Language::English => "de",
-            "" => "en",
-            code => code,
-        };
-        state.set_memo_rework_target(TARGETS.iter().position(|(c, _)| *c == target).unwrap_or(0) as i32);
+        // A memo starts with what dictations get, else with fixing.
+        state.set_memo_rework_action(if config.rework == 0 {
+            1
+        } else {
+            config.rework.min(3) as i32
+        });
+        state.set_memo_rework_target(translate_index(&config));
         rework::set_prompts(own_prompts(&config));
         state.set_asr_on(config.asr_server);
         state.set_asr_url(config.asr_url.as_str().into());

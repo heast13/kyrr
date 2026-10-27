@@ -322,6 +322,12 @@ pub fn keep_original(path: &Path) -> io::Result<()> {
     std::fs::rename(&part, &original)
 }
 
+/// The text as it was before the first rework, while it is kept.
+pub fn read_original(path: &Path) -> Option<Vec<Paragraph>> {
+    let text = std::fs::read_to_string(original_path(path)).ok()?;
+    Some(paragraphs(&text))
+}
+
 /// The text kept before the first rework is the text again.
 pub fn restore_original(path: &Path) -> io::Result<()> {
     std::fs::rename(original_path(path), text_path(path))

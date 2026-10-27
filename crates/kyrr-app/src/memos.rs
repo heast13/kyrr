@@ -18,6 +18,7 @@ use kyrr_server::{Error, Server};
 use slint::{ComponentHandle, Model, ModelRc, VecModel, Weak};
 
 use crate::dictation::{Command, Job, Text};
+use crate::memo::compare;
 use crate::memo::library::{self, Memo, Stamps};
 use crate::memo::player::Player;
 use crate::memo::recorder::{Ending, Recording};
@@ -381,6 +382,7 @@ impl Memos {
         state.on_memo_record(with0(|m| m.toggle()));
         state.on_memo_close_text(with0(|m| m.close_text()));
         state.on_memo_restore_text(with0(|m| m.restore_text()));
+        state.on_memo_show_compare(with0(|m| m.show_compare()));
         state.on_memo_stop_rework(with0(|m| m.stop_rework()));
         let weak = Rc::downgrade(self);
         state.on_memo_rework(move |action, target| {
@@ -1003,7 +1005,12 @@ impl Memos {
         }
         state.set_memo_sheet_title(memo.title.as_str().into());
         state.set_memo_sheet_when(self.when(memo).into());
-        state.set_memo_sheet_original(library::original_path(&memo.path).exists());
+        let original = library::read_original(&memo.path);
+        state.set_memo_sheet_original(original.is_some());
+        match original {
+            Some(before) => state.set_memo_sheet_compare(self.comparison(&before, memo)),
+            None => state.set_memo_sheet_view(0),
+        }
         state.set_memo_copied(false);
         drop(all);
         drop(sheet);
@@ -1114,6 +1121,28 @@ impl Memos {
             .unwrap_or_default()
     }
 
+    /// The text before and after the language model, marked, paragraph by
+    /// paragraph.
+    fn comparison(&self, before: &[library::Paragraph], memo: &Memo) -> ModelRc<slint::StyledText> {
+        let after = memo.text.as_deref().unwrap_or_default();
+        let paragraphs: Vec<slint::StyledText> = compare::markdown(before, after)
+            .iter()
+            .map(|markdown| {
+                slint::StyledText::from_markdown(markdown).unwrap_or_else(|e| {
+                    eprintln!("kyrr: memo: comparing the text of {}: {e}", memo.path.display());
+                    slint::StyledText::from_plain_text(markdown)
+                })
+            })
+            .collect();
+        ModelRc::new(VecModel::from(paragraphs))
+    }
+
+    /// The comparison opens: what was typed counts in it.
+    fn show_compare(&self) {
+        self.flush();
+        self.show_sheet();
+    }
+
     /// The language model as set up now (None for none or switched off).
     pub fn set_rework(&self, rework: Option<MemoRework>) {
         if let Some(w) = self.window.upgrade() {
@@ -1122,9 +1151,10 @@ impl Memos {
         *self.rework.borrow_mut() = rework;
     }
 
-    /// Has the language model fix (0), reword (1), formalize (2) or
-    /// translate (3, into `TARGETS[target]`) the open text, paragraph by
-    /// paragraph, beside the window. The text before it is kept.
+    /// Has the language model fix (1), reword (2) or formalize (3) the open
+    /// text and then translate it (into `TARGETS[target - 1]`), or only one
+    /// of them, paragraph by paragraph beside the window. The text before
+    /// it is kept.
     fn rework_text(self: &Rc<Self>, action: i32, target: i32) {
         let Some(w) = self.window.upgrade() else {
             return;
@@ -1142,15 +1172,19 @@ impl Memos {
         if self.reworking.borrow().is_some() {
             return;
         }
-        let preset = match action {
-            0 => Preset::Fix,
-            1 => Preset::Polish,
-            2 => Preset::Business,
-            _ => match usize::try_from(target).ok().and_then(|i| TARGETS.get(i)) {
-                Some((code, _)) => Preset::Translate(code),
-                None => return,
-            },
-        };
+        let mut steps = Vec::new();
+        match action {
+            1 => steps.push(Preset::Fix),
+            2 => steps.push(Preset::Polish),
+            3 => steps.push(Preset::Business),
+            _ => {}
+        }
+        if let Some((code, _)) = usize::try_from(target - 1).ok().and_then(|i| TARGETS.get(i)) {
+            steps.push(Preset::Translate(code));
+        }
+        if steps.is_empty() {
+            return;
+        }
         self.flush();
         // What was typed could not be saved: it is not worked over.
         if self.dirty.get() {
@@ -1177,23 +1211,31 @@ impl Memos {
                     break;
                 }
                 // Nobody waits at the keyboard: more time than for a dictation.
-                let limit = (rework::time_limit(preset, &p.text) * 4).max(Duration::from_secs(30));
+                let limit = (rework::time_limit_all(&steps, &p.text) * 4).max(Duration::from_secs(30));
                 let deadline = std::time::Instant::now() + limit;
-                let outcome = rework::rework(&server, &model, preset, &p.text, language, deadline, &stop);
-                fixed_only += usize::from(matches!(outcome, Outcome::FixedInstead(_)));
-                match outcome {
-                    Outcome::Reworked(text) | Outcome::FixedInstead(text) => {
+                let outcomes = rework::rework_all(&server, &model, &steps, &p.text, language, deadline, &stop);
+                if let Some(e) = outcomes.iter().find_map(|o| match o {
+                    Outcome::Original(Why::Server(e)) => Some(e.clone()),
+                    _ => None,
+                }) {
+                    failed = Some(e);
+                    break;
+                }
+                fixed_only += usize::from(outcomes.iter().any(|o| matches!(o, Outcome::FixedInstead(_))));
+                // Each step went on from the one before: the last text is it.
+                let text = outcomes.into_iter().rev().find_map(|o| match o {
+                    Outcome::Reworked(text) | Outcome::FixedInstead(text) => Some(text),
+                    Outcome::Original(_) => None,
+                });
+                match text {
+                    Some(text) => {
                         changed += 1;
                         out.push(library::Paragraph {
                             seconds: p.seconds,
                             text,
                         });
                     }
-                    Outcome::Original(Why::Server(e)) => {
-                        failed = Some(e);
-                        break;
-                    }
-                    Outcome::Original(_) => out.push(p),
+                    None => out.push(p),
                 }
                 let done = (i + 1) as f32 / all as f32;
                 let _ = slint::invoke_from_event_loop(move || {
@@ -1209,7 +1251,7 @@ impl Memos {
             let stopped = stop.load(Ordering::Relaxed);
             let _ = slint::invoke_from_event_loop(move || {
                 if let Some(m) = memos() {
-                    m.reworked(&path, &stop, preset, (!stopped).then_some(result), german);
+                    m.reworked(&path, &stop, &steps, (!stopped).then_some(result), german);
                 }
             });
         });
@@ -1227,7 +1269,7 @@ impl Memos {
 
     /// What the language model made of a memo's text: kept as its text, the
     /// one before kept beside it. None when it was stopped.
-    fn reworked(&self, path: &Path, run: &Arc<AtomicBool>, preset: Preset, result: Option<Reworked>, german: bool) {
+    fn reworked(&self, path: &Path, run: &Arc<AtomicBool>, steps: &[Preset], result: Option<Reworked>, german: bool) {
         // Stopped, and maybe another one started since.
         if self
             .reworking
@@ -1273,12 +1315,24 @@ impl Memos {
                 if self.sheet.borrow().as_deref() == Some(path) {
                     self.show_sheet();
                 }
-                let done = match preset {
-                    Preset::Fix => self.say("Ausgebessert", "Fixed"),
-                    Preset::Polish => self.say("Umformuliert", "Reworded"),
-                    Preset::Business => self.say("Professionell formuliert", "Made professional"),
-                    Preset::Translate(_) => self.say("Übersetzt", "Translated"),
-                };
+                let done = steps
+                    .iter()
+                    .enumerate()
+                    .map(|(i, step)| {
+                        let said = match step {
+                            Preset::Fix => self.say("Ausgebessert", "Fixed"),
+                            Preset::Polish => self.say("Umformuliert", "Reworded"),
+                            Preset::Business => self.say("Professionell formuliert", "Made professional"),
+                            Preset::Translate(_) => self.say("Übersetzt", "Translated"),
+                        };
+                        if i == 0 {
+                            said
+                        } else {
+                            said.to_lowercase()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(&self.say(" und ", " and "));
                 let mut note = format!("{done}.");
                 if fixed_only > 0 {
                     note += &if german {

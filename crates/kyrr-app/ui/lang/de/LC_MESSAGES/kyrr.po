@@ -1678,3 +1678,12 @@ msgstr "Anwenden"
 
 msgid "Restore original"
 msgstr "Original wiederherstellen"
+
+msgid "Compare"
+msgstr "Vergleich"
+
+msgid "Text"
+msgstr "Text"
+
+msgid "Red, struck through: before. Green: new. Grey: what was said, above its translation."
+msgstr "Rot durchgestrichen: vorher. Grün: neu. Grau: das Gesagte, über der Übersetzung."

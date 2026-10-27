@@ -194,18 +194,28 @@ fn memos(window: &MinimalSoftwareWindow, ui: &MainWindow, out: &str, lang: &str)
     // The language model on the text: at work, then done with the original kept.
     state.set_memo_rework_ready(true);
     state.set_memo_rework_action(3);
-    state.set_memo_rework_target(0);
+    state.set_memo_rework_target(1);
     state.set_memo_rework_busy(true);
     state.set_memo_rework_progress(0.4);
     render_at(window, ui, 820.0, &format!("{out}/memos-ai-busy-{lang}.rgba"));
     state.set_memo_rework_busy(false);
-    state.set_memo_rework_action(2);
     state.set_memo_sheet_original(true);
     state.set_memo_rework_note(t(
         "Professionell formuliert. 1 von 4 Absätzen unverändert. Das Original ist gesichert.",
         "Made professional. 1 of 4 paragraphs unchanged. The original is kept.",
     ));
     render_at(window, ui, 820.0, &format!("{out}/memos-ai-done-{lang}.rgba"));
+    // Compared with the text before: fixed and made professional, then one
+    // paragraph translated.
+    state.set_memo_sheet_compare(ModelRc::new(VecModel::from(
+        compare_preview(lang == "de")
+            .split("\n\n")
+            .map(|p| slint::StyledText::from_markdown(p).unwrap_or_default())
+            .collect::<Vec<_>>(),
+    )));
+    state.set_memo_sheet_view(1);
+    render_at(window, ui, 820.0, &format!("{out}/memos-ai-compare-{lang}.rgba"));
+    state.set_memo_sheet_view(0);
     state.set_memo_rework_ready(false);
     state.set_memo_sheet_original(false);
     state.set_memo_rework_note("".into());
@@ -225,6 +235,28 @@ fn memos(window: &MinimalSoftwareWindow, ui: &MainWindow, out: &str, lang: &str)
     state.set_memo_new(true);
     render(window, ui, &format!("{out}/main-memo-new-{lang}.rgba"));
     state.set_memo_new(false);
+}
+
+/// What the comparison in the memo text shows (as `memo::compare` writes it).
+fn compare_preview(german: bool) -> String {
+    let (gone, came, said) = ("#d9534f", "#2e9e5b", "#8a8a8a");
+    if german {
+        format!(
+            "<font color=\"{gone}\">~~Gedanken zur neuen Startseite. Oben soll sofort klar sein, was kyrr macht, ohne Werbesprech.~~</font> \
+             <font color=\"{came}\">Überlegungen zur neuen Startseite: Oben muss sofort erkennbar sein, was kyrr leistet, ohne Werbesprache.</font>\n\n\
+             Darunter <font color=\"{gone}\">~~der Download, groß, und gleich daneben~~</font> <font color=\"{came}\">folgt gut sichtbar der Download, direkt daneben</font> die Befehle für Linux zum Kopieren\\.\n\n\
+             <font color=\"{said}\">Die Beispiel\\-Pille als kurze Schleife, nicht als Video, das lädt sonst ewig\\.</font>\n\
+             The example pill as a short loop rather than a video, which would take too long to load\\.\n\n\
+             Und unten nur noch die häufigen Fragen, zusammengeklappt\\."
+        )
+    } else {
+        format!(
+            "<font color=\"{gone}\">~~Thoughts on the new home page.~~</font> <font color=\"{came}\">Notes on the new home page:</font> \
+             the top must make clear at once what kyrr does\\.\n\n\
+             <font color=\"{said}\">Die Beispiel\\-Pille als kurze Schleife\\.</font>\n\
+             The example pill as a short loop\\."
+        )
+    }
 }
 
 fn main() {

@@ -771,8 +771,7 @@ export global AppState {
     callback memo-search(string);
     callback memo-open-folder();
     // The user's language model can rework the open text: what it does
-    // (0 fix, 1 reword, 2 professional, 3 translate) and into which
-    // language, in the order of `kyrr_server::rework::TARGETS`.
+    // (as `rework-index`) and into which language (as `translate-index`).
     in property <bool> memo-rework-ready;
     in property <bool> memo-rework-busy;
     in property <float> memo-rework-progress;
@@ -781,6 +780,10 @@ export global AppState {
     in-out property <int> memo-rework-target;
     // The text before the first rework is kept beside it.
     in property <bool> memo-sheet-original;
+    // The text as it is (0) or compared with the one before (1).
+    in-out property <int> memo-sheet-view;
+    in property <[styled-text]> memo-sheet-compare;
+    callback memo-show-compare();
     callback memo-rework(int, int);
     callback memo-stop-rework();
     callback memo-restore-text();
@@ -846,9 +849,9 @@ export global AppState {
     callback asr-model-picked(int);
     // What reworking can be, for the choices on the main page.
     out property <[string]> rework-options: [@tr("Off"), @tr("Fix mishearings"), @tr("Reword nicely"), @tr("Professional")];
-    // What the language model can do with a memo's text, and the prompts.
-    out property <[string]> memo-rework-options: [@tr("Fix mishearings"), @tr("Reword nicely"), @tr("Professional"), @tr("Translate")];
-    out property <[string]> memo-translate-options: [@tr("English"), @tr("German"), @tr("French"), @tr("Spanish"), @tr("Italian"), @tr("Dutch"), @tr("Portuguese"), @tr("Polish"), @tr("Czech"), @tr("Slovak"), @tr("Swedish"), @tr("Danish"), @tr("Norwegian"), @tr("Finnish"), @tr("Hungarian"), @tr("Romanian"), @tr("Croatian")];
+    // The instructions that can be edited, in the order of
+    // `kyrr_server::rework::DEFAULT_PROMPTS`.
+    out property <[string]> prompt-options: [@tr("Fix mishearings"), @tr("Reword nicely"), @tr("Professional"), @tr("Translate")];
     // In the order of the targets in `kyrr_server::rework::TARGETS`.
     out property <[string]> translate-options: [@tr("Off"), @tr("English"), @tr("German"), @tr("French"), @tr("Spanish"), @tr("Italian"), @tr("Dutch"), @tr("Portuguese"), @tr("Polish"), @tr("Czech"), @tr("Slovak"), @tr("Swedish"), @tr("Danish"), @tr("Norwegian"), @tr("Finnish"), @tr("Hungarian"), @tr("Romanian"), @tr("Croatian")];
 }
@@ -2318,7 +2321,7 @@ component PromptSettings inherits Card {
     Heading { text: @tr("Instructions"); }
     Hint { text: @tr("What the language model is told for each task. In English, which most models follow best."); }
     ComboBox {
-        model: AppState.memo-rework-options;
+        model: AppState.prompt-options;
         current-index <=> AppState.prompt-index;
         selected => { AppState.prompt-picked(self.current-index); }
     }
@@ -3097,35 +3100,47 @@ component TranscriptSheet inherits Rectangle {
                 horizontal-stretch: 0;
             }
         }
-        // The user's language model on the whole text; the text before is
-        // kept and comes back with one button.
-        if AppState.memo-rework-ready || AppState.memo-sheet-original: HorizontalLayout {
+        // The user's language model on the whole text, as on the main page:
+        // a rework, a translation or both. The text before is kept, can be
+        // compared and comes back with one button.
+        if AppState.memo-rework-ready: HorizontalLayout {
             spacing: 8px;
             Text {
-                text: @tr("Local AI");
+                text: @tr("Rework");
                 font-size: 12px;
                 color: Skin.foreground.with-alpha(0.65);
                 vertical-alignment: center;
-                horizontal-stretch: 0;
+                width: 110px;
             }
-            if AppState.memo-rework-ready: ComboBox {
-                model: AppState.memo-rework-options;
+            ComboBox {
+                model: AppState.rework-options;
                 current-index <=> AppState.memo-rework-action;
                 enabled: !AppState.memo-rework-busy;
-                horizontal-stretch: 0;
-                min-width: 150px;
             }
-            if AppState.memo-rework-ready && AppState.memo-rework-action == 3: ComboBox {
-                model: AppState.memo-translate-options;
+        }
+        if AppState.memo-rework-ready: HorizontalLayout {
+            spacing: 8px;
+            Text {
+                text: @tr("Translate into");
+                font-size: 12px;
+                color: Skin.foreground.with-alpha(0.65);
+                vertical-alignment: center;
+                width: 110px;
+            }
+            ComboBox {
+                model: AppState.translate-options;
                 current-index <=> AppState.memo-rework-target;
                 enabled: !AppState.memo-rework-busy;
-                horizontal-stretch: 0;
-                min-width: 120px;
             }
+        }
+        if AppState.memo-rework-ready || AppState.memo-sheet-original: HorizontalLayout {
+            spacing: 8px;
             if AppState.memo-rework-ready: Button {
                 text: AppState.memo-rework-busy ? @tr("Cancel") : @tr("Apply");
+                primary: !AppState.memo-rework-busy;
                 horizontal-stretch: 0;
-                enabled: AppState.memo-rework-busy || AppState.memo-sheet-text != "";
+                enabled: AppState.memo-rework-busy
+                    || (AppState.memo-sheet-text != "" && (AppState.memo-rework-action > 0 || AppState.memo-rework-target > 0));
                 clicked => {
                     if (AppState.memo-rework-busy) {
                         AppState.memo-stop-rework();
@@ -3135,6 +3150,17 @@ component TranscriptSheet inherits Rectangle {
                 }
             }
             Rectangle { }
+            if AppState.memo-sheet-original && !AppState.memo-rework-busy: Segmented {
+                options: [@tr("Text"), @tr("Compare")];
+                selected <=> AppState.memo-sheet-view;
+                changed(i) => {
+                    if (i == 1) {
+                        AppState.memo-show-compare();
+                    }
+                }
+                horizontal-stretch: 0;
+                min-width: 170px;
+            }
             if AppState.memo-sheet-original && !AppState.memo-rework-busy: Button {
                 text: @tr("Restore original");
                 horizontal-stretch: 0;
@@ -3157,6 +3183,7 @@ component TranscriptSheet inherits Rectangle {
                 y: 12px;
                 width: parent.width - 24px;
                 height: parent.height - 24px;
+                visible: AppState.memo-sheet-view == 0 || !AppState.memo-sheet-original;
                 content-width: self.visible-width;
                 content-height: max(self.visible-height, input.preferred-height);
                 input := TextInput {
@@ -3195,6 +3222,26 @@ component TranscriptSheet inherits Rectangle {
                     }
                 }
             }
+            // Before and after: what went struck through, what came in
+            // colour; a translation under the paragraph as said.
+            if AppState.memo-sheet-view == 1 && AppState.memo-sheet-original: ScrollView {
+                x: 12px;
+                y: 12px;
+                width: parent.width - 24px;
+                height: parent.height - 24px;
+                content-width: self.visible-width;
+                content-height: max(self.visible-height, compare.preferred-height);
+                compare := VerticalLayout {
+                    width: parent.width;
+                    alignment: start;
+                    spacing: 14px;
+                    for paragraph in AppState.memo-sheet-compare: StyledText {
+                        text: paragraph;
+                        default-color: Skin.foreground;
+                        default-font-size: 15px;
+                    }
+                }
+            }
             if AppState.memo-sheet-text == "": Caption {
                 x: 14px;
                 y: 14px;
@@ -3218,7 +3265,9 @@ component TranscriptSheet inherits Rectangle {
                 }
             }
             Hint {
-                text: @tr("Select and copy: the times stay behind. What you type is saved by itself.");
+                text: AppState.memo-sheet-view == 1 && AppState.memo-sheet-original
+                    ? @tr("Red, struck through: before. Green: new. Grey: what was said, above its translation.")
+                    : @tr("Select and copy: the times stay behind. What you type is saved by itself.");
                 vertical-alignment: center;
             }
         }
