@@ -42,18 +42,19 @@ fn preset(config: &Config) -> Option<Preset> {
     }
 }
 
-/// The choice on the main page: 0 off, 1 fix, 2 reword, 3 and on the
-/// translations, in the order of `TARGETS`.
-fn rework_index(config: &Config) -> i32 {
-    match preset(config) {
-        None => 0,
-        Some(Preset::Fix) => 1,
-        Some(Preset::Polish) => 2,
-        Some(Preset::Translate(t)) => 3 + TARGETS.iter().position(|(c, _)| *c == t).unwrap_or(0) as i32,
-    }
+/// The language translations go into, as its place in `TARGETS`.
+fn target_index(config: &Config) -> i32 {
+    TARGETS
+        .iter()
+        .position(|(c, _)| *c == config.rework_target)
+        .unwrap_or(0) as i32
 }
 
+/// The language model, when own models are switched on and one is set up.
 fn rework_server(config: &Config, keys: &Keys) -> Option<(Server, String)> {
+    if !config.own_models {
+        return None;
+    }
     let url = kyrr_server::address(&config.rework_url)?;
     let model = config.rework_model.trim();
     (!model.is_empty()).then(|| {
@@ -77,7 +78,7 @@ fn reworker(config: &Config, keys: &Keys) -> Option<Reworker> {
 }
 
 fn recognizer(config: &Config, keys: &Keys) -> Option<Recognizer> {
-    if !config.asr_server {
+    if !config.own_models || !config.asr_server {
         return None;
     }
     Some(Recognizer {
@@ -133,7 +134,9 @@ pub fn setup(app: &Rc<App>, window: &MainWindow) {
         state.set_rework_url(config.rework_url.as_str().into());
         state.set_rework_model(config.rework_model.as_str().into());
         state.set_rework_key(keys.rework.as_str().into());
-        state.set_rework_index(rework_index(&config));
+        state.set_own_models(config.own_models);
+        state.set_rework_index(config.rework.min(3) as i32);
+        state.set_rework_target_index(target_index(&config));
         state.set_rework_ready(rework_server(&config, &keys).is_some());
         state.set_asr_on(config.asr_server);
         state.set_asr_url(config.asr_url.as_str().into());
@@ -142,17 +145,29 @@ pub fn setup(app: &Rc<App>, window: &MainWindow) {
         let _ = app.worker.send(Command::Rework(reworker(&config, &keys)));
         let _ = app.worker.send(Command::Recognizer(recognizer(&config, &keys)));
     }
+    state.on_own_models_toggled({
+        let app = Rc::clone(app);
+        move |on| {
+            app.config.borrow_mut().own_models = on;
+            app.config.borrow().save();
+            send(&app);
+            crate::fit(&app.window);
+        }
+    });
     state.on_rework_changed({
         let app = Rc::clone(app);
         move |i| {
-            {
-                let mut config = app.config.borrow_mut();
-                config.rework = (i.clamp(0, 3)) as u8;
-                if i >= 3 {
-                    config.rework_target = TARGETS.get(i as usize - 3).map_or("en", |(c, _)| c).into();
-                }
-                config.save();
-            }
+            app.config.borrow_mut().rework = i.clamp(0, 3) as u8;
+            app.config.borrow().save();
+            send(&app);
+        }
+    });
+    state.on_rework_target_changed({
+        let app = Rc::clone(app);
+        move |i| {
+            let code = TARGETS.get(i.max(0) as usize).map_or("en", |(c, _)| c);
+            app.config.borrow_mut().rework_target = code.into();
+            app.config.borrow().save();
             send(&app);
         }
     });
@@ -225,12 +240,10 @@ fn show_tray(app: &App, tray: &Tray) {
     tray.set_rework_ready(rework_server(&config, &Keys::load()).is_some());
     tray.set_rework_index(config.rework.min(3) as i32);
     let label = app.window.upgrade().and_then(|w| {
-        w.global::<AppState>()
-            .get_rework_options()
-            .row_data(rework_index(&Config {
-                rework: 3,
-                ..config.clone()
-            }) as usize)
+        let state = w.global::<AppState>();
+        let translate = state.get_rework_options().row_data(3)?;
+        let target = state.get_rework_targets().row_data(target_index(&config) as usize)?;
+        Some(SharedString::from(format!("{translate}: {target}")))
     });
     tray.set_rework_target(label.unwrap_or_default());
 }
@@ -243,7 +256,9 @@ fn send(app: &App) {
     let _ = app.worker.send(Command::Recognizer(recognizer(&config, &keys)));
     if let Some(w) = app.window.upgrade() {
         let state = w.global::<AppState>();
-        state.set_rework_index(rework_index(&config));
+        state.set_own_models(config.own_models);
+        state.set_rework_index(config.rework.min(3) as i32);
+        state.set_rework_target_index(target_index(&config));
         state.set_rework_ready(rework_server(&config, &keys).is_some());
     }
     if let Some(t) = tray() {

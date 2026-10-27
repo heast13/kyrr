@@ -443,6 +443,9 @@ pub enum Refusal {
     Lines,
     /// A question came back as a statement: answered, most likely.
     Answered,
+    /// Fixing changed words, and none of the changes looked like a
+    /// mishearing.
+    Unlike,
 }
 
 /// Whether reworded text may be typed instead of the dictation, which is in

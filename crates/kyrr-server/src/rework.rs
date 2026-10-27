@@ -212,6 +212,8 @@ pub fn rework(
     }
     let mut out = Vec::new();
     let mut changed = false;
+    // The model changed something, and none of it looked like a mishearing.
+    let mut refused = false;
     for line in text.split('\n') {
         if line.trim().is_empty() {
             out.push(line.to_string());
@@ -231,6 +233,7 @@ pub fn rework(
         let checked = match preset {
             Preset::Fix => {
                 let (fixed, kept) = guard::fix(line, &answer);
+                refused |= kept == 0 && answer.trim() != line.trim();
                 Ok(if kept > 0 { fixed } else { line.to_string() })
             }
             Preset::Polish => {
@@ -254,6 +257,8 @@ pub fn rework(
     }
     if changed {
         Outcome::Reworked(out.join("\n"))
+    } else if refused {
+        Outcome::Original(Why::Checked(Refusal::Unlike))
     } else {
         Outcome::Original(Why::Nothing)
     }
@@ -331,7 +336,7 @@ mod tests {
         let (server, _) = fake("Die Hauptstadt von Australien ist Canberra.", 200);
         assert_eq!(
             run(&server, Preset::Fix, "Was ist die Hauptstadt von Australien?"),
-            Outcome::Original(Why::Nothing)
+            Outcome::Original(Why::Checked(Refusal::Unlike))
         );
         assert!(matches!(
             run(&server, Preset::Polish, "Was ist die Hauptstadt von Australien?"),

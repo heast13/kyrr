@@ -2170,6 +2170,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
             Event::Ends(at) => return wave.set_end(at),
             Event::Limit(text) => return wave.set_limit(text),
             Event::Nothing(text) => return wave.set_note(text),
+            Event::Note(text, tone) => return wave.set_toned(text, tone),
             _ => {}
         }
         if let Event::State(s) = &event {
@@ -2209,7 +2210,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
                 }
                 Event::Progress(p) => state.set_download_progress(p),
                 Event::Typed(text) => state.set_last_text(text.into()),
-                Event::Heard(_) | Event::Ends(_) | Event::Limit(_) | Event::Nothing(_) => {}
+                Event::Heard(_) | Event::Ends(_) | Event::Limit(_) | Event::Nothing(_) | Event::Note(..) => {}
                 Event::Message(m) => state.set_dictation_message(m.unwrap_or_default().into()),
                 Event::Titled(path, title) => {
                     if let Some(m) = memos::memos() {

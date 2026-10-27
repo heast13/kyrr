@@ -64,6 +64,9 @@ pub struct Config {
     /// "hold" once; after that the user's own choice stays.
     #[serde(default = "never")]
     pub memo_hold_default: bool,
+    /// Own models (experimental, off by default): with it off, nothing of
+    /// the language model or the speech server shows or runs.
+    pub own_models: bool,
     /// The user's own language model that reworks dictations (see
     /// `kyrr_server`): its address ("" for none) and model.
     pub rework_url: String,
@@ -111,6 +114,7 @@ impl Default for Config {
             memo_stamps: 0,
             memos_seen: 0,
             memo_hold_default: true,
+            own_models: false,
             rework_url: String::new(),
             rework_model: String::new(),
             rework: 0,

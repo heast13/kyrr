@@ -418,6 +418,7 @@ fn main() {
     state.set_update_state(UpdateState::Idle);
 
     // The user's own models: set up, tested, and the choice on the main page.
+    state.set_own_models(true);
     state.set_rework_url("http://192.168.88.112:1234".into());
     state.set_rework_models(ModelRc::new(VecModel::from(vec!["gemma-4-26B-A4B-it".into()])));
     state.set_rework_model_index(0);
@@ -445,8 +446,11 @@ fn main() {
     state.set_rework_index(3);
     state.set_page(0);
     render(&window, &ui, &format!("{out}/main-rework-{lang}.rgba"));
+    state.set_page(1);
+    render(&window, &ui, &format!("{out}/own-models-on-{lang}.rgba"));
     state.set_rework_ready(false);
     state.set_asr_on(false);
+    state.set_own_models(false);
 
     // Windows on ARM: no filter, dictation only.
     state.set_filter_enabled(false);

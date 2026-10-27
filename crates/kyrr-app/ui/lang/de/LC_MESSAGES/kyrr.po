@@ -1503,20 +1503,10 @@ msgstr "Fehler ausbessern"
 msgid "Reword nicely"
 msgstr "Schöner formulieren"
 
-msgid "Translate to English"
-msgstr "Übersetzen: Englisch"
 
-msgid "Translate to German"
-msgstr "Übersetzen: Deutsch"
 
-msgid "Translate to French"
-msgstr "Übersetzen: Französisch"
 
-msgid "Translate to Spanish"
-msgstr "Übersetzen: Spanisch"
 
-msgid "Translate to Italian"
-msgstr "Übersetzen: Italienisch"
 
 msgid "Rework"
 msgstr "Überarbeitung"
@@ -1527,8 +1517,6 @@ msgstr "Eigene Modelle"
 msgid "Set up"
 msgstr "Einrichten"
 
-msgid "For a model on this computer or in your home network. Not needed for anything else."
-msgstr "Für ein Modell auf diesem PC oder im Heimnetz. Für alles andere nicht nötig."
 
 msgid "A language model on this computer or in your home network fixes, rewords or translates what you dictate. Needs a program like Ollama or LM Studio."
 msgstr "Ein Sprachmodell auf diesem PC oder im Heimnetz bessert aus, formuliert um oder übersetzt, was du diktierst. Braucht ein Programm wie Ollama oder LM Studio."
@@ -1568,3 +1556,33 @@ msgstr "Ein Sprach-Server im Heimnetz erkennt, was du sagst (speaches, whisper.c
 
 msgid "kyrr recognises on this computer. Nothing leaves it."
 msgstr "kyrr erkennt auf diesem PC. Nichts verlässt ihn."
+
+msgid "Translate"
+msgstr "Übersetzen"
+
+msgid "Translate into"
+msgstr "Übersetzen in"
+
+msgid "English"
+msgstr "Englisch"
+
+msgid "German"
+msgstr "Deutsch"
+
+msgid "French"
+msgstr "Französisch"
+
+msgid "Spanish"
+msgstr "Spanisch"
+
+msgid "Italian"
+msgstr "Italienisch"
+
+msgid "Own models (experimental)"
+msgstr "Eigene Modelle (experimentell)"
+
+msgid "A language model or speech server on this computer or in your home network. Still an experiment: may change or go again."
+msgstr "Ein Sprachmodell oder Sprach-Server auf diesem PC oder im Heimnetz. Noch ein Experiment: kann sich ändern oder wieder verschwinden."
+
+msgid "Off. For a language model or speech server of your own; kyrr needs none."
+msgstr "Aus. Für ein eigenes Sprachmodell oder einen eigenen Sprach-Server; kyrr braucht keins."

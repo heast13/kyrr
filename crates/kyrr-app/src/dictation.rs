@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
+use kyrr_common::wave::Tone;
 use kyrr_dictate::download::{download, DownloadError};
 use kyrr_dictate::{european, Dictation, Language, Live, ModelSpec, Transcript};
 use kyrr_server::rework::{self, Outcome, Preset, Why};
@@ -92,6 +93,7 @@ pub struct Recognizer {
 /// A dictation out at the language model.
 struct Reworking {
     id: u64,
+    preset: Preset,
     original: String,
     until: Instant,
     stop: Arc<AtomicBool>,
@@ -142,6 +144,9 @@ pub enum Event {
     Limit(String),
     /// A real dictation that came out empty: this, for a moment in the pill.
     Nothing(String),
+    /// How reworking the text went: this, for a moment in the pill, in the
+    /// colour of the tone.
+    Note(String, Tone),
     /// Something to tell the user; `None` clears an earlier message.
     Message(Option<String>),
     /// The title heard at the start of the voice memo at this path; None
@@ -330,8 +335,16 @@ fn say(language: Language, what: &str) -> String {
         ("rework asleep", false) => "Server asleep, typed as said",
         ("rework refused", true) => "Server sagt nein, Original getippt",
         ("rework refused", false) => "Server says no, typed as said",
-        ("rework free", true) => "Zu frei, Original getippt",
-        ("rework free", false) => "Too free, typed as said",
+        ("rework free", true) => "Abgelehnt, Original getippt",
+        ("rework free", false) => "Refused, typed as said",
+        ("fixed", true) => "Ausgebessert",
+        ("fixed", false) => "Fixed",
+        ("polished", true) => "Umformuliert",
+        ("polished", false) => "Reworded",
+        ("translated", true) => "Übersetzt",
+        ("translated", false) => "Translated",
+        ("fine", true) => "Passte schon",
+        ("fine", false) => "Nothing to change",
         ("asr local", true) => "Server nicht erreichbar, hier erkannt.",
         ("asr local", false) => "Server out of reach, recognised here.",
         ("asr gone", true) => "Der Diktier-Server antwortet nicht. Läuft er noch?",
@@ -1202,7 +1215,8 @@ impl Worker {
         };
         self.rework_id += 1;
         let id = self.rework_id;
-        let limit = rework::time_limit(reworker.preset, &text);
+        let preset = reworker.preset;
+        let limit = rework::time_limit(preset, &text);
         let stop = Arc::new(AtomicBool::new(false));
         let language = (!self.more_languages).then(|| self.language.code());
         let busy = match reworker.preset {
@@ -1234,6 +1248,7 @@ impl Worker {
         }
         self.reworking = Some(Reworking {
             id,
+            preset,
             original: text,
             until: deadline + REWORK_GRACE,
             stop,
@@ -1259,21 +1274,27 @@ impl Worker {
         };
         r.stop.store(true, Ordering::Relaxed);
         let took = r.started.elapsed().as_secs_f32();
+        let done = match r.preset {
+            Preset::Fix => "fixed",
+            Preset::Polish => "polished",
+            Preset::Translate(_) => "translated",
+        };
         let (text, note) = match outcome {
             Outcome::Reworked(text) => {
                 eprintln!("kyrr: dictation: reworked in {took:.1} s");
-                (text, None)
+                (text, Some((done, Tone::Good)))
             }
             Outcome::Original(why) => {
                 // Numbers only, never the text.
                 eprintln!("kyrr: dictation: typed as dictated after {took:.1} s: {why:?}");
                 let note = match why {
                     Why::Server(kyrr_server::Error::Refused(_) | kyrr_server::Error::NotLocal) => {
-                        Some("rework refused")
+                        Some(("rework refused", Tone::Bad))
                     }
-                    Why::Server(_) => Some("rework asleep"),
-                    Why::Checked(_) => Some("rework free"),
-                    Why::Short | Why::Same | Why::Nothing | Why::Skipped => None,
+                    Why::Server(_) => Some(("rework asleep", Tone::Bad)),
+                    Why::Checked(_) => Some(("rework free", Tone::Bad)),
+                    Why::Nothing => Some(("fine", Tone::Plain)),
+                    Why::Short | Why::Same | Why::Skipped => None,
                 };
                 (r.original, note)
             }
@@ -1283,8 +1304,8 @@ impl Worker {
         } else {
             self.type_text(text);
         }
-        if let Some(note) = note {
-            (self.notify)(Event::Nothing(say(self.language, note)));
+        if let Some((note, tone)) = note {
+            (self.notify)(Event::Note(say(self.language, note), tone));
         }
         self.refresh();
     }

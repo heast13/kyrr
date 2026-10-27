@@ -772,7 +772,10 @@ export global AppState {
     callback memo-open-folder();
 
     // Own models (page 7): the user's language model reworks dictations,
-    // the user's speech server can recognise them.
+    // the user's speech server can recognise them. Experimental: off, none
+    // of it shows.
+    in-out property <bool> own-models;
+    callback own-models-toggled(bool);
     in-out property <string> rework-url;
     in-out property <string> rework-model;
     in-out property <string> rework-key;
@@ -784,8 +787,11 @@ export global AppState {
     in property <bool> rework-busy;
     // A server and model are set: the choice shows on the main page.
     in property <bool> rework-ready;
-    // 0 off, 1 fix, 2 reword, 3 and on: translate into one of the languages.
+    // 0 off, 1 fix, 2 reword, 3 translate.
     in-out property <int> rework-index;
+    // The language translations go into, in the order of `rework-targets`.
+    in-out property <int> rework-target-index;
+    callback rework-target-changed(int);
     in-out property <bool> asr-on;
     in-out property <string> asr-url;
     in-out property <string> asr-model;
@@ -802,9 +808,8 @@ export global AppState {
     callback asr-connect();
     callback asr-model-picked(int);
     // What reworking can be, for the choices on the main page.
-    out property <[string]> rework-options: [@tr("Off"), @tr("Fix mishearings"), @tr("Reword nicely"),
-        @tr("Translate to English"), @tr("Translate to German"), @tr("Translate to French"),
-        @tr("Translate to Spanish"), @tr("Translate to Italian")];
+    out property <[string]> rework-options: [@tr("Off"), @tr("Fix mishearings"), @tr("Reword nicely"), @tr("Translate")];
+    out property <[string]> rework-targets: [@tr("English"), @tr("German"), @tr("French"), @tr("Spanish"), @tr("Italian")];
 }
 
 // The tray has its own properties: globals are per component instance, so
@@ -1315,11 +1320,20 @@ component DictationCard inherits Card {
     }
     if AppState.rework-ready && !root.in-setup && AppState.dictation-enabled: HorizontalLayout {
         spacing: 8px;
-        Caption { text: @tr("Rework"); vertical-alignment: center; horizontal-stretch: 0; }
+        Caption { text: @tr("Rework"); vertical-alignment: center; width: 30%; }
         ComboBox {
             model: AppState.rework-options;
             current-index <=> AppState.rework-index;
             selected => { AppState.rework-changed(self.current-index); }
+        }
+    }
+    if AppState.rework-ready && !root.in-setup && AppState.dictation-enabled: HorizontalLayout {
+        spacing: 8px;
+        Caption { text: @tr("Translate into"); vertical-alignment: center; width: 30%; }
+        ComboBox {
+            model: AppState.rework-targets;
+            current-index <=> AppState.rework-target-index;
+            selected => { AppState.rework-target-changed(self.current-index); }
         }
     }
 }
@@ -2107,11 +2121,21 @@ component GeneralSettings inherits Card {
     }
     Separator { }
     HorizontalLayout {
-        spacing: 8px;
-        Caption { text: @tr("Own models"); horizontal-stretch: 1; vertical-alignment: center; }
+        Caption { text: @tr("Own models (experimental)"); vertical-alignment: center; }
+        Rectangle { }
+        Switch {
+            checked <=> AppState.own-models;
+            toggled => { AppState.own-models-toggled(self.checked); }
+        }
+    }
+    Hint {
+        text: AppState.own-models ? @tr("A language model or speech server on this computer or in your home network. Still an experiment: may change or go again.")
+            : @tr("Off. For a language model or speech server of your own; kyrr needs none.");
+    }
+    if AppState.own-models: HorizontalLayout {
+        Rectangle { }
         Button { text: @tr("Set up"); clicked => { AppState.open-page(7); } }
     }
-    Hint { text: @tr("For a model on this computer or in your home network. Not needed for anything else."); }
 }
 
 // Settings: the user's language model, which reworks dictations.

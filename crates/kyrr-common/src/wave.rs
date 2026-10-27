@@ -386,6 +386,8 @@ pub struct Wave {
     end: Option<Instant>,
     /// The limit was reached: the line is the note about it, in red.
     limit: bool,
+    /// The colour of a note: how reworking the text went.
+    tone: Tone,
     /// How yellow and how red the bars are, 0..1 each, eased.
     warn: [f32; 2],
     /// Seconds a note still stays on after the dictation ended.
@@ -414,6 +416,7 @@ impl Default for Wave {
             clock_shown: 0,
             end: None,
             limit: false,
+            tone: Tone::Plain,
             warn: [0.0; 2],
             hold: 0.0,
         }
@@ -502,6 +505,7 @@ impl Wave {
             self.clock_shown = 0;
             self.end = None;
             self.limit = false;
+            self.tone = Tone::Plain;
             self.warn = [0.0; 2];
             self.hold = 0.0;
         }
@@ -578,6 +582,13 @@ impl Wave {
     /// A word for the end of a dictation that came out empty: `note` stays
     /// in the pill for a moment after it, with calm bars.
     pub fn set_note(&mut self, note: String) {
+        self.set_toned(note, Tone::Plain);
+    }
+
+    /// A note after the text was typed, in the colour of `tone`: green when
+    /// the language model's work was taken, red when kyrr typed the
+    /// dictation as it was instead.
+    pub fn set_toned(&mut self, note: String, tone: Tone) {
         self.words.clear();
         self.leaving.clear();
         self.pen = 0.0;
@@ -588,6 +599,7 @@ impl Wave {
         self.set_words(&[note]);
         self.look = Mode::Listening;
         self.limit = false;
+        self.tone = tone;
         self.warn = [0.0; 2];
         self.hold = NOTE_HOLD;
     }
@@ -776,7 +788,12 @@ impl Wave {
         } else {
             mix(mix(colors.bar, colors.yellow, self.warn[0]), colors.red, self.warn[1])
         };
-        let text_color = if self.limit { colors.red } else { colors.text };
+        let text_color = match self.tone {
+            _ if self.limit => colors.red,
+            Tone::Good => colors.bar,
+            Tone::Bad => colors.red,
+            Tone::Plain => colors.text,
+        };
         let open = self.open.clamp(0.0, 1.0);
         let pill = self.pill.clamp(PILL, w);
         let pill_left = (w - pill) / 2.0;
@@ -1034,8 +1051,18 @@ enum Message {
     Words(Vec<String>),
     End(Instant),
     Limit(String),
-    Note(String),
+    Note(String, Tone),
     Clock(f32),
+}
+
+/// The colour of a note in the pill.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tone {
+    Plain,
+    /// Done as asked: in the bars' green.
+    Good,
+    /// Not done, the dictation went as it was: in red.
+    Bad,
 }
 
 impl Wave {
@@ -1045,7 +1072,7 @@ impl Wave {
             Message::Words(words) => self.set_words(&words),
             Message::End(at) => self.set_end(at),
             Message::Limit(note) => self.set_limit(note),
-            Message::Note(note) => self.set_note(note),
+            Message::Note(note, tone) => self.set_toned(note, tone),
             Message::Clock(seconds) => self.set_clock(seconds),
         }
     }
@@ -1103,7 +1130,13 @@ impl Overlay {
 
     /// The dictation came out empty: `note` stays a moment after it.
     pub fn set_note(&self, note: String) {
-        let _ = self.tx.send(Message::Note(note));
+        let _ = self.tx.send(Message::Note(note, Tone::Plain));
+    }
+
+    /// How reworking the text went: `note` a moment after it, in the colour
+    /// of `tone`.
+    pub fn set_toned(&self, note: String, tone: Tone) {
+        let _ = self.tx.send(Message::Note(note, tone));
     }
 }
 
@@ -1496,6 +1529,38 @@ mod tests {
         wave.set_mode(Mode::Hidden);
         wave.set_mode(Mode::Listening);
         assert!(!wave.limit && wave.words.is_empty() && wave.warn == [0.0; 2]);
+    }
+
+    #[test]
+    fn a_reworked_note_is_green_a_refused_one_red() {
+        let ink = |tone| {
+            let mut wave = shown(Mode::Listening, 0.5, &QUIET);
+            wave.set_mode(Mode::Writing);
+            wave.set_toned("Ausgebessert".into(), tone);
+            wave.set_mode(Mode::Hidden);
+            run_for(&mut wave, 1.0);
+            let mut pixels = Vec::new();
+            wave.paint(1.0, &mut pixels);
+            let red = pixels
+                .iter()
+                .filter(|&&p| (p >> 16 & 0xff) > (p >> 8 & 0xff) + 80)
+                .count();
+            let green = pixels
+                .iter()
+                .filter(|&&p| (p >> 8 & 0xff) > (p >> 16 & 0xff) + 80)
+                .count();
+            (red, green)
+        };
+        let (red, green) = ink(Tone::Bad);
+        assert!(red > 100 && red > green, "{red} red, {green} green");
+        let (red, green) = ink(Tone::Good);
+        assert!(green > red + 100, "{red} red, {green} green");
+        // A new dictation starts plain.
+        let mut wave = shown(Mode::Listening, 0.5, &QUIET);
+        wave.set_toned("x".into(), Tone::Bad);
+        wave.set_mode(Mode::Hidden);
+        wave.set_mode(Mode::Listening);
+        assert_eq!(wave.tone, Tone::Plain);
     }
 
     #[test]
