@@ -208,7 +208,8 @@ pub fn chat(server: &Server, body: &serde_json::Value, timeout: Duration) -> Res
     if content.trim().is_empty() && thought {
         return Err(Error::Thinks);
     }
-    if message["content"].is_null() && !thought {
+    // No answer at all, or one in a form kyrr does not read (parts).
+    if !message["content"].is_string() && !thought {
         return Err(Error::Answer);
     }
     Ok(content.to_string())

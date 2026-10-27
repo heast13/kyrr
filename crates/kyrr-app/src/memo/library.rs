@@ -316,7 +316,10 @@ pub fn keep_original(path: &Path) -> io::Result<()> {
         return Ok(());
     }
     let text = std::fs::read(text_path(path))?;
-    write_private(&original, &text)
+    // Whole or not at all: a half one would be kept for good.
+    let part = original.with_extension("txt.part");
+    write_private(&part, &text)?;
+    std::fs::rename(&part, &original)
 }
 
 /// The text kept before the first rework is the text again.

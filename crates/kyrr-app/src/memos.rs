@@ -1151,6 +1151,10 @@ impl Memos {
             },
         };
         self.flush();
+        // What was typed could not be saved: it is not worked over.
+        if self.dirty.get() {
+            return;
+        }
         let paragraphs = library::read_text(&path).unwrap_or_default();
         if paragraphs.iter().all(|p| p.text.trim().is_empty()) {
             return;
@@ -1202,7 +1206,7 @@ impl Memos {
             let stopped = stop.load(Ordering::Relaxed);
             let _ = slint::invoke_from_event_loop(move || {
                 if let Some(m) = memos() {
-                    m.reworked(&path, preset, (!stopped).then_some(result), german);
+                    m.reworked(&path, &stop, preset, (!stopped).then_some(result), german);
                 }
             });
         });
@@ -1220,9 +1224,14 @@ impl Memos {
 
     /// What the language model made of a memo's text: kept as its text, the
     /// one before kept beside it. None when it was stopped.
-    fn reworked(&self, path: &Path, preset: Preset, result: Option<Reworked>, german: bool) {
+    fn reworked(&self, path: &Path, run: &Arc<AtomicBool>, preset: Preset, result: Option<Reworked>, german: bool) {
         // Stopped, and maybe another one started since.
-        if self.reworking.borrow().as_ref().is_none_or(|(p, _)| p != path) {
+        if self
+            .reworking
+            .borrow()
+            .as_ref()
+            .is_none_or(|(_, r)| !Arc::ptr_eq(r, run))
+        {
             return;
         }
         *self.reworking.borrow_mut() = None;

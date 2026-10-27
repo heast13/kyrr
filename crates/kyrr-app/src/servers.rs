@@ -3,7 +3,7 @@
 //! `kyrr_server`). Asking a server happens beside the window; what comes
 //! back is shown, saved and handed to the dictation worker.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak as RcWeak};
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
@@ -21,6 +21,10 @@ use crate::{tray, App, AppState, MainWindow, Tray};
 thread_local! {
     /// For what comes back from a server, on the window's thread.
     static APP: RefCell<RcWeak<App>> = const { RefCell::new(RcWeak::new()) };
+    /// The instruction shown in the editor, and what was typed into the
+    /// others without saving: switching back brings it again.
+    static PROMPT_SHOWN: Cell<usize> = const { Cell::new(0) };
+    static PROMPT_DRAFTS: RefCell<[Option<String>; 4]> = const { RefCell::new([None, None, None, None]) };
 }
 
 /// A sentence with a mishearing in it, for the test: fixed, it says
@@ -119,8 +123,10 @@ fn show_prompt(app: &App, kind: i32) {
     let kind = kind.clamp(0, 3) as usize;
     let config = app.config.borrow();
     let text = prompt_text(&config, kind);
+    let draft = PROMPT_DRAFTS.with_borrow_mut(|drafts| drafts[kind].take());
+    PROMPT_SHOWN.set(kind);
     state.set_prompt_index(kind as i32);
-    state.set_prompt_text(text.as_str().into());
+    state.set_prompt_text(draft.as_deref().unwrap_or(&text).into());
     state.set_prompt_saved(text.as_str().into());
     state.set_prompt_own(!own_prompts(&config)[kind].trim().is_empty());
 }
@@ -248,7 +254,16 @@ pub fn setup(app: &Rc<App>, window: &MainWindow) {
     });
     state.on_prompt_picked({
         let app = Rc::clone(app);
-        move |i| show_prompt(&app, i)
+        move |i| {
+            if let Some(w) = app.window.upgrade() {
+                let state = w.global::<AppState>();
+                if state.get_prompt_text() != state.get_prompt_saved() {
+                    let typed = state.get_prompt_text().to_string();
+                    PROMPT_DRAFTS.with_borrow_mut(|drafts| drafts[PROMPT_SHOWN.get()] = Some(typed));
+                }
+            }
+            show_prompt(&app, i)
+        }
     });
     state.on_prompt_save({
         let app = Rc::clone(app);

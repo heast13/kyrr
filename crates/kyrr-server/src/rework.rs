@@ -4,7 +4,8 @@
 //! never answers a dictated question, and whatever does not pass the checks
 //! is typed as dictated.
 
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -189,19 +190,36 @@ fn messages(preset: Preset, text: &str) -> Vec<Value> {
     m
 }
 
-/// How much of the switches for thinking the server takes: 0 all of them,
-/// 1 only the chat template's, 2 none. A server that says no (400) to a
+/// How much of the switches for thinking each server and model take: 0 all
+/// of them, 1 only the chat template's, 2 none. One that says no (400) to a
 /// request with them gets fewer from then on.
-static THINKING_SWITCHES: AtomicU8 = AtomicU8::new(0);
+static THINKING_SWITCHES: Mutex<BTreeMap<String, u8>> = Mutex::new(BTreeMap::new());
 
-fn body(model: &str, preset: Preset, text: &str) -> Value {
+fn switches(server: &Server, model: &str) -> u8 {
+    let key = format!("{} {model}", server.url);
+    THINKING_SWITCHES
+        .lock()
+        .map(|levels| levels.get(&key).copied().unwrap_or(0))
+        .unwrap_or(0)
+}
+
+fn fewer_switches(server: &Server, model: &str, from: u8) {
+    let key = format!("{} {model}", server.url);
+    if let Ok(mut levels) = THINKING_SWITCHES.lock() {
+        let level = levels.entry(key).or_insert(0);
+        if *level == from {
+            *level = from + 1;
+        }
+    }
+}
+
+fn body(model: &str, preset: Preset, text: &str, switches: u8) -> Value {
     let mut body = json!({
         "model": model,
         "messages": messages(preset, text),
         "max_tokens": text.chars().count() / 2 + 64,
         "stream": false,
     });
-    let switches = THINKING_SWITCHES.load(Ordering::Relaxed);
     if switches < 2 {
         // Thinking off in the chat template: "enable_thinking" for Qwen 3,
         // Gemma, GLM and most others, "thinking" for DeepSeek. A template
@@ -225,13 +243,10 @@ fn body(model: &str, preset: Preset, text: &str) -> Value {
 fn ask(server: &Server, model: &str, preset: Preset, text: &str, timeout: Duration) -> Result<String, Error> {
     let started = Instant::now();
     loop {
-        let switches = THINKING_SWITCHES.load(Ordering::Relaxed);
+        let switches = switches(server, model);
         let left = timeout.saturating_sub(started.elapsed());
-        match chat(server, &body(model, preset, text), left) {
-            Err(Error::Refused(400)) if switches < 2 && !left.is_zero() => {
-                let _ =
-                    THINKING_SWITCHES.compare_exchange(switches, switches + 1, Ordering::Relaxed, Ordering::Relaxed);
-            }
+        match chat(server, &body(model, preset, text, switches), left) {
+            Err(Error::Refused(400)) if switches < 2 && !left.is_zero() => fewer_switches(server, model, switches),
             other => return other,
         }
     }
