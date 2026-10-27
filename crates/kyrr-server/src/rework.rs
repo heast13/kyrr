@@ -738,8 +738,9 @@ mod tests {
             key: String::new(),
         };
         let started = Instant::now();
-        prime(&gone, "m", Preset::Fix, Duration::from_secs(5));
-        assert!(started.elapsed() < Duration::from_secs(1));
+        // Windows retries a refused connection for about two seconds.
+        prime(&gone, "m", Preset::Fix, Duration::from_secs(10));
+        assert!(started.elapsed() < Duration::from_secs(5));
         let slow = raw(|_, _| ok("{}"), Duration::from_secs(5));
         let started = Instant::now();
         prime(&slow, "m", Preset::Fix, Duration::from_millis(500));
