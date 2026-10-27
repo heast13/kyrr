@@ -648,7 +648,7 @@ export global AppState {
 
     // 0 is the main view, 1 the setup, then the settings of each
     // card: 2 noise, 3 voice, 4 dictation, 5 voice memos; 6 the voice memos
-    // themselves; 7 the user's own models.
+    // themselves; 7 the user's own dictation model; 8 Local AI.
     in-out property <int> page;
     // Counts up every few seconds; the status line picks its next phrase
     // from it, so one state does not repeat the same sentence.
@@ -3359,8 +3359,12 @@ export component MainWindow inherits Window {
     // The same height as a maximum for a moment, so a compositor that keeps
     // its own idea of the size (Hyprland) lets the window shrink too.
     in property <bool> fit-hold;
-    min-height: main-page ? layout.preferred-height : root.fit-height;
-    max-height: main-page ? layout.preferred-height : root.fit-hold ? root.fit-height : 16384px;
+    // The tallest the screen has room for (the app says): a main page with
+    // everything on it (Local AI, an update note) scrolls on a small screen
+    // instead of reaching beyond it.
+    in property <length> height-cap: 16384px;
+    min-height: main-page ? min(layout.preferred-height, root.height-cap) : root.fit-height;
+    max-height: main-page ? min(layout.preferred-height, root.height-cap) : root.fit-hold ? root.fit-height : 16384px;
 
     // A new page starts at the top, not where the last one was scrolled to.
     public function reset-scroll() {

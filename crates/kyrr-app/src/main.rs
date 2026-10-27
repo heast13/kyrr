@@ -324,8 +324,9 @@ fn show_voice(state: &AppState, v: &VoiceSettings) {
 }
 
 /// Tallest the window gets, screen permitting; more content scrolls. Room
-/// for the tallest settings page (Setup, about 1060).
-const MAX_HEIGHT: f32 = 1310.0;
+/// for the tallest settings page (Setup with an update note, in German about
+/// 1420).
+const MAX_HEIGHT: f32 = 1460.0;
 /// Tallest when the screen is unknown: fits a 768-pixel-high laptop screen
 /// with the taskbar and title bar.
 const FALLBACK_HEIGHT: f32 = 660.0;
@@ -346,11 +347,19 @@ fn screen(w: &MainWindow) -> Option<(i32, i32, i32, i32)> {
 /// and a text to read want room.
 const MEMOS_HEIGHT: f32 = 780.0;
 
-/// The height the content wants, up to what the screen has room for.
-fn wanted_height(w: &MainWindow) -> f32 {
-    let cap = screen(w).map_or(FALLBACK_HEIGHT, |(_, top, _, bottom)| {
+/// The tallest the window gets on the screen it is on.
+fn height_cap(w: &MainWindow) -> f32 {
+    screen(w).map_or(FALLBACK_HEIGHT, |(_, top, _, bottom)| {
         ((bottom - top) as f32 / w.window().scale_factor() - FRAME).clamp(MIN_HEIGHT, MAX_HEIGHT)
-    });
+    })
+}
+
+/// The height the content wants, up to what the screen has room for. Also
+/// tells the window that cap: the main page's height is fixed to its
+/// content, and must not outgrow a small screen.
+fn wanted_height(w: &MainWindow) -> f32 {
+    let cap = height_cap(w);
+    w.set_height_cap(cap);
     let memos = !w.get_setup_mode() && w.global::<AppState>().get_page() == 6;
     let content = w.get_content_height();
     (if memos { content.max(MEMOS_HEIGHT) } else { content }).min(cap)
@@ -474,9 +483,7 @@ fn fit_sheet(w: &MainWindow, open: bool) {
     if let Some((left, _, right, _)) = screen(w) {
         w.set_widest(((right - left) as f32 / win.scale_factor() - FRAME_SIDES).max(520.0));
     }
-    let cap = screen(w).map_or(FALLBACK_HEIGHT, |(_, top, _, bottom)| {
-        ((bottom - top) as f32 / win.scale_factor() - FRAME).clamp(MIN_HEIGHT, MAX_HEIGHT)
-    });
+    let cap = height_cap(w);
     let height = win.size().to_logical(win.scale_factor()).height;
     let wanted = SHEET_HEIGHT.min(cap);
     if wanted > height + 0.5 {
