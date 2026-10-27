@@ -186,7 +186,11 @@ fn agent(timeout: Duration) -> ureq::Agent {
         .timeout_global(Some(timeout))
         .user_agent(concat!("kyrr/", env!("CARGO_PKG_VERSION")))
         .build();
-    ureq::Agent::with_parts(config, ureq::unversioned::transport::DefaultConnector::default(), HomeOnly)
+    ureq::Agent::with_parts(
+        config,
+        ureq::unversioned::transport::DefaultConnector::default(),
+        HomeOnly,
+    )
 }
 
 fn failed(e: ureq::Error) -> Error {
@@ -363,10 +367,7 @@ mod tests {
             address("https://ai.example.org").as_deref(),
             Some("https://ai.example.org")
         );
-        assert_eq!(
-            address("0.0.0.0:1234").as_deref(),
-            Some("http://127.0.0.1:1234")
-        );
+        assert_eq!(address("0.0.0.0:1234").as_deref(), Some("http://127.0.0.1:1234"));
         assert_eq!(address("http://[::]:8080").as_deref(), Some("http://[::1]:8080"));
         assert_eq!(address("  "), None);
         assert_eq!(address("http://me:secret@192.168.1.5:8080"), None);

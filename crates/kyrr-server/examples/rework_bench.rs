@@ -202,7 +202,15 @@ fn live(server: &Server, model: &str, steps: &[Preset], items: &[Value], output:
         let text = item["text"].as_str().unwrap_or_default();
         let limit = rework::time_limit_all(steps, text);
         let started = Instant::now();
-        let outcomes = rework::rework_all(server, model, steps, text, item["lang"].as_str(), started + limit, &stop);
+        let outcomes = rework::rework_all(
+            server,
+            model,
+            steps,
+            text,
+            item["lang"].as_str(),
+            started + limit,
+            &stop,
+        );
         let took = started.elapsed().as_secs_f32();
         times.push(took);
         let said: Vec<String> = outcomes.iter().map(kind).collect();
@@ -240,7 +248,11 @@ fn primed(server: &Server, model: &str, steps: &[Preset], items: &[Value], outpu
     let mut out = std::fs::File::create(output).expect("the results file");
     let stop = AtomicBool::new(false);
     let (mut cold, mut warm) = (Vec::new(), Vec::new());
-    let other = if steps[0] == Preset::Fix { Preset::Translate("fr") } else { Preset::Fix };
+    let other = if steps[0] == Preset::Fix {
+        Preset::Translate("fr")
+    } else {
+        Preset::Fix
+    };
     let far = Duration::from_secs(60);
     for item in items {
         let text = item["text"].as_str().unwrap_or_default();
