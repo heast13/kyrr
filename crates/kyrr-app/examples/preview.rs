@@ -422,10 +422,24 @@ fn main() {
     state.set_rework_models(ModelRc::new(VecModel::from(vec!["gemma-4-26B-A4B-it".into()])));
     state.set_rework_model_index(0);
     state.set_rework_ready(true);
-    state.set_rework_note(if lang == "de" { "Geht, 1,1 s: „Ich habe heute die Bremsbeläge am Auto gewechselt.“" } else { "Works, 1.1 s: “Ich habe heute die Bremsbeläge am Auto gewechselt.”" }.into());
+    state.set_rework_note(
+        if lang == "de" {
+            "Geht, 1,1 s: „Ich habe heute die Bremsbeläge am Auto gewechselt.“"
+        } else {
+            "Works, 1.1 s: “Ich habe heute die Bremsbeläge am Auto gewechselt.”"
+        }
+        .into(),
+    );
     state.set_asr_on(true);
     state.set_asr_url("http://192.168.88.118:8081".into());
-    state.set_asr_note(if lang == "de" { "Geht, 0,4 s für eine Sekunde Stille." } else { "Works, 0.4 s for a second of silence." }.into());
+    state.set_asr_note(
+        if lang == "de" {
+            "Geht, 0,4 s für eine Sekunde Stille."
+        } else {
+            "Works, 0.4 s for a second of silence."
+        }
+        .into(),
+    );
     state.set_page(7);
     render(&window, &ui, &format!("{out}/own-models-{lang}.rgba"));
     state.set_rework_index(3);

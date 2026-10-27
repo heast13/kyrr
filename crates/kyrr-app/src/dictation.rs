@@ -320,7 +320,7 @@ fn say(language: Language, what: &str) -> String {
             "Your microphone is muted in Windows. You can switch that off on the main page."
         }
         ("muted", true) => "Dein Mikrofon ist stummgeschaltet. Auf der Hauptseite kannst du das aufheben.",
-        ("fixing", true) => "Feile noch…",
+        ("fixing", true) => "Korrigiere…",
         ("fixing", false) => "Polishing…",
         ("polishing", true) => "Formuliere…",
         ("polishing", false) => "Rewording…",
@@ -548,7 +548,11 @@ impl Worker {
         self.recording = None;
         self.transcript = None;
         self.waiting = None;
-        self.reworking = None;
+        // A dictation out at the language model is typed as it was.
+        if let Some(r) = self.reworking.take() {
+            r.stop.store(true, Ordering::Relaxed);
+            let _ = catch_unwind(AssertUnwindSafe(|| self.type_text(r.original)));
+        }
         self.pause.store(false, Ordering::Relaxed);
         let _ = catch_unwind(AssertUnwindSafe(|| self.refresh()));
     }
@@ -914,6 +918,11 @@ impl Worker {
             }
             Command::Rework(reworker) => self.reworker = reworker,
             Command::Recognizer(recognizer) => {
+                // Back to the built-in model in the middle of a dictation:
+                // it loads while the recording runs.
+                if recognizer.is_none() && self.recording.is_some() && self.model.is_none() {
+                    self.start_load();
+                }
                 self.recognizer = recognizer;
                 self.told_local = false;
                 self.refresh();
@@ -1008,7 +1017,7 @@ impl Worker {
         // Still waiting for the key (its release got lost): first that.
         self.type_waiting();
         // The key while the language model works: the dictation as it was,
-        // right now.
+        // without waiting (once the key is up again, in hold mode).
         if self.reworking.is_some() {
             self.reworked(Outcome::Original(Why::Skipped));
             return;

@@ -45,6 +45,18 @@ pub fn address(typed: &str) -> Option<String> {
     if !s.contains("://") {
         s = format!("http://{s}");
     }
+    // A name and password in the address would end up in the settings:
+    // keys go in their own field.
+    let authority = s
+        .split("://")
+        .nth(1)
+        .unwrap_or_default()
+        .split('/')
+        .next()
+        .unwrap_or_default();
+    if authority.contains('@') {
+        return None;
+    }
     // Pasted with the path of one of the calls.
     for tail in ["/v1/chat/completions", "/v1/audio/transcriptions", "/v1/models", "/v1"] {
         if let Some(base) = s.strip_suffix(tail) {
@@ -303,6 +315,7 @@ mod tests {
             Some("https://ai.example.org")
         );
         assert_eq!(address("  "), None);
+        assert_eq!(address("http://me:secret@192.168.1.5:8080"), None);
     }
 
     #[test]
