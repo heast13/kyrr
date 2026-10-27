@@ -330,8 +330,9 @@ pub fn fix(orig: &str, out: &str) -> (String, usize) {
     (join(&res), kept)
 }
 
-/// The numbers in a text, sorted, by their digits alone: "3,5" and "3.5",
-/// "10.000", "10,000" and "10 000" are the same number in another language.
+/// The numbers in a text, sorted, written alike: "3,5" and "3.5", "10.000",
+/// "10,000" and "10 000" are the same number in another language; "1,5"
+/// and "15" are not.
 fn numbers(s: &str) -> Vec<String> {
     let chars: Vec<char> = s.chars().collect();
     let digits_from = |i: usize| chars[i..].iter().take_while(|c| c.is_ascii_digit()).count();
@@ -349,14 +350,14 @@ fn numbers(s: &str) -> Vec<String> {
             i += n;
             let Some(&sep) = chars.get(i) else { break };
             let next = if i + 1 < chars.len() { digits_from(i + 1) } else { 0 };
-            let goes_on = match sep {
-                '.' | ',' => next > 0,
-                // A space only between groups of thousands.
-                ' ' | '\u{a0}' | '\u{202f}' => next == 3,
-                _ => false,
-            };
-            if !goes_on {
-                break;
+            // Three digits after a dot, comma or space: groups of
+            // thousands, the sign does not count. Fewer or more after a dot
+            // or comma: a decimal sign, the same in every language.
+            let thousands = next == 3 && chars.get(i + 4).is_none_or(|c| !c.is_ascii_digit());
+            match sep {
+                '.' | ',' | ' ' | '\u{a0}' | '\u{202f}' if thousands => {}
+                '.' | ',' if next > 0 => number.push('.'),
+                _ => break,
             }
             i += 1;
         }
@@ -735,6 +736,8 @@ mod tests {
         assert_eq!(numbers("10.000 Euro"), numbers("10 000 euros"));
         assert_eq!(numbers("um 14:30 Uhr"), vec!["14", "30"]);
         assert_ne!(numbers("am 3. 10 Uhr"), numbers("am 310 Uhr"));
+        assert_ne!(numbers("1,5 Meter"), numbers("15 Meter"));
+        assert_eq!(numbers("1,5 Meter"), vec!["1.5"]);
         assert_eq!(
             translated("Das kostet 349,50 Euro.", "Cela coûte 349,50 euros.", "fr"),
             Ok(())

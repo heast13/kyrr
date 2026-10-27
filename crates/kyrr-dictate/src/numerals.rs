@@ -478,6 +478,8 @@ enum Num {
 
 struct Text {
     words: Vec<String>,
+    /// As said, with their capitals ("May" the month, "may" the verb).
+    raw: Vec<String>,
     /// Whether word `i` and word `i + 1` are apart by a single space only.
     gaps: Vec<bool>,
 }
@@ -525,6 +527,12 @@ impl Text {
         find(&EN_UNITS, self.word(i)?)
     }
 
+    /// An English month's name; "may" only as "May".
+    fn en_month(&self, i: usize) -> bool {
+        self.word(i).is_some_and(|w| EN_MONTHS.contains(&w))
+            && (self.word(i) != Some("may") || self.raw[i].starts_with('M'))
+    }
+
     fn any_number(&self, i: usize) -> bool {
         self.de(i).is_some() || self.en(i).is_some()
     }
@@ -563,15 +571,19 @@ fn german(text: &Text, i: usize) -> Option<(String, usize)> {
                     {
                         return Some((format!("{day}.{month}.{year}"), 3));
                     }
-                    return Some((format!("{day}.{month}."), 2));
+                    // "am dritten zehnten.", but not "im dritten achten Stock"
+                    if next(2).is_none() {
+                        return Some((format!("{day}.{month}."), 2));
+                    }
                 }
             }
             let month = next(1).is_some_and(|w| DE_MONTHS.contains(&w));
             ((month && (1..=31).contains(&day)) || day >= 13).then(|| (format!("{day}."), 1))
         }
         Num::Cardinal(v) => {
-            // "vierzehn Uhr dreißig"
-            if next(1) == Some("uhr") && v <= 24 {
+            // "vierzehn Uhr dreißig", but not "fünf Uhr zehn Minuten"
+            let counted = matches!(next(3), Some("minuten" | "minute" | "sekunden"));
+            if next(1) == Some("uhr") && v <= 24 && !counted {
                 if let Some(m) = next(2)
                     .and_then(|_| text.de_cardinal(i + 2))
                     .filter(|m| (1..60).contains(m))
@@ -580,16 +592,18 @@ fn german(text: &Text, i: usize) -> Option<(String, usize)> {
                 }
             }
             // "dreihundertneunundvierzig Euro (und) fünfzig (Cent)"
-            if let Some(unit) = next(1).filter(|w| DE_MONEY.contains(w)) {
+            if next(1).is_some_and(|w| DE_MONEY.contains(&w)) {
                 let and = usize::from(next(2) == Some("und"));
                 if let Some(cents) = next(2 + and)
                     .and_then(|_| text.de_cardinal(i + 2 + and))
                     .filter(|c| (1..100).contains(c))
                 {
                     let cent_word = matches!(next(3 + and), Some("cent" | "rappen"));
-                    if cent_word || cents >= 10 {
+                    // "zwölf Euro fünfzig." is money, "zwei Euro und zwanzig
+                    // Minuten" is not.
+                    let ends = next(3 + and).is_none() && and == 0;
+                    if cent_word || (cents >= 10 && ends) {
                         let money = text.words[i + 1].clone();
-                        let _ = unit;
                         return Some((
                             format!("{},{cents:02} {}", grouped(v, '.'), capital(&money)),
                             3 + and + usize::from(cent_word),
@@ -655,13 +669,14 @@ fn english(text: &Text, i: usize) -> Option<(String, usize)> {
     let next = |k: usize| if text.joined(i + k - 1) { text.word(i + k) } else { None };
     let digits_only = n == 1 && text.word(i).is_some_and(|w| w.parse::<u64>().is_ok());
     if ordinal {
-        let month_before = i > 0 && text.joined(i - 1) && text.word(i - 1).is_some_and(|w| EN_MONTHS.contains(&w));
-        let month_after = next(n) == Some("of") && next(n + 1).is_some_and(|w| EN_MONTHS.contains(&w));
+        let month_before = i > 0 && text.joined(i - 1) && text.en_month(i - 1);
+        let month_after = next(n) == Some("of") && next(n + 1).is_some() && text.en_month(i + n + 1);
         return ((month_before || month_after) || v >= 13).then(|| (format!("{v}{}", en_ordinal_suffix(v)), n));
     }
     // "nineteen eighty-nine", "twenty twenty-four"
     if n == 1 && matches!(v, 18..=20) {
-        if let Some((rest, 1, false)) = next(1).and_then(|_| text.en(i + 1)) {
+        let spelled = next(1).is_some_and(|w| w.parse::<u64>().is_err());
+        if let Some((rest, 1, false)) = next(1).filter(|_| spelled).and_then(|_| text.en(i + 1)) {
             if (10..100).contains(&rest) {
                 return Some((format!("{}", v * 100 + rest), 2));
             }
@@ -673,7 +688,8 @@ fn english(text: &Text, i: usize) -> Option<(String, usize)> {
             let at = i > 0 && text.word(i - 1) == Some("at");
             let pm = matches!(next(2), Some("am" | "pm"))
                 || (matches!(next(2), Some("a" | "p")) && text.word(i + 3) == Some("m"));
-            if (10..60).contains(&m) && (at || pm) {
+            let unit = next(2).is_some_and(|w| EN_UNIT_WORDS.contains(&w));
+            if (10..60).contains(&m) && (at || pm) && !unit {
                 return Some((format!("{v}:{m:02}"), 2));
             }
         }
@@ -713,12 +729,19 @@ pub fn digits(text: &str, languages: &[Language]) -> String {
     }
     let parsed = Text {
         words: tokens.iter().map(|t| fold(&t.word)).collect(),
+        raw: tokens.iter().map(|t| t.word.clone()).collect(),
         gaps: tokens.iter().map(|t| t.after == " ").collect(),
     };
     let mut out = lead;
     let mut i = 0;
     while i < tokens.len() {
-        let found = languages.iter().find_map(|l| match l {
+        // Right after another number ("four fifty", "drei zwanzig Euro"):
+        // what was said is no number of the rules, it stays.
+        let after_number = i > 0
+            && parsed.joined(i - 1)
+            && !matches!(parsed.word(i - 1), Some("ein" | "eine" | "one" | "a"))
+            && parsed.any_number(i - 1);
+        let found = languages.iter().filter(|_| !after_number).find_map(|l| match l {
             Language::German => german(&parsed, i),
             Language::English => english(&parsed, i),
         });
@@ -849,6 +872,16 @@ mod tests {
             de("Zuerst die Nacht, dann das Fest."),
             "Zuerst die Nacht, dann das Fest."
         );
+        assert_eq!(
+            de("Wir haben zwei Euro und zwanzig Minuten gewartet."),
+            "Wir haben 2 Euro und 20 Minuten gewartet."
+        );
+        assert_eq!(
+            de("Wir wohnen im dritten achten Stock."),
+            "Wir wohnen im dritten achten Stock."
+        );
+        assert_eq!(de("Bis zum dritten zehnten."), "Bis zum 3.10.");
+        assert_eq!(de("Um fünf Uhr zehn Minuten warten."), "Um 5 Uhr zehn Minuten warten.");
     }
 
     #[test]
@@ -882,6 +915,13 @@ mod tests {
             "About a hundred people and 100 cars."
         );
         assert_eq!(en("Two three four."), "Two three four.");
+        assert_eq!(de("Das kostet drei zwanzig Euro."), "Das kostet drei zwanzig Euro.");
+        assert_eq!(en("We may first talk to the team."), "We may first talk to the team.");
+        assert_eq!(en("I need twenty 30 chairs."), "I need 20 30 chairs.");
+        assert_eq!(
+            en("It is priced at four fifty dollars."),
+            "It is priced at four fifty dollars."
+        );
     }
 
     #[test]
