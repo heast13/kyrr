@@ -1496,3 +1496,75 @@ msgstr "Rechner kam nicht mit: jetzt Sparsam."
 
 msgid "The computer cannot keep up: noise removal pauses now and then."
 msgstr "Rechner kommt nicht mit: Geräuschunterdrückung setzt ab und zu aus."
+
+msgid "Fix mishearings"
+msgstr "Fehler ausbessern"
+
+msgid "Reword nicely"
+msgstr "Schöner formulieren"
+
+msgid "Translate to English"
+msgstr "Übersetzen: Englisch"
+
+msgid "Translate to German"
+msgstr "Übersetzen: Deutsch"
+
+msgid "Translate to French"
+msgstr "Übersetzen: Französisch"
+
+msgid "Translate to Spanish"
+msgstr "Übersetzen: Spanisch"
+
+msgid "Translate to Italian"
+msgstr "Übersetzen: Italienisch"
+
+msgid "Rework"
+msgstr "Überarbeitung"
+
+msgid "Own models"
+msgstr "Eigene Modelle"
+
+msgid "Set up"
+msgstr "Einrichten"
+
+msgid "For a model on this computer or in your home network. Not needed for anything else."
+msgstr "Für ein Modell auf diesem PC oder im Heimnetz. Für alles andere nicht nötig."
+
+msgid "A language model on this computer or in your home network fixes, rewords or translates what you dictate. Needs a program like Ollama or LM Studio."
+msgstr "Ein Sprachmodell auf diesem PC oder im Heimnetz bessert aus, formuliert um oder übersetzt, was du diktierst. Braucht ein Programm wie Ollama oder LM Studio."
+
+msgid "Address"
+msgstr "Adresse"
+
+msgid "Model"
+msgstr "Modell"
+
+msgid "Filled in once the server answers"
+msgstr "Kommt, sobald der Server antwortet"
+
+msgid "Key, if the server wants one"
+msgstr "Schlüssel, falls der Server einen will"
+
+msgid "Asking…"
+msgstr "Frage nach…"
+
+msgid "Connect and test"
+msgstr "Verbinden und testen"
+
+msgid "What it does: on the main page, under Dictation. Press the key while it works and your words come as you said them."
+msgstr "Was es tut, wählst du auf der Hauptseite unter Diktieren. Taste drücken, während es arbeitet, und dein Text kommt so, wie du ihn gesagt hast."
+
+msgid "Dictation model"
+msgstr "Diktiermodell"
+
+msgid "Built in"
+msgstr "Eingebaut"
+
+msgid "Own server"
+msgstr "Eigener Server"
+
+msgid "A speech server in your home network recognises what you say (speaches, whisper.cpp and the like). No live text then. If the server is away, kyrr recognises here, if the speech model is on this computer."
+msgstr "Ein Sprach-Server im Heimnetz erkennt, was du sagst (speaches, whisper.cpp und Co.). Live-Text gibt es dann nicht. Ist der Server weg, erkennt kyrr hier, falls das Sprachmodell auf diesem PC ist."
+
+msgid "kyrr recognises on this computer. Nothing leaves it."
+msgstr "kyrr erkennt auf diesem PC. Nichts verlässt ihn."

@@ -642,7 +642,7 @@ export global AppState {
 
     // 0 is the main view, 1 the setup, then the settings of each
     // card: 2 noise, 3 voice, 4 dictation, 5 voice memos; 6 the voice memos
-    // themselves.
+    // themselves; 7 the user's own models.
     in-out property <int> page;
     // Counts up every few seconds; the status line picks its next phrase
     // from it, so one state does not repeat the same sentence.
@@ -770,6 +770,41 @@ export global AppState {
     callback memo-open-text();
     callback memo-search(string);
     callback memo-open-folder();
+
+    // Own models (page 7): the user's language model reworks dictations,
+    // the user's speech server can recognise them.
+    in-out property <string> rework-url;
+    in-out property <string> rework-model;
+    in-out property <string> rework-key;
+    // The models the server offers, once it answered.
+    in property <[string]> rework-models;
+    in-out property <int> rework-model-index;
+    // How the last test went; "" for nothing yet.
+    in property <string> rework-note;
+    in property <bool> rework-busy;
+    // A server and model are set: the choice shows on the main page.
+    in property <bool> rework-ready;
+    // 0 off, 1 fix, 2 reword, 3 and on: translate into one of the languages.
+    in-out property <int> rework-index;
+    in-out property <bool> asr-on;
+    in-out property <string> asr-url;
+    in-out property <string> asr-model;
+    in-out property <string> asr-key;
+    in property <[string]> asr-models;
+    in-out property <int> asr-model-index;
+    in property <string> asr-note;
+    in property <bool> asr-busy;
+    // Saves address, model and key, asks the server and tries it once.
+    callback rework-connect();
+    callback rework-model-picked(int);
+    callback rework-changed(int);
+    callback asr-toggled(bool);
+    callback asr-connect();
+    callback asr-model-picked(int);
+    // What reworking can be, for the choices on the main page.
+    out property <[string]> rework-options: [@tr("Off"), @tr("Fix mishearings"), @tr("Reword nicely"),
+        @tr("Translate to English"), @tr("Translate to German"), @tr("Translate to French"),
+        @tr("Translate to Spanish"), @tr("Translate to Italian")];
 }
 
 // The tray has its own properties: globals are per component instance, so
@@ -787,6 +822,12 @@ export component Tray inherits SystemTrayIcon {
     in property <string> memo-key-name;
     // A newer version found ("" for none).
     in property <string> update-version;
+    // The user's language model is set up: what it does, 0 off, 1 fix,
+    // 2 reword, 3 translate.
+    in property <bool> rework-ready;
+    in property <int> rework-index;
+    in property <string> rework-target;
+    callback rework-picked(int);
     callback open();
     callback toggle-memo();
     callback open-memos();
@@ -834,6 +875,25 @@ export component Tray inherits SystemTrayIcon {
         if root.memos-enabled: MenuItem {
             title: @tr("Open recordings");
             activated => { root.open-memos(); }
+        }
+        if root.rework-ready: Menu {
+            title: @tr("Rework");
+            MenuItem {
+                title: (root.rework-index == 0 ? "✓ " : "") + @tr("Off");
+                activated => { root.rework-picked(0); }
+            }
+            MenuItem {
+                title: (root.rework-index == 1 ? "✓ " : "") + @tr("Fix mishearings");
+                activated => { root.rework-picked(1); }
+            }
+            MenuItem {
+                title: (root.rework-index == 2 ? "✓ " : "") + @tr("Reword nicely");
+                activated => { root.rework-picked(2); }
+            }
+            MenuItem {
+                title: (root.rework-index == 3 ? "✓ " : "") + root.rework-target;
+                activated => { root.rework-picked(3); }
+            }
         }
         if root.update-version != "": MenuItem {
             title: @tr("Install update {}", root.update-version);
@@ -1252,6 +1312,15 @@ component DictationCard inherits Card {
         text: @tr("Download");
         primary: true;
         clicked => { AppState.download-model(); }
+    }
+    if AppState.rework-ready && !root.in-setup && AppState.dictation-enabled: HorizontalLayout {
+        spacing: 8px;
+        Caption { text: @tr("Rework"); vertical-alignment: center; horizontal-stretch: 0; }
+        ComboBox {
+            model: AppState.rework-options;
+            current-index <=> AppState.rework-index;
+            selected => { AppState.rework-changed(self.current-index); }
+        }
     }
 }
 
@@ -2036,6 +2105,94 @@ component GeneralSettings inherits Card {
         Caption { text: AppState.attached-mic != "" ? AppState.attached-mic : @tr("Microphone"); horizontal-stretch: 1; vertical-alignment: center; }
         Button { text: @tr("Change microphone"); clicked => { AppState.change-microphone(); } }
     }
+    Separator { }
+    HorizontalLayout {
+        spacing: 8px;
+        Caption { text: @tr("Own models"); horizontal-stretch: 1; vertical-alignment: center; }
+        Button { text: @tr("Set up"); clicked => { AppState.open-page(7); } }
+    }
+    Hint { text: @tr("For a model on this computer or in your home network. Not needed for anything else."); }
+}
+
+// Settings: the user's language model, which reworks dictations.
+component ReworkSettings inherits Card {
+    Heading { text: @tr("Rework"); }
+    Hint { text: @tr("A language model on this computer or in your home network fixes, rewords or translates what you dictate. Needs a program like Ollama or LM Studio."); }
+    Caption { text: @tr("Address"); }
+    LineEdit {
+        placeholder-text: "http://192.168.1.10:11434";
+        text <=> AppState.rework-url;
+    }
+    Caption { text: @tr("Model"); }
+    if AppState.rework-models.length > 0: ComboBox {
+        model: AppState.rework-models;
+        current-index <=> AppState.rework-model-index;
+        selected => { AppState.rework-model-picked(self.current-index); }
+    }
+    if AppState.rework-models.length == 0: LineEdit {
+        placeholder-text: @tr("Filled in once the server answers");
+        text <=> AppState.rework-model;
+    }
+    Caption { text: @tr("Key, if the server wants one"); }
+    LineEdit {
+        input-type: password;
+        text <=> AppState.rework-key;
+    }
+    HorizontalLayout {
+        Rectangle { }
+        Button {
+            text: AppState.rework-busy ? @tr("Asking…") : @tr("Connect and test");
+            primary: true;
+            enabled: !AppState.rework-busy;
+            clicked => { AppState.rework-connect(); }
+        }
+    }
+    if AppState.rework-note != "": Hint { text: AppState.rework-note; }
+    if AppState.rework-ready: Hint { text: @tr("What it does: on the main page, under Dictation. Press the key while it works and your words come as you said them."); }
+}
+
+// Settings: dictation through the user's own speech server.
+component SpeechServerSettings inherits Card {
+    Heading { text: @tr("Dictation model"); }
+    Segmented {
+        options: [@tr("Built in"), @tr("Own server")];
+        selected: AppState.asr-on ? 1 : 0;
+        changed(i) => { AppState.asr-toggled(i == 1); }
+    }
+    Hint {
+        text: AppState.asr-on ? @tr("A speech server in your home network recognises what you say (speaches, whisper.cpp and the like). No live text then. If the server is away, kyrr recognises here, if the speech model is on this computer.")
+            : @tr("kyrr recognises on this computer. Nothing leaves it.");
+    }
+    if AppState.asr-on: Caption { text: @tr("Address"); }
+    if AppState.asr-on: LineEdit {
+        placeholder-text: "http://192.168.1.10:8000";
+        text <=> AppState.asr-url;
+    }
+    if AppState.asr-on: Caption { text: @tr("Model"); }
+    if AppState.asr-on && AppState.asr-models.length > 0: ComboBox {
+        model: AppState.asr-models;
+        current-index <=> AppState.asr-model-index;
+        selected => { AppState.asr-model-picked(self.current-index); }
+    }
+    if AppState.asr-on && AppState.asr-models.length == 0: LineEdit {
+        placeholder-text: @tr("Filled in once the server answers");
+        text <=> AppState.asr-model;
+    }
+    if AppState.asr-on: Caption { text: @tr("Key, if the server wants one"); }
+    if AppState.asr-on: LineEdit {
+        input-type: password;
+        text <=> AppState.asr-key;
+    }
+    if AppState.asr-on: HorizontalLayout {
+        Rectangle { }
+        Button {
+            text: AppState.asr-busy ? @tr("Asking…") : @tr("Connect and test");
+            primary: true;
+            enabled: !AppState.asr-busy;
+            clicked => { AppState.asr-connect(); }
+        }
+    }
+    if AppState.asr-on && AppState.asr-note != "": Hint { text: AppState.asr-note; }
 }
 
 component SetupPage inherits VerticalLayout {
@@ -2851,12 +3008,13 @@ export component MainWindow inherits Window {
     }
 
     property <bool> main-page: !setup-mode && AppState.page == 0;
-    property <bool> settings-page: !setup-mode && AppState.page >= 1 && AppState.page <= 5;
+    property <bool> settings-page: !setup-mode && ((AppState.page >= 1 && AppState.page <= 5) || AppState.page == 7);
     property <bool> memos-page: !setup-mode && AppState.page == 6;
     property <string> page-title: AppState.page == 2 ? @tr("Isolate your voice")
         : AppState.page == 3 ? @tr("Improve voice")
         : AppState.page == 4 ? @tr("Dictation")
         : AppState.page == 5 ? @tr("Voice memo")
+        : AppState.page == 7 ? @tr("Own models")
         : @tr("Setup");
     // Where the memos are, as the user knows the folder.
     in property <string> memo-folder;
@@ -2935,7 +3093,8 @@ export component MainWindow inherits Window {
                     text: @tr("← Back");
                     horizontal-stretch: 0;
                     clicked => {
-                        AppState.page = 0;
+                        // Own models were opened from the general settings.
+                        AppState.page = AppState.page == 7 ? 1 : 0;
                         AppState.page-changed();
                     }
                 }
@@ -2950,6 +3109,8 @@ export component MainWindow inherits Window {
             if settings-page && AppState.page == 3: LevelSettings { }
             if settings-page && AppState.page == 4: DictationSettings { }
             if settings-page && AppState.page == 5: RecordingSettings { folder: root.memo-folder; }
+            if settings-page && AppState.page == 7: ReworkSettings { }
+            if settings-page && AppState.page == 7: SpeechServerSettings { }
             if memos-page: MemosPage { }
             if settings-page && AppState.page == 1: Caption {
                 // English in every language, on purpose.

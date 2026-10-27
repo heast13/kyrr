@@ -7,6 +7,7 @@ members = [
     "crates/kyrr-denoise",
     "crates/kyrr-dictate",
     "crates/kyrr-linux",
+    "crates/kyrr-server",
     "crates/kyrr-voice",
     "crates/kyrr-windows",
 ]

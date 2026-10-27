@@ -21,6 +21,7 @@ mod platform;
 mod player;
 mod probe;
 mod recorder;
+mod servers;
 #[cfg(target_os = "linux")]
 mod skin;
 mod update;
@@ -2401,6 +2402,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
     });
     state.set_memos_enabled(app.config.borrow().memos);
     state.set_memo_auto_text(app.config.borrow().memo_text_auto);
+    servers::setup(&app, &window);
     tray.set_memos_enabled(app.config.borrow().memos);
     show_voice(&state, &filter.voice);
     tray.set_dictation_enabled(app.config.borrow().dictation);
@@ -2755,6 +2757,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
         move || {
             // A key field that waited is gone with its page.
             app.capture(0);
+            servers::look_around(&app);
             if let Some(w) = weak.upgrade() {
                 w.invoke_reset_scroll();
             }
@@ -3542,6 +3545,7 @@ fn new_tray(app: &Rc<App>) -> Result<Tray, slint::PlatformError> {
             }
         }
     });
+    servers::wire_tray(app, &tray);
     Ok(tray)
 }
 

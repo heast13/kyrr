@@ -1,0 +1,687 @@
+//! The checks on what the language model sends back, before kyrr types it.
+//!
+//! Fixing goes word by word: a change stays only if it looks like a
+//! mishearing of what was dictated (similar spelling or sound), or is
+//! punctuation, case, a compound split or joined, a doubled word or a filler
+//! dropped. Everything else goes back to the dictation. Rewording and
+//! translating are all or nothing: length, numbers, no answer of its own, the
+//! language. Measured on the home server in 2026-10 (see the research notes):
+//! without these checks a model "fixes" right words and makes it worse.
+
+/// A word or one sign, and whether a space came before it.
+#[derive(Clone, Debug)]
+struct Token {
+    text: String,
+    spaced: bool,
+}
+
+fn word_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
+}
+
+/// Words (with inner hyphens and apostrophes: "U-Boot", "geht's") and
+/// single signs.
+fn tokens(s: &str) -> Vec<Token> {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    let mut spaced = false;
+    while i < chars.len() {
+        let c = chars[i];
+        if c.is_whitespace() {
+            spaced = true;
+            i += 1;
+            continue;
+        }
+        let start = i;
+        if word_char(c) {
+            i += 1;
+            loop {
+                while i < chars.len() && word_char(chars[i]) {
+                    i += 1;
+                }
+                let joined = i + 1 < chars.len() && matches!(chars[i], '-' | '\'' | '’') && word_char(chars[i + 1]);
+                if !joined {
+                    break;
+                }
+                i += 1;
+            }
+        } else {
+            i += 1;
+        }
+        out.push(Token {
+            text: chars[start..i].iter().collect(),
+            spaced: spaced && !out.is_empty(),
+        });
+        spaced = false;
+    }
+    out
+}
+
+fn join(tokens: &[Token]) -> String {
+    let mut s = String::new();
+    for (i, t) in tokens.iter().enumerate() {
+        // Two words never touch: they would have been one token. Where the
+        // model's text and the dictation meet, the spacing may be either's.
+        let touching = i > 0 && is_word(&t.text) && tokens[i - 1].text.chars().last().is_some_and(word_char);
+        if i > 0 && (t.spaced || touching) {
+            s.push(' ');
+        }
+        s.push_str(&t.text);
+    }
+    s
+}
+
+fn is_word(t: &str) -> bool {
+    t.chars().next().is_some_and(word_char)
+}
+
+/// Lower case, ß as ss: what counts as the same word.
+pub fn norm(w: &str) -> String {
+    w.to_lowercase().replace('ß', "ss")
+}
+
+/// Edits between two strings, by characters.
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.iter().enumerate() {
+        let mut last = row[0];
+        row[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let here = row[j + 1];
+            row[j + 1] = (row[j] + 1).min(here + 1).min(last + usize::from(ca != cb));
+            last = here;
+        }
+    }
+    row[b.len()]
+}
+
+/// 1 for the same, 0 for nothing alike.
+fn similarity(a: &str, b: &str) -> f32 {
+    let longest = a.chars().count().max(b.chars().count());
+    if longest == 0 {
+        return 1.0;
+    }
+    1.0 - levenshtein(a, b) as f32 / longest as f32
+}
+
+/// Kölner Phonetik: enough to tell "sounds alike" in German.
+fn koelner(word: &str) -> String {
+    let w: Vec<char> = norm(word)
+        .replace('ä', "a")
+        .replace('ö', "o")
+        .replace('ü', "u")
+        .chars()
+        .filter(|c| c.is_alphabetic())
+        .collect();
+    let mut codes = String::new();
+    for (i, &c) in w.iter().enumerate() {
+        let p = if i > 0 { w[i - 1] } else { ' ' };
+        let n = w.get(i + 1).copied().unwrap_or(' ');
+        let k = match c {
+            'a' | 'e' | 'i' | 'j' | 'o' | 'u' | 'y' => "0",
+            'b' => "1",
+            'p' if n == 'h' => "3",
+            'p' => "1",
+            'd' | 't' if "csz".contains(n) => "8",
+            'd' | 't' => "2",
+            'f' | 'v' | 'w' => "3",
+            'g' | 'k' | 'q' => "4",
+            'c' if i == 0 && "ahkloqrux".contains(n) => "4",
+            'c' if i == 0 => "8",
+            'c' if "sz".contains(p) || !"ahkoqux".contains(n) => "8",
+            'c' => "4",
+            'x' if "ckq".contains(p) => "8",
+            'x' => "48",
+            'l' => "5",
+            'm' | 'n' => "6",
+            'r' => "7",
+            's' | 'z' => "8",
+            _ => "",
+        };
+        codes.push_str(k);
+    }
+    let mut out: Vec<char> = Vec::new();
+    for ch in codes.chars() {
+        if out.last() != Some(&ch) {
+            out.push(ch);
+        }
+    }
+    let Some((&first, rest)) = out.split_first() else {
+        return String::new();
+    };
+    std::iter::once(first)
+        .chain(rest.iter().copied().filter(|&c| c != '0'))
+        .collect()
+}
+
+/// Could `b` be what was said where the recognizer wrote `a`?
+fn alike(a: &str, b: &str) -> bool {
+    let (x, y) = (norm(a), norm(b));
+    if x == y || similarity(&x, &y) >= 0.5 {
+        return true;
+    }
+    let (ka, kb) = (koelner(&x), koelner(&y));
+    !ka.is_empty() && similarity(&ka, &kb) >= 0.67
+}
+
+const FILLERS: [&str; 9] = ["äh", "ähm", "öhm", "hm", "hmm", "uh", "um", "uhm", "erm"];
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Op {
+    Equal,
+    Replace,
+    Delete,
+    Insert,
+}
+
+/// The longest run that `a[alo..ahi]` and `b[blo..bhi]` share, the earliest
+/// one on a tie, as Python's difflib finds it (without junk).
+fn longest_match(a: &[String], b: &[String], alo: usize, ahi: usize, blo: usize, bhi: usize) -> (usize, usize, usize) {
+    let (mut besti, mut bestj, mut bestsize) = (alo, blo, 0);
+    let mut lengths = vec![0usize; bhi - blo + 1];
+    for (i, x) in a.iter().enumerate().take(ahi).skip(alo) {
+        let mut next = vec![0usize; bhi - blo + 1];
+        for (j, y) in b.iter().enumerate().take(bhi).skip(blo) {
+            if x == y {
+                let k = if j > blo { lengths[j - blo] } else { 0 } + 1;
+                next[j - blo + 1] = k;
+                if k > bestsize {
+                    (besti, bestj, bestsize) = (i + 1 - k, j + 1 - k, k);
+                }
+            }
+        }
+        lengths = next;
+    }
+    (besti, bestj, bestsize)
+}
+
+/// How `a` turns into `b`, as difflib's opcodes.
+fn opcodes(a: &[String], b: &[String]) -> Vec<(Op, usize, usize, usize, usize)> {
+    let mut queue = vec![(0, a.len(), 0, b.len())];
+    let mut blocks = Vec::new();
+    while let Some((alo, ahi, blo, bhi)) = queue.pop() {
+        let (i, j, k) = longest_match(a, b, alo, ahi, blo, bhi);
+        if k > 0 {
+            blocks.push((i, j, k));
+            if alo < i && blo < j {
+                queue.push((alo, i, blo, j));
+            }
+            if i + k < ahi && j + k < bhi {
+                queue.push((i + k, ahi, j + k, bhi));
+            }
+        }
+    }
+    blocks.sort_unstable();
+    blocks.push((a.len(), b.len(), 0));
+    let (mut i, mut j) = (0, 0);
+    let mut ops = Vec::new();
+    for (ai, bj, size) in blocks {
+        let op = match (i < ai, j < bj) {
+            (true, true) => Some(Op::Replace),
+            (true, false) => Some(Op::Delete),
+            (false, true) => Some(Op::Insert),
+            (false, false) => None,
+        };
+        if let Some(op) = op {
+            ops.push((op, i, ai, j, bj));
+        }
+        if size > 0 {
+            ops.push((Op::Equal, ai, ai + size, bj, bj + size));
+        }
+        (i, j) = (ai + size, bj + size);
+    }
+    ops
+}
+
+/// What came back from fixing, with every change undone that does not look
+/// like a mishearing: the text and how many changes stayed.
+pub fn fix(orig: &str, out: &str) -> (String, usize) {
+    let (a, b) = (tokens(orig), tokens(out));
+    if b.is_empty() {
+        return (orig.to_string(), 0);
+    }
+    let na: Vec<String> = a.iter().map(|t| norm(&t.text)).collect();
+    let nb: Vec<String> = b.iter().map(|t| norm(&t.text)).collect();
+    let mut res: Vec<Token> = Vec::new();
+    let mut kept = 0;
+    let sentence_end = |t: &Token| matches!(t.text.as_str(), "." | "!" | "?");
+    for (op, i1, i2, j1, j2) in opcodes(&na, &nb) {
+        let (ta, tb) = (&a[i1..i2], &b[j1..j2]);
+        if op == Op::Equal {
+            // The model's case wins, but not a capital that only comes from
+            // a sentence start of its own around a change that went back.
+            for (k, t) in tb.iter().enumerate() {
+                let j = j1 + k;
+                let starts_b = j == 0 || sentence_end(&b[j - 1]);
+                let starts_r = res.last().is_none_or(sentence_end);
+                let lower = ta[k].text.chars().next().is_some_and(char::is_lowercase);
+                let upper = t.text.chars().next().is_some_and(char::is_uppercase);
+                if upper && lower && starts_b && !starts_r {
+                    res.push(Token {
+                        text: ta[k].text.clone(),
+                        spaced: t.spaced,
+                    });
+                } else {
+                    res.push(t.clone());
+                }
+            }
+            continue;
+        }
+        let wa: Vec<&str> = ta.iter().map(|t| t.text.as_str()).filter(|t| is_word(t)).collect();
+        let wb: Vec<&str> = tb.iter().map(|t| t.text.as_str()).filter(|t| is_word(t)).collect();
+        let ok = if wa.is_empty() && wb.is_empty() {
+            // Punctuation only.
+            true
+        } else {
+            match op {
+                // A doubled word or a filler may go, nothing else.
+                Op::Delete => wa.iter().all(|w| {
+                    let w = norm(w);
+                    FILLERS.contains(&w.as_str()) || (i1 > 0 && w == na[i1 - 1]) || (i2 < na.len() && w == na[i2])
+                }),
+                // New words are never a fix.
+                Op::Insert => false,
+                _ => {
+                    let ja: String = wa.iter().map(|w| norm(w)).collect();
+                    let jb: String = wb.iter().map(|w| norm(w)).collect();
+                    if ja == jb {
+                        // A compound split or joined.
+                        true
+                    } else if wa.len() == wb.len() {
+                        wa.iter().zip(&wb).all(|(x, y)| alike(x, y))
+                    } else if (1..=3).contains(&wa.len()) && (1..=3).contains(&wb.len()) {
+                        alike(&wa.join(" "), &wb.join(" ")) || similarity(&ja, &jb) >= 0.6
+                    } else {
+                        false
+                    }
+                }
+            }
+        };
+        if ok {
+            res.extend(tb.iter().cloned());
+            kept += 1;
+        } else {
+            res.extend(ta.iter().cloned());
+        }
+    }
+    if let Some(first) = res.first_mut() {
+        first.spaced = false;
+    }
+    // A model that rewrote much of the text did not fix it: all back.
+    let plain = |ts: &[Token]| {
+        ts.iter()
+            .filter(|t| is_word(&t.text))
+            .map(|t| norm(&t.text))
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    if 1.0 - similarity(&plain(&a), &plain(&res)) > 0.34 {
+        return (orig.to_string(), 0);
+    }
+    (join(&res), kept)
+}
+
+/// The numbers in a text, sorted.
+fn numbers(s: &str) -> Vec<String> {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if !chars[i].is_ascii_digit() {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < chars.len() && chars[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i + 1 < chars.len() && matches!(chars[i], '.' | ',') && chars[i + 1].is_ascii_digit() {
+            i += 1;
+            while i < chars.len() && chars[i].is_ascii_digit() {
+                i += 1;
+            }
+        }
+        out.push(chars[start..i].iter().collect());
+    }
+    out.sort();
+    out
+}
+
+const STOP: [(&str, &str); 5] = [
+    ("de", "der die das und ist nicht ich du er sie wir ihr es ein eine zu mit auf für von den dem des im sind war hat haben auch noch wie aber oder wenn dass"),
+    ("en", "the and is not you he she we they it a an to with on for of in was were has have also still how but or if that this"),
+    ("fr", "le la les et est pas je tu il elle nous vous un une des du de en pour avec sur que qui"),
+    ("es", "el la los las y es no yo tú él ella nosotros un una de en para con que por del se"),
+    ("it", "il lo la gli le e è non io tu lui lei noi voi un una di in per con su che chi del della sono"),
+];
+
+fn words(s: &str) -> Vec<String> {
+    s.split(|c: char| !word_char(c))
+        .filter(|w| !w.is_empty())
+        .map(norm)
+        .collect()
+}
+
+/// The language a text is most likely in, by its small words; None when
+/// there are too few to tell.
+pub fn language_of(s: &str) -> Option<&'static str> {
+    let ws = words(s);
+    if ws.is_empty() {
+        return None;
+    }
+    let count = |list: &str| ws.iter().filter(|w| list.split(' ').any(|s| s == w.as_str())).count();
+    let mut best = ("", 0);
+    for (code, list) in STOP {
+        let n = count(list);
+        if n > best.1 {
+            best = (code, n);
+        }
+    }
+    (best.1 >= (ws.len() / 12).max(1)).then_some(best.0)
+}
+
+/// The first five letters of every longer word.
+fn stems(s: &str) -> std::collections::HashSet<String> {
+    words(s)
+        .into_iter()
+        .filter(|w| w.chars().count() > 3)
+        .map(|w| w.chars().take(5).collect())
+        .collect()
+}
+
+/// A lead-in of the model's own ("Gerne, hier ist…:", "Here is the
+/// revised text:").
+fn lead_in(s: &str) -> bool {
+    const STARTS: [&str; 21] = [
+        "gerne",
+        "gern",
+        "natürlich",
+        "klar",
+        "hier ist",
+        "hier sind",
+        "hier der",
+        "hier die",
+        "korrigiert",
+        "korrektur",
+        "überarbeitet",
+        "sure",
+        "certainly",
+        "of course",
+        "here is",
+        "here's",
+        "here are",
+        "corrected",
+        "revised",
+        "translation",
+        "übersetzung",
+    ];
+    let lower = s.trim_start().to_lowercase();
+    STARTS.iter().any(|start| {
+        let Some(rest) = lower.strip_prefix(start) else {
+            return false;
+        };
+        if rest.chars().next().is_some_and(word_char) {
+            return false;
+        }
+        let line: String = rest.chars().take_while(|&c| c != '\n').take(61).collect();
+        line.contains([':', '：'])
+    })
+}
+
+/// How rewording or translating went wrong, for the log and the pill.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Refusal {
+    Empty,
+    LeadIn,
+    Length,
+    Numbers,
+    Language,
+    Content,
+    Lines,
+    /// A question came back as a statement: answered, most likely.
+    Answered,
+}
+
+/// Whether reworded text may be typed instead of the dictation, which is in
+/// `language` (a code, None when unknown).
+pub fn reworded(orig: &str, out: &str, language: Option<&str>) -> Result<(), Refusal> {
+    whole(orig, out, (0.6, 1.5))?;
+    if let (Some(found), Some(wanted)) = (language_of(out), language) {
+        if found != wanted {
+            return Err(Refusal::Language);
+        }
+    }
+    let (before, after) = (stems(orig), stems(out));
+    if !before.is_empty() && (before.intersection(&after).count() as f32) < 0.4 * before.len() as f32 {
+        return Err(Refusal::Content);
+    }
+    Ok(())
+}
+
+/// Whether a translation into `target` (a code) may be typed instead of the
+/// dictation.
+pub fn translated(orig: &str, out: &str, target: &str) -> Result<(), Refusal> {
+    whole(orig, out, (0.5, 2.0))?;
+    if language_of(out).is_some_and(|found| found != target) {
+        return Err(Refusal::Language);
+    }
+    Ok(())
+}
+
+fn whole(orig: &str, out: &str, (lo, hi): (f32, f32)) -> Result<(), Refusal> {
+    if out.trim().is_empty() {
+        return Err(Refusal::Empty);
+    }
+    if lead_in(out) {
+        return Err(Refusal::LeadIn);
+    }
+    let (o, n) = (orig.chars().count(), out.chars().count());
+    let ratio = n as f32 / o.max(1) as f32;
+    let (lo, hi) = if o < 40 { (lo * 0.6, hi * 1.6) } else { (lo, hi) };
+    if !(lo..=hi).contains(&ratio) {
+        return Err(Refusal::Length);
+    }
+    let after = numbers(out);
+    if numbers(orig).iter().any(|n| !after.contains(n)) {
+        return Err(Refusal::Numbers);
+    }
+    if !orig.contains('\n') && out.matches('\n').count() > 1 {
+        return Err(Refusal::Lines);
+    }
+    if orig.contains('?') && !out.contains(['?', '？']) {
+        return Err(Refusal::Answered);
+    }
+    Ok(())
+}
+
+/// What every answer goes through first: thinking, code fences, quotes and
+/// markers around it.
+pub fn clean(out: &str) -> String {
+    let mut s = out.to_string();
+    for (open, close) in [("<think>", "</think>"), ("<|channel|>", "<|message|>")] {
+        while let Some(start) = s.find(open) {
+            match s[start..].find(close) {
+                Some(end) => s.replace_range(start..start + end + close.len(), ""),
+                // Never closed: all of it was thinking.
+                None => s.truncate(start),
+            }
+        }
+    }
+    let mut s = s.trim().to_string();
+    for _ in 0..2 {
+        if s.starts_with("```") {
+            let line = s.find('\n').unwrap_or(s.len());
+            s = s[line..].to_string();
+        }
+        for open in ["<dictation>", "<diktat>", "<text>", "\"", "„", "«"] {
+            if let Some(rest) = s.trim_start().strip_prefix(open) {
+                s = rest.to_string();
+            }
+        }
+        for close in ["```", "</dictation>", "</diktat>", "</text>", "\"", "“", "»"] {
+            if let Some(rest) = s.trim_end().strip_suffix(close) {
+                s = rest.to_string();
+            }
+        }
+        s = s.trim().to_string();
+    }
+    s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mishearings_are_fixed() {
+        let (text, kept) = fix(
+            "Die Brainsbelege sind im Beschwächungsraum",
+            "Die Bremsbeläge sind im Besprechungsraum.",
+        );
+        assert_eq!(text, "Die Bremsbeläge sind im Besprechungsraum.");
+        assert_eq!(kept, 2);
+        let (text, _) = fix("Wir fahren nach süd Tirol", "Wir fahren nach Südtirol.");
+        assert_eq!(text, "Wir fahren nach Südtirol.");
+    }
+
+    #[test]
+    fn other_words_go_back() {
+        // A synonym is no mishearing; a new word is never a fix.
+        let (text, kept) = fix(
+            "Ich gehe zur Bank und hole Geld",
+            "Ich gehe zur Sparkasse und hole schnell Geld.",
+        );
+        assert_eq!(text, "Ich gehe zur Bank und hole Geld.");
+        assert_eq!(kept, 1);
+    }
+
+    #[test]
+    fn an_answer_is_not_a_fix() {
+        let q = "Was ist die Hauptstadt von Australien?";
+        let (text, kept) = fix(q, "Die Hauptstadt von Australien ist Canberra.");
+        assert_eq!(text, q);
+        assert_eq!(kept, 0);
+    }
+
+    #[test]
+    fn doubled_words_and_fillers_may_go() {
+        let (text, _) = fix(
+            "Das das Treffen ist äh morgen um drei im großen Raum",
+            "Das Treffen ist morgen um drei im großen Raum.",
+        );
+        assert_eq!(text, "Das Treffen ist morgen um drei im großen Raum.");
+        let (text, _) = fix(
+            "Das Treffen ist nicht morgen um drei im großen Raum",
+            "Das Treffen ist morgen um drei im großen Raum.",
+        );
+        assert_eq!(text, "Das Treffen ist nicht morgen um drei im großen Raum.");
+    }
+
+    #[test]
+    fn hyphens_and_apostrophes_stay_in_the_word() {
+        let t: Vec<String> = tokens("Das U-Boot geht's, gut.").into_iter().map(|t| t.text).collect();
+        assert_eq!(t, ["Das", "U-Boot", "geht's", ",", "gut", "."]);
+        assert_eq!(join(&tokens("Ja , gut ( so ) .")), "Ja , gut ( so ) .");
+    }
+
+    #[test]
+    fn opcodes_like_difflib() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let ops = opcodes(&s(&["a", "b", "c", "d"]), &s(&["a", "x", "c", "d", "e"]));
+        assert_eq!(
+            ops,
+            [
+                (Op::Equal, 0, 1, 0, 1),
+                (Op::Replace, 1, 2, 1, 2),
+                (Op::Equal, 2, 4, 2, 4),
+                (Op::Insert, 4, 4, 4, 5)
+            ]
+        );
+    }
+
+    #[test]
+    fn koelner_phonetik() {
+        assert_eq!(koelner("Müller-Lüdenscheidt"), "65752682");
+        assert_eq!(koelner("Wikipedia"), "3412");
+        assert_eq!(koelner("Breschnew"), "17863");
+    }
+
+    #[test]
+    fn rewording_keeps_numbers_and_language() {
+        let orig = "Also ich wollte nur kurz sagen dass wir den Termin am 3. Mai machen weil der Chef keine Zeit hat";
+        assert_eq!(
+            reworded(
+                orig,
+                "Ich wollte kurz sagen, dass wir den Termin am 3. Mai machen, weil der Chef keine Zeit hat.",
+                Some("de")
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            reworded(
+                orig,
+                "Ich wollte kurz sagen, dass wir den Termin im Mai machen, weil der Chef keine Zeit hat.",
+                Some("de")
+            ),
+            Err(Refusal::Numbers)
+        );
+        assert_eq!(
+            reworded(
+                orig,
+                "I just wanted to say that we have the meeting on the 3rd of May because the boss has no time.",
+                Some("de")
+            ),
+            Err(Refusal::Language)
+        );
+        assert_eq!(
+            reworded(
+                orig,
+                "Gerne, hier ist der Text: Termin am 3. Mai, der Chef hat keine Zeit, also machen wir das so.",
+                Some("de")
+            ),
+            Err(Refusal::LeadIn)
+        );
+    }
+
+    #[test]
+    fn translations_land_in_the_target_language() {
+        let orig = "Kannst du mir sagen, wie spät es ist?";
+        assert_eq!(translated(orig, "Can you tell me what time it is?", "en"), Ok(()));
+        assert_eq!(
+            translated(orig, "Kannst du mir sagen, wie spät es ist?", "en"),
+            Err(Refusal::Language)
+        );
+        assert_eq!(translated(orig, "  ", "en"), Err(Refusal::Empty));
+        let long = "Wir treffen uns am Montag um 9 Uhr im Büro, bring bitte die Unterlagen mit.";
+        assert_eq!(
+            translated(long, "We meet on Monday at nine.", "en"),
+            Err(Refusal::Length)
+        );
+        assert_eq!(
+            translated(
+                long,
+                "We meet on Monday at nine in the office, please bring the documents along.",
+                "en"
+            ),
+            Err(Refusal::Numbers)
+        );
+    }
+
+    #[test]
+    fn thinking_and_wrapping_go() {
+        assert_eq!(clean("<think>hmm</think>\n„Hallo Welt.“"), "Hallo Welt.");
+        assert_eq!(clean("```text\nHallo.\n```"), "Hallo.");
+        assert_eq!(clean("<dictation>\nHallo.\n</dictation>"), "Hallo.");
+        assert_eq!(clean("<think>endless"), "");
+    }
+
+    #[test]
+    fn languages() {
+        assert_eq!(language_of("Das ist ein Test und es geht"), Some("de"));
+        assert_eq!(language_of("This is a test and it works"), Some("en"));
+        assert_eq!(language_of("Xyz"), None);
+    }
+}

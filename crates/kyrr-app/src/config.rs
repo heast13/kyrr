@@ -64,6 +64,20 @@ pub struct Config {
     /// "hold" once; after that the user's own choice stays.
     #[serde(default = "never")]
     pub memo_hold_default: bool,
+    /// The user's own language model that reworks dictations (see
+    /// `kyrr_server`): its address ("" for none) and model.
+    pub rework_url: String,
+    pub rework_model: String,
+    /// What it does with a dictation: 0 nothing, 1 fix what was misheard,
+    /// 2 reword it, 3 translate it.
+    pub rework: u8,
+    /// The language translations go into, a code.
+    pub rework_target: String,
+    /// Dictation through the user's own speech server instead of the
+    /// built-in model, its address and model.
+    pub asr_server: bool,
+    pub asr_url: String,
+    pub asr_model: String,
 }
 
 /// A setting that an older settings file does not have yet.
@@ -97,6 +111,13 @@ impl Default for Config {
             memo_stamps: 0,
             memos_seen: 0,
             memo_hold_default: true,
+            rework_url: String::new(),
+            rework_model: String::new(),
+            rework: 0,
+            rework_target: "en".into(),
+            asr_server: false,
+            asr_url: String::new(),
+            asr_model: String::new(),
         }
     }
 }
@@ -260,6 +281,41 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     }
     let _ = std::fs::remove_file(&tmp);
     result
+}
+
+/// The keys for the user's own servers, if they need one: kept apart from
+/// the settings, so a settings file shown to someone does not give them
+/// away. Only the user may read the file (Linux; on Windows it lies in the
+/// user's own profile).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Keys {
+    pub rework: String,
+    pub asr: String,
+}
+
+impl Keys {
+    pub fn load() -> Keys {
+        std::fs::read(keys_file())
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn save(&self) {
+        let path = keys_file();
+        if self.rework.is_empty() && self.asr.is_empty() {
+            let _ = std::fs::remove_file(path);
+        } else if let Ok(json) = serde_json::to_vec(self) {
+            if let Err(e) = write_atomic(&path, &json) {
+                eprintln!("kyrr: could not save the server keys: {e}");
+            }
+        }
+    }
+}
+
+fn keys_file() -> PathBuf {
+    config_dir().join("keys.json")
 }
 
 /// German for German-speaking systems, English otherwise.

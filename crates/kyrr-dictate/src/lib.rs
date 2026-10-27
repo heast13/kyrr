@@ -537,8 +537,14 @@ fn resample(rate: u32, samples: &[f32]) -> Result<Vec<f32>, String> {
     Ok(out)
 }
 
-/// Collapses whitespace runs and trims, so the text can be typed as is.
-fn tidy(text: &str) -> String {
+/// A mono recording at the rate the models (and speech servers) want, 16 kHz.
+pub fn at_model_rate(rate: u32, samples: &[f32]) -> Vec<f32> {
+    resample(rate, samples).unwrap_or_default()
+}
+
+/// Collapses whitespace runs and trims, and turns spoken line breaks into
+/// real ones, so the text can be typed as is.
+pub fn tidy(text: &str) -> String {
     commands(&text.split_whitespace().collect::<Vec<_>>().join(" "))
 }
 

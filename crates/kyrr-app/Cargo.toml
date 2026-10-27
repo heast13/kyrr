@@ -11,6 +11,8 @@ publish = false
 [dependencies]
 kyrr-common = { path = "../kyrr-common" }
 kyrr-dictate = { path = "../kyrr-dictate" }
+# The user's own servers: reworking the text, recognising speech.
+kyrr-server = { path = "../kyrr-server" }
 cpal = "0.18"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
