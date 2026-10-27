@@ -8,6 +8,7 @@
 //! "fix", "polish+en", "business+fr" or "en": `live:STEPS` in place of the
 //! preset. `prime:STEPS` measures how much reading ahead while the user
 //! speaks saves: each dictation once after another preset, once primed.
+//! With MEMO set, live mode gives each item the time of a memo paragraph.
 //!
 //! A key goes in LLM_KEY. Each line of the dictations is
 //! {"id": …, "lang": "de"|"en", "text": …}, numbers already as digits (as
@@ -200,7 +201,11 @@ fn live(server: &Server, model: &str, steps: &[Preset], items: &[Value], output:
     let stop = AtomicBool::new(false);
     for item in items {
         let text = item["text"].as_str().unwrap_or_default();
-        let limit = rework::time_limit_all(steps, text);
+        let mut limit = rework::time_limit_all(steps, text);
+        // A memo's paragraph: as kyrr gives it, nobody waits at the keyboard.
+        if std::env::var_os("MEMO").is_some() {
+            limit = (limit * 4).max(Duration::from_secs(30));
+        }
         let started = Instant::now();
         let outcomes = rework::rework_all(
             server,
