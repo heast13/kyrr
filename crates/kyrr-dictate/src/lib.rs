@@ -8,6 +8,7 @@
 pub mod download;
 pub mod live;
 mod model;
+pub mod numerals;
 mod stitch;
 
 use std::path::Path;

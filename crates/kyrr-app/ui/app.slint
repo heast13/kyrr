@@ -771,11 +771,13 @@ export global AppState {
     callback memo-search(string);
     callback memo-open-folder();
 
-    // Own models (page 7): the user's language model reworks dictations,
-    // the user's speech server can recognise them. Experimental: off, none
-    // of it shows.
-    in-out property <bool> own-models;
-    callback own-models-toggled(bool);
+    // Own models (page 7): the user's speech server can recognise
+    // dictations, the user's language model rework them. The language model
+    // is an experiment: with AI features off, none of it shows.
+    in-out property <bool> ai-features;
+    callback ai-features-toggled(bool);
+    // The tips on which model to take, open.
+    in-out property <bool> rework-tips;
     in-out property <string> rework-url;
     in-out property <string> rework-model;
     in-out property <string> rework-key;
@@ -787,11 +789,12 @@ export global AppState {
     in property <bool> rework-busy;
     // A server and model are set: the choice shows on the main page.
     in property <bool> rework-ready;
-    // 0 off, 1 fix, 2 reword, 3 translate.
+    // 0 off, 1 fix, 2 reword.
     in-out property <int> rework-index;
-    // The language translations go into, in the order of `rework-targets`.
-    in-out property <int> rework-target-index;
-    callback rework-target-changed(int);
+    // The language translations go into, in the order of
+    // `translate-options` (0: no translating).
+    in-out property <int> translate-index;
+    callback translate-changed(int);
     in-out property <bool> asr-on;
     in-out property <string> asr-url;
     in-out property <string> asr-model;
@@ -808,8 +811,9 @@ export global AppState {
     callback asr-connect();
     callback asr-model-picked(int);
     // What reworking can be, for the choices on the main page.
-    out property <[string]> rework-options: [@tr("Off"), @tr("Fix mishearings"), @tr("Reword nicely"), @tr("Translate")];
-    out property <[string]> rework-targets: [@tr("English"), @tr("German"), @tr("French"), @tr("Spanish"), @tr("Italian")];
+    out property <[string]> rework-options: [@tr("Off"), @tr("Fix mishearings"), @tr("Reword nicely")];
+    // In the order of the targets in `kyrr_server::rework::TARGETS`.
+    out property <[string]> translate-options: [@tr("Off"), @tr("English"), @tr("German"), @tr("French"), @tr("Spanish"), @tr("Italian"), @tr("Dutch"), @tr("Portuguese"), @tr("Polish"), @tr("Czech"), @tr("Slovak"), @tr("Swedish"), @tr("Danish"), @tr("Norwegian"), @tr("Finnish"), @tr("Hungarian"), @tr("Romanian"), @tr("Croatian")];
 }
 
 // The tray has its own properties: globals are per component instance, so
@@ -828,11 +832,13 @@ export component Tray inherits SystemTrayIcon {
     // A newer version found ("" for none).
     in property <string> update-version;
     // The user's language model is set up: what it does, 0 off, 1 fix,
-    // 2 reword, 3 translate.
+    // 2 reword; and what it translates into, 0 nothing.
     in property <bool> rework-ready;
     in property <int> rework-index;
-    in property <string> rework-target;
+    in property <int> translate-index;
+    in property <[string]> translate-options;
     callback rework-picked(int);
+    callback translate-picked(int);
     callback open();
     callback toggle-memo();
     callback open-memos();
@@ -895,9 +901,12 @@ export component Tray inherits SystemTrayIcon {
                 title: (root.rework-index == 2 ? "✓ " : "") + @tr("Reword nicely");
                 activated => { root.rework-picked(2); }
             }
-            MenuItem {
-                title: (root.rework-index == 3 ? "✓ " : "") + root.rework-target;
-                activated => { root.rework-picked(3); }
+        }
+        if root.rework-ready: Menu {
+            title: @tr("Translate into");
+            for name[i] in root.translate-options: MenuItem {
+                title: (root.translate-index == i ? "✓ " : "") + name;
+                activated => { root.translate-picked(i); }
             }
         }
         if root.update-version != "": MenuItem {
@@ -1331,9 +1340,9 @@ component DictationCard inherits Card {
         spacing: 8px;
         Caption { text: @tr("Translate into"); vertical-alignment: center; width: 30%; }
         ComboBox {
-            model: AppState.rework-targets;
-            current-index <=> AppState.rework-target-index;
-            selected => { AppState.rework-target-changed(self.current-index); }
+            model: AppState.translate-options;
+            current-index <=> AppState.translate-index;
+            selected => { AppState.translate-changed(self.current-index); }
         }
     }
 }
@@ -2121,27 +2130,79 @@ component GeneralSettings inherits Card {
     }
     Separator { }
     HorizontalLayout {
-        Caption { text: @tr("Own models (experimental)"); vertical-alignment: center; }
+        Caption { text: @tr("Own models"); vertical-alignment: center; }
+        Rectangle { }
+        Button { text: @tr("Set up"); clicked => { AppState.open-page(7); } }
+    }
+    Hint { text: @tr("A speech server of your own, on this computer or in your home network. kyrr needs none."); }
+    HorizontalLayout {
+        Caption { text: @tr("Experimental AI features"); vertical-alignment: center; }
         Rectangle { }
         Switch {
-            checked <=> AppState.own-models;
-            toggled => { AppState.own-models-toggled(self.checked); }
+            checked <=> AppState.ai-features;
+            toggled => { AppState.ai-features-toggled(self.checked); }
         }
     }
     Hint {
-        text: AppState.own-models ? @tr("A language model or speech server on this computer or in your home network. Still an experiment: may change or go again.")
-            : @tr("Off. For a language model or speech server of your own; kyrr needs none.");
+        text: AppState.ai-features ? @tr("A language model of your own fixes, rewords or translates what you dictate. Set it up under Own models. Still an experiment: may change or go again.")
+            : @tr("Off. With it on, a language model of your own can fix, reword or translate what you dictate.");
     }
-    if AppState.own-models: HorizontalLayout {
-        Rectangle { }
-        Button { text: @tr("Set up"); clicked => { AppState.open-page(7); } }
+}
+
+// A small round "i" that shows or hides tips beside a heading.
+component InfoButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> open;
+    callback clicked();
+    width: 20px;
+    height: 20px;
+    border-radius: Skin.round(10px);
+    border-width: 1px;
+    border-color: Skin.foreground.with-alpha(root.open || touch.has-hover || key.has-focus ? 0.8 : 0.45);
+    background: root.open ? Skin.foreground.with-alpha(0.12) : transparent;
+    forward-focus: key;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-action-default => { root.clicked(); }
+    Text {
+        text: "i";
+        font-size: 12px;
+        font-weight: 700;
+        color: Skin.foreground.with-alpha(0.8);
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    key := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+        mouse-cursor: pointer;
     }
 }
 
 // Settings: the user's language model, which reworks dictations.
 component ReworkSettings inherits Card {
-    Heading { text: @tr("Rework"); }
+    HorizontalLayout {
+        spacing: 8px;
+        Heading { text: @tr("Rework"); vertical-alignment: center; }
+        InfoButton {
+            label: @tr("Which model?");
+            open: AppState.rework-tips;
+            clicked => { AppState.rework-tips = !AppState.rework-tips; }
+        }
+        Rectangle { }
+    }
     Hint { text: @tr("A language model on this computer or in your home network fixes, rewords or translates what you dictate. Needs a program like Ollama or LM Studio."); }
+    if AppState.rework-tips: Hint {
+        text: @tr("Recommended: Gemma 4 from Google from E4B up, best 12B, 26B or 31B. kyrr is tested with these models. Other models may work too, but have not been checked.\n\nSwitch thinking off on the server. If the model answers too slowly, kyrr types the text unchanged.");
+    }
     Caption { text: @tr("Address"); }
     LineEdit {
         placeholder-text: "http://192.168.1.10:11434";
@@ -2269,7 +2330,10 @@ component SetupPage inherits VerticalLayout {
         selected <=> AppState.language-index;
         changed(i) => { AppState.language-changed(i); }
     }
-    if step == 1: DictationCard { in-setup: true; }
+    // The built-in model, or the user's own speech server instead: then
+    // nothing needs to be downloaded.
+    if step == 1: SpeechServerSettings { }
+    if step == 1 && !AppState.asr-on: DictationCard { in-setup: true; }
     if step == 1 && AppState.key-note != "" && !AppState.guide: Hint { text: AppState.key-note; }
     // The desktop's questions, one at a time, each said before it comes.
     if step == 1 && AppState.guide: Caption {
@@ -3133,8 +3197,8 @@ export component MainWindow inherits Window {
             if settings-page && AppState.page == 3: LevelSettings { }
             if settings-page && AppState.page == 4: DictationSettings { }
             if settings-page && AppState.page == 5: RecordingSettings { folder: root.memo-folder; }
-            if settings-page && AppState.page == 7: ReworkSettings { }
             if settings-page && AppState.page == 7: SpeechServerSettings { }
+            if settings-page && AppState.page == 7 && AppState.ai-features: ReworkSettings { }
             if memos-page: MemosPage { }
             if settings-page && AppState.page == 1: Caption {
                 // English in every language, on purpose.

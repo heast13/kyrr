@@ -1549,9 +1549,6 @@ msgstr "Ein Sprach-Server im Heimnetz erkennt, was du sagst (speaches, whisper.c
 msgid "kyrr recognises on this computer. Nothing leaves it."
 msgstr "kyrr erkennt auf diesem PC. Nichts verlässt ihn."
 
-msgid "Translate"
-msgstr "Übersetzen"
-
 msgid "Translate into"
 msgstr "Übersetzen in"
 
@@ -1570,11 +1567,56 @@ msgstr "Spanisch"
 msgid "Italian"
 msgstr "Italienisch"
 
-msgid "Own models (experimental)"
-msgstr "Eigene Modelle (experimentell)"
+msgid "Dutch"
+msgstr "Niederländisch"
 
-msgid "A language model or speech server on this computer or in your home network. Still an experiment: may change or go again."
-msgstr "Ein Sprachmodell oder Sprach-Server auf diesem PC oder im Heimnetz. Noch ein Experiment: kann sich ändern oder wieder verschwinden."
+msgid "Portuguese"
+msgstr "Portugiesisch"
 
-msgid "Off. For a language model or speech server of your own; kyrr needs none."
-msgstr "Aus. Für ein eigenes Sprachmodell oder einen eigenen Sprach-Server; kyrr braucht keins."
+msgid "Polish"
+msgstr "Polnisch"
+
+msgid "Czech"
+msgstr "Tschechisch"
+
+msgid "Slovak"
+msgstr "Slowakisch"
+
+msgid "Swedish"
+msgstr "Schwedisch"
+
+msgid "Danish"
+msgstr "Dänisch"
+
+msgid "Norwegian"
+msgstr "Norwegisch"
+
+msgid "Finnish"
+msgstr "Finnisch"
+
+msgid "Hungarian"
+msgstr "Ungarisch"
+
+msgid "Romanian"
+msgstr "Rumänisch"
+
+msgid "Croatian"
+msgstr "Kroatisch"
+
+msgid "A speech server of your own, on this computer or in your home network. kyrr needs none."
+msgstr "Ein eigener Sprach-Server auf diesem PC oder im Heimnetz. kyrr braucht keinen."
+
+msgid "Experimental AI features"
+msgstr "Experimentelle KI-Features"
+
+msgid "A language model of your own fixes, rewords or translates what you dictate. Set it up under Own models. Still an experiment: may change or go again."
+msgstr "Ein eigenes Sprachmodell bessert aus, formuliert um oder übersetzt, was du diktierst. Einrichten unter Eigene Modelle. Noch ein Experiment: kann sich ändern oder wieder verschwinden."
+
+msgid "Off. With it on, a language model of your own can fix, reword or translate what you dictate."
+msgstr "Aus. Eingeschaltet kann ein eigenes Sprachmodell ausbessern, umformulieren oder übersetzen, was du diktierst."
+
+msgid "Which model?"
+msgstr "Welches Modell?"
+
+msgid "Recommended: Gemma 4 from Google from E4B up, best 12B, 26B or 31B. kyrr is tested with these models. Other models may work too, but have not been checked.\n\nSwitch thinking off on the server. If the model answers too slowly, kyrr types the text unchanged."
+msgstr "Empfohlen: Gemma 4 von Google ab E4B, am besten 12B, 26B oder 31B. Mit diesen Modellen ist kyrr getestet. Andere Modelle funktionieren möglicherweise auch, wurden aber nicht geprüft.\n\nDen Denkmodus (Thinking) am Server ausschalten. Antwortet das Modell zu langsam, tippt kyrr den Text unverändert."

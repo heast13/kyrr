@@ -330,9 +330,11 @@ pub fn fix(orig: &str, out: &str) -> (String, usize) {
     (join(&res), kept)
 }
 
-/// The numbers in a text, sorted.
+/// The numbers in a text, sorted, by their digits alone: "3,5" and "3.5",
+/// "10.000", "10,000" and "10 000" are the same number in another language.
 fn numbers(s: &str) -> Vec<String> {
     let chars: Vec<char> = s.chars().collect();
+    let digits_from = |i: usize| chars[i..].iter().take_while(|c| c.is_ascii_digit()).count();
     let mut out = Vec::new();
     let mut i = 0;
     while i < chars.len() {
@@ -340,28 +342,48 @@ fn numbers(s: &str) -> Vec<String> {
             i += 1;
             continue;
         }
-        let start = i;
-        while i < chars.len() && chars[i].is_ascii_digit() {
-            i += 1;
-        }
-        if i + 1 < chars.len() && matches!(chars[i], '.' | ',') && chars[i + 1].is_ascii_digit() {
-            i += 1;
-            while i < chars.len() && chars[i].is_ascii_digit() {
-                i += 1;
+        let mut number = String::new();
+        loop {
+            let n = digits_from(i);
+            number.extend(&chars[i..i + n]);
+            i += n;
+            let Some(&sep) = chars.get(i) else { break };
+            let next = if i + 1 < chars.len() { digits_from(i + 1) } else { 0 };
+            let goes_on = match sep {
+                '.' | ',' => next > 0,
+                // A space only between groups of thousands.
+                ' ' | '\u{a0}' | '\u{202f}' => next == 3,
+                _ => false,
+            };
+            if !goes_on {
+                break;
             }
+            i += 1;
         }
-        out.push(chars[start..i].iter().collect());
+        out.push(number);
     }
     out.sort();
     out
 }
 
-const STOP: [(&str, &str); 5] = [
+const STOP: [(&str, &str); 17] = [
     ("de", "der die das und ist nicht ich du er sie wir ihr es ein eine zu mit auf für von den dem des im sind war hat haben auch noch wie aber oder wenn dass"),
     ("en", "the and is not you he she we they it a an to with on for of in was were has have also still how but or if that this"),
     ("fr", "le la les et est pas je tu il elle nous vous un une des du de en pour avec sur que qui"),
     ("es", "el la los las y es no yo tú él ella nosotros un una de en para con que por del se"),
     ("it", "il lo la gli le e è non io tu lui lei noi voi un una di in per con su che chi del della sono"),
+    ("nl", "de het een en is niet ik jij je hij zij wij we jullie van in op met voor dat die er maar ook nog zijn was hebben heeft hoe wat waarom"),
+    ("pt", "o a os as e é não eu tu ele ela nós um uma de em para com que por do da dos das se são"),
+    ("pl", "i w nie to jest się na że z do jak ale czy ja ty on ona my wy jestem są był co tak która który kiedy gdzie"),
+    ("cs", "a je to se na že v nebo ale jak jsem jsi já ty on ona my vy jsou byl co tak už kolik kde kdy proč"),
+    ("sk", "a je to sa na že v alebo ale ako som si ja ty on ona my vy sú bol čo tak už koľko kde kedy prečo"),
+    ("sv", "och är inte jag du han hon vi ni det en ett att med på för av som men om eller den har var vad mig dig hur varför"),
+    ("da", "og er ikke jeg du han hun vi i det en et at med på for af som men om eller den har var hvad mig dig hvor hvorfor"),
+    ("no", "og er ikke jeg du han hun vi dere det en et å med på for av som men om eller den har var hva meg deg hvor hvorfor"),
+    ("fi", "ja on ei minä sinä hän me te se että mutta tai kuin olen olet ovat oli myös vain jo mitä missä milloin miksi"),
+    ("hu", "a az és nem én te ő mi ti egy hogy de vagy is van volt meg már csak mert hány mit hol mikor miért"),
+    ("ro", "și este nu eu tu el ea noi voi un o de în pe cu la că dar sau ce sunt cât unde când"),
+    ("hr", "i je da se na u ne to ali ili ja ti on ona mi vi su bio što kako sam koliko gdje kada zašto li"),
 ];
 
 fn words(s: &str) -> Vec<String> {
@@ -387,6 +409,23 @@ pub fn language_of(s: &str) -> Option<&'static str> {
         }
     }
     (best.1 >= (ws.len() / 12).max(1)).then_some(best.0)
+}
+
+/// Languages whose small words are too alike to tell apart by them.
+pub fn kin(a: &str, b: &str) -> bool {
+    const KIN: [[&str; 2]; 2] = [["da", "no"], ["cs", "sk"]];
+    a == b || KIN.iter().any(|k| k.contains(&a) && k.contains(&b))
+}
+
+/// The person speaking or spoken to, by the words for it: I, you, we.
+fn persons(s: &str) -> [bool; 3] {
+    const PERSONS: [&str; 3] = [
+        "ich mich mir mein meine meinem meinen meiner meines i me my mine myself",
+        "du dich dir dein deine deinem deinen deiner deines you your yours yourself",
+        "wir uns unser unsere unserem unseren unserer unseres we us our ours ourselves",
+    ];
+    let ws = words(s);
+    PERSONS.map(|list| ws.iter().any(|w| list.split(' ').any(|p| p == w)))
 }
 
 /// The first five letters of every longer word.
@@ -449,6 +488,8 @@ pub enum Refusal {
     Lines,
     /// A question came back as a statement: answered, most likely.
     Answered,
+    /// "Bist du…" came back as "Bin ich…": who speaks to whom changed.
+    Person,
     /// Fixing changed words, and none of the changes looked like a
     /// mishearing.
     Unlike,
@@ -463,6 +504,12 @@ pub fn reworded(orig: &str, out: &str, language: Option<&str>) -> Result<(), Ref
             return Err(Refusal::Language);
         }
     }
+    let (before, after) = (persons(orig), persons(out));
+    let lost = (0..3).any(|i| before[i] && !after[i]);
+    let gained = (0..3).any(|i| !before[i] && after[i]);
+    if lost && gained {
+        return Err(Refusal::Person);
+    }
     let (before, after) = (stems(orig), stems(out));
     if !before.is_empty() && (before.intersection(&after).count() as f32) < 0.4 * before.len() as f32 {
         return Err(Refusal::Content);
@@ -474,7 +521,7 @@ pub fn reworded(orig: &str, out: &str, language: Option<&str>) -> Result<(), Ref
 /// dictation.
 pub fn translated(orig: &str, out: &str, target: &str) -> Result<(), Refusal> {
     whole(orig, out, (0.5, 2.0))?;
-    if language_of(out).is_some_and(|found| found != target) {
+    if language_of(out).is_some_and(|found| !kin(found, target)) {
         return Err(Refusal::Language);
     }
     Ok(())
@@ -677,6 +724,78 @@ mod tests {
             ),
             Err(Refusal::Numbers)
         );
+    }
+
+    #[test]
+    fn numbers_are_the_same_in_every_language() {
+        assert_eq!(
+            numbers("3,5 Liter für 10.000 Euro"),
+            numbers("3.5 litres for 10,000 euros")
+        );
+        assert_eq!(numbers("10.000 Euro"), numbers("10 000 euros"));
+        assert_eq!(numbers("um 14:30 Uhr"), vec!["14", "30"]);
+        assert_ne!(numbers("am 3. 10 Uhr"), numbers("am 310 Uhr"));
+        assert_eq!(
+            translated("Das kostet 349,50 Euro.", "Cela coûte 349,50 euros.", "fr"),
+            Ok(())
+        );
+        assert_eq!(
+            translated("Das kostet 349,50 Euro.", "That costs 349.50 euros.", "en"),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn who_speaks_to_whom_stays() {
+        assert_eq!(
+            reworded(
+                "Bist du eine künstliche Intelligenz?",
+                "Bin ich eine künstliche Intelligenz?",
+                Some("de")
+            ),
+            Err(Refusal::Person)
+        );
+        assert_eq!(
+            reworded(
+                "Danke dir, das hat mir sehr geholfen.",
+                "Danke, das hat mir sehr geholfen.",
+                Some("de")
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn near_languages_count_as_one() {
+        assert_eq!(
+            translated(
+                "Kannst du mir sagen, wie spät es ist?",
+                "Kan du sige mig, hvad klokken er?",
+                "no"
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            language_of("Kan du säga mig vad klockan är och om det är sent?"),
+            Some("sv")
+        );
+        assert_eq!(
+            language_of("Kun je me zeggen hoe laat het is en of het al donker is?"),
+            Some("nl")
+        );
+        assert_eq!(
+            language_of("Možeš li mi reći koliko je sati i da li je kasno?"),
+            Some("hr")
+        );
+    }
+
+    #[test]
+    fn a_hyphen_left_hanging_keeps_its_place() {
+        let (text, _) = fix(
+            "Er hat die Gemüse- oder Blumenbeete gemülcht",
+            "Er hat die Gemüse- oder Blumenbeete gemulcht.",
+        );
+        assert_eq!(text, "Er hat die Gemüse- oder Blumenbeete gemulcht.");
     }
 
     #[test]

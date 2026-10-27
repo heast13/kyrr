@@ -64,18 +64,23 @@ pub struct Config {
     /// "hold" once; after that the user's own choice stays.
     #[serde(default = "never")]
     pub memo_hold_default: bool,
-    /// Own models (experimental, off by default): with it off, nothing of
-    /// the language model or the speech server shows or runs.
-    pub own_models: bool,
+    /// Experimental AI features (off by default): with it off, nothing of
+    /// the language model shows or runs. The own speech server is no
+    /// experiment and works either way.
+    #[serde(alias = "own_models")]
+    pub ai_features: bool,
     /// The user's own language model that reworks dictations (see
     /// `kyrr_server`): its address ("" for none) and model.
     pub rework_url: String,
     pub rework_model: String,
     /// What it does with a dictation: 0 nothing, 1 fix what was misheard,
-    /// 2 reword it, 3 translate it.
+    /// 2 reword it.
     pub rework: u8,
-    /// The language translations go into, a code.
-    pub rework_target: String,
+    /// The language it then translates into, a code; "" for none.
+    pub translate_into: String,
+    /// Test builds before had translating as rework 3, into this.
+    #[serde(rename = "rework_target", skip_serializing)]
+    pub old_target: String,
     /// Dictation through the user's own speech server instead of the
     /// built-in model, its address and model.
     pub asr_server: bool,
@@ -114,11 +119,12 @@ impl Default for Config {
             memo_stamps: 0,
             memos_seen: 0,
             memo_hold_default: true,
-            own_models: false,
+            ai_features: false,
             rework_url: String::new(),
             rework_model: String::new(),
             rework: 0,
-            rework_target: "en".into(),
+            translate_into: String::new(),
+            old_target: String::new(),
             asr_server: false,
             asr_url: String::new(),
             asr_model: String::new(),
@@ -144,6 +150,10 @@ impl Config {
             }
         };
         let (mut config, whole) = parse(&bytes);
+        if config.rework > 2 {
+            config.rework = 0;
+            config.translate_into = std::mem::take(&mut config.old_target);
+        }
         if !config.memo_hold_default {
             config.memo_toggle = false;
             config.memo_hold_default = true;
@@ -403,6 +413,24 @@ mod tests {
             ..Config::default()
         };
         assert_eq!(config.language(), Language::German);
+    }
+
+    #[test]
+    fn translating_from_a_test_build_before_goes_on() {
+        let dir = std::env::temp_dir().join(format!("kyrr-config-{}", std::process::id()));
+        let path = dir.join("config.json");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&path, br#"{"own_models": true, "rework": 3, "rework_target": "fr"}"#).unwrap();
+        let config = Config::load_from(&path);
+        assert!(config.ai_features);
+        assert_eq!((config.rework, config.translate_into.as_str()), (0, "fr"));
+        config.save_to(&path);
+        let saved = std::fs::read_to_string(&path).unwrap();
+        assert!(!saved.contains("rework_target") && saved.contains("ai_features"));
+        std::fs::write(&path, br#"{"rework": 2, "rework_target": "en"}"#).unwrap();
+        let config = Config::load_from(&path);
+        assert_eq!((config.rework, config.translate_into.as_str()), (2, ""));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

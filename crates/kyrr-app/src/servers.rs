@@ -26,33 +26,41 @@ thread_local! {
 /// "Bremsbeläge".
 const TEST: &str = "Ich habe heute die Brainsbelege am Auto gewechselt";
 
-/// What the settings ask the language model to do.
-fn preset(config: &Config) -> Option<Preset> {
+/// What the settings ask the language model to do: fix or reword, then
+/// translate, or one of them.
+fn steps(config: &Config) -> Vec<Preset> {
+    let mut steps = Vec::new();
     match config.rework {
-        1 => Some(Preset::Fix),
-        2 => Some(Preset::Polish),
-        3 => {
-            let target = TARGETS
-                .iter()
-                .find(|(c, _)| *c == config.rework_target)
-                .map_or("en", |(c, _)| c);
-            Some(Preset::Translate(target))
-        }
-        _ => None,
+        1 => steps.push(Preset::Fix),
+        2 => steps.push(Preset::Polish),
+        _ => {}
     }
+    if let Some((code, _)) = TARGETS.iter().find(|(c, _)| *c == config.translate_into) {
+        steps.push(Preset::Translate(code));
+    }
+    steps
 }
 
-/// The language translations go into, as its place in `TARGETS`.
-fn target_index(config: &Config) -> i32 {
+/// The language translations go into, as its place in the choice: 0 for
+/// none, then in the order of `TARGETS`.
+fn translate_index(config: &Config) -> i32 {
     TARGETS
         .iter()
-        .position(|(c, _)| *c == config.rework_target)
-        .unwrap_or(0) as i32
+        .position(|(c, _)| *c == config.translate_into)
+        .map_or(0, |i| i as i32 + 1)
 }
 
-/// The language model, when own models are switched on and one is set up.
+fn translate_code(index: i32) -> String {
+    let i = index.max(0) as usize;
+    if i == 0 {
+        return String::new();
+    }
+    TARGETS.get(i - 1).map_or(String::new(), |(c, _)| (*c).to_string())
+}
+
+/// The language model, when AI features are switched on and one is set up.
 fn rework_server(config: &Config, keys: &Keys) -> Option<(Server, String)> {
-    if !config.own_models {
+    if !config.ai_features {
         return None;
     }
     let url = kyrr_server::address(&config.rework_url)?;
@@ -70,15 +78,12 @@ fn rework_server(config: &Config, keys: &Keys) -> Option<(Server, String)> {
 
 fn reworker(config: &Config, keys: &Keys) -> Option<Reworker> {
     let (server, model) = rework_server(config, keys)?;
-    Some(Reworker {
-        server,
-        model,
-        preset: preset(config)?,
-    })
+    let steps = steps(config);
+    (!steps.is_empty()).then_some(Reworker { server, model, steps })
 }
 
 fn recognizer(config: &Config, keys: &Keys) -> Option<Recognizer> {
-    if !config.own_models || !config.asr_server {
+    if !config.asr_server {
         return None;
     }
     Some(Recognizer {
@@ -134,9 +139,9 @@ pub fn setup(app: &Rc<App>, window: &MainWindow) {
         state.set_rework_url(config.rework_url.as_str().into());
         state.set_rework_model(config.rework_model.as_str().into());
         state.set_rework_key(keys.rework.as_str().into());
-        state.set_own_models(config.own_models);
-        state.set_rework_index(config.rework.min(3) as i32);
-        state.set_rework_target_index(target_index(&config));
+        state.set_ai_features(config.ai_features);
+        state.set_rework_index(config.rework.min(2) as i32);
+        state.set_translate_index(translate_index(&config));
         state.set_rework_ready(rework_server(&config, &keys).is_some());
         state.set_asr_on(config.asr_server);
         state.set_asr_url(config.asr_url.as_str().into());
@@ -145,10 +150,10 @@ pub fn setup(app: &Rc<App>, window: &MainWindow) {
         let _ = app.worker.send(Command::Rework(reworker(&config, &keys)));
         let _ = app.worker.send(Command::Recognizer(recognizer(&config, &keys)));
     }
-    state.on_own_models_toggled({
+    state.on_ai_features_toggled({
         let app = Rc::clone(app);
         move |on| {
-            app.config.borrow_mut().own_models = on;
+            app.config.borrow_mut().ai_features = on;
             app.config.borrow().save();
             send(&app);
             crate::fit(&app.window);
@@ -157,16 +162,15 @@ pub fn setup(app: &Rc<App>, window: &MainWindow) {
     state.on_rework_changed({
         let app = Rc::clone(app);
         move |i| {
-            app.config.borrow_mut().rework = i.clamp(0, 3) as u8;
+            app.config.borrow_mut().rework = i.clamp(0, 2) as u8;
             app.config.borrow().save();
             send(&app);
         }
     });
-    state.on_rework_target_changed({
+    state.on_translate_changed({
         let app = Rc::clone(app);
         move |i| {
-            let code = TARGETS.get(i.max(0) as usize).map_or("en", |(c, _)| c);
-            app.config.borrow_mut().rework_target = code.into();
+            app.config.borrow_mut().translate_into = translate_code(i);
             app.config.borrow().save();
             send(&app);
         }
@@ -227,7 +231,18 @@ pub fn wire_tray(app: &Rc<App>, tray: &Tray) {
         move |i| {
             {
                 let mut config = app.config.borrow_mut();
-                config.rework = i.clamp(0, 3) as u8;
+                config.rework = i.clamp(0, 2) as u8;
+                config.save();
+            }
+            send(&app);
+        }
+    });
+    tray.on_translate_picked({
+        let app = Rc::clone(app);
+        move |i| {
+            {
+                let mut config = app.config.borrow_mut();
+                config.translate_into = translate_code(i);
                 config.save();
             }
             send(&app);
@@ -238,14 +253,11 @@ pub fn wire_tray(app: &Rc<App>, tray: &Tray) {
 fn show_tray(app: &App, tray: &Tray) {
     let config = app.config.borrow();
     tray.set_rework_ready(rework_server(&config, &Keys::load()).is_some());
-    tray.set_rework_index(config.rework.min(3) as i32);
-    let label = app.window.upgrade().and_then(|w| {
-        let state = w.global::<AppState>();
-        let translate = state.get_rework_options().row_data(3)?;
-        let target = state.get_rework_targets().row_data(target_index(&config) as usize)?;
-        Some(SharedString::from(format!("{translate}: {target}")))
-    });
-    tray.set_rework_target(label.unwrap_or_default());
+    tray.set_rework_index(config.rework.min(2) as i32);
+    tray.set_translate_index(translate_index(&config));
+    if let Some(w) = app.window.upgrade() {
+        tray.set_translate_options(w.global::<AppState>().get_translate_options());
+    }
 }
 
 /// The settings as they are now, to the worker, the window and the tray.
@@ -256,9 +268,9 @@ fn send(app: &App) {
     let _ = app.worker.send(Command::Recognizer(recognizer(&config, &keys)));
     if let Some(w) = app.window.upgrade() {
         let state = w.global::<AppState>();
-        state.set_own_models(config.own_models);
-        state.set_rework_index(config.rework.min(3) as i32);
-        state.set_rework_target_index(target_index(&config));
+        state.set_ai_features(config.ai_features);
+        state.set_rework_index(config.rework.min(2) as i32);
+        state.set_translate_index(translate_index(&config));
         state.set_rework_ready(rework_server(&config, &keys).is_some());
     }
     if let Some(t) = tray() {
@@ -440,12 +452,13 @@ fn connect_asr(app: &Rc<App>) {
     );
 }
 
-/// The own-models page opened with nothing set up: kyrr looks for servers
-/// on this computer and fills in what it finds.
+/// The own-models page opened with AI features on and no language model
+/// set up: kyrr looks for servers on this computer and fills in what it
+/// finds.
 pub fn look_around(app: &Rc<App>) {
     let Some(w) = app.window.upgrade() else { return };
     let state = w.global::<AppState>();
-    if state.get_page() != 7 || !state.get_rework_url().is_empty() {
+    if state.get_page() != 7 || !state.get_ai_features() || !state.get_rework_url().is_empty() {
         return;
     }
     let german = app.language() == Language::German;

@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use kyrr_common::wave::Tone;
 use kyrr_dictate::download::{download, DownloadError};
-use kyrr_dictate::{european, Dictation, Language, Live, ModelSpec, Transcript};
+use kyrr_dictate::{european, numerals, Dictation, Language, Live, ModelSpec, Transcript};
 use kyrr_server::rework::{self, Outcome, Preset, Why};
 use kyrr_server::Server;
 
@@ -79,7 +79,8 @@ const REWORK_GRACE: Duration = Duration::from_secs(1);
 pub struct Reworker {
     pub server: Server,
     pub model: String,
-    pub preset: Preset,
+    /// Fixing or rewording, translating, or one and then the other.
+    pub steps: Vec<Preset>,
 }
 
 /// The user's speech server, which recognises dictations instead of the
@@ -93,7 +94,7 @@ pub struct Recognizer {
 /// A dictation out at the language model.
 struct Reworking {
     id: u64,
-    preset: Preset,
+    steps: Vec<Preset>,
     original: String,
     until: Instant,
     stop: Arc<AtomicBool>,
@@ -221,7 +222,7 @@ pub enum Command {
     /// Dictations are recognised by the user's speech server (or not).
     Recognizer(Option<Recognizer>),
     /// Internal: rework number `.0` came back.
-    Reworked(u64, Outcome),
+    Reworked(u64, Vec<Outcome>),
 }
 
 pub type Notify = Arc<dyn Fn(Event) + Send + Sync>;
@@ -326,7 +327,19 @@ fn say(language: Language, what: &str) -> String {
         }
         ("muted", true) => "Dein Mikrofon ist stummgeschaltet. Auf der Hauptseite kannst du das aufheben.",
         ("fixing", true) => "Korrigiere…",
-        ("fixing", false) => "Polishing…",
+        ("fixing", false) => "Fixing…",
+        ("fixing+translating", true) => "Korrigiere und übersetze…",
+        ("fixing+translating", false) => "Fixing and translating…",
+        ("polishing+translating", true) => "Formuliere und übersetze…",
+        ("polishing+translating", false) => "Rewording and translating…",
+        ("and", true) => "und",
+        ("and", false) => "and",
+        ("not fixed", true) => "nicht ausgebessert",
+        ("not fixed", false) => "not fixed",
+        ("not polished", true) => "nicht umformuliert",
+        ("not polished", false) => "not reworded",
+        ("not translated", true) => "nicht übersetzt",
+        ("not translated", false) => "not translated",
         ("polishing", true) => "Formuliere…",
         ("polishing", false) => "Rewording…",
         ("translating", true) => "Übersetze…",
@@ -353,6 +366,47 @@ fn say(language: Language, what: &str) -> String {
         (other, _) => other,
     }
     .to_string()
+}
+
+/// What the pill says after reworking: green when it went through, red
+/// when something was refused, plain when there was nothing to change.
+fn rework_note(language: Language, steps: &[Preset], outcomes: &[Outcome]) -> Option<(String, Tone)> {
+    let done = |p: &Preset| match p {
+        Preset::Fix => "fixed",
+        Preset::Polish => "polished",
+        Preset::Translate(_) => "translated",
+    };
+    let not_done = |p: &Preset| match p {
+        Preset::Fix => "not fixed",
+        Preset::Polish => "not polished",
+        Preset::Translate(_) => "not translated",
+    };
+    let (mut good, mut bad, mut plain) = (Vec::new(), Vec::new(), false);
+    for (step, outcome) in steps.iter().zip(outcomes) {
+        match outcome {
+            Outcome::Reworked(_) => good.push(step),
+            Outcome::Original(why) => match why {
+                Why::Server(kyrr_server::Error::Refused(_) | kyrr_server::Error::NotLocal) => {
+                    bad.push((step, "rework refused"))
+                }
+                Why::Server(_) => bad.push((step, "rework asleep")),
+                Why::Checked(_) => bad.push((step, "rework free")),
+                Why::Nothing => plain = true,
+                Why::Short | Why::Same | Why::Skipped => {}
+            },
+        }
+    }
+    let say = |key| say(language, key);
+    match (good.as_slice(), bad.first()) {
+        ([], Some((_, why))) => Some((say(why), Tone::Bad)),
+        ([], None) => plain.then(|| (say("fine"), Tone::Plain)),
+        ([one], None) => Some((say(done(one)), Tone::Good)),
+        ([first, then, ..], None) => Some((
+            format!("{} {} {}", say(done(first)), say("and"), say(done(then)).to_lowercase()),
+            Tone::Good,
+        )),
+        ([first, ..], Some((step, _))) => Some((format!("{}, {}", say(done(first)), say(not_done(step))), Tone::Bad)),
+    }
 }
 
 struct Worker {
@@ -940,9 +994,9 @@ impl Worker {
                 self.told_local = false;
                 self.refresh();
             }
-            Command::Reworked(id, outcome) => {
+            Command::Reworked(id, outcomes) => {
                 if self.reworking.as_ref().is_some_and(|r| r.id == id) {
-                    self.reworked(outcome);
+                    self.reworked(outcomes);
                 }
             }
             Command::Quit => {}
@@ -983,6 +1037,7 @@ impl Worker {
         };
         self.job = Some((path, Arc::clone(&cancel)));
         let (pause, notify, tx) = (Arc::clone(&self.pause), Arc::clone(&self.notify), self.tx.clone());
+        let languages = self.numerals();
         let spawned = std::thread::Builder::new()
             .name("kyrr-memo-text".into())
             .spawn(move || {
@@ -1000,7 +1055,7 @@ impl Worker {
                         let started = Instant::now();
                         let mut progress = |done, left| notify(Event::Text(path.clone(), Text::Writing(done, left)));
                         let result = catch_unwind(AssertUnwindSafe(|| {
-                            text::write(&model, &path, &cancel, &pause, &mut progress)
+                            text::write(&model, &path, &cancel, &pause, &languages, &mut progress)
                         }))
                         .unwrap_or_else(|_| Err("crashed".into()));
                         let state = match result {
@@ -1032,7 +1087,7 @@ impl Worker {
         // The key while the language model works: the dictation as it was,
         // without waiting (once the key is up again, in hold mode).
         if self.reworking.is_some() {
-            self.reworked(Outcome::Original(Why::Skipped));
+            self.reworked(vec![Outcome::Original(Why::Skipped)]);
             return;
         }
         // While the model loads, the recording starts all the same.
@@ -1117,6 +1172,8 @@ impl Worker {
             },
             None => String::new(),
         };
+        // Numbers as digits, before anything else sees the text.
+        let text = numerals::digits(&text, &self.numerals());
         self.last_used = Instant::now();
         eprintln!(
             "kyrr: dictation: {}, recognized in {:.1} s after the key, {ahead} pieces while recording",
@@ -1153,6 +1210,16 @@ impl Worker {
         // the settings say, not blindly to Ready. A rework comes back there.
         if self.reworking.is_none() {
             self.refresh();
+        }
+    }
+
+    /// Whose rules write numbers as digits: in many languages, German and
+    /// English both.
+    fn numerals(&self) -> Vec<Language> {
+        if self.more_languages {
+            vec![Language::German, Language::English]
+        } else {
+            vec![self.language]
         }
     }
 
@@ -1215,32 +1282,34 @@ impl Worker {
         };
         self.rework_id += 1;
         let id = self.rework_id;
-        let preset = reworker.preset;
-        let limit = rework::time_limit(preset, &text);
+        let steps = reworker.steps.clone();
+        let limit = rework::time_limit_all(&steps, &text);
         let stop = Arc::new(AtomicBool::new(false));
         let language = (!self.more_languages).then(|| self.language.code());
-        let busy = match reworker.preset {
-            Preset::Fix => "fixing",
-            Preset::Polish => "polishing",
-            Preset::Translate(_) => "translating",
+        let busy = match steps.as_slice() {
+            [Preset::Fix, Preset::Translate(_)] => "fixing+translating",
+            [Preset::Polish, Preset::Translate(_)] => "polishing+translating",
+            [Preset::Fix, ..] => "fixing",
+            [Preset::Polish, ..] => "polishing",
+            _ => "translating",
         };
         (self.notify)(Event::Heard(vec![say(self.language, busy)]));
         let (tx, original, cancel) = (self.tx.clone(), text.clone(), Arc::clone(&stop));
         let deadline = Instant::now() + limit;
         let spawned = std::thread::Builder::new().name("kyrr-rework".into()).spawn(move || {
-            let outcome = catch_unwind(AssertUnwindSafe(|| {
-                rework::rework(
+            let outcomes = catch_unwind(AssertUnwindSafe(|| {
+                rework::rework_all(
                     &reworker.server,
                     &reworker.model,
-                    reworker.preset,
+                    &reworker.steps,
                     &original,
                     language,
                     deadline,
                     &cancel,
                 )
             }))
-            .unwrap_or(Outcome::Original(Why::Server(kyrr_server::Error::Answer)));
-            let _ = tx.send(Command::Reworked(id, outcome));
+            .unwrap_or_else(|_| vec![Outcome::Original(Why::Server(kyrr_server::Error::Answer))]);
+            let _ = tx.send(Command::Reworked(id, outcomes));
         });
         if spawned.is_err() {
             self.type_text(text);
@@ -1248,7 +1317,7 @@ impl Worker {
         }
         self.reworking = Some(Reworking {
             id,
-            preset,
+            steps,
             original: text,
             until: deadline + REWORK_GRACE,
             stop,
@@ -1263,49 +1332,40 @@ impl Worker {
     }
 
     fn rework_late(&mut self) {
-        self.reworked(Outcome::Original(Why::Server(kyrr_server::Error::Timeout)));
+        self.reworked(vec![Outcome::Original(Why::Server(kyrr_server::Error::Timeout))]);
     }
 
     /// Types what came back from the language model, or the dictation as
-    /// it was, with a word in the pill why.
-    fn reworked(&mut self, outcome: Outcome) {
+    /// it was, with a word in the pill how it went.
+    fn reworked(&mut self, outcomes: Vec<Outcome>) {
         let Some(r) = self.reworking.take() else {
             return;
         };
         r.stop.store(true, Ordering::Relaxed);
         let took = r.started.elapsed().as_secs_f32();
-        let done = match r.preset {
-            Preset::Fix => "fixed",
-            Preset::Polish => "polished",
-            Preset::Translate(_) => "translated",
-        };
-        let (text, note) = match outcome {
-            Outcome::Reworked(text) => {
-                eprintln!("kyrr: dictation: reworked in {took:.1} s");
-                (text, Some((done, Tone::Good)))
+        for outcome in &outcomes {
+            // Numbers only, never the text.
+            match outcome {
+                Outcome::Reworked(_) => eprintln!("kyrr: dictation: reworked after {took:.1} s"),
+                Outcome::Original(why) => eprintln!("kyrr: dictation: left as it was after {took:.1} s: {why:?}"),
             }
-            Outcome::Original(why) => {
-                // Numbers only, never the text.
-                eprintln!("kyrr: dictation: typed as dictated after {took:.1} s: {why:?}");
-                let note = match why {
-                    Why::Server(kyrr_server::Error::Refused(_) | kyrr_server::Error::NotLocal) => {
-                        Some(("rework refused", Tone::Bad))
-                    }
-                    Why::Server(_) => Some(("rework asleep", Tone::Bad)),
-                    Why::Checked(_) => Some(("rework free", Tone::Bad)),
-                    Why::Nothing => Some(("fine", Tone::Plain)),
-                    Why::Short | Why::Same | Why::Skipped => None,
-                };
-                (r.original, note)
-            }
-        };
+        }
+        let note = rework_note(self.language, &r.steps, &outcomes);
+        let text = outcomes
+            .into_iter()
+            .rev()
+            .find_map(|o| match o {
+                Outcome::Reworked(text) => Some(text),
+                Outcome::Original(_) => None,
+            })
+            .unwrap_or(r.original);
         if self.held {
             self.waiting = Some((text, Instant::now()));
         } else {
             self.type_text(text);
         }
         if let Some((note, tone)) = note {
-            (self.notify)(Event::Note(say(self.language, note), tone));
+            (self.notify)(Event::Note(note, tone));
         }
         self.refresh();
     }
@@ -1400,5 +1460,39 @@ mod tests {
                 last = word;
             }
         }
+    }
+
+    #[test]
+    fn the_pill_says_how_each_step_went() {
+        use kyrr_server::guard::Refusal;
+        let de = Language::German;
+        let both = [Preset::Polish, Preset::Translate("fr")];
+        let done = |s: &str| Outcome::Reworked(s.into());
+        let refused = Outcome::Original(Why::Checked(Refusal::Length));
+        assert_eq!(
+            rework_note(de, &both, &[done("a"), done("b")]),
+            Some(("Umformuliert und übersetzt".into(), Tone::Good))
+        );
+        assert_eq!(
+            rework_note(de, &both, &[refused.clone(), done("b")]),
+            Some(("Übersetzt, nicht umformuliert".into(), Tone::Bad))
+        );
+        assert_eq!(
+            rework_note(de, &both, &[done("a"), Outcome::Original(Why::Same)]),
+            Some(("Umformuliert".into(), Tone::Good))
+        );
+        assert_eq!(
+            rework_note(
+                de,
+                &both,
+                &[Outcome::Original(Why::Server(kyrr_server::Error::Timeout))]
+            ),
+            Some(("Server schläft, Original getippt".into(), Tone::Bad))
+        );
+        assert_eq!(
+            rework_note(de, &[Preset::Fix], &[Outcome::Original(Why::Nothing)]),
+            Some(("Passte schon".into(), Tone::Plain))
+        );
+        assert_eq!(rework_note(de, &[Preset::Fix], &[Outcome::Original(Why::Short)]), None);
     }
 }
