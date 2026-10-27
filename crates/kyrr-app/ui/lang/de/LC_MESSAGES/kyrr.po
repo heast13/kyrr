@@ -998,7 +998,6 @@ msgstr "Version {} ist da. Herunterladen und den Installer starten, deine Einste
 msgid "Moves while an app uses the mic."
 msgstr "Bewegt sich, solange eine App das Mikro nutzt."
 
-
 msgid "Off to the corner"
 msgstr "Ab in die Ecke"
 
@@ -1085,7 +1084,6 @@ msgstr "Einschalten"
 
 msgid "Your mic is muted."
 msgstr "Dein Mikro ist stummgeschaltet."
-
 
 msgid "No tray here: closing the window quits kyrr."
 msgstr "Kein Tray hier: Fenster schließen beendet kyrr."
@@ -1503,11 +1501,6 @@ msgstr "Fehler ausbessern"
 msgid "Reword nicely"
 msgstr "Schöner formulieren"
 
-
-
-
-
-
 msgid "Rework"
 msgstr "Überarbeitung"
 
@@ -1516,7 +1509,6 @@ msgstr "Eigene Modelle"
 
 msgid "Set up"
 msgstr "Einrichten"
-
 
 msgid "A language model on this computer or in your home network fixes, rewords or translates what you dictate. Needs a program like Ollama or LM Studio."
 msgstr "Ein Sprachmodell auf diesem PC oder im Heimnetz bessert aus, formuliert um oder übersetzt, was du diktierst. Braucht ein Programm wie Ollama oder LM Studio."

@@ -233,8 +233,9 @@ pub fn rework(
         let checked = match preset {
             Preset::Fix => {
                 let (fixed, kept) = guard::fix(line, &answer);
-                refused |= kept == 0 && answer.trim() != line.trim();
-                Ok(if kept > 0 { fixed } else { line.to_string() })
+                // Case alone counts as no change of words.
+                refused |= kept == 0 && !guard::same_words(line, &answer);
+                Ok(fixed)
             }
             Preset::Polish => {
                 let language = language.or_else(|| guard::language_of(line));
@@ -329,6 +330,15 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("Brainsbelege"));
+    }
+
+    #[test]
+    fn capitals_alone_are_a_fix_too() {
+        let (server, _) = fake("Ich habe das Auto in München gewechselt", 200);
+        assert_eq!(
+            run(&server, Preset::Fix, "ich habe das auto in münchen gewechselt"),
+            Outcome::Reworked("Ich habe das Auto in München gewechselt".into())
+        );
     }
 
     #[test]

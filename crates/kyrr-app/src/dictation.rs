@@ -1239,7 +1239,7 @@ impl Worker {
                     &cancel,
                 )
             }))
-            .unwrap_or(Outcome::Original(Why::Nothing));
+            .unwrap_or(Outcome::Original(Why::Server(kyrr_server::Error::Answer)));
             let _ = tx.send(Command::Reworked(id, outcome));
         });
         if spawned.is_err() {

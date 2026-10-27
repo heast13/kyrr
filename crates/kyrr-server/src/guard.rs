@@ -76,6 +76,12 @@ fn is_word(t: &str) -> bool {
     t.chars().next().is_some_and(word_char)
 }
 
+/// Whether two texts have the same words, whatever their case and
+/// punctuation.
+pub fn same_words(a: &str, b: &str) -> bool {
+    words(a) == words(b)
+}
+
 /// Lower case, ß as ss: what counts as the same word.
 pub fn norm(w: &str) -> String {
     w.to_lowercase().replace('ß', "ss")
