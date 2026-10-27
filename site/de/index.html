@@ -81,12 +81,20 @@
         <p>Halte F9 gedrückt, während du sprichst. Beim Loslassen tippt kyrr den Text an der Cursorposition ein, in der App, in der du gerade schreibst. Deutsch, Englisch und weitere europäische Sprachen, etwa Französisch, Spanisch, Italienisch oder Niederländisch. „Neue Zeile“ fügt einen Zeilenumbruch ein. Während du diktierst, zeigt eine kleine Welle am unteren Bildschirmrand, dass kyrr zuhört, mit den bisher verstandenen Wörtern, und danach, dass es schreibt. Statt F9 kannst du eine eigene Taste festlegen, oder einmal tippen zum Starten und einmal zum Beenden.</p>
       </div>
       <div class="feature">
+        <h3>Zahlen als Ziffern</h3>
+        <p>Gesprochene Zahlen werden dort als Ziffern geschrieben, wo das besser liest: ab 13 immer, dazu Uhrzeiten, Datum, Geld und Dezimalzahlen, etwa „26 Leute“, „26. Mai“, „14:30 Uhr“ oder „349,50 Euro“. Null bis zwölf bleiben Wörter, außer vor einer Einheit („2 Euro“). Gilt beim Diktieren und in Sprachaufzeichnungen, auf Deutsch und Englisch.</p>
+      </div>
+      <div class="feature">
         <h3>Sprachaufzeichnungen</h3>
         <p>F8 halten, sprechen, loslassen. kyrr speichert die Aufnahme im Ordner Dokumente/kyrr und benennt sie nach den ersten Worten. In der Liste kannst du Aufnahmen abspielen, umbenennen oder löschen. Ein Klick macht aus einer Aufnahme Text, mit der Zeit, an der jeder Abschnitt beginnt. Sprachaufzeichnungen lassen sich auf der Hauptseite abschalten.</p>
       </div>
       <div class="feature">
         <h3>Pegelkontrolle</h3>
         <p>Anzeigen zeigen, was das Mikrofon aufnimmt und was bei den Apps ankommt. Ein Zehn-Sekunden-Test nimmt deine Stimme auf und spielt sie vor und nach der Bearbeitung ab. Du kannst dich auch live über Kopfhörer mithören.</p>
+      </div>
+      <div class="feature">
+        <h3>Lokale KI (experimentell)</h3>
+        <p>Standardmäßig aus. Ein eigenes Sprachmodell auf deinem Computer oder im Heimnetz (Ollama, LM Studio oder llama.cpp) kann jedes Diktat ausbessern, schöner oder professionell formulieren oder in 17 Sprachen übersetzen, einzeln oder kombiniert. Jede Änderung wird Wort für Wort geprüft: Fragen bleiben Fragen, nichts wird beantwortet. Bei Sprachaufzeichnungen läuft es genauso, und das Original lässt sich jederzeit wiederherstellen. Ein eigener Sprachserver kann auch das Diktieren übernehmen. Einschalten unter Setup: „Experimentelle KI-Features“.</p>
       </div>
     </div>
 
@@ -105,8 +113,8 @@
 <section class="band" id="privacy" aria-labelledby="h-privacy">
   <div class="wrap">
     <h2 id="h-privacy">Datenschutz</h2>
-    <p class="lead">Ton und Text werden nur auf deinem Computer verarbeitet. kyrr braucht kein Konto und sendet keine Nutzungsdaten.</p>
-    <p class="small">kyrr verbindet sich für drei Dinge mit dem Internet: einmal zum Herunterladen des Sprachmodells (jede Datei wird per SHA256-Prüfsumme kontrolliert), täglich zur Update-Suche bei GitHub (im Setup abschaltbar) und zum Herunterladen eines Updates, wenn du auf „Aktualisieren“ klickst. Sprachaufzeichnungen und ihr Text bleiben in deinem Dokumente-Ordner. <a href="https://github.com/heast13/kyrr#privacy">Details im README (Englisch)</a></p>
+    <p class="lead">Ton und Text werden auf deinem Computer verarbeitet. kyrr braucht kein Konto und sendet keine Nutzungsdaten. Die einzige Ausnahme ist ein eigener KI-Server, der nur dann genutzt wird, wenn du ihn einschaltest und seine Adresse eingibst.</p>
+    <p class="small">kyrr verbindet sich für drei Dinge mit dem Internet: einmal zum Herunterladen des Sprachmodells (jede Datei wird per SHA256-Prüfsumme kontrolliert), täglich zur Update-Suche bei GitHub (im Setup abschaltbar) und zum Herunterladen eines Updates, wenn du auf „Aktualisieren“ klickst. Sprachaufzeichnungen und ihr Text bleiben in deinem Dokumente-Ordner. Wenn du einen eigenen KI-Server einschaltest, gehen Diktate oder Ton an diesen Server, der auf deinem Computer oder im Heimnetz laufen soll. <a href="https://github.com/heast13/kyrr#privacy">Details im README (Englisch)</a></p>
   </div>
 </section>
 
@@ -195,6 +203,10 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
   <details>
     <summary>Braucht kyrr eine Internetverbindung?</summary>
     <p>Nur zum Herunterladen des Sprachmodells beim ersten Diktieren, für die tägliche Update-Suche, die du abschalten kannst, und zum Herunterladen eines Updates, wenn du auf „Aktualisieren“ klickst. Die Geräuschunterdrückung funktioniert ohne Internet.</p>
+  </details>
+  <details>
+    <summary>Kann kyrr meine Diktate ausbessern oder übersetzen?</summary>
+    <p>Nur mit der experimentellen Funktion „Lokale KI“, die standardmäßig aus ist. Sie nutzt ein Sprachmodell, das du selbst betreibst, auf deinem Computer oder im Heimnetz. Unter Setup „Experimentelle KI-Features“ einschalten, dann erscheint die Karte auf der Startseite.</p>
   </details>
   <details>
     <summary>Wie lang kann ich am Stück diktieren?</summary>

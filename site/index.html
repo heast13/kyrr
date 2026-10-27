@@ -93,12 +93,20 @@
         <p>Hold F9 while you speak. When you release it, kyrr types the text at the cursor, in the app you are typing in. German, English and more European languages, such as French, Spanish, Italian or Dutch. “New line” inserts a line break. While you dictate, a small wave at the bottom of the screen shows that kyrr is listening, with the words heard so far, and then that it is writing. Instead of F9 you can set a key of your own, or tap once to start and once to stop.</p>
       </div>
       <div class="feature">
+        <h3>Numbers as digits</h3>
+        <p>Spoken numbers are written as digits where that reads better: from 13 up always, and also times, dates, money and decimals, such as “26 chairs”, “May 12th” or “349 dollars”. Zero to twelve stay words, unless a unit follows (“2 euros”). Works in dictation and in voice memos, in German and English.</p>
+      </div>
+      <div class="feature">
         <h3>Voice memos</h3>
         <p>Hold F8, speak, let go. kyrr saves the recording in the folder Documents/kyrr and names it after its first words. In the list you can play, rename or delete a recording. One click turns a recording into text, with the time at which each part starts. Voice memos can be switched off on the main page.</p>
       </div>
       <div class="feature">
         <h3>Level check</h3>
         <p>Meters show what the microphone picks up and what apps receive. A ten-second test records your voice and plays it back before and after processing. You can also listen to yourself live on headphones.</p>
+      </div>
+      <div class="feature">
+        <h3>Local AI (experimental)</h3>
+        <p>Off by default. A language model of your own, on your computer or in your home network (Ollama, LM Studio or llama.cpp), can fix mistakes in each dictation, reword it, make it professional or translate it into 17 languages, one at a time or combined. Every change is checked word by word: a question stays a question, and nothing is answered. Voice memos work the same way, and you can always restore the original. A speech server of your own can also take over the recognition. Switch on “Experimental AI features” under Setup.</p>
       </div>
     </div>
 
@@ -117,8 +125,8 @@
 <section class="band" id="privacy" aria-labelledby="h-privacy">
   <div class="wrap">
     <h2 id="h-privacy">Privacy</h2>
-    <p class="lead">Audio and text are processed only on your computer. kyrr needs no account and sends no usage data.</p>
-    <p class="small">kyrr connects to the internet for three things: downloading the speech model once (each file checked against a SHA256 hash), a daily update check with GitHub (can be switched off in Setup), and downloading an update when you click “Update”. Voice memos and their text stay in your Documents folder. <a href="https://github.com/heast13/kyrr#privacy">Details in the README</a></p>
+    <p class="lead">Audio and text are processed on your computer. kyrr needs no account and sends no usage data. The one exception is an AI server of your own, which only goes into use when you switch it on and enter its address.</p>
+    <p class="small">kyrr connects to the internet for three things: downloading the speech model once (each file checked against a SHA256 hash), a daily update check with GitHub (can be switched off in Setup), and downloading an update when you click “Update”. Voice memos and their text stay in your Documents folder. If you switch on an AI server of your own, dictated text or audio goes to that server, which is meant to run on your computer or in your home network. <a href="https://github.com/heast13/kyrr#privacy">Details in the README</a></p>
   </div>
 </section>
 
@@ -207,6 +215,10 @@ rm -rf ~/.config/kyrr ~/.local/share/kyrr</code></pre></div>
   <details>
     <summary>Does kyrr need an internet connection?</summary>
     <p>Only to download the speech model the first time you dictate, for the daily update check, which you can switch off, and to download an update when you click “Update”. Noise suppression works without internet.</p>
+  </details>
+  <details>
+    <summary>Can kyrr fix or translate my dictations?</summary>
+    <p>Only with the experimental feature “Local AI”, which is off by default. It uses a language model that you run yourself, on your computer or in your home network. Switch on “Experimental AI features” under Setup, and the card appears on the main page.</p>
   </details>
   <details>
     <summary>How long can a dictation be?</summary>

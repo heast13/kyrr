@@ -9,6 +9,8 @@ The details behind each part of the app. For installing, see
 - [Check](#check)
 - [Dictation](#dictation)
 - [Voice memos](#voice-memos)
+- [Numbers](#numbers)
+- [Your own servers (experimental)](#your-own-servers-experimental)
 - [Keys](#keys)
 
 <p align="center">
@@ -178,9 +180,9 @@ and in the text of voice memos, in German and English.
 Off by default. Under Setup, "Experimental AI features" switches on the card
 "Local AI" on the main page. It needs a language model that runs on your own
 computer or in your home network (Ollama, LM Studio or llama.cpp; Gemma 4 from
-E4B up is what kyrr is tested with, 12B or 26B recommended). kyrr never talks
-to a server outside your own network: plain `http` goes to the own PC and to
-home-network addresses only.
+E4B up is what kyrr is tested with, 12B or 26B recommended). Plain `http`
+goes to the own PC and to home-network addresses only, and kyrr refuses it
+anywhere else. An `https` address is used as typed.
 
 - **Fix mistakes**, **Nicer** (more fluent wording), **Professional** and
   **Translate** (17 languages) work on each dictation before it is typed,
