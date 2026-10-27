@@ -132,6 +132,11 @@ computer. No telemetry. kyrr goes online for exactly three things:
 Nothing is installed without your click. Record other people only when they
 agree to it.
 
+Only if you switch on the experimental own servers (see [How kyrr
+works](docs/how-it-works.md#your-own-servers-experimental)) does kyrr send
+dictated text or audio, and only to a server on your own computer or in your
+home network that you name yourself.
+
 ## Code signing policy
 
 kyrr's releases are not code-signed yet. A free certificate from the SignPath
