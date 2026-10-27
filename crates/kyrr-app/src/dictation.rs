@@ -74,6 +74,9 @@ const STALE_PRESS: Duration = Duration::from_secs(1);
 /// name that never resolves, say) is given up: the dictation is typed.
 const REWORK_GRACE: Duration = Duration::from_secs(1);
 
+/// How long the language model may take to read ahead (and load).
+const PRIME_TIME: Duration = Duration::from_secs(30);
+
 /// The user's language model, which reworks every dictation.
 #[derive(Clone, Debug)]
 pub struct Reworker {
@@ -1133,6 +1136,15 @@ impl Worker {
                 // Asleep after a long pause: load while the recording runs.
                 if self.model.is_none() && self.recognizer.is_none() {
                     self.start_load();
+                }
+                // The language model reads its instructions while the user
+                // speaks (and loads, if it was asleep).
+                if let Some(r) = self.reworker.clone() {
+                    if let Some(&first) = r.steps.first() {
+                        let _ = std::thread::Builder::new().name("kyrr-prime".into()).spawn(move || {
+                            rework::prime(&r.server, &r.model, first, PRIME_TIME);
+                        });
+                    }
                 }
             }
             Err(_) => self.tell("mic"),

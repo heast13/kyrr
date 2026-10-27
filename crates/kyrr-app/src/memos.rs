@@ -49,10 +49,20 @@ pub struct MemoRework {
     pub language: Option<&'static str>,
 }
 
-/// How reworking a memo's text went: the paragraphs and how many of them
-/// changed and how many of those were only fixed, or what kept the server
-/// from helping.
-type Reworked = Result<(Vec<library::Paragraph>, usize, usize), Error>;
+/// How reworking a memo's text went: the text it started from, the
+/// paragraphs now, how many of them changed and how many of those were
+/// only fixed, and what kept the server from finishing, if anything did.
+struct Reworked {
+    from: Vec<library::Paragraph>,
+    paragraphs: Vec<library::Paragraph>,
+    changed: usize,
+    fixed_only: usize,
+    failed: Option<Error>,
+}
+
+/// Paragraphs in a row that may run out of time before the server counts
+/// as gone: a single long one can, a server that went away makes them all.
+const LATE_IN_A_ROW: usize = 2;
 
 pub struct Memos {
     window: Weak<MainWindow>,
@@ -1198,6 +1208,7 @@ impl Memos {
             return;
         }
         let paragraphs = library::read_text(&path).unwrap_or_default();
+        let from = paragraphs.clone();
         if paragraphs.iter().all(|p| p.text.trim().is_empty()) {
             return;
         }
@@ -1213,20 +1224,27 @@ impl Memos {
             let (mut changed, mut fixed_only) = (0, 0);
             let mut out = Vec::with_capacity(all);
             let mut failed = None;
-            for (i, p) in paragraphs.into_iter().enumerate() {
-                if stop.load(Ordering::Relaxed) {
-                    break;
+            let mut late = 0;
+            let mut paragraphs = paragraphs.into_iter();
+            for (i, p) in paragraphs.by_ref().enumerate() {
+                if stop.load(Ordering::Relaxed) || failed.is_some() {
+                    out.push(p);
+                    continue;
                 }
                 // Nobody waits at the keyboard: more time than for a dictation.
                 let limit = (rework::time_limit_all(&steps, &p.text) * 4).max(Duration::from_secs(30));
                 let deadline = std::time::Instant::now() + limit;
                 let outcomes = rework::rework_all(&server, &model, &steps, &p.text, language, deadline, &stop);
-                if let Some(e) = outcomes.iter().find_map(|o| match o {
+                // One paragraph too long for the time: it stays, the next go
+                // on. Anything else, or the time running out again and
+                // again, ends the work; what is done is kept.
+                match outcomes.iter().find_map(|o| match o {
                     Outcome::Original(Why::Server(e)) => Some(e.clone()),
                     _ => None,
                 }) {
-                    failed = Some(e);
-                    break;
+                    Some(Error::Timeout) if late + 1 < LATE_IN_A_ROW => late += 1,
+                    Some(e) => failed = Some(e),
+                    None => late = 0,
                 }
                 fixed_only += usize::from(outcomes.iter().any(|o| matches!(o, Outcome::FixedInstead(_))));
                 // Each step went on from the one before: the last text is it.
@@ -1251,9 +1269,13 @@ impl Memos {
                     }
                 });
             }
-            let result: Reworked = match failed {
-                Some(e) => Err(e),
-                None => Ok((out, changed, fixed_only)),
+            out.extend(paragraphs);
+            let result = Reworked {
+                from,
+                paragraphs: out,
+                changed,
+                fixed_only,
+                failed,
             };
             let stopped = stop.load(Ordering::Relaxed);
             let _ = slint::invoke_from_event_loop(move || {
@@ -1298,13 +1320,32 @@ impl Memos {
         if !path.exists() {
             return;
         }
-        let note = match result {
-            Err(e) => crate::servers::problem(german, &e),
-            Ok((_, 0, _)) => self.say(
+        let Reworked {
+            from,
+            paragraphs,
+            changed,
+            fixed_only,
+            failed,
+        } = result;
+        // Written anew meanwhile (a fresh transcript, an edit elsewhere):
+        // that text stays.
+        if library::read_text(path).as_ref() != Some(&from) {
+            state.set_memo_rework_note(
+                self.say(
+                    "Der Text hat sich inzwischen geändert. Bitte nochmal anwenden.",
+                    "The text changed in the meantime. Please apply again.",
+                )
+                .into(),
+            );
+            return;
+        }
+        let note = match (changed, failed) {
+            (0, Some(e)) => crate::servers::problem(german, &e),
+            (0, None) => self.say(
                 "Nichts geändert: Der Text passt so, oder das Modell hat ihn zu stark verändert.",
                 "Nothing changed: the text is fine as it is, or the model changed too much.",
             ),
-            Ok((paragraphs, changed, fixed_only)) => {
+            (changed, failed) => {
                 let all = paragraphs.iter().filter(|p| !p.text.trim().is_empty()).count();
                 let written = library::keep_original(path).and_then(|_| library::write_text(path, &paragraphs));
                 if let Err(e) = written {
@@ -1355,6 +1396,13 @@ impl Memos {
                     } else {
                         format!(" {left} of {all} unchanged.")
                     };
+                }
+                if let Some(e) = failed {
+                    note += &format!(
+                        " {} {}",
+                        self.say("Dann abgebrochen:", "Then stopped:"),
+                        crate::servers::problem(german, &e)
+                    );
                 }
                 note + &self.say(" Das Original ist gesichert.", " The original is kept.")
             }

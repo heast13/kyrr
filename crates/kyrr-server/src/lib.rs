@@ -59,6 +59,13 @@ pub fn address(typed: &str) -> Option<String> {
     if authority.contains('@') {
         return None;
     }
+    // As a server log names it ("listening on 0.0.0.0:1234"): reachable
+    // here as the own computer, which Windows does not take 0.0.0.0 for.
+    for (any, own) in [("://0.0.0.0", "://127.0.0.1"), ("://[::]", "://[::1]")] {
+        if s.contains(any) {
+            s = s.replacen(any, own, 1);
+        }
+    }
     // Pasted with the path of one of the calls.
     for tail in ["/v1/chat/completions", "/v1/audio/transcriptions", "/v1/models", "/v1"] {
         if let Some(base) = s.strip_suffix(tail) {
@@ -138,19 +145,48 @@ pub fn allowed(url: &str) -> Result<(), Error> {
     }
 }
 
+/// Finds where a name leads like ureq itself, but plain http only ever
+/// goes to the addresses of the own computer and home network among them:
+/// a name that leads elsewhere by the time of the request (after
+/// [`allowed`] looked) finds nothing.
+#[derive(Debug)]
+struct HomeOnly;
+
+impl ureq::unversioned::resolver::Resolver for HomeOnly {
+    fn resolve(
+        &self,
+        uri: &ureq::http::Uri,
+        config: &ureq::config::Config,
+        timeout: ureq::unversioned::transport::NextTimeout,
+    ) -> Result<ureq::unversioned::resolver::ResolvedSocketAddrs, ureq::Error> {
+        let all = ureq::unversioned::resolver::DefaultResolver::default().resolve(uri, config, timeout)?;
+        if uri.scheme_str() == Some("https") {
+            return Ok(all);
+        }
+        let mut home = self.empty();
+        for addr in all.iter().filter(|a| local(a.ip())) {
+            home.push(*addr);
+        }
+        if home.is_empty() {
+            return Err(ureq::Error::HostNotFound);
+        }
+        Ok(home)
+    }
+}
+
 /// No proxy (a server in the home network is not behind it), no redirects
 /// (they could lead out of it), and an end to waiting.
 fn agent(timeout: Duration) -> ureq::Agent {
     use ureq::tls::{TlsConfig, TlsProvider};
-    ureq::config::Config::builder()
+    let config = ureq::config::Config::builder()
         .proxy(None)
         .max_redirects(0)
         .tls_config(TlsConfig::builder().provider(TlsProvider::NativeTls).build())
         .timeout_connect(Some(timeout.min(Duration::from_secs(5))))
         .timeout_global(Some(timeout))
         .user_agent(concat!("kyrr/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .new_agent()
+        .build();
+    ureq::Agent::with_parts(config, ureq::unversioned::transport::DefaultConnector::default(), HomeOnly)
 }
 
 fn failed(e: ureq::Error) -> Error {
@@ -327,6 +363,11 @@ mod tests {
             address("https://ai.example.org").as_deref(),
             Some("https://ai.example.org")
         );
+        assert_eq!(
+            address("0.0.0.0:1234").as_deref(),
+            Some("http://127.0.0.1:1234")
+        );
+        assert_eq!(address("http://[::]:8080").as_deref(), Some("http://[::1]:8080"));
         assert_eq!(address("  "), None);
         assert_eq!(address("http://me:secret@192.168.1.5:8080"), None);
     }

@@ -595,6 +595,15 @@ fn whole(orig: &str, out: &str, (lo, hi): (f32, f32)) -> Result<(), Refusal> {
 /// markers around it.
 pub fn clean(out: &str) -> String {
     let mut s = out.to_string();
+    // gpt-oss hands its channels on as they are: the answer is the final one.
+    if let Some(at) = s.rfind("<|channel|>final<|message|>") {
+        s = s[at + "<|channel|>final<|message|>".len()..].to_string();
+    }
+    for end in ["<|return|>", "<|end|>"] {
+        if let Some(at) = s.find(end) {
+            s.truncate(at);
+        }
+    }
     for (open, close) in [("<think>", "</think>"), ("<|channel|>", "<|message|>")] {
         while let Some(start) = s.find(open) {
             match s[start..].find(close) {
@@ -908,6 +917,10 @@ mod tests {
         assert_eq!(clean("```text\nHallo.\n```"), "Hallo.");
         assert_eq!(clean("<dictation>\nHallo.\n</dictation>"), "Hallo.");
         assert_eq!(clean("<think>endless"), "");
+        assert_eq!(
+            clean("<|channel|>analysis<|message|>The user dictated.<|end|><|start|>assistant<|channel|>final<|message|>Hallo Welt.<|return|>"),
+            "Hallo Welt."
+        );
     }
 
     #[test]

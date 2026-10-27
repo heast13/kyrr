@@ -4,6 +4,11 @@
 //!
 //! cargo run --release -p kyrr-server --example rework_bench -- URL MODEL [business|polish] [dictations.jsonl] [results.jsonl]
 //!
+//! As kyrr does it while dictating, with its time limits, steps such as
+//! "fix", "polish+en", "business+fr" or "en": `live:STEPS` in place of the
+//! preset. `prime:STEPS` measures how much reading ahead while the user
+//! speaks saves: each dictation once after another preset, once primed.
+//!
 //! A key goes in LLM_KEY. Each line of the dictations is
 //! {"id": …, "lang": "de"|"en", "text": …}, numbers already as digits (as
 //! kyrr hands them on).
@@ -34,6 +39,19 @@ fn main() {
         url,
         key: std::env::var("LLM_KEY").unwrap_or_default(),
     };
+    if let Some(mode) = args.get(2).and_then(|m| m.split_once(':')) {
+        let input = args
+            .get(3)
+            .cloned()
+            .unwrap_or_else(|| concat!(env!("CARGO_MANIFEST_DIR"), "/examples/dictations.jsonl").into());
+        let output = args.get(4).cloned().unwrap_or_else(|| "rework_bench.jsonl".into());
+        let steps = steps(mode.1);
+        match mode.0 {
+            "prime" => primed(&server, &model, &steps, &read_items(&input), &output),
+            _ => live(&server, &model, &steps, &read_items(&input), &output),
+        }
+        return;
+    }
     let items: Vec<Value> = std::fs::read_to_string(&input)
         .expect("the dictations")
         .lines()
@@ -137,4 +155,117 @@ fn main() {
         );
     }
     println!("  details: {output}");
+}
+
+fn read_items(input: &str) -> Vec<Value> {
+    std::fs::read_to_string(input)
+        .expect("the dictations")
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).expect("a json line"))
+        .collect()
+}
+
+/// "polish+en" as the steps kyrr takes.
+fn steps(spec: &str) -> Vec<Preset> {
+    spec.split('+')
+        .map(|step| match step {
+            "fix" => Preset::Fix,
+            "polish" => Preset::Polish,
+            "business" => Preset::Business,
+            code => Preset::Translate(
+                rework::TARGETS
+                    .iter()
+                    .find(|(c, _)| *c == code)
+                    .map(|(c, _)| *c)
+                    .expect("a preset or a language code"),
+            ),
+        })
+        .collect()
+}
+
+fn kind(outcome: &Outcome) -> String {
+    match outcome {
+        Outcome::Reworked(_) => "reworked".into(),
+        Outcome::FixedInstead(_) => "fixed instead".into(),
+        Outcome::Original(why) => format!("{why:?}"),
+    }
+}
+
+/// Every dictation as kyrr reworks it while dictating, with its time limit.
+fn live(server: &Server, model: &str, steps: &[Preset], items: &[Value], output: &str) {
+    let mut out = std::fs::File::create(output).expect("the results file");
+    let mut kinds: BTreeMap<String, usize> = BTreeMap::new();
+    let mut times = Vec::new();
+    let stop = AtomicBool::new(false);
+    for item in items {
+        let text = item["text"].as_str().unwrap_or_default();
+        let limit = rework::time_limit_all(steps, text);
+        let started = Instant::now();
+        let outcomes = rework::rework_all(server, model, steps, text, item["lang"].as_str(), started + limit, &stop);
+        let took = started.elapsed().as_secs_f32();
+        times.push(took);
+        let said: Vec<String> = outcomes.iter().map(kind).collect();
+        let typed = outcomes
+            .iter()
+            .rev()
+            .find_map(|o| match o {
+                Outcome::Reworked(t) | Outcome::FixedInstead(t) => Some(t.as_str()),
+                Outcome::Original(_) => None,
+            })
+            .unwrap_or(text);
+        *kinds.entry(said.join(" / ")).or_default() += 1;
+        let record = json!({"id": item["id"], "text": text, "typed": typed, "outcomes": said,
+            "seconds": (took * 100.0).round() / 100.0, "limit": (limit.as_secs_f32() * 10.0).round() / 10.0});
+        writeln!(out, "{record}").expect("writing the results");
+    }
+    times.sort_by(f32::total_cmp);
+    println!("\n{} dictations, live {steps:?}, model {model}", items.len());
+    for (kind, count) in &kinds {
+        println!("  {count:>4}  {kind}");
+    }
+    if !times.is_empty() {
+        println!(
+            "  seconds: median {:.2}, 90 % {:.2}, max {:.2}",
+            times[times.len() / 2],
+            times[times.len() * 9 / 10],
+            times[times.len() - 1]
+        );
+    }
+    println!("  details: {output}");
+}
+
+/// The time to the answer with and without reading ahead.
+fn primed(server: &Server, model: &str, steps: &[Preset], items: &[Value], output: &str) {
+    let mut out = std::fs::File::create(output).expect("the results file");
+    let stop = AtomicBool::new(false);
+    let (mut cold, mut warm) = (Vec::new(), Vec::new());
+    let other = if steps[0] == Preset::Fix { Preset::Translate("fr") } else { Preset::Fix };
+    let far = Duration::from_secs(60);
+    for item in items {
+        let text = item["text"].as_str().unwrap_or_default();
+        let language = item["lang"].as_str();
+        // Something else read last: the instructions are new to the server.
+        rework::prime(server, model, other, far);
+        let started = Instant::now();
+        rework::rework_all(server, model, steps, text, language, started + far, &stop);
+        let c = started.elapsed().as_secs_f32();
+        rework::prime(server, model, steps[0], far);
+        let started = Instant::now();
+        rework::rework_all(server, model, steps, text, language, started + far, &stop);
+        let w = started.elapsed().as_secs_f32();
+        writeln!(out, "{}", json!({"id": item["id"], "cold": c, "warm": w})).expect("writing the results");
+        cold.push(c);
+        warm.push(w);
+    }
+    for v in [&mut cold, &mut warm] {
+        v.sort_by(f32::total_cmp);
+    }
+    let median = |v: &[f32]| v.get(v.len() / 2).copied().unwrap_or_default();
+    println!(
+        "\n{} dictations, {steps:?}, model {model}: median {:.2} s without, {:.2} s with reading ahead",
+        items.len(),
+        median(&cold),
+        median(&warm)
+    );
 }

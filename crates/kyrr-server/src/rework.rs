@@ -300,6 +300,18 @@ fn ask(
     }
 }
 
+/// Has the server read the instructions and examples for `preset` ahead,
+/// while the user still speaks: a server that keeps what it read (llama.cpp,
+/// LM Studio, Ollama) then only reads the dictation itself, and one that
+/// loads models when asked starts loading now. Blocks until the server
+/// answered or `timeout`; what it says does not matter.
+pub fn prime(server: &Server, model: &str, preset: Preset, timeout: Duration) {
+    let switches = switches(server, model);
+    let mut body = body(model, preset, "", None, switches);
+    body["max_tokens"] = json!(1);
+    let _ = chat(server, &body, timeout);
+}
+
 /// Why the dictation is typed as it was.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Why {
