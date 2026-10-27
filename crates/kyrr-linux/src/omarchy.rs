@@ -629,6 +629,19 @@ mod tests {
         assert_eq!(state_json("idle", "{}", 7), "{\"v\":2,\"pid\":7,\"mode\":\"idle\"}\n");
     }
 
+    /// Local AI came without a new version of the format: the widget reads
+    /// `ai` where it is and leaves it out where it is not (an older kyrr).
+    #[test]
+    fn state_with_local_ai_is_still_version_2() {
+        let line = state_json(
+            "idle",
+            "{\"ai\":{\"features\":true,\"keySet\":true,\"models\":[\"a\"]}}",
+            1,
+        );
+        assert!(line.starts_with("{\"v\":2,\"pid\":1,\"mode\":\"idle\",\"ai\":{"));
+        assert!(line.ends_with("}}\n") && line.matches('\n').count() == 1);
+    }
+
     #[test]
     fn plugin_turned_on() {
         assert!(plugin_in("{\"bar\":{\"right\":[{\"id\":\"io.github.heast13.kyrr\"}]}}"));

@@ -56,12 +56,21 @@ fn translate_index(config: &Config) -> i32 {
         .map_or(0, |i| i as i32 + 1)
 }
 
-fn translate_code(index: i32) -> String {
+pub(crate) fn translate_code(index: i32) -> String {
     let i = index.max(0) as usize;
     if i == 0 {
         return String::new();
     }
     TARGETS.get(i - 1).map_or(String::new(), |(c, _)| (*c).to_string())
+}
+
+/// The place of a language in the choice from its code (0 for none, "off"
+/// or a code nobody knows): the widget's menu names languages so.
+fn translate_position(code: &str) -> i32 {
+    TARGETS
+        .iter()
+        .position(|(c, _)| *c == code.trim())
+        .map_or(0, |i| i as i32 + 1)
 }
 
 /// The language model, when AI features are switched on and one is set up.
@@ -603,8 +612,16 @@ fn connect_asr(app: &Rc<App>) {
 pub fn look_around(app: &Rc<App>) {
     let Some(w) = app.window.upgrade() else { return };
     let state = w.global::<AppState>();
-    let speech = state.get_page() == 7 && state.get_asr_on() && state.get_asr_url().is_empty();
-    let language = state.get_page() == 8 && state.get_ai_features() && state.get_rework_url().is_empty();
+    look_for(app, state.get_page() == 7, state.get_page() == 8);
+}
+
+/// Looks for a speech server and/or a language model on this computer, for
+/// the one whose address is still empty (and which is switched on).
+fn look_for(app: &Rc<App>, speech: bool, language: bool) {
+    let Some(w) = app.window.upgrade() else { return };
+    let state = w.global::<AppState>();
+    let speech = speech && state.get_asr_on() && state.get_asr_url().is_empty();
+    let language = language && state.get_ai_features() && state.get_rework_url().is_empty();
     if !speech && !language {
         return;
     }
@@ -623,4 +640,222 @@ pub fn look_around(app: &Rc<App>) {
         }
         crate::fit(&app.window);
     });
+}
+
+/// What the widget's menu knows of one server: never its key, only whether
+/// there is one.
+#[cfg(target_os = "linux")]
+struct ServerShown {
+    url: String,
+    model: String,
+    key_set: bool,
+    models: Vec<String>,
+    busy: bool,
+    note: String,
+    found: String,
+}
+
+/// The most model names the widget's state carries (it stays small).
+#[cfg(target_os = "linux")]
+const MODELS_SHOWN: usize = 30;
+
+#[cfg(target_os = "linux")]
+impl ServerShown {
+    fn json(&self) -> serde_json::Map<String, serde_json::Value> {
+        use serde_json::json;
+        let models: Vec<&String> = self.models.iter().take(MODELS_SHOWN).collect();
+        let mut shown = serde_json::Map::new();
+        shown.insert("url".into(), json!(self.url));
+        shown.insert("model".into(), json!(self.model));
+        shown.insert("keySet".into(), json!(self.key_set));
+        shown.insert("models".into(), json!(models));
+        shown.insert("busy".into(), json!(self.busy));
+        shown.insert("note".into(), json!(self.note));
+        shown.insert("found".into(), json!(self.found));
+        shown
+    }
+}
+
+fn names(models: ModelRc<SharedString>) -> Vec<String> {
+    models.iter().map(|m| m.to_string()).collect()
+}
+
+/// Local AI and the speech server for the widget's menu (the widget's
+/// README, "State", `ai`).
+#[cfg(target_os = "linux")]
+pub fn widget_state(state: &AppState) -> serde_json::Value {
+    use serde_json::json;
+    let language = ServerShown {
+        url: state.get_rework_url().to_string(),
+        model: state.get_rework_model().to_string(),
+        key_set: !state.get_rework_key().is_empty(),
+        models: names(state.get_rework_models()),
+        busy: state.get_rework_busy(),
+        note: state.get_rework_note().to_string(),
+        found: state.get_rework_found().to_string(),
+    };
+    let speech = ServerShown {
+        url: state.get_asr_url().to_string(),
+        model: state.get_asr_model().to_string(),
+        key_set: !state.get_asr_key().is_empty(),
+        models: names(state.get_asr_models()),
+        busy: state.get_asr_busy(),
+        note: state.get_asr_note().to_string(),
+        found: state.get_asr_found().to_string(),
+    };
+    let mut ai = language.json();
+    ai.insert("features".into(), json!(state.get_ai_features()));
+    ai.insert("on".into(), json!(state.get_local_ai()));
+    ai.insert("ready".into(), json!(state.get_rework_ready()));
+    ai.insert("rework".into(), json!(state.get_rework_index()));
+    ai.insert("translate".into(), json!(translate_code(state.get_translate_index())));
+    // The instruction shown (0 to 3) and whether it is the user's own.
+    ai.insert(
+        "prompt".into(),
+        json!({ "index": state.get_prompt_index(), "own": state.get_prompt_own() }),
+    );
+    let mut asr = speech.json();
+    asr.insert("on".into(), json!(state.get_asr_on()));
+    ai.insert("asr".into(), serde_json::Value::Object(asr));
+    serde_json::Value::Object(ai)
+}
+
+/// The language model's part of the open text, for the widget's menu: what
+/// it does, into which language, how far it is, and whether there is an
+/// original to bring back.
+#[cfg(target_os = "linux")]
+pub fn widget_memo_rework(state: &AppState) -> serde_json::Value {
+    serde_json::json!({
+        "ready": state.get_memo_rework_ready(),
+        "busy": state.get_memo_rework_busy(),
+        "progress": (state.get_memo_rework_progress() * 50.0).round() / 50.0,
+        "note": state.get_memo_rework_note().as_str(),
+        "action": state.get_memo_rework_action(),
+        "target": translate_code(state.get_memo_rework_target()),
+        "original": state.get_memo_sheet_original(),
+    })
+}
+
+/// `set ai.*`, `set asr.*` and `set memos.rework*` from the widget's menu:
+/// what the same click in the settings window does. Addresses and keys
+/// arrive as typed and are saved and tried like "Connect and test".
+pub fn widget_set(app: &Rc<App>, setting: &str, value: &str) {
+    let Some(w) = app.window.upgrade() else { return };
+    let state = w.global::<AppState>();
+    let value = value.trim();
+    let number = |max: i32| value.parse::<i32>().ok().map(|i| i.clamp(0, max));
+    match setting {
+        "ai.rework" => {
+            if let Some(i) = number(3) {
+                state.set_rework_index(i);
+                state.invoke_rework_changed(i);
+            }
+        }
+        "ai.translate" => {
+            let i = translate_position(value);
+            state.set_translate_index(i);
+            state.invoke_translate_changed(i);
+        }
+        "ai.prompt" => {
+            if let Some(i) = number(3) {
+                state.invoke_prompt_picked(i);
+            }
+        }
+        "ai.promptReset" => state.invoke_prompt_reset(state.get_prompt_index()),
+        "ai.url" => {
+            state.set_rework_url(value.into());
+            state.set_rework_found("".into());
+            connect_rework(app);
+        }
+        "ai.model" if !value.is_empty() => {
+            let at = names(state.get_rework_models()).iter().position(|n| n == value);
+            state.set_rework_model_index(at.map_or(-1, |i| i as i32));
+            state.set_rework_model(value.into());
+            app.config.borrow_mut().rework_model = value.into();
+            app.config.borrow().save();
+            send(app);
+        }
+        "ai.key" => {
+            state.set_rework_key(value.into());
+            let mut keys = Keys::load();
+            keys.rework = value.into();
+            keys.save();
+            connect_rework(app);
+        }
+        "ai.connect" => connect_rework(app),
+        "ai.take" => state.invoke_rework_take_found(),
+        "ai.look" => look_for(app, value == "speech", value == "language"),
+        "asr.on" => {
+            state.invoke_asr_toggled(value == "true");
+            look_for(app, true, false);
+        }
+        "asr.url" => {
+            state.set_asr_url(value.into());
+            state.set_asr_found("".into());
+            connect_asr(app);
+        }
+        "asr.model" if !value.is_empty() => {
+            let at = names(state.get_asr_models()).iter().position(|n| n == value);
+            state.set_asr_model_index(at.map_or(-1, |i| i as i32));
+            state.set_asr_model(value.into());
+            app.config.borrow_mut().asr_model = value.into();
+            app.config.borrow().save();
+            send(app);
+        }
+        "asr.key" => {
+            state.set_asr_key(value.into());
+            let mut keys = Keys::load();
+            keys.asr = value.into();
+            keys.save();
+            connect_asr(app);
+        }
+        "asr.connect" => connect_asr(app),
+        "asr.take" => state.invoke_asr_take_found(),
+        // What "Apply" does to the open text is chosen here and started
+        // with `memo rework`.
+        "memos.reworkAction" => {
+            if let Some(i) = number(3) {
+                state.set_memo_rework_action(i);
+            }
+        }
+        "memos.reworkTarget" => state.set_memo_rework_target(translate_position(value)),
+        _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn languages_by_code() {
+        assert_eq!(translate_position("off"), 0);
+        assert_eq!(translate_position(""), 0);
+        assert_eq!(translate_position("en"), 1);
+        assert_eq!(translate_position(" hr "), TARGETS.len() as i32);
+        assert_eq!(translate_position("xx"), 0);
+        for i in 0..=TARGETS.len() as i32 {
+            assert_eq!(translate_position(&translate_code(i)), i);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_server_shows_no_key_and_few_models() {
+        let shown = ServerShown {
+            url: "http://localhost:11434".into(),
+            model: "gemma".into(),
+            key_set: true,
+            models: (0..100).map(|i| format!("model-{i}")).collect(),
+            busy: false,
+            note: String::new(),
+            found: String::new(),
+        }
+        .json();
+        let text = serde_json::Value::Object(shown.clone()).to_string();
+        assert!(!text.to_lowercase().contains("\"key\""));
+        assert_eq!(shown["keySet"], true);
+        assert_eq!(shown["models"].as_array().map(Vec::len), Some(MODELS_SHOWN));
+        assert!(text.len() < 1200, "{} bytes", text.len());
+    }
 }

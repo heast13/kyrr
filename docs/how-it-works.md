@@ -201,6 +201,11 @@ anywhere else. An `https` address is used as typed.
   whisper.cpp) can recognise the dictation instead of kyrr's built-in model.
   Live words are not shown then. If the server cannot be reached, kyrr
   recognises on the computer, provided the speech model is installed.
+- **Omarchy:** the plugin's menu has all of this (Setup > Experimental AI
+  features adds the row "Local AI"; Setup > Own dictation model), also
+  rework and translation on a recording with "Restore original". Missing
+  there: the comparison of old and new text, and reading or changing the
+  wording of the instructions (they can be reset). Needs plugin 1.1.0.
 
 ## Keys
 

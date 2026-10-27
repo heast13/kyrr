@@ -1272,6 +1272,8 @@ impl App {
             ("toggle", "general.overload") => flip!(get_auto_lean, set_auto_lean, invoke_auto_lean_toggled),
             ("toggle", "general.updateCheck") => flip!(get_update_auto, set_update_auto, invoke_update_auto_toggled),
             ("toggle", "listen") => state.invoke_listen_toggled(),
+            ("toggle", "ai.features") => flip!(get_ai_features, set_ai_features, invoke_ai_features_toggled),
+            ("toggle", "ai.on") => flip!(get_local_ai, set_local_ai, invoke_local_ai_toggled),
             ("set", setting) => self.omarchy_set(&state, setting, value),
             ("mic", "unmute") => state.invoke_unmute(),
             ("mic", "repair") => state.invoke_repair(),
@@ -1350,6 +1352,14 @@ impl App {
                 state.set_memo_sheet_stamps(i);
                 state.invoke_memo_sheet_stamps_changed(i);
             }
+            // The language model on the open text, as chosen with
+            // `set memos.reworkAction|reworkTarget`; typed text goes first.
+            ("memo", "rework") => {
+                self.omarchy_edit(&state);
+                state.invoke_memo_rework(state.get_memo_rework_action(), state.get_memo_rework_target());
+            }
+            ("memo", "stoprework") => state.invoke_memo_stop_rework(),
+            ("memo", "restore") => state.invoke_memo_restore_text(),
             ("memo", "opentext") => {
                 self.omarchy_edit(&state);
                 state.invoke_memo_open_text();
@@ -1403,7 +1413,7 @@ impl App {
     }
 
     /// `set <setting> <value>` from the widget's menu.
-    fn omarchy_set(&self, state: &AppState, setting: &str, value: &str) {
+    fn omarchy_set(self: &Rc<Self>, state: &AppState, setting: &str, value: &str) {
         let pick = |names: &[&str]| -> Option<i32> {
             names
                 .iter()
@@ -1466,6 +1476,10 @@ impl App {
                 state.invoke_key_toggle_changed(tap);
             }
             "memos.hold" => state.invoke_memo_toggle_changed(value != "true"),
+            // Local AI, the own speech server and reworking a recording.
+            _ if setting.starts_with("ai.") || setting.starts_with("asr.") || setting.starts_with("memos.rework") => {
+                servers::widget_set(self, setting, value)
+            }
             "general.language" => {
                 if let Some(i) = pick(&["de", "en", "multi"]).map(|i| i.clamp(0, 2)) {
                     state.set_language_index(i);
@@ -3351,6 +3365,7 @@ fn tell_widget(window: &MainWindow) {
             "here": state
                 .invoke_memo_here_label(sheet_text.clone(), SHEET_CURSOR.get())
                 .as_str(),
+            "rework": servers::widget_memo_rework(&state),
         })
     } else {
         serde_json::Value::Null
@@ -3498,6 +3513,8 @@ fn tell_widget(window: &MainWindow) {
             "installable": state.get_update_installable(),
             "dismissed": state.get_update_dismissed(),
         },
+        // Local AI and the own speech server (kyrr 0.8.0).
+        "ai": servers::widget_state(&state),
         "probe": probe,
         "hasProbe": state.get_has_probe(),
         "probeError": state.get_probe_error().as_str(),
