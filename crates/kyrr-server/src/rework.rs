@@ -160,8 +160,42 @@ fn dictation(text: &str) -> String {
     format!("<dictation>\n{text}\n</dictation>")
 }
 
-/// The conversation sent for one line of dictation.
-fn messages(preset: Preset, text: &str) -> Vec<Value> {
+/// What the model is told when its answer did not pass the check, so it
+/// can try once more.
+fn feedback(preset: Preset, refusal: &Refusal) -> String {
+    let (again, done) = match preset {
+        Preset::Translate(_) => ("Translate the same dictation again", "translation"),
+        _ => ("Rewrite the same dictation again", "rewritten text"),
+    };
+    let target = match preset {
+        Preset::Translate(target) => TARGETS.iter().find(|(c, _)| *c == target).map_or("English", |(_, n)| n),
+        _ => "",
+    };
+    let problem = match refusal {
+        Refusal::Empty => format!("Your reply was empty. {again}."),
+        Refusal::LeadIn => format!("Your reply started with an introduction. {again}."),
+        Refusal::Length => {
+            format!("Your version is much shorter or longer than the dictation. {again}, keeping all of its content and about its length.")
+        }
+        Refusal::Numbers => format!("Your version lost or changed a number. {again} and keep every number exactly as it is."),
+        Refusal::Language if target.is_empty() => format!("Your version is in another language. {again} in its own language."),
+        Refusal::Language => format!("Your version is not in {target}. {again}, into {target}."),
+        Refusal::Person => format!(
+            "Your version changed who speaks or who is addressed (I, you, we). {again} and keep the persons as they are."
+        ),
+        Refusal::Content => {
+            format!("Your version left out or replaced too much of the content. {again} and stay closer to its words and facts.")
+        }
+        Refusal::Lines => format!("Your version has several lines or a list. {again} as running text."),
+        Refusal::Answered => format!("You answered the question instead of handling it. {again}: it stays a question."),
+        Refusal::Unlike => format!("{again}."),
+    };
+    format!("{problem} Reply with the {done} only.")
+}
+
+/// The conversation sent for one line of dictation; with an answer that
+/// was refused, that answer and what was wrong with it follow.
+fn messages(preset: Preset, text: &str, retry: Option<(&str, &Refusal)>) -> Vec<Value> {
     let (system, shots): (String, Vec<(&str, &str)>) = match preset {
         Preset::Fix => (prompt(0), FIX_SHOTS.to_vec()),
         Preset::Polish => (prompt(1), POLISH_SHOTS.to_vec()),
@@ -187,6 +221,10 @@ fn messages(preset: Preset, text: &str) -> Vec<Value> {
         m.push(json!({"role": "assistant", "content": answer}));
     }
     m.push(json!({"role": "user", "content": dictation(text)}));
+    if let Some((answer, refusal)) = retry {
+        m.push(json!({"role": "assistant", "content": answer}));
+        m.push(json!({"role": "user", "content": feedback(preset, refusal)}));
+    }
     m
 }
 
@@ -213,10 +251,10 @@ fn fewer_switches(server: &Server, model: &str, from: u8) {
     }
 }
 
-fn body(model: &str, preset: Preset, text: &str, switches: u8) -> Value {
+fn body(model: &str, preset: Preset, text: &str, retry: Option<(&str, &Refusal)>, switches: u8) -> Value {
     let mut body = json!({
         "model": model,
-        "messages": messages(preset, text),
+        "messages": messages(preset, text, retry),
         "max_tokens": text.chars().count() / 2 + 64,
         "stream": false,
     });
@@ -240,12 +278,19 @@ fn body(model: &str, preset: Preset, text: &str, switches: u8) -> Value {
     body
 }
 
-fn ask(server: &Server, model: &str, preset: Preset, text: &str, timeout: Duration) -> Result<String, Error> {
+fn ask(
+    server: &Server,
+    model: &str,
+    preset: Preset,
+    text: &str,
+    retry: Option<(&str, &Refusal)>,
+    timeout: Duration,
+) -> Result<String, Error> {
     let started = Instant::now();
     loop {
         let switches = switches(server, model);
         let left = timeout.saturating_sub(started.elapsed());
-        match chat(server, &body(model, preset, text, switches), left) {
+        match chat(server, &body(model, preset, text, retry, switches), left) {
             Err(Error::Refused(400)) if switches < 2 && !left.is_zero() => fewer_switches(server, model, switches),
             other => return other,
         }
@@ -273,6 +318,8 @@ pub enum Why {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Outcome {
     Reworked(String),
+    /// Rewording was refused twice; only what was misheard is fixed.
+    FixedInstead(String),
     Original(Why),
 }
 
@@ -310,7 +357,7 @@ pub fn rework_all(
     for &preset in steps {
         let outcome = rework(server, model, preset, &text, language, deadline, stop);
         let over = matches!(outcome, Outcome::Original(Why::Server(_) | Why::Skipped));
-        if let Outcome::Reworked(new) = &outcome {
+        if let Outcome::Reworked(new) | Outcome::FixedInstead(new) = &outcome {
             text = new.clone();
         }
         outcomes.push(outcome);
@@ -326,6 +373,8 @@ const FEWEST: usize = 4;
 
 /// Reworks a dictation in `language` (a code; None when it could be any).
 /// Every line goes on its own, so line breaks stay where they were said.
+/// An answer that does not pass the check goes back to the model once,
+/// with what was wrong; refused again, rewording falls back to fixing.
 /// Blocks until done or until `deadline`; `stop` ends it early.
 pub fn rework(
     server: &Server,
@@ -363,27 +412,34 @@ pub fn rework(
         if left.is_zero() {
             return Outcome::Original(Why::Server(Error::Timeout));
         }
-        let answer = match ask(server, model, preset, line, left) {
-            Ok(answer) => guard::clean(&answer),
+        if preset == Preset::Fix {
+            let answer = match ask(server, model, preset, line, None, left) {
+                Ok(answer) => guard::clean(&answer),
+                Err(e) => return Outcome::Original(Why::Server(e)),
+            };
+            let (fixed, kept) = guard::fix(line, &answer);
+            // Case alone counts as no change of words.
+            refused |= kept == 0 && !guard::same_words(line, &answer);
+            changed |= fixed != line;
+            out.push(fixed);
+            continue;
+        }
+        let (answer, mut checked) = match attempt(server, model, preset, line, language, None, left) {
+            Ok(tried) => tried,
             Err(e) => return Outcome::Original(Why::Server(e)),
         };
-        let checked = match preset {
-            Preset::Fix => {
-                let (fixed, kept) = guard::fix(line, &answer);
-                // Case alone counts as no change of words.
-                refused |= kept == 0 && !guard::same_words(line, &answer);
-                Ok(fixed)
+        if let Err(refusal) = &checked {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if !left.is_zero() && !stop.load(Ordering::Relaxed) {
+                // Whatever goes wrong the second time, the first refusal
+                // stands.
+                if let Ok((_, again @ Ok(_))) =
+                    attempt(server, model, preset, line, language, Some((&answer, refusal)), left)
+                {
+                    checked = again;
+                }
             }
-            Preset::Polish => {
-                let language = language.or_else(|| guard::language_of(line));
-                guard::reworded(line, &answer, language).map(|_| answer)
-            }
-            Preset::Business => {
-                let language = language.or_else(|| guard::language_of(line));
-                guard::formal(line, &answer, language).map(|_| answer)
-            }
-            Preset::Translate(target) => guard::translated(line, &answer, target).map(|_| answer),
-        };
+        }
         match checked {
             Ok(new) => {
                 changed |= new != line;
@@ -391,7 +447,7 @@ pub fn rework(
             }
             // A line fixed goes on its own; reworded or translated, the
             // dictation stays one piece.
-            Err(refusal) => return Outcome::Original(Why::Checked(refusal)),
+            Err(refusal) => return fix_instead(server, model, preset, text, language, deadline, stop, refusal),
         }
     }
     if stop.load(Ordering::Relaxed) {
@@ -404,6 +460,55 @@ pub fn rework(
     } else {
         Outcome::Original(Why::Nothing)
     }
+}
+
+/// Rewording that was refused: at least what was misheard gets fixed.
+/// Translating stays as said, in its own language.
+#[allow(clippy::too_many_arguments)]
+fn fix_instead(
+    server: &Server,
+    model: &str,
+    preset: Preset,
+    text: &str,
+    language: Option<&str>,
+    deadline: Instant,
+    stop: &AtomicBool,
+    refusal: Refusal,
+) -> Outcome {
+    if matches!(preset, Preset::Polish | Preset::Business) && !stop.load(Ordering::Relaxed) {
+        if let Outcome::Reworked(fixed) = rework(server, model, Preset::Fix, text, language, deadline, stop) {
+            return Outcome::FixedInstead(fixed);
+        }
+    }
+    Outcome::Original(Why::Checked(refusal))
+}
+
+/// Asks the model about one line, once, and checks its answer: the answer
+/// as it came, and the text to type or why not. With `retry`, the answer
+/// refused before and why go along.
+pub fn attempt(
+    server: &Server,
+    model: &str,
+    preset: Preset,
+    line: &str,
+    language: Option<&str>,
+    retry: Option<(&str, &Refusal)>,
+    timeout: Duration,
+) -> Result<(String, Result<String, Refusal>), Error> {
+    let answer = guard::clean(&ask(server, model, preset, line, retry, timeout)?);
+    let checked = match preset {
+        Preset::Fix => Ok(guard::fix(line, &answer).0),
+        Preset::Polish => {
+            let language = language.or_else(|| guard::language_of(line));
+            guard::reworded(line, &answer, language).map(|_| answer.clone())
+        }
+        Preset::Business => {
+            let language = language.or_else(|| guard::language_of(line));
+            guard::formal(line, &answer, language).map(|_| answer.clone())
+        }
+        Preset::Translate(target) => guard::translated(line, &answer, target).map(|_| answer.clone()),
+    };
+    Ok((answer, checked))
 }
 
 #[cfg(test)]
@@ -420,12 +525,18 @@ mod tests {
 
     /// The same with the whole message the server answers.
     fn fake_message(message: Value, status: u16) -> (Server, std::sync::mpsc::Receiver<String>) {
+        fake_messages(vec![message], status)
+    }
+
+    /// The same with one answer after the other, the last one from then on.
+    fn fake_messages(messages: Vec<Value>, status: u16) -> (Server, std::sync::mpsc::Receiver<String>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let url = format!("http://{}", listener.local_addr().unwrap());
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            for stream in listener.incoming() {
+            for (n, stream) in listener.incoming().enumerate() {
                 let Ok(mut stream) = stream else { return };
+                let message = &messages[n.min(messages.len() - 1)];
                 let mut reader = BufReader::new(stream.try_clone().unwrap());
                 let mut length = 0;
                 loop {
@@ -578,7 +689,8 @@ mod tests {
                 Outcome::Reworked("We are sending the offer on Friday.".into())
             ]
         );
-        assert_eq!(requests.try_iter().count(), 2);
+        // Rewording, once more with what was wrong, fixing instead, translating.
+        assert_eq!(requests.try_iter().count(), 4);
         let gone = Server {
             url: "http://127.0.0.1:9".into(),
             key: String::new(),
@@ -624,6 +736,48 @@ mod tests {
     }
 
     #[test]
+    fn a_refused_answer_gets_a_second_chance() {
+        let said = "das angebot über 349 euro schicke ich ihnen bis freitag";
+        let (server, requests) = fake_messages(
+            vec![
+                json!({"content": "Das Angebot schicke ich Ihnen bis Freitag."}),
+                json!({"content": "Das Angebot über 349 Euro sende ich Ihnen bis Freitag."}),
+            ],
+            200,
+        );
+        assert_eq!(
+            run(&server, Preset::Business, said),
+            Outcome::Reworked("Das Angebot über 349 Euro sende ich Ihnen bis Freitag.".into())
+        );
+        let first: Value = serde_json::from_str(&requests.recv().unwrap()).unwrap();
+        let second: Value = serde_json::from_str(&requests.recv().unwrap()).unwrap();
+        let turns = second["messages"].as_array().unwrap();
+        assert_eq!(turns.len(), first["messages"].as_array().unwrap().len() + 2);
+        assert_eq!(
+            turns[turns.len() - 2]["content"],
+            json!("Das Angebot schicke ich Ihnen bis Freitag.")
+        );
+        assert!(turns[turns.len() - 1]["content"].as_str().unwrap().contains("number"));
+    }
+
+    #[test]
+    fn refused_twice_it_is_at_least_fixed() {
+        let said = "das angebot über 349 euro schicke ich ihnen bis freitag";
+        let (server, _) = fake_messages(
+            vec![
+                json!({"content": "Das Angebot schicke ich Ihnen bis Freitag."}),
+                json!({"content": "Ich schicke das Angebot bis Freitag."}),
+                json!({"content": "Das Angebot über 349 Euro schicke ich Ihnen bis Freitag."}),
+            ],
+            200,
+        );
+        assert_eq!(
+            run(&server, Preset::Business, said),
+            Outcome::FixedInstead("Das Angebot über 349 Euro schicke ich Ihnen bis Freitag.".into())
+        );
+    }
+
+    #[test]
     fn own_prompts_go_out_and_back() {
         assert_eq!(prompt(0), FIX);
         set_prompts([
@@ -633,10 +787,13 @@ mod tests {
             "Übersetze locker.".into(),
         ]);
         assert_eq!(prompt(1), "Mach es schön.");
-        assert_eq!(messages(Preset::Polish, "x")[0]["content"], json!("Mach es schön."));
+        assert_eq!(
+            messages(Preset::Polish, "x", None)[0]["content"],
+            json!("Mach es schön.")
+        );
         // Without the placeholder, the target language is still named.
         assert_eq!(
-            messages(Preset::Translate("fr"), "x")[0]["content"],
+            messages(Preset::Translate("fr"), "x", None)[0]["content"],
             json!("Übersetze locker.\nTranslate into French.")
         );
         set_prompts(Default::default());

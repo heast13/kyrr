@@ -362,6 +362,8 @@ fn say(language: Language, what: &str) -> String {
         ("rework free", false) => "Refused, typed as said",
         ("fixed", true) => "Ausgebessert",
         ("fixed", false) => "Fixed",
+        ("fixed only", true) => "Nur ausgebessert",
+        ("fixed only", false) => "Only fixed",
         ("polished", true) => "Umformuliert",
         ("polished", false) => "Reworded",
         ("translated", true) => "Übersetzt",
@@ -394,9 +396,15 @@ fn rework_note(language: Language, steps: &[Preset], outcomes: &[Outcome]) -> Op
         Preset::Translate(_) => "not translated",
     };
     let (mut good, mut bad, mut plain) = (Vec::new(), Vec::new(), false);
+    // Rewording was refused and only fixing went through: not red, not green.
+    let mut partly = false;
     for (step, outcome) in steps.iter().zip(outcomes) {
         match outcome {
-            Outcome::Reworked(_) => good.push(step),
+            Outcome::Reworked(_) => good.push(done(step)),
+            Outcome::FixedInstead(_) => {
+                good.push("fixed only");
+                partly = true;
+            }
             Outcome::Original(why) => match why {
                 Why::Server(kyrr_server::Error::Refused(_) | kyrr_server::Error::NotLocal) => {
                     bad.push((step, "rework refused"))
@@ -410,15 +418,16 @@ fn rework_note(language: Language, steps: &[Preset], outcomes: &[Outcome]) -> Op
         }
     }
     let say = |key| say(language, key);
+    let tone = if partly { Tone::Plain } else { Tone::Good };
     match (good.as_slice(), bad.first()) {
         ([], Some((_, why))) => Some((say(why), Tone::Bad)),
         ([], None) => plain.then(|| (say("fine"), Tone::Plain)),
-        ([one], None) => Some((say(done(one)), Tone::Good)),
+        ([one], None) => Some((say(one), tone)),
         ([first, then, ..], None) => Some((
-            format!("{} {} {}", say(done(first)), say("and"), say(done(then)).to_lowercase()),
-            Tone::Good,
+            format!("{} {} {}", say(first), say("and"), say(then).to_lowercase()),
+            tone,
         )),
-        ([first, ..], Some((step, _))) => Some((format!("{}, {}", say(done(first)), say(not_done(step))), Tone::Bad)),
+        ([first, ..], Some((step, _))) => Some((format!("{}, {}", say(first), say(not_done(step))), Tone::Bad)),
     }
 }
 
@@ -1362,6 +1371,7 @@ impl Worker {
             // Numbers only, never the text.
             match outcome {
                 Outcome::Reworked(_) => eprintln!("kyrr: dictation: reworked after {took:.1} s"),
+                Outcome::FixedInstead(_) => eprintln!("kyrr: dictation: only fixed after {took:.1} s"),
                 Outcome::Original(why) => eprintln!("kyrr: dictation: left as it was after {took:.1} s: {why:?}"),
             }
         }
@@ -1370,7 +1380,7 @@ impl Worker {
             .into_iter()
             .rev()
             .find_map(|o| match o {
-                Outcome::Reworked(text) => Some(text),
+                Outcome::Reworked(text) | Outcome::FixedInstead(text) => Some(text),
                 Outcome::Original(_) => None,
             })
             .unwrap_or(r.original);
@@ -1509,5 +1519,11 @@ mod tests {
             Some(("Passte schon".into(), Tone::Plain))
         );
         assert_eq!(rework_note(de, &[Preset::Fix], &[Outcome::Original(Why::Short)]), None);
+        // Professional refused twice, fixed instead, then translated.
+        let business = [Preset::Business, Preset::Translate("en")];
+        assert_eq!(
+            rework_note(de, &business, &[Outcome::FixedInstead("a".into()), done("b")]),
+            Some(("Nur ausgebessert und übersetzt".into(), Tone::Plain))
+        );
     }
 }

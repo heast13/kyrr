@@ -509,8 +509,8 @@ fn connect_rework(app: &Rc<App>) {
             state.set_rework_model(model.as_str().into());
             let note = match tested {
                 Err(e) => problem(german, &e),
-                Ok((Outcome::Reworked(text), took)) if german => format!("Funktioniert ({} s): „{text}“", seconds(german, took)),
-                Ok((Outcome::Reworked(text), took)) => format!("Works ({} s): “{text}”", seconds(german, took)),
+                Ok((Outcome::Reworked(text) | Outcome::FixedInstead(text), took)) if german => format!("Funktioniert ({} s): „{text}“", seconds(german, took)),
+                Ok((Outcome::Reworked(text) | Outcome::FixedInstead(text), took)) => format!("Works ({} s): “{text}”", seconds(german, took)),
                 Ok((Outcome::Original(Why::Server(e)), _)) => problem(german, &e),
                 Ok((Outcome::Original(_), took)) if german => format!(
                     "Verbunden ({} s), aber der Testsatz kam unverändert zurück. Ein anderes Modell könnte besser passen.",

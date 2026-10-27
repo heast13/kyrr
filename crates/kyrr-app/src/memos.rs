@@ -49,8 +49,9 @@ pub struct MemoRework {
 }
 
 /// How reworking a memo's text went: the paragraphs and how many of them
-/// changed, or what kept the server from helping.
-type Reworked = Result<(Vec<library::Paragraph>, usize), Error>;
+/// changed and how many of those were only fixed, or what kept the server
+/// from helping.
+type Reworked = Result<(Vec<library::Paragraph>, usize, usize), Error>;
 
 pub struct Memos {
     window: Weak<MainWindow>,
@@ -1168,7 +1169,7 @@ impl Memos {
         std::thread::spawn(move || {
             let (server, model, language) = rework;
             let all = paragraphs.len();
-            let mut changed = 0;
+            let (mut changed, mut fixed_only) = (0, 0);
             let mut out = Vec::with_capacity(all);
             let mut failed = None;
             for (i, p) in paragraphs.into_iter().enumerate() {
@@ -1178,8 +1179,10 @@ impl Memos {
                 // Nobody waits at the keyboard: more time than for a dictation.
                 let limit = (rework::time_limit(preset, &p.text) * 4).max(Duration::from_secs(30));
                 let deadline = std::time::Instant::now() + limit;
-                match rework::rework(&server, &model, preset, &p.text, language, deadline, &stop) {
-                    Outcome::Reworked(text) => {
+                let outcome = rework::rework(&server, &model, preset, &p.text, language, deadline, &stop);
+                fixed_only += usize::from(matches!(outcome, Outcome::FixedInstead(_)));
+                match outcome {
+                    Outcome::Reworked(text) | Outcome::FixedInstead(text) => {
                         changed += 1;
                         out.push(library::Paragraph {
                             seconds: p.seconds,
@@ -1201,7 +1204,7 @@ impl Memos {
             }
             let result: Reworked = match failed {
                 Some(e) => Err(e),
-                None => Ok((out, changed)),
+                None => Ok((out, changed, fixed_only)),
             };
             let stopped = stop.load(Ordering::Relaxed);
             let _ = slint::invoke_from_event_loop(move || {
@@ -1248,11 +1251,11 @@ impl Memos {
         }
         let note = match result {
             Err(e) => crate::servers::problem(german, &e),
-            Ok((_, 0)) => self.say(
+            Ok((_, 0, _)) => self.say(
                 "Nichts geändert: Der Text passt so, oder das Modell hat ihn zu stark verändert.",
                 "Nothing changed: the text is fine as it is, or the model changed too much.",
             ),
-            Ok((paragraphs, changed)) => {
+            Ok((paragraphs, changed, fixed_only)) => {
                 let all = paragraphs.iter().filter(|p| !p.text.trim().is_empty()).count();
                 let written = library::keep_original(path).and_then(|_| library::write_text(path, &paragraphs));
                 if let Err(e) = written {
@@ -1276,22 +1279,23 @@ impl Memos {
                     Preset::Business => self.say("Professionell formuliert", "Made professional"),
                     Preset::Translate(_) => self.say("Übersetzt", "Translated"),
                 };
+                let mut note = format!("{done}.");
+                if fixed_only > 0 {
+                    note += &if german {
+                        format!(" {fixed_only} von {all} Absätzen nur ausgebessert.")
+                    } else {
+                        format!(" {fixed_only} of {all} paragraphs only fixed.")
+                    };
+                }
                 if changed < all {
                     let left = all - changed;
-                    format!(
-                        "{done}. {}",
-                        if german {
-                            format!("{left} von {all} Absätzen unverändert. Das Original ist gesichert.")
-                        } else {
-                            format!("{left} of {all} paragraphs unchanged. The original is kept.")
-                        }
-                    )
-                } else {
-                    format!(
-                        "{done}. {}",
-                        self.say("Das Original ist gesichert.", "The original is kept.")
-                    )
+                    note += &if german {
+                        format!(" {left} von {all} unverändert.")
+                    } else {
+                        format!(" {left} of {all} unchanged.")
+                    };
                 }
+                note + &self.say(" Das Original ist gesichert.", " The original is kept.")
             }
         };
         state.set_memo_rework_note(note.into());
