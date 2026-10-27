@@ -9,6 +9,8 @@
 //! preset. `prime:STEPS` measures how much reading ahead while the user
 //! speaks saves: each dictation once after another preset, once primed.
 //! With MEMO set, live mode gives each item the time of a memo paragraph.
+//! `replay:fix` needs no server: it checks answers measured before (lines
+//! with "hyp" or "text" and the model's "raw" answer) with today's check.
 //!
 //! A key goes in LLM_KEY. Each line of the dictations is
 //! {"id": …, "lang": "de"|"en", "text": …}, numbers already as digits (as
@@ -46,6 +48,10 @@ fn main() {
             .cloned()
             .unwrap_or_else(|| concat!(env!("CARGO_MANIFEST_DIR"), "/examples/dictations.jsonl").into());
         let output = args.get(4).cloned().unwrap_or_else(|| "rework_bench.jsonl".into());
+        if mode.0 == "replay" {
+            replay(&read_items(&input), &output);
+            return;
+        }
         let steps = steps(mode.1);
         match mode.0 {
             "prime" => primed(&server, &model, &steps, &read_items(&input), &output),
@@ -284,5 +290,24 @@ fn primed(server: &Server, model: &str, steps: &[Preset], items: &[Value], outpu
         items.len(),
         median(&cold),
         median(&warm)
+    );
+}
+
+/// Answers of a fix run measured before, through today's check.
+fn replay(items: &[Value], output: &str) {
+    let mut out = std::fs::File::create(output).expect("the results file");
+    let mut changed = 0;
+    for item in items {
+        let text = item["hyp"].as_str().or(item["text"].as_str()).unwrap_or_default();
+        let raw = item["raw"].as_str().unwrap_or_default();
+        let (typed, _) = kyrr_server::guard::fix(text, &kyrr_server::guard::clean(raw));
+        changed += usize::from(typed != text);
+        let mut record = item.clone();
+        record["typed"] = json!(typed);
+        writeln!(out, "{record}").expect("writing the results");
+    }
+    println!(
+        "{} answers checked again, {changed} changed; details: {output}",
+        items.len()
     );
 }

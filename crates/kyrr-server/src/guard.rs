@@ -166,10 +166,46 @@ fn koelner(word: &str) -> String {
 /// Could `b` be what was said where the recognizer wrote `a`?
 fn alike(a: &str, b: &str) -> bool {
     let (x, y) = (norm(a), norm(b));
-    if x == y || similarity(&x, &y) >= 0.5 {
+    if x == y {
         return true;
     }
-    let (ka, kb) = (koelner(&x), koelner(&y));
+    // Small words that only look alike are another word ("es" for "er",
+    // "Erst" for "Es"): misheard, they sound the same.
+    if x.chars().count() <= 4 && y.chars().count() <= 4 {
+        let k = koelner(&x);
+        return !k.is_empty() && k == koelner(&y);
+    }
+    // Mostly the same letters: misheard ("Beschwächungsraum").
+    if similarity(&x, &y) >= 0.7 {
+        return true;
+    }
+    // A compound with another word in it is a synonym, not a mishearing
+    // ("Wasserbassin" for "Wasserbecken"): what differs must sound alike
+    // on its own.
+    let (xc, yc): (Vec<char>, Vec<char>) = (x.chars().collect(), y.chars().collect());
+    let front = xc.iter().zip(&yc).take_while(|(p, q)| p == q).count();
+    let back = xc[front..]
+        .iter()
+        .rev()
+        .zip(yc[front..].iter().rev())
+        .take_while(|(p, q)| p == q)
+        .count();
+    let (xm, ym): (String, String) = (
+        xc[front..xc.len() - back].iter().collect(),
+        yc[front..yc.len() - back].iter().collect(),
+    );
+    if front + back >= 4 && xm.chars().count() >= 3 && ym.chars().count() >= 3 {
+        return close(&xm, &ym);
+    }
+    close(&x, &y)
+}
+
+/// Alike in letters or in sound.
+fn close(x: &str, y: &str) -> bool {
+    if similarity(x, y) >= 0.5 {
+        return true;
+    }
+    let (ka, kb) = (koelner(x), koelner(y));
     !ka.is_empty() && similarity(&ka, &kb) >= 0.67
 }
 
@@ -368,7 +404,7 @@ fn numbers(s: &str) -> Vec<String> {
 }
 
 const STOP: [(&str, &str); 17] = [
-    ("de", "der die das und ist nicht ich du er sie wir ihr es ein eine zu mit auf für von den dem des im mich mir sich bei nach sind war hat haben auch noch wie aber oder wenn dass"),
+    ("de", "der die das und ist nicht ich du er sie wir ihr es ein eine zu mit auf für von den dem des im mich mir sich bei nach sind war hat haben auch noch wie aber oder wenn dass einen einem einer sein seine seiner jeder jede gegen über aus vom zum zur nur schon kann wird werden hier"),
     ("en", "the and is not you he she we they it a an to with on for of in was were has have also still how but or if that this"),
     ("fr", "le la les et est pas je tu il elle nous vous un une des du de en pour avec sur que qui"),
     ("es", "el la los las y es no yo tú él ella nosotros un una de en para con que por del se"),
@@ -420,7 +456,7 @@ fn small_words(ws: &[String], code: &str) -> usize {
 /// Whether `s` is clearly in another language than `wanted`: the small
 /// words of another one win by two, or `wanted` has none of them. Short
 /// sentences share small words ("die", "in") and are not judged by one.
-fn other_language(s: &str, wanted: &str) -> bool {
+pub(crate) fn other_language(s: &str, wanted: &str) -> bool {
     let Some(found) = language_of(s) else {
         return false;
     };
@@ -637,6 +673,27 @@ pub fn clean(out: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn other_words_are_no_mishearing() {
+        for (said, model) in [
+            ("Das Wasserbassin war leer.", "Das Wasserbecken war leer."),
+            ("Die widerhaarigen Kinder kamen.", "Die widerspenstigen Kinder kamen."),
+            ("Der Motor ist angelaufen und lief.", "Der Motor ist angelegt und lief."),
+            ("Ich glaube es kommt morgen.", "Ich glaube er kommt morgen."),
+            ("Erst sah es noch hin.", "Es sah es noch hin."),
+        ] {
+            assert_eq!(fix(said, model).0, said, "{model}");
+        }
+        for (said, model) in [
+            ("Im foggländischen Dorf.", "Im Vogtländischen Dorf."),
+            ("Er schmiekte sich an.", "Er schmiegte sich an."),
+            ("Ich weiß das du kommst.", "Ich weiß, dass du kommst."),
+            ("Sie hat es im Licht gesehen.", "Sie hat es nicht gesehen."),
+        ] {
+            assert_eq!(fix(said, model).0, model, "{model}");
+        }
+    }
 
     #[test]
     fn mishearings_are_fixed() {

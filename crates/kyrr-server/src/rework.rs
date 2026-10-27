@@ -408,7 +408,10 @@ pub fn rework(
     match preset {
         Preset::Translate(target) => {
             let found = guard::language_of(text).or(language);
-            if found == Some(target) {
+            // Said in the dictation language, it is translated unless it
+            // clearly is not in it: small words of both are no proof.
+            let said_elsewhere = language.is_none_or(|l| l == target || guard::other_language(text, l));
+            if found == Some(target) && said_elsewhere {
                 return Outcome::Original(Why::Same);
             }
         }
@@ -666,6 +669,20 @@ mod tests {
             Outcome::Reworked("Can you tell me what time it is?\n\nCan you tell me what time it is?".into())
         );
         assert_eq!(requests.try_iter().count(), 2);
+    }
+
+    #[test]
+    fn german_with_few_small_words_is_translated() {
+        let (server, requests) = fake("In each group, every participant played each opponent once.", 200);
+        assert!(matches!(
+            run(
+                &server,
+                Preset::Translate("en"),
+                "In jeder Gruppe spielte jeder Teilnehmer einmal gegen jeden seiner Gegner."
+            ),
+            Outcome::Reworked(_)
+        ));
+        assert_eq!(requests.try_iter().count(), 1);
     }
 
     #[test]
