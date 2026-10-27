@@ -175,6 +175,16 @@ fn alike(a: &str, b: &str) -> bool {
         let k = koelner(&x);
         return !k.is_empty() && k == koelner(&y);
     }
+    // Only another ending ("Bewerbern" for "Bewerber", "Kinde" for "Kind"):
+    // grammar the model would like better, mostly not what was said.
+    let (short, long) = if x.len() < y.len() { (&x, &y) } else { (&y, &x) };
+    if short.chars().count() >= 3
+        && long
+            .strip_prefix(short.as_str())
+            .is_some_and(|tail| ["e", "n", "s", "en", "es", "er", "em", "ns"].contains(&tail))
+    {
+        return false;
+    }
     // Mostly the same letters: misheard ("Beschwächungsraum").
     if similarity(&x, &y) >= 0.7 {
         return true;
@@ -682,6 +692,12 @@ mod tests {
             ("Der Motor ist angelaufen und lief.", "Der Motor ist angelegt und lief."),
             ("Ich glaube es kommt morgen.", "Ich glaube er kommt morgen."),
             ("Erst sah es noch hin.", "Es sah es noch hin."),
+            ("Die Zahl der Bewerbern stieg.", "Die Zahl der Bewerber stieg."),
+            ("Er lag im Bette und schlief.", "Er lag im Bett und schlief."),
+            (
+                "Wir brauchen die Information heute.",
+                "Wir brauchen die Informationen heute.",
+            ),
         ] {
             assert_eq!(fix(said, model).0, said, "{model}");
         }

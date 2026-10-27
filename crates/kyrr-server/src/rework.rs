@@ -603,6 +603,149 @@ mod tests {
         )
     }
 
+    /// A server that answers the n-th request with whatever `answer` makes
+    /// of it (raw bytes, status line and all), after `delay`.
+    fn raw(answer: fn(usize, &str) -> Vec<u8>, delay: Duration) -> Server {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            for (n, stream) in listener.incoming().enumerate() {
+                let Ok(mut stream) = stream else { return };
+                std::thread::spawn(move || {
+                    let mut reader = BufReader::new(stream.try_clone().unwrap());
+                    let mut length = 0;
+                    loop {
+                        let mut line = String::new();
+                        if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+                            break;
+                        }
+                        if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                            length = v.trim().parse().unwrap();
+                        }
+                    }
+                    let mut body = vec![0; length];
+                    let _ = reader.read_exact(&mut body);
+                    std::thread::sleep(delay);
+                    let _ = stream.write_all(&answer(n, &String::from_utf8_lossy(&body)));
+                });
+            }
+        });
+        Server {
+            url,
+            key: String::new(),
+        }
+    }
+
+    fn ok(json: &str) -> Vec<u8> {
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{json}",
+            json.len()
+        )
+        .into_bytes()
+    }
+
+    #[test]
+    fn a_slow_server_ends_at_the_deadline() {
+        let server = raw(
+            |_, _| ok(r#"{"choices":[{"message":{"content":"x"}}]}"#),
+            Duration::from_secs(5),
+        );
+        let started = Instant::now();
+        let outcome = rework(
+            &server,
+            "m",
+            Preset::Fix,
+            "Ich habe die Brainsbelege gewechselt",
+            Some("de"),
+            started + Duration::from_millis(700),
+            &AtomicBool::new(false),
+        );
+        assert_eq!(outcome, Outcome::Original(Why::Server(Error::Timeout)));
+        assert!(started.elapsed() < Duration::from_secs(2), "{:?}", started.elapsed());
+    }
+
+    #[test]
+    fn broken_answers_leave_the_dictation() {
+        let said = "Ich habe die Brainsbelege gewechselt";
+        // Cut off in the middle, not json, nothing at all, far too much.
+        for answer in [
+            (|_, _| b"HTTP/1.1 200 OK\r\nContent-Length: 500\r\n\r\n{\"choices\":".to_vec())
+                as fn(usize, &str) -> Vec<u8>,
+            |_, _| ok("<html>Bad Gateway</html>"),
+            |_, _| Vec::new(),
+            |_, _| {
+                ok(&format!(
+                    r#"{{"choices":[{{"message":{{"content":"{}"}}}}]}}"#,
+                    "a".repeat(9 << 20)
+                ))
+            },
+        ] {
+            let server = raw(answer, Duration::ZERO);
+            assert!(matches!(
+                run(&server, Preset::Fix, said),
+                Outcome::Original(Why::Server(Error::Answer | Error::Offline))
+            ));
+        }
+    }
+
+    #[test]
+    fn a_server_without_thinking_switches_gets_none() {
+        // Says no to anything it does not know, as some servers do.
+        let server = raw(
+            |_, body| {
+                if body.contains("reasoning_effort") || body.contains("chat_template_kwargs") {
+                    b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec()
+                } else {
+                    ok(r#"{"choices":[{"message":{"content":"Ich habe die Bremsbeläge gewechselt."}}]}"#)
+                }
+            },
+            Duration::ZERO,
+        );
+        for _ in 0..2 {
+            assert_eq!(
+                run(&server, Preset::Fix, "Ich habe die Brainsbelege gewechselt"),
+                Outcome::Reworked("Ich habe die Bremsbeläge gewechselt.".into())
+            );
+        }
+        assert_eq!(switches(&server, "m"), 2);
+    }
+
+    #[test]
+    fn stopping_ends_it_at_once() {
+        let server = raw(
+            |_, _| ok(r#"{"choices":[{"message":{"content":"x"}}]}"#),
+            Duration::from_millis(300),
+        );
+        let stop = AtomicBool::new(true);
+        let started = Instant::now();
+        let outcome = rework(
+            &server,
+            "m",
+            Preset::Polish,
+            "Also wir schicken äh das Angebot erst am Freitag",
+            Some("de"),
+            started + Duration::from_secs(10),
+            &stop,
+        );
+        assert_eq!(outcome, Outcome::Original(Why::Skipped));
+        assert!(started.elapsed() < Duration::from_millis(200));
+    }
+
+    #[test]
+    fn reading_ahead_never_waits_long() {
+        let gone = Server {
+            url: "http://127.0.0.1:9".into(),
+            key: String::new(),
+        };
+        let started = Instant::now();
+        prime(&gone, "m", Preset::Fix, Duration::from_secs(5));
+        assert!(started.elapsed() < Duration::from_secs(1));
+        let slow = raw(|_, _| ok("{}"), Duration::from_secs(5));
+        let started = Instant::now();
+        prime(&slow, "m", Preset::Fix, Duration::from_millis(500));
+        assert!(started.elapsed() < Duration::from_secs(2));
+    }
+
     fn run(server: &Server, preset: Preset, text: &str) -> Outcome {
         let deadline = Instant::now() + Duration::from_secs(5);
         rework(server, "m", preset, text, Some("de"), deadline, &AtomicBool::new(false))
