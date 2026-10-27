@@ -958,7 +958,10 @@ impl Memos {
         // What could not be saved for the memo before is given up here.
         self.flush();
         if let Some(w) = self.window.upgrade() {
-            w.global::<AppState>().set_memo_rework_note("".into());
+            let state = w.global::<AppState>();
+            state.set_memo_rework_note("".into());
+            // Another memo opens as text.
+            state.set_memo_sheet_view(0);
         }
         self.dirty.set(false);
         *self.sheet.borrow_mut() = Some(path);

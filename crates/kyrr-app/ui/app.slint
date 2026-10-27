@@ -3183,7 +3183,7 @@ component TranscriptSheet inherits Rectangle {
                 y: 12px;
                 width: parent.width - 24px;
                 height: parent.height - 24px;
-                visible: AppState.memo-sheet-view == 0 || !AppState.memo-sheet-original;
+                visible: AppState.memo-sheet-view == 0 || !AppState.memo-sheet-original || AppState.memo-rework-busy;
                 content-width: self.visible-width;
                 content-height: max(self.visible-height, input.preferred-height);
                 input := TextInput {
@@ -3224,7 +3224,7 @@ component TranscriptSheet inherits Rectangle {
             }
             // Before and after: what went struck through, what came in
             // colour; a translation under the paragraph as said.
-            if AppState.memo-sheet-view == 1 && AppState.memo-sheet-original: ScrollView {
+            if AppState.memo-sheet-view == 1 && AppState.memo-sheet-original && !AppState.memo-rework-busy: ScrollView {
                 x: 12px;
                 y: 12px;
                 width: parent.width - 24px;
@@ -3265,8 +3265,8 @@ component TranscriptSheet inherits Rectangle {
                 }
             }
             Hint {
-                text: AppState.memo-sheet-view == 1 && AppState.memo-sheet-original
-                    ? @tr("Red, struck through: before. Green: new. Grey: what was said, above its translation.")
+                text: AppState.memo-sheet-view == 1 && AppState.memo-sheet-original && !AppState.memo-rework-busy
+                    ? @tr("Red, struck through: before. Green: new. Grey: what was said, where almost all of it is new.")
                     : @tr("Select and copy: the times stay behind. What you type is saved by itself.");
                 vertical-alignment: center;
             }

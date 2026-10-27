@@ -8,7 +8,8 @@ use crate::memo::library::Paragraph;
 const GONE: &str = "#d9534f";
 /// What came instead.
 const CAME: &str = "#2e9e5b";
-/// The paragraph as said, above its translation.
+/// The paragraph as said, above its translation or a rewrite with little
+/// left of it (then all of the new one is in colour).
 const BEFORE: &str = "#8a8a8a";
 /// Fewer words in common than this, and a paragraph is new rather than
 /// changed (a translation): no marks in it.
@@ -25,7 +26,11 @@ pub fn markdown(before: &[Paragraph], after: &[Paragraph]) -> Vec<String> {
         let then = before
             .iter()
             .find(|p| p.seconds == now.seconds && p.seconds != u32::MAX)
-            .or_else(|| before.get(i))
+            .or_else(|| {
+                before
+                    .get(i)
+                    .filter(|p| p.seconds == u32::MAX && now.seconds == u32::MAX)
+            })
             .map_or("", |p| p.text.as_str());
         out.push(paragraph(then, &now.text));
     }
@@ -37,13 +42,22 @@ fn paragraph(then: &str, now: &str) -> String {
         return escape(now);
     }
     let (a, b): (Vec<&str>, Vec<&str>) = (then.split_whitespace().collect(), now.split_whitespace().collect());
-    let same = common(&a, &b);
+    // Very long paragraphs are not compared word by word.
+    let same = if a.len() * b.len() > 1_000_000 {
+        Vec::new()
+    } else {
+        common(&a, &b)
+    };
     let alike = same.len() as f32 / a.len().max(b.len()).max(1) as f32;
     if alike < ALIKE {
         if then.trim().is_empty() {
             return escape(now);
         }
-        return format!("<font color=\"{BEFORE}\">{}</font>\n{}", escape(then), escape(now));
+        return format!(
+            "<font color=\"{BEFORE}\">{}</font>\n<font color=\"{CAME}\">{}</font>",
+            escape(then),
+            escape(now)
+        );
     }
     // Walk both along the words they share: what lies between is gone or new.
     let mut parts = Vec::new();
@@ -142,7 +156,7 @@ mod tests {
         assert_eq!(
             md,
             [
-                "<font color=\"#8a8a8a\">Das Angebot kommt am Freitag\\.</font>\nThe offer comes on Friday\\.",
+                "<font color=\"#8a8a8a\">Das Angebot kommt am Freitag\\.</font>\n<font color=\"#2e9e5b\">The offer comes on Friday\\.</font>",
                 "Danke\\!"
             ]
         );
