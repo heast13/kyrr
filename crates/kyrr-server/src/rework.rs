@@ -291,7 +291,10 @@ fn ask(
         let switches = switches(server, model);
         let left = timeout.saturating_sub(started.elapsed());
         match chat(server, &body(model, preset, text, retry, switches), left) {
-            Err(Error::Refused(400)) if switches < 2 && !left.is_zero() => fewer_switches(server, model, switches),
+            // A second try is longer, and its 400 may be about that.
+            Err(Error::Refused(400)) if switches < 2 && retry.is_none() && !left.is_zero() => {
+                fewer_switches(server, model, switches)
+            }
             other => return other,
         }
     }
@@ -329,7 +332,8 @@ pub fn time_limit(preset: Preset, text: &str) -> Duration {
     let words = text.split_whitespace().count() as f32;
     let (base, per_word) = match preset {
         Preset::Fix => (3.0, 0.05),
-        Preset::Polish | Preset::Business => (6.0, 0.1),
+        // Room for a second try and for fixing instead.
+        Preset::Polish | Preset::Business => (9.0, 0.15),
         Preset::Translate(_) => (8.0, 0.1),
     };
     Duration::from_secs_f32(base + per_word * words)
@@ -354,8 +358,11 @@ pub fn rework_all(
 ) -> Vec<Outcome> {
     let mut text = text.to_string();
     let mut outcomes = Vec::new();
-    for &preset in steps {
-        let outcome = rework(server, model, preset, &text, language, deadline, stop);
+    for (i, &preset) in steps.iter().enumerate() {
+        // The steps after this one keep their time.
+        let later = time_limit_all(&steps[i + 1..], &text);
+        let ends = deadline.checked_sub(later).unwrap_or(deadline);
+        let outcome = rework(server, model, preset, &text, language, ends, stop);
         let over = matches!(outcome, Outcome::Original(Why::Server(_) | Why::Skipped));
         if let Outcome::Reworked(new) | Outcome::FixedInstead(new) = &outcome {
             text = new.clone();
@@ -429,8 +436,16 @@ pub fn rework(
             Err(e) => return Outcome::Original(Why::Server(e)),
         };
         if let Err(refusal) = &checked {
-            let left = deadline.saturating_duration_since(Instant::now());
-            if !left.is_zero() && !stop.load(Ordering::Relaxed) {
+            // Time stays for fixing instead, should the second try fail too.
+            let reserve = match preset {
+                Preset::Polish | Preset::Business => time_limit(Preset::Fix, text),
+                Preset::Translate(_) | Preset::Fix => Duration::ZERO,
+            };
+            let left = deadline
+                .saturating_duration_since(Instant::now())
+                .saturating_sub(reserve);
+            // Nothing came: nothing to tell the model about.
+            if *refusal != Refusal::Empty && !left.is_zero() && !stop.load(Ordering::Relaxed) {
                 // Whatever goes wrong the second time, the first refusal
                 // stands.
                 if let Ok((_, again @ Ok(_))) =
@@ -475,9 +490,14 @@ fn fix_instead(
     stop: &AtomicBool,
     refusal: Refusal,
 ) -> Outcome {
-    if matches!(preset, Preset::Polish | Preset::Business) && !stop.load(Ordering::Relaxed) {
-        if let Outcome::Reworked(fixed) = rework(server, model, Preset::Fix, text, language, deadline, stop) {
-            return Outcome::FixedInstead(fixed);
+    if stop.load(Ordering::Relaxed) {
+        return Outcome::Original(Why::Skipped);
+    }
+    if matches!(preset, Preset::Polish | Preset::Business) {
+        match rework(server, model, Preset::Fix, text, language, deadline, stop) {
+            Outcome::Reworked(fixed) => return Outcome::FixedInstead(fixed),
+            skipped @ Outcome::Original(Why::Skipped) => return skipped,
+            _ => {}
         }
     }
     Outcome::Original(Why::Checked(refusal))
@@ -671,7 +691,8 @@ mod tests {
     #[test]
     fn rewording_then_translating_goes_step_by_step() {
         let (server, requests) = fake("We are sending the offer on Friday.", 200);
-        let deadline = Instant::now() + Duration::from_secs(5);
+        // As the dictation gives it: the time of all steps together.
+        let deadline = Instant::now() + Duration::from_secs(30);
         let outcomes = rework_all(
             &server,
             "m",
