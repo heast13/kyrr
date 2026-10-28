@@ -22,8 +22,8 @@ CI (`.github/workflows/ci.yml`) on Windows and Linux, all required:
   the socket takes, every control of the window and every key of the state
   file is listed in `packaging/omarchy/contract.json`, with the way the bar
   menu does the same. A new setting without its entry fails here.
-- **Layout** (`examples/layout.rs`): every page in German and English at
-  scale 1.0 to 2.0 on screens from 768 to 1440 px high. Fails on a window
+- **Layout** (`crates/kyrr-app/examples/layout.rs`): every page in German and English at
+  scale 1.0 to 2.0 on screens from 720 to 2160 px high. Fails on a window
   taller than the screen, a page that scrolls although the screen has room,
   a width that does not follow the scale, and content wider than the window.
   Its pictures are the CI artifact the layout review looks at.

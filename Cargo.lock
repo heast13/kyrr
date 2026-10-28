@@ -2897,6 +2897,7 @@ dependencies = [
  "kyrr-windows",
  "ogg",
  "opus",
+ "png",
  "raw-window-handle",
  "rubato",
  "serde",

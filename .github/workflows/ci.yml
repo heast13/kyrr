@@ -38,6 +38,20 @@ jobs:
         run: |
           cargo build --release --locked -p kyrr -p kyrr-apo
           python scripts/check-binaries.py
+      - name: Layout
+        # Every page, German and English, scale 1 to 2, screens 720 to 2160 px
+        # high: fails on a window taller than the screen, needless scrolling,
+        # widths that do not follow the scale (docs/release-gate.md).
+        # TODO: required once the layout bugs it found are fixed (Windows
+        # 125 %, What's new window, Linux panels); until then it reports.
+        continue-on-error: true
+        run: cargo run --release --locked --example layout -- target/layout
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: layout-windows
+          path: target/layout
+          retention-days: 14
 
   linux:
     runs-on: ubuntu-24.04
@@ -88,6 +102,20 @@ jobs:
         run: |
           cargo build --release --locked -p kyrr
           python3 scripts/check-binaries.py --linux
+      - name: Layout
+        # Every page, German and English, scale 1 to 2, screens 720 to 2160 px
+        # high: fails on a window taller than the screen, needless scrolling,
+        # widths that do not follow the scale (docs/release-gate.md).
+        # TODO: required once the layout bugs it found are fixed (Windows
+        # 125 %, What's new window, Linux panels); until then it reports.
+        continue-on-error: true
+        run: cargo run --release --locked --example layout -- target/layout
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: layout-linux
+          path: target/layout
+          retention-days: 14
 
   # Known vulnerabilities in the crates kyrr builds with (RustSec), on every
   # pull request rather than once before a release.
