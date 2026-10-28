@@ -47,11 +47,11 @@
          the files; when the screenshots change, point it at the new commit. -->
     <screenshot type="default">
       <caption>Noise filter, voice and dictation, each with one switch</caption>
-      <image>https://raw.githubusercontent.com/heast13/kyrr/ab8dd4c1290bff1da9540b84337da8a0931e0a77/docs/screenshots/main.png</image>
+      <image>https://raw.githubusercontent.com/heast13/kyrr/v0.8.1/docs/screenshots/main.png</image>
     </screenshot>
     <screenshot>
       <caption>Settings</caption>
-      <image>https://raw.githubusercontent.com/heast13/kyrr/ab8dd4c1290bff1da9540b84337da8a0931e0a77/docs/screenshots/settings.png</image>
+      <image>https://raw.githubusercontent.com/heast13/kyrr/v0.8.1/docs/screenshots/settings.png</image>
     </screenshot>
   </screenshots>
   <branding>
@@ -75,6 +75,16 @@
     <keyword>speech to text</keyword>
   </keywords>
   <releases>
+    <release version="0.8.1" date="2026-10-28">
+      <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.8.1</url>
+      <description>
+        <ul>
+          <li>Windows no longer scroll for nothing at 125 % display scaling</li>
+          <li>The What's new window fits its text; the main window leaves room for the panel</li>
+          <li>Omarchy: edit the AI instructions and compare a reworked recording in the bar menu</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.8.0" date="2026-10-28">
       <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.8.0</url>
       <description>
