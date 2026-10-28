@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Release PR?
         # A pull request that raises the version is a release: the release
-        # checks below then run too, and the layout check must pass.
+        # checks below then run too.
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
@@ -53,14 +53,7 @@ jobs:
         # Every page, German and English, scale 1 to 2, screens 720 to 2160 px
         # high: fails on a window taller than the screen, needless scrolling,
         # widths that do not follow the scale (docs/release-gate.md).
-        # TODO: required on every pull request once the layout bugs it found
-        # are fixed (Windows 125 %, What's new window, Linux panels); until
-        # then it only warns there, and a release PR must pass it.
-        shell: bash
-        run: |
-          cargo run --release --locked --example layout -- target/layout || {
-            [ -z "${RELEASE:-}" ] && echo "::warning::layout check found problems (target/layout/problems.txt)"
-          }
+        run: cargo run --release --locked --example layout -- target/layout
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -77,7 +70,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Release PR?
         # A pull request that raises the version is a release: the release
-        # checks below then run too, and the layout check must pass.
+        # checks below then run too.
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
@@ -126,14 +119,7 @@ jobs:
         # Every page, German and English, scale 1 to 2, screens 720 to 2160 px
         # high: fails on a window taller than the screen, needless scrolling,
         # widths that do not follow the scale (docs/release-gate.md).
-        # TODO: required on every pull request once the layout bugs it found
-        # are fixed (Windows 125 %, What's new window, Linux panels); until
-        # then it only warns there, and a release PR must pass it.
-        shell: bash
-        run: |
-          cargo run --release --locked --example layout -- target/layout || {
-            [ -z "${RELEASE:-}" ] && echo "::warning::layout check found problems (target/layout/problems.txt)"
-          }
+        run: cargo run --release --locked --example layout -- target/layout
       - uses: actions/upload-artifact@v7
         if: always()
         with:

@@ -22,6 +22,7 @@ mod player;
 mod probe;
 mod recorder;
 mod servers;
+mod sizing;
 #[cfg(target_os = "linux")]
 mod skin;
 mod update;
@@ -323,35 +324,25 @@ fn show_voice(state: &AppState, v: &VoiceSettings) {
     state.set_voice_is_default(*v == voice_defaults(v));
 }
 
-/// Tallest the window gets, screen permitting; more content scrolls. Room
-/// for the tallest settings page (Setup with an update note, in German about
-/// 1420).
-const MAX_HEIGHT: f32 = 1460.0;
-/// Tallest when the screen is unknown: fits a 768-pixel-high laptop screen
-/// with the taskbar and title bar.
-const FALLBACK_HEIGHT: f32 = 660.0;
-/// Never smaller than this, however small the screen.
-const MIN_HEIGHT: f32 = 400.0;
-/// Title bar and borders, about, plus a little air.
-const FRAME: f32 = 40.0;
-/// Borders left and right, about.
-const FRAME_SIDES: f32 = 16.0;
-
 /// Left, top, right and bottom of the free screen the window is on, in
 /// physical pixels.
-fn screen(w: &MainWindow) -> Option<(i32, i32, i32, i32)> {
+fn screen(w: &MainWindow) -> Option<sizing::Area> {
     platform::work_area(w.window())
 }
 
-/// The recordings page is this tall at least (screen permitting): a list
-/// and a text to read want room.
-const MEMOS_HEIGHT: f32 = 780.0;
-
 /// The tallest the window gets on the screen it is on.
 fn height_cap(w: &MainWindow) -> f32 {
-    screen(w).map_or(FALLBACK_HEIGHT, |(_, top, _, bottom)| {
-        ((bottom - top) as f32 / w.window().scale_factor() - FRAME).clamp(MIN_HEIGHT, MAX_HEIGHT)
-    })
+    window_cap(w.window())
+}
+
+/// The same for any window of kyrr's (Linux does not tell where its panels
+/// are, so room is kept for them).
+fn window_cap(win: &slint::Window) -> f32 {
+    sizing::height_cap(
+        platform::work_area(win),
+        win.scale_factor(),
+        sizing::panel(cfg!(target_os = "linux")),
+    )
 }
 
 /// The height the content wants, up to what the screen has room for. Also
@@ -361,8 +352,7 @@ fn wanted_height(w: &MainWindow) -> f32 {
     let cap = height_cap(w);
     w.set_height_cap(cap);
     let memos = !w.get_setup_mode() && w.global::<AppState>().get_page() == 6;
-    let content = w.get_content_height();
-    (if memos { content.max(MEMOS_HEIGHT) } else { content }).min(cap)
+    sizing::wanted_height(w.get_content_height(), cap, memos)
 }
 
 #[cfg(target_os = "linux")]
@@ -376,6 +366,7 @@ thread_local! {
 fn resize(w: &MainWindow, height: f32) {
     let win = w.window();
     let width = w.get_page_width();
+    let height = sizing::whole_pixels(height, win.scale_factor());
     #[cfg(target_os = "linux")]
     let shrinking = height < win.size().to_logical(win.scale_factor()).height;
     win.set_size(LogicalSize::new(width, height));
@@ -408,13 +399,19 @@ fn resize(w: &MainWindow, height: f32) {
             }
         });
     }
-    let Some((left, top, right, bottom)) = screen(w) else {
+    move_clear(win, width, height);
+}
+
+/// Moves the window up or left when it would end up behind the taskbar or
+/// off the screen.
+fn move_clear(win: &slint::Window, width: f32, height: f32) {
+    let Some((left, top, right, bottom)) = platform::work_area(win) else {
         return;
     };
     let pos = win.position();
     let scale = win.scale_factor();
-    let outer_width = ((width + FRAME_SIDES) * scale).round() as i32;
-    let outer_height = ((height + FRAME) * scale).round() as i32;
+    let outer_width = ((width + sizing::FRAME_SIDES) * scale).round() as i32;
+    let outer_height = ((height + sizing::FRAME) * scale).round() as i32;
     let x = if pos.x + outer_width > right {
         (right - outer_width).max(left)
     } else {
@@ -457,7 +454,7 @@ fn grow(window: &Weak<MainWindow>) {
             return;
         }
         let height = win.size().to_logical(win.scale_factor()).height;
-        let wanted = wanted_height(&w);
+        let wanted = sizing::whole_pixels(wanted_height(&w), win.scale_factor());
         // The main page has a fixed height that follows its content both
         // ways (Slint applies it by itself); resizing still moves the window
         // clear of the taskbar.
@@ -471,8 +468,6 @@ fn grow(window: &Weak<MainWindow>) {
 /// Room for a memo's text: the window grows as tall as the screen allows
 /// (up to a comfortable reading height) while it is open, and fits its
 /// content again after.
-const SHEET_HEIGHT: f32 = 820.0;
-
 fn fit_sheet(w: &MainWindow, open: bool) {
     if !open {
         fit(&w.as_weak());
@@ -480,15 +475,25 @@ fn fit_sheet(w: &MainWindow, open: bool) {
     }
     let win = w.window();
     // Two columns, side by side, fit on the screen.
-    if let Some((left, _, right, _)) = screen(w) {
-        w.set_widest(((right - left) as f32 / win.scale_factor() - FRAME_SIDES).max(520.0));
+    if let Some(area) = screen(w) {
+        w.set_widest(sizing::widest(area, win.scale_factor()));
     }
     let cap = height_cap(w);
     let height = win.size().to_logical(win.scale_factor()).height;
-    let wanted = SHEET_HEIGHT.min(cap);
+    let wanted = sizing::sheet_height(cap);
     if wanted > height + 0.5 {
         resize(w, wanted);
     }
+}
+
+/// Sizes the news window to its text, as far as the screen has room.
+fn fit_news(win: &NewsWindow, content: f32) {
+    let window = win.window();
+    let scale = window.scale_factor();
+    let height = sizing::whole_pixels(sizing::news_height(content, window_cap(window)), scale);
+    win.set_wanted_height(height);
+    window.set_size(LogicalSize::new(sizing::NEWS_WIDTH, height));
+    move_clear(window, sizing::NEWS_WIDTH, height);
 }
 
 /// How often the status line moves on to its next phrase, in 100 ms ticks.
@@ -612,7 +617,9 @@ fn show(window: &MainWindow) {
         // it wrapped after every word, and the content seems far taller.
         // Wayland compositors may keep the first size they saw.
         let width = window.get_page_width();
-        window.window().set_size(LogicalSize::new(width, FALLBACK_HEIGHT));
+        window
+            .window()
+            .set_size(LogicalSize::new(width, sizing::FALLBACK_HEIGHT));
         resize(window, wanted_height(window));
     }
     window.global::<AppState>().set_window_shown(true);
@@ -1711,7 +1718,25 @@ impl App {
             }
         });
         keycapture::install(win.window(), None);
+        // The text's height at the window's width; a tall window first, so
+        // no scrollbar narrows the text.
+        win.window()
+            .set_size(LogicalSize::new(sizing::NEWS_WIDTH, sizing::MAX_HEIGHT));
+        let content = win.get_content_height();
+        // It comes up near its size (a compositor may keep the first one it
+        // sees), the screen's own limit follows once the window is up.
+        let first = sizing::news_height(content, sizing::FALLBACK_HEIGHT);
+        win.set_wanted_height(first);
+        win.window().set_size(LogicalSize::new(sizing::NEWS_WIDTH, first));
         if win.show().is_ok() {
+            fit_news(&win, content);
+            // The screen is only known once the window is up.
+            let weak = win.as_weak();
+            slint::Timer::single_shot(Duration::from_millis(50), move || {
+                if let Some(win) = weak.upgrade() {
+                    fit_news(&win, content);
+                }
+            });
             *self.news_window.borrow_mut() = Some(win);
         }
     }
