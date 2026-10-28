@@ -102,6 +102,10 @@ pub struct Memos {
     sheet_stamp: Cell<Option<SystemTime>>,
     /// What the text field shows before each paragraph.
     stamps: Cell<Stamps>,
+    /// The comparison for the widget's menu while it compares: a JSON list
+    /// of `{before, after}` in rich text.
+    #[cfg(target_os = "linux")]
+    widget_compare: RefCell<Option<String>>,
     /// When the list was last looked at (seconds since 1970); memos made
     /// after that are new.
     seen: Cell<u64>,
@@ -161,6 +165,8 @@ impl Memos {
             sheet: RefCell::new(None),
             dirty: Cell::new(false),
             sheet_stamp: Cell::new(None),
+            #[cfg(target_os = "linux")]
+            widget_compare: RefCell::new(None),
             stamps: Cell::new(Stamps::None),
             seen: Cell::new(0),
             on_seen: RefCell::new(None),
@@ -1021,8 +1027,16 @@ impl Memos {
         let original = library::read_original(&memo.path);
         state.set_memo_sheet_original(original.is_some());
         match original {
-            Some(before) => state.set_memo_sheet_compare(self.comparison(&before, memo)),
-            None => state.set_memo_sheet_view(0),
+            Some(before) => {
+                state.set_memo_sheet_compare(self.comparison(&before, memo));
+                #[cfg(target_os = "linux")]
+                self.compare_for_widget(state.get_memo_sheet_view() == 1, &before, memo);
+            }
+            None => {
+                state.set_memo_sheet_view(0);
+                #[cfg(target_os = "linux")]
+                self.compare_for_widget(false, &[], memo);
+            }
         }
         state.set_memo_copied(false);
         drop(all);
@@ -1152,6 +1166,27 @@ impl Memos {
             })
             .collect();
         ModelRc::new(VecModel::from(pairs))
+    }
+
+    /// The comparison as the widget's menu draws it, made while it compares
+    /// (the menu is where Omarchy's user reads it, the window has none).
+    #[cfg(target_os = "linux")]
+    fn compare_for_widget(&self, comparing: bool, before: &[library::Paragraph], memo: &Memo) {
+        let json = (comparing && crate::platform::widget_shown()).then(|| {
+            let after = memo.text.as_deref().unwrap_or_default();
+            let pairs: Vec<serde_json::Value> = compare::rich(before, after)
+                .into_iter()
+                .map(|(before, after)| serde_json::json!({ "before": before, "after": after }))
+                .collect();
+            serde_json::Value::Array(pairs).to_string()
+        });
+        *self.widget_compare.borrow_mut() = json;
+    }
+
+    /// What the widget's menu shows of the comparison, if it compares.
+    #[cfg(target_os = "linux")]
+    pub fn widget_compare(&self) -> Option<String> {
+        self.widget_compare.borrow().clone()
     }
 
     /// The comparison opens: what was typed counts in it.

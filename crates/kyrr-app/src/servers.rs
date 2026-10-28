@@ -761,6 +761,12 @@ pub fn widget_set(app: &Rc<App>, setting: &str, value: &str) {
                 state.invoke_prompt_picked(i);
             }
         }
+        "ai.promptSave" => {
+            // The wording the menu put into its file, for the task it names.
+            if let Some((kind, text)) = crate::platform::take_widget_prompt_edit() {
+                state.invoke_prompt_save(kind.min(3) as i32, text.into());
+            }
+        }
         "ai.promptReset" => state.invoke_prompt_reset(state.get_prompt_index()),
         "ai.url" => {
             // Only an address kyrr accepts goes into the state the menu

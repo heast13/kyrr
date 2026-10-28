@@ -368,32 +368,42 @@ fn state_json(mode: &str, status: &str, pid: u32) -> String {
     format!("{{\"v\":2,\"pid\":{pid},\"mode\":\"{mode}\"{comma}{rest}\n")
 }
 
-/// Beside the state: the text of the recording the widget's menu shows, as
-/// kyrr's text view has it (stamps and all), and what the menu typed into
-/// it, which kyrr takes from there. Both start with a line naming the
-/// recording (its file name), so a text never lands on another one.
+/// Beside the state, files for the longer texts the widget's menu shows and
+/// types, so the state stays small:
+///
+/// - `sheet`: the text of the recording the menu shows, as kyrr's text view
+///   has it (stamps and all), and `edit`: what the menu typed into it.
+/// - `compare`: the open recording's text before and after the language
+///   model, as a JSON list of `{before, after}` paragraphs in rich text.
+/// - `prompt`: the instruction the language model gets for the task the menu
+///   shows, and `promptedit`: the wording the menu wants it to have.
+///
+/// All of them start with a line naming what they are about (a recording's
+/// file name, a task's number), so a text never lands on another one.
 fn side_file(name: &str) -> Option<PathBuf> {
     state_file().map(|f| f.with_file_name(name))
 }
 
-static SHEET: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+const SIDE_FILES: [&str; 5] = ["sheet", "edit", "compare", "prompt", "promptedit"];
 
-/// The recording open in the widget's menu (its file name) and its text,
-/// `None` for none; written only when it changed.
-pub fn set_sheet(sheet: Option<(&str, &str)>) {
-    let text = sheet.map(|(id, text)| format!("{id}\n{text}"));
-    let text = text.as_deref();
+static SIDE: std::sync::Mutex<Vec<(&'static str, String)>> = std::sync::Mutex::new(Vec::new());
+
+/// What the widget's menu shows in the side file `name`: `None` for none;
+/// written only when it changed.
+fn set_side(name: &'static str, id: &str, text: Option<&str>) {
     if path().is_none() {
         return;
     }
-    let mut sheet = SHEET.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    if sheet.as_deref() == text {
+    let text = text.map(|text| format!("{id}\n{text}"));
+    let mut side = SIDE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let at = side.iter().position(|(n, _)| *n == name);
+    if at.map(|i| side[i].1.as_str()) == text.as_deref() {
         return;
     }
-    let Some(file) = side_file("sheet") else {
+    let Some(file) = side_file(name) else {
         return;
     };
-    match text {
+    match &text {
         Some(text) => {
             if let Some(dir) = file.parent() {
                 let _ = std::fs::create_dir_all(dir);
@@ -404,14 +414,39 @@ pub fn set_sheet(sheet: Option<(&str, &str)>) {
             let _ = std::fs::remove_file(&file);
         }
     }
-    *sheet = text.map(str::to_string);
+    match (at, text) {
+        (Some(i), Some(text)) => side[i].1 = text,
+        (Some(i), None) => {
+            side.remove(i);
+        }
+        (None, Some(text)) => side.push((name, text)),
+        (None, None) => {}
+    }
 }
 
-/// What the widget's menu typed into the open text since kyrr last looked:
-/// the recording's file name and the text. One left from before (kyrr
-/// ended in between) is old news.
-pub fn take_edit() -> Option<(String, String)> {
-    let file = side_file("edit")?;
+/// The recording open in the widget's menu (its file name) and its text,
+/// `None` for none.
+pub fn set_sheet(sheet: Option<(&str, &str)>) {
+    set_side("sheet", sheet.map_or("", |s| s.0), sheet.map(|s| s.1));
+}
+
+/// The open recording's text before and after the language model (a JSON
+/// list), `None` while the menu does not compare.
+pub fn set_compare(compare: Option<(&str, &str)>) {
+    set_side("compare", compare.map_or("", |s| s.0), compare.map(|s| s.1));
+}
+
+/// The instruction for the task the menu shows (0 to 3), `None` for none.
+pub fn set_prompt(prompt: Option<(usize, &str)>) {
+    let id = prompt.map(|p| p.0.to_string());
+    set_side("prompt", id.as_deref().unwrap_or_default(), prompt.map(|p| p.1));
+}
+
+/// What the widget's menu put into the side file `name` since kyrr last
+/// looked: the first line and the text. One left from before (kyrr ended in
+/// between) is old news.
+fn take_side(name: &str) -> Option<(String, String)> {
+    let file = side_file(name)?;
     let fresh = std::fs::metadata(&file)
         .and_then(|m| m.modified())
         .ok()
@@ -419,16 +454,27 @@ pub fn take_edit() -> Option<(String, String)> {
         .is_some_and(|age| age < std::time::Duration::from_secs(10));
     let text = std::fs::read_to_string(&file).ok();
     let _ = std::fs::remove_file(&file);
-    let (id, text) = text
-        .filter(|_| fresh)?
+    text.filter(|_| fresh)?
         .split_once('\n')
-        .map(|(i, t)| (i.to_string(), t.to_string()))?;
-    Some((id, text))
+        .map(|(i, t)| (i.to_string(), t.to_string()))
+}
+
+/// What the widget's menu typed into the open text since kyrr last looked:
+/// the recording's file name and the text.
+pub fn take_edit() -> Option<(String, String)> {
+    take_side("edit")
+}
+
+/// The wording the widget's menu wants for an instruction: its task's number
+/// and the text.
+pub fn take_prompt_edit() -> Option<(usize, String)> {
+    let (kind, text) = take_side("promptedit")?;
+    Some((kind.parse().ok()?, text))
 }
 
 /// kyrr ends: the widget shows it as not running.
 pub fn clear_state() {
-    for name in ["sheet", "edit"] {
+    for name in SIDE_FILES {
         if let Some(file) = side_file(name) {
             let _ = std::fs::remove_file(file);
         }
@@ -640,6 +686,52 @@ mod tests {
         );
         assert!(line.starts_with("{\"v\":2,\"pid\":1,\"mode\":\"idle\",\"ai\":{"));
         assert!(line.ends_with("}}\n") && line.matches('\n').count() == 1);
+    }
+
+    /// The files beside the state: written once, rewritten only when the text
+    /// changed, taken (and removed) when the menu left one, and gone when
+    /// kyrr ends. This test owns the two variables it sets.
+    #[test]
+    fn side_files_travel_between_kyrr_and_the_menu() {
+        let dir = std::env::temp_dir().join(format!("kyrr-side-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("omarchy/bin")).unwrap();
+        std::env::set_var("OMARCHY_PATH", dir.join("omarchy"));
+        std::env::set_var("XDG_RUNTIME_DIR", &dir);
+        let file = |name: &str| dir.join("kyrr").join(name);
+
+        set_prompt(Some((2, "Say it\nin two lines.")));
+        assert_eq!(
+            std::fs::read_to_string(file("prompt")).unwrap(),
+            "2\nSay it\nin two lines."
+        );
+        set_compare(Some(("a.opus", "[]")));
+        assert_eq!(std::fs::read_to_string(file("compare")).unwrap(), "a.opus\n[]");
+        // A file the menu removed is not written again for the same text.
+        std::fs::remove_file(file("prompt")).unwrap();
+        set_prompt(Some((2, "Say it\nin two lines.")));
+        assert!(!file("prompt").exists());
+        set_prompt(Some((3, "Translate.")));
+        assert_eq!(std::fs::read_to_string(file("prompt")).unwrap(), "3\nTranslate.");
+        set_compare(None);
+        assert!(!file("compare").exists());
+
+        // What the menu wants: the task's number, then the text.
+        assert_eq!(take_prompt_edit(), None);
+        std::fs::write(file("promptedit"), "1\nline one\nline two").unwrap();
+        assert_eq!(take_prompt_edit(), Some((1, "line one\nline two".to_string())));
+        assert!(!file("promptedit").exists());
+        std::fs::write(file("promptedit"), "not a number\ntext").unwrap();
+        assert_eq!(take_prompt_edit(), None);
+        std::fs::write(file("edit"), "a.opus\nText").unwrap();
+        assert_eq!(take_edit(), Some(("a.opus".to_string(), "Text".to_string())));
+
+        set_sheet(Some(("a.opus", "Text")));
+        clear_state();
+        for name in SIDE_FILES {
+            assert!(!file(name).exists(), "{name} left behind");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
