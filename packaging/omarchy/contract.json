@@ -442,9 +442,7 @@
       ]
     },
     "callback open-update": {
-      "plugin": [
-        "update page"
-      ]
+      "windowOnly": "the menu installs the update itself (its update.sh) instead of opening the download page"
     },
     "callback page-changed": {
       "windowOnly": "the window's pages; the menu has its own (set ai.look when the server pages open)"
