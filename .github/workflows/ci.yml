@@ -76,3 +76,15 @@ jobs:
         run: |
           cargo build --release --locked -p kyrr
           python3 scripts/check-binaries.py --linux
+
+  # Known vulnerabilities in the crates kyrr builds with (RustSec), on every
+  # pull request rather than once before a release.
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+        with:
+          tool: cargo-audit
+      - name: Advisories
+        run: cargo audit
