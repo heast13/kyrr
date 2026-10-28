@@ -79,6 +79,9 @@ pub struct Config {
     /// What it does with a dictation: 0 nothing, 1 fix what was misheard,
     /// 2 reword it, 3 make it professional.
     pub rework: u8,
+    /// With fixing on, the model may also change the word order (only
+    /// moving words, never adding or changing any). Off by default.
+    pub fix_order: bool,
     /// The language it then translates into, a code; "" for none.
     pub translate_into: String,
     /// Test builds before had translating as rework 3, into this.
@@ -130,6 +133,7 @@ impl Default for Config {
             rework_model: String::new(),
             local_ai: false,
             rework: 0,
+            fix_order: false,
             translate_into: String::new(),
             old_target: String::new(),
             prompts: Vec::new(),
@@ -439,9 +443,13 @@ mod tests {
         let config = Config::load_from(&path);
         assert!(config.ai_features);
         assert_eq!((config.rework, config.translate_into.as_str()), (0, "fr"));
+        assert!(!config.fix_order);
         config.save_to(&path);
         let saved = std::fs::read_to_string(&path).unwrap();
         assert!(!saved.contains("rework_target") && saved.contains("ai_features"));
+        std::fs::write(&path, br#"{"rework": 1, "fix_order": true}"#).unwrap();
+        let config = Config::load_from(&path);
+        assert_eq!((config.rework, config.fix_order), (1, true));
         std::fs::write(&path, br#"{"rework": 2, "rework_target": "en"}"#).unwrap();
         let config = Config::load_from(&path);
         assert_eq!((config.rework, config.translate_into.as_str()), (2, ""));

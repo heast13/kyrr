@@ -230,6 +230,7 @@ pub fn setup(app: &Rc<App>, window: &MainWindow) {
         state.set_ai_features(config.ai_features);
         state.set_local_ai(config.local_ai);
         state.set_rework_index(config.rework.min(3) as i32);
+        state.set_fix_order(config.fix_order);
         state.set_translate_index(translate_index(&config));
         state.set_rework_ready(rework_server(&config, &keys).is_some());
         // A memo starts with what dictations get, else with fixing.
@@ -240,6 +241,7 @@ pub fn setup(app: &Rc<App>, window: &MainWindow) {
         });
         state.set_memo_rework_target(translate_index(&config));
         rework::set_prompts(own_prompts(&config));
+        rework::set_fix_order(config.fix_order);
         state.set_asr_on(config.asr_server);
         state.set_asr_url(config.asr_url.as_str().into());
         state.set_asr_model(config.asr_model.as_str().into());
@@ -308,6 +310,15 @@ pub fn setup(app: &Rc<App>, window: &MainWindow) {
             app.config.borrow().save();
             send(&app);
             crate::fit(&app.window);
+        }
+    });
+    state.on_fix_order_toggled({
+        let app = Rc::clone(app);
+        move |on| {
+            app.config.borrow_mut().fix_order = on;
+            app.config.borrow().save();
+            rework::set_fix_order(on);
+            send(&app);
         }
     });
     state.on_rework_changed({
@@ -425,6 +436,7 @@ pub(crate) fn send(app: &App) {
         state.set_ai_features(config.ai_features);
         state.set_local_ai(config.local_ai);
         state.set_rework_index(config.rework.min(3) as i32);
+        state.set_fix_order(config.fix_order);
         state.set_translate_index(translate_index(&config));
         state.set_rework_ready(rework_server(&config, &keys).is_some());
     }
@@ -705,6 +717,7 @@ pub fn widget_state(state: &AppState) -> serde_json::Value {
     };
     let mut ai = language.json();
     ai.insert("features".into(), json!(state.get_ai_features()));
+    ai.insert("fixOrder".into(), json!(state.get_fix_order()));
     ai.insert("on".into(), json!(state.get_local_ai()));
     ai.insert("ready".into(), json!(state.get_rework_ready()));
     ai.insert("rework".into(), json!(state.get_rework_index()));

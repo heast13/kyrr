@@ -802,6 +802,9 @@ export global AppState {
     callback ai-features-toggled(bool);
     in-out property <bool> local-ai;
     callback local-ai-toggled(bool);
+    // With "Fix mishearings", the model may also fix the word order.
+    in-out property <bool> fix-order;
+    callback fix-order-toggled(bool);
     // A server found on this computer ("" for none), offered to take.
     in property <string> rework-found;
     in property <string> rework-found-url;
@@ -1410,6 +1413,14 @@ component LocalAiCard inherits Card {
             model: AppState.rework-options;
             current-index <=> AppState.rework-index;
             selected => { AppState.rework-changed(self.current-index); }
+        }
+    }
+    if AppState.local-ai && AppState.rework-ready: HorizontalLayout {
+        spacing: 8px;
+        Caption { text: @tr("Fixing also fixes word order"); vertical-alignment: center; horizontal-stretch: 1; }
+        Switch {
+            checked <=> AppState.fix-order;
+            toggled => { AppState.fix-order-toggled(self.checked); }
         }
     }
     if AppState.local-ai && AppState.rework-ready: HorizontalLayout {

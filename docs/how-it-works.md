@@ -186,9 +186,10 @@ and kyrr refuses it anywhere else. An `https` address is used as typed.
 
 - **Fix mistakes**, **Nicer** (more fluent wording), **Professional** and
   **Translate** (17 languages) work on each dictation before it is typed,
-  alone or combined (rework first, then translate). The same choices exist
-  for voice memos, with a comparison of the old and the new text and a way
-  back to the original.
+  alone or combined (rework first, then translate). With "Fixing also
+  fixes word order" on, "Fix mistakes" may also move words around, but never
+  adds or drops one. The same choices exist for voice memos, with a
+  comparison of the old and the new text and a way back to the original.
 - kyrr checks every answer before it is typed. "Fix mistakes" may change a
   word only into one that looks or sounds like it; every task keeps
   numbers, language and length in range, a question stays a question, and

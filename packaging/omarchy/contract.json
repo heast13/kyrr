@@ -91,6 +91,7 @@
     "test delete": "",
     "test start": "",
     "toggle ai.features": "",
+    "toggle ai.fixOrder": "",
     "toggle ai.on": "",
     "toggle dictation": "",
     "toggle filter": "",
@@ -240,6 +241,11 @@
     "callback finish-setup": {
       "plugin": [
         "setup done"
+      ]
+    },
+    "callback fix-order-toggled": {
+      "plugin": [
+        "toggle ai.fixOrder"
       ]
     },
     "callback hide": {
@@ -653,6 +659,11 @@
         "toggle filter"
       ]
     },
+    "property fix-order": {
+      "plugin": [
+        "toggle ai.fixOrder"
+      ]
+    },
     "property language-index": {
       "plugin": [
         "set general.language"
@@ -984,6 +995,7 @@
       "note": "",
       "found": "",
       "features": true,
+      "fixOrder": false,
       "on": true,
       "ready": true,
       "rework": 1,
