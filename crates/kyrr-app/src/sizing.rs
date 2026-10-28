@@ -39,11 +39,11 @@ pub const fn panel(linux: bool) -> f32 {
     }
 }
 
-/// The tallest a window gets on the screen it is on, where `panel` is kept
-/// free (see [`panel`]).
-pub fn height_cap(area: Option<Area>, scale: f32, panel: f32) -> f32 {
+/// The tallest a window gets on the screen it is on, where `kept_free` is
+/// left for panels (see [`panel`]).
+pub fn height_cap(area: Option<Area>, scale: f32, kept_free: f32) -> f32 {
     area.map_or(FALLBACK_HEIGHT, |(_, top, _, bottom)| {
-        ((bottom - top) as f32 / scale - panel - FRAME).clamp(MIN_HEIGHT, MAX_HEIGHT)
+        ((bottom - top) as f32 / scale - kept_free - FRAME).clamp(MIN_HEIGHT, MAX_HEIGHT)
     })
 }
 
@@ -88,7 +88,7 @@ mod tests {
     fn heights_land_on_whole_physical_pixels() {
         // 417 px at 125 % is 521.25 physical px: up to 522, never down to 521.
         let h = whole_pixels(417.0, 1.25);
-        assert!(h * 1.25 >= 521.99 && h >= 417.0);
+        assert!(h * 1.25 >= 521.99 && h * 1.25 < 523.0 && h >= 417.0);
         // Already whole: stays.
         assert_eq!(whole_pixels(400.0, 1.0), 400.0);
         assert!((whole_pixels(300.0, 1.5) - 300.0).abs() < 0.001);

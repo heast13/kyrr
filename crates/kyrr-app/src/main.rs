@@ -454,7 +454,7 @@ fn grow(window: &Weak<MainWindow>) {
             return;
         }
         let height = win.size().to_logical(win.scale_factor()).height;
-        let wanted = wanted_height(&w);
+        let wanted = sizing::whole_pixels(wanted_height(&w), win.scale_factor());
         // The main page has a fixed height that follows its content both
         // ways (Slint applies it by itself); resizing still moves the window
         // clear of the taskbar.
@@ -1713,6 +1713,11 @@ impl App {
         win.window()
             .set_size(LogicalSize::new(sizing::NEWS_WIDTH, sizing::MAX_HEIGHT));
         let content = win.get_content_height();
+        // It comes up near its size (a compositor may keep the first one it
+        // sees), the screen's own limit follows once the window is up.
+        let first = sizing::news_height(content, sizing::FALLBACK_HEIGHT);
+        win.set_wanted_height(first);
+        win.window().set_size(LogicalSize::new(sizing::NEWS_WIDTH, first));
         if win.show().is_ok() {
             fit_news(&win, content);
             // The screen is only known once the window is up.

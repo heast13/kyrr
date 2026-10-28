@@ -1,7 +1,7 @@
 //! The layout check of the release gate: walks every page and state of the
 //! window headless (software renderer, no display, no winit window) and fails
-//! on the two classic layout bugs, window sizes that do not follow the display
-//! scale or the screen, and needless scrolling.
+//! on the classic layout bugs: window sizes that do not follow the display
+//! scale or the screen, needless scrolling, content in the margins.
 //! `cargo run --release --example layout -- <out-dir> [lang=de,en] [scale=1,1.25,1.5,2]
 //! [os=windows|linux] [panel=<px>] [sheets=off] [verbose=on] [selftest=on]`.
 //! The exit code is 1 when anything is wrong, with one line per problem

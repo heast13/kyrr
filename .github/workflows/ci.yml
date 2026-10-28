@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Release PR?
         # A pull request that raises the version is a release: the release
-        # checks below then run too, and the layout check must pass.
+        # checks below then run too.
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
@@ -70,7 +70,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Release PR?
         # A pull request that raises the version is a release: the release
-        # checks below then run too, and the layout check must pass.
+        # checks below then run too.
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
