@@ -1,9 +1,10 @@
 # Layout, scaling, light and dark (Haiku)
 
-Input: the layout check's pictures (CI artifact `layout` of the release PR,
-Windows and Linux) and the plugin load test's pictures.
+Input: the layout check's pictures (CI artifacts `layout-windows` and
+`layout-linux` of the release PR) and the plugin load test's pictures.
 
-1. The layout check passed on Windows and on Linux (CI step "Layout").
+1. The layout check passed on Windows and on Linux (CI step "Layout" of the
+   release PR; its `problems.txt` in the artifact is empty).
 2. Open every picture. Per picture: nothing cut off (text, buttons, cards),
    nothing overlapping, no text running out of its box, no empty band where
    the window is taller than its content, icons sharp at every scale.

@@ -17,6 +17,17 @@ jobs:
       SHERPA_ONNX_LIB_DIR: ${{ github.workspace }}\assets\sherpa-onnx\lib
     steps:
       - uses: actions/checkout@v7
+      - name: Release PR?
+        # A pull request that raises the version is a release: the release
+        # checks below then run too, and the layout check must pass.
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          git fetch --quiet --depth 1 origin "$GITHUB_BASE_REF"
+          version() { grep -m1 '^version' | cut -d'"' -f2; }
+          if [ "$(version < Cargo.toml)" != "$(git show FETCH_HEAD:Cargo.toml | version)" ]; then
+            echo RELEASE=1 >> "$GITHUB_ENV"
+          fi
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
@@ -42,10 +53,14 @@ jobs:
         # Every page, German and English, scale 1 to 2, screens 720 to 2160 px
         # high: fails on a window taller than the screen, needless scrolling,
         # widths that do not follow the scale (docs/release-gate.md).
-        # TODO: required once the layout bugs it found are fixed (Windows
-        # 125 %, What's new window, Linux panels); until then it reports.
-        continue-on-error: true
-        run: cargo run --release --locked --example layout -- target/layout
+        # TODO: required on every pull request once the layout bugs it found
+        # are fixed (Windows 125 %, What's new window, Linux panels); until
+        # then it only warns there, and a release PR must pass it.
+        shell: bash
+        run: |
+          cargo run --release --locked --example layout -- target/layout || {
+            [ -z "${RELEASE:-}" ] && echo "::warning::layout check found problems (target/layout/problems.txt)"
+          }
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -60,6 +75,17 @@ jobs:
       SHERPA_ONNX_LIB_DIR: ${{ github.workspace }}/assets/sherpa-onnx/lib
     steps:
       - uses: actions/checkout@v7
+      - name: Release PR?
+        # A pull request that raises the version is a release: the release
+        # checks below then run too, and the layout check must pass.
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          git fetch --quiet --depth 1 origin "$GITHUB_BASE_REF"
+          version() { grep -m1 '^version' | cut -d'"' -f2; }
+          if [ "$(version < Cargo.toml)" != "$(git show FETCH_HEAD:Cargo.toml | version)" ]; then
+            echo RELEASE=1 >> "$GITHUB_ENV"
+          fi
       - name: System libraries
         run: |
           sudo apt-get update
@@ -80,16 +106,10 @@ jobs:
         # (docs/release-gate.md).
         run: python3 scripts/release-gate.py
       - name: Release rules, release PR
-        # A pull request that raises the version is a release: it also needs
-        # one version everywhere, this version's NEWS and no open gap in the
+        # One version everywhere, this version's NEWS and no open gap in the
         # Omarchy menu.
-        if: github.event_name == 'pull_request'
-        run: |
-          git fetch --quiet --depth 1 origin "$GITHUB_BASE_REF"
-          version() { grep -m1 '^version' | cut -d'"' -f2; }
-          if [ "$(version < Cargo.toml)" != "$(git show FETCH_HEAD:Cargo.toml | version)" ]; then
-            python3 scripts/release-gate.py --release
-          fi
+        if: env.RELEASE == '1'
+        run: python3 scripts/release-gate.py --release
       - name: Fetch assets
         run: python3 scripts/fetch-assets.py --linux --test
       - name: Format
@@ -106,10 +126,14 @@ jobs:
         # Every page, German and English, scale 1 to 2, screens 720 to 2160 px
         # high: fails on a window taller than the screen, needless scrolling,
         # widths that do not follow the scale (docs/release-gate.md).
-        # TODO: required once the layout bugs it found are fixed (Windows
-        # 125 %, What's new window, Linux panels); until then it reports.
-        continue-on-error: true
-        run: cargo run --release --locked --example layout -- target/layout
+        # TODO: required on every pull request once the layout bugs it found
+        # are fixed (Windows 125 %, What's new window, Linux panels); until
+        # then it only warns there, and a release PR must pass it.
+        shell: bash
+        run: |
+          cargo run --release --locked --example layout -- target/layout || {
+            [ -z "${RELEASE:-}" ] && echo "::warning::layout check found problems (target/layout/problems.txt)"
+          }
       - uses: actions/upload-artifact@v7
         if: always()
         with:

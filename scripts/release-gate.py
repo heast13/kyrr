@@ -232,7 +232,7 @@ def check_flatpak():
     """Flatpak was dropped for good: not in the README, NEWS, site or docs."""
     # The gate's own briefs state the rule, so they name it.
     units = text_units([README, NEWS, ROOT / "site", ROOT / "docs"])
-    hits = scan((u for u in units if not u[0].startswith("docs/release-gate")), FLATPAK)
+    hits = scan((u for u in units if not u[0].startswith(("docs/release-gate/", "docs/release-gate.md"))), FLATPAK)
     conclude("flatpak", hits, "line(s) with Flatpak, which was dropped for good")
 
 

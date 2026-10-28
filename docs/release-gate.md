@@ -14,7 +14,8 @@ system forbids it; such exceptions are written down in
 
 ## 1. Automatic, on every pull request
 
-CI (`.github/workflows/ci.yml`) on Windows and Linux, all required:
+CI (`.github/workflows/ci.yml`) on Windows and Linux, all required (one
+exception, see Layout):
 
 - `cargo fmt`, `cargo clippy -D warnings`, `cargo test` on the whole
   workspace, `scripts/check-binaries.py`.
@@ -26,8 +27,11 @@ CI (`.github/workflows/ci.yml`) on Windows and Linux, all required:
   scale 1.0 to 2.0 on screens from 720 to 2160 px high. Fails on a window
   taller than the screen, a page that scrolls although the screen has room,
   a width that does not follow the scale, and content wider than the window.
-  Its pictures are the CI artifact the layout review looks at.
-- **Release rules** (`scripts/release-gate.py`): translations complete,
+  Its pictures are the CI artifact the layout review looks at. Until the
+  bugs it found when it came are fixed (scrolling by rounding at 125 % on
+  Windows, the What's new window, panels on Linux) it only warns on normal
+  pull requests; a release PR fails on it.
+- **Release rules** (`scripts/release-gate.py`, Linux job): translations complete,
   word rules, no Flatpak, relative links resolve, the contract.
 
 In [omarchy-kyrr](https://github.com/heast13/omarchy-kyrr) (its `tests/`):
