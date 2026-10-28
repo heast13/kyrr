@@ -18,15 +18,15 @@ line saying nothing changes on Windows.
 
 ## 0.8.1
 
-- Windows no longer scroll for nothing at 125 % display scaling; the window now fits its content.
+- kyrr's windows no longer scroll for nothing at display scaling like 125 %; they fit their content.
 - The "What's new" window fits its text instead of always scrolling.
 - (Linux) The main window leaves room for the panel instead of reaching under it.
 - (Linux) Omarchy: the bar menu can now change the wording of the AI instructions and shows a reworked recording next to the original (needs plugin 1.4.0). The plugin can also be updated on its own from the menu.
 
 ### Deutsch
 
-- Fenster scrollen bei 125 % Anzeigeskalierung nicht mehr unnötig; das Fenster passt jetzt zu seinem Inhalt.
-- Das Fenster „Neuigkeiten“ passt sich seinem Text an, statt immer zu scrollen.
+- Die Fenster von kyrr scrollen bei Anzeigeskalierung wie 125 % nicht mehr unnötig; sie passen zu ihrem Inhalt.
+- Das Fenster „Was ist neu“ passt sich seinem Text an, statt immer zu scrollen.
 - (Linux) Das Hauptfenster lässt Platz für die Leiste, statt darunter zu reichen.
 - (Linux) Omarchy: Das Menü in der Leiste kann jetzt den Wortlaut der KI-Anweisungen ändern und zeigt eine überarbeitete Aufzeichnung neben dem Original (braucht Plugin 1.4.0). Das Plugin lässt sich auch allein aus dem Menü aktualisieren.
 

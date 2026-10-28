@@ -5,7 +5,7 @@
 - Omarchy: the bar menu can edit the wording of the AI instructions and shows
   the two-column comparison of a reworked recording (plugin 1.4.0). The
   plugin can also be updated on its own from the menu.
-- Windows: windows no longer scroll for nothing at 125 % display scaling
+- Windows no longer scroll for nothing at display scaling like 125 %
   (heights are rounded up to whole pixels).
 - Linux: the main window leaves room for the panel instead of reaching
   under it.
