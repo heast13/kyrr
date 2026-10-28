@@ -73,7 +73,10 @@ def run_logged(command, log, cwd, env=None):
 
 
 def clean(out):
-    """Removes the worktrees of a run and its folder."""
+    """Removes the worktrees of a run and its folder. Only a folder this script
+    made (it has a PINNED.md) and that is not a checkout."""
+    if not (out / "PINNED.md").is_file() or (out / ".git").exists() or out in (ROOT, *ROOT.parents):
+        sys.exit(f"{out} is not a gate run made by this script (no PINNED.md, or a checkout): nothing removed")
     for name, repo in (("src", ROOT), ("plugin", None)):
         target = out / name
         if not (target / ".git").exists():
@@ -141,6 +144,7 @@ def main():
             run_logged([sys.executable, "scripts/fetch-assets.py", "--linux"], out / "assets.log", ROOT)
         if not (src / "assets").exists() and assets.exists():
             (src / "assets").symlink_to(assets)
+        shutil.rmtree(out / "layout", ignore_errors=True)  # no stale problems.txt from an earlier run
         env = dict(os.environ)
         env["SHERPA_ONNX_LIB_DIR"] = str(assets / "sherpa-onnx" / "lib")
         env.setdefault("CARGO_TARGET_DIR", str(ROOT / "target"))

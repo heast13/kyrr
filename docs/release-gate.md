@@ -52,7 +52,8 @@ adds: one version everywhere (Cargo.toml, Cargo.lock, metainfo, CHANGELOG,
 NEWS), the NEWS rules for this version (both languages, an item for each
 system, length), no open gap in the contract (the bar menu does everything
 the window does), external links alive, and a plugin that changed got a new
-version. Also checked: window and control names against the UI texts, NEWS
+version. Also checked (the Linux news and number format checks run on every pull
+request, the name checks in release mode): window and control names against the UI texts, NEWS
 lines that Linux shows and say "Windows", number format (125% and 125 %) and
 Diktat compounds.
 
