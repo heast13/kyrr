@@ -16,6 +16,22 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
+## 0.8.0
+
+- Spoken numbers are written as digits where that reads better: "twenty-six" becomes 26, as do times, dates and money. This works in dictation and in the text of voice memos.
+- New, experimental and off by default: a language model of your own, on your computer or in your home network, can fix mistakes in your dictations, reword them, make them professional or translate them. Switch it on under Setup, "Experimental AI features". Voice memos can be reworked and translated the same way, and you can always restore the original.
+- A speech server of your own can now recognise your dictation, if you prefer that to kyrr's own model.
+- The main window scrolls on a small screen instead of being cut off.
+- (Linux) Omarchy: the bar menu now covers the new features too (needs plugin 1.1.0).
+
+### Deutsch
+
+- Gesprochene Zahlen werden dort als Ziffern geschrieben, wo das besser lesbar ist: „sechsundzwanzig“ wird zu 26, ebenso Uhrzeiten, Datum und Geldbeträge. Das gilt beim Diktieren und im Text von Sprachaufzeichnungen.
+- Neu, experimentell und standardmäßig aus: Ein eigenes Sprachmodell auf deinem Computer oder im Heimnetz kann Fehler in deinen Diktaten ausbessern, sie schöner oder professionell formulieren oder übersetzen. Einschalten unter Setup, „Experimentelle KI-Features“. Sprachaufzeichnungen lassen sich genauso überarbeiten und übersetzen, das Original kannst du jederzeit zurückholen.
+- Ein eigener Sprachserver kann jetzt dein Diktat erkennen, wenn du das dem eingebauten Modell von kyrr vorziehst.
+- Das Hauptfenster scrollt auf kleinen Bildschirmen, statt abgeschnitten zu werden.
+- (Linux) Omarchy: Das Menü in der Leiste deckt jetzt auch die neuen Funktionen ab (braucht Plugin 1.1.0).
+
 ## 0.7.2
 
 - (Windows) General bug fixes.
