@@ -60,10 +60,16 @@ jobs:
           # sherpa-onnx-sys unpacks its prebuilt libraries here; the cache
           # would otherwise keep its build output but drop the libraries.
           cache-directories: target/sherpa-onnx-prebuilt
-      - name: Omarchy contract
-        # Every control of the window has its way in the Omarchy bar menu
-        # (packaging/omarchy/contract.json, docs/release-gate.md).
-        run: python3 scripts/check-omarchy-contract.py
+      - name: Release rules
+        # Translations, word rules, links and the Omarchy contract: every
+        # control of the window has its way in the bar menu
+        # (docs/release-gate.md).
+        run: python3 scripts/release-gate.py
+      - name: Release rules, release PR
+        # The release PR ("Release X.Y.Z") also needs one version everywhere,
+        # this version's NEWS and no open gap in the Omarchy menu.
+        if: startsWith(github.event.pull_request.title, 'Release ')
+        run: python3 scripts/release-gate.py --release
       - name: Fetch assets
         run: python3 scripts/fetch-assets.py --linux --test
       - name: Format
