@@ -1360,6 +1360,16 @@ impl App {
             }
             ("memo", "stoprework") => state.invoke_memo_stop_rework(),
             ("memo", "restore") => state.invoke_memo_restore_text(),
+            ("memo", "view") => {
+                // What was typed counts in the comparison.
+                self.omarchy_edit(&state);
+                // 0 the text as it is, 1 the text beside the one before.
+                let compare = value == "1";
+                state.set_memo_sheet_view(i32::from(compare));
+                if compare {
+                    state.invoke_memo_show_compare();
+                }
+            }
             ("memo", "opentext") => {
                 self.omarchy_edit(&state);
                 state.invoke_memo_open_text();
@@ -3353,12 +3363,26 @@ fn tell_widget(window: &MainWindow) {
     let sheet_open = state.get_memo_sheet_open() && !sheet_id.is_empty();
     let sheet_text = state.get_memo_sheet_text();
     kyrr_linux::omarchy::set_sheet(sheet_open.then_some((sheet_id.as_str(), sheet_text.as_str())));
+    let comparing = sheet_open
+        && state.get_memo_sheet_view() == 1
+        && state.get_memo_sheet_original()
+        && !state.get_memo_rework_busy();
+    let compare = memos.as_ref().filter(|_| comparing).and_then(|m| m.widget_compare());
+    kyrr_linux::omarchy::set_compare(compare.as_deref().map(|json| (sheet_id.as_str(), json)));
+    // The instruction the menu's Local AI page shows for its task.
+    let prompt_saved = state.get_prompt_saved();
+    kyrr_linux::omarchy::set_prompt(
+        state
+            .get_ai_features()
+            .then(|| (state.get_prompt_index().clamp(0, 3) as usize, prompt_saved.as_str())),
+    );
     let sheet = if sheet_open {
         json!({
             "id": sheet_id,
             "title": state.get_memo_sheet_title().as_str(),
             "when": state.get_memo_sheet_when().as_str(),
             "stamps": state.get_memo_sheet_stamps(),
+            "view": state.get_memo_sheet_view(),
             "saved": state.get_memo_sheet_saved(),
             "copied": state.get_memo_copied(),
             "empty": sheet_text.trim().is_empty(),

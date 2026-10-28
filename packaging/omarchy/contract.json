@@ -1,5 +1,5 @@
 {
-  "about": "What kyrr and its Omarchy bar menu (github.com/heast13/omarchy-kyrr) share: the lines kyrr's socket takes, how each control of the window is done in the menu, and a full sample of the state file. scripts/check-omarchy-contract.py keeps it true against kyrr's code; the menu's CI checks itself against it. See docs/release-gate.md.",
+  "about": "What kyrr and its Omarchy bar menu (github.com/heast13/omarchy-kyrr) share: the lines kyrr's socket takes, how each control of the window is done in the menu, and a full sample of the state file. scripts/check-omarchy-contract.py keeps it true against kyrr's code; the menu's CI checks itself against it. See docs/release-gate.md. Side files beside the state, in $XDG_RUNTIME_DIR/kyrr: sheet and edit (the open recording's text and what the menu typed into it), compare (the text before and after the language model, JSON in rich text, while the menu compares), prompt and promptedit (the instruction of the task the menu shows and the wording the menu wants). Each starts with a line naming its recording or task.",
   "commands": {
     "background": "a start while kyrr runs: nothing; the menu's 'is kyrr there' probe",
     "dictate": "dictation key: start or stop",
@@ -28,6 +28,7 @@
     "memo stop": "",
     "memo stoprework": "",
     "memo text": "<file name>: writes its text",
+    "memo view": "0 the text as it is, 1 the text beside the one before the language model (kyrr then writes $XDG_RUNTIME_DIR/kyrr/compare)",
     "memo-start": "memo recording starts",
     "memo-stop": "memo key up",
     "menu-closed": "the menu closed",
@@ -50,6 +51,7 @@
     "set ai.model": "",
     "set ai.prompt": "",
     "set ai.promptReset": "",
+    "set ai.promptSave": "takes the wording the menu put into $XDG_RUNTIME_DIR/kyrr/promptedit (task number, newline, text) as the instruction of that task",
     "set ai.rework": "",
     "set ai.take": "",
     "set ai.translate": "",
@@ -395,7 +397,9 @@
       ]
     },
     "callback memo-show-compare": {
-      "gap": "the compare view (text before and after the rework) is missing in the menu"
+      "plugin": [
+        "memo view"
+      ]
     },
     "callback memo-show-text": {
       "plugin": [
@@ -482,7 +486,9 @@
       ]
     },
     "callback prompt-save": {
-      "gap": "the wording of the AI instructions cannot be edited in the menu, only reset"
+      "plugin": [
+        "set ai.promptSave"
+      ]
     },
     "callback quit-app": {
       "windowOnly": "turning kyrr off on Omarchy = disabling the plugin (Flo, 2026-10-25)"
@@ -710,7 +716,9 @@
       "via": "omarchy_edit"
     },
     "property memo-sheet-view": {
-      "gap": "switching the text between 'as it is' and 'compared' is missing in the menu"
+      "plugin": [
+        "memo view"
+      ]
     },
     "property memos-enabled": {
       "plugin": [
@@ -748,7 +756,10 @@
       "via": "invoke_prompt_picked"
     },
     "property prompt-text": {
-      "gap": "the wording of the AI instructions cannot be edited in the menu"
+      "plugin": [
+        "set ai.promptSave"
+      ],
+      "via": "invoke_prompt_save"
     },
     "property rework-index": {
       "plugin": [
@@ -909,6 +920,7 @@
         "title": "Einkaufsliste",
         "when": "Gestern, 18:04",
         "stamps": 0,
+        "view": 0,
         "saved": true,
         "copied": false,
         "empty": false,
@@ -978,7 +990,8 @@
       "translate": "",
       "prompt": {
         "index": 0,
-        "own": false
+        "own": false,
+        "edit": true
       },
       "asr": {
         "url": "",

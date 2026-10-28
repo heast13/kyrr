@@ -16,6 +16,17 @@ const ALIKE: f32 = 0.3;
 /// The comparison as markdown for the two columns, a pair (before, after)
 /// for each paragraph.
 pub fn markdown(before: &[Paragraph], after: &[Paragraph]) -> Vec<(String, String)> {
+    pairs(before, after, escape)
+}
+
+/// The same as rich text (`<font color>`), for a menu that is no window of
+/// kyrr's.
+#[cfg(target_os = "linux")]
+pub fn rich(before: &[Paragraph], after: &[Paragraph]) -> Vec<(String, String)> {
+    pairs(before, after, html)
+}
+
+fn pairs(before: &[Paragraph], after: &[Paragraph], escape: fn(&str) -> String) -> Vec<(String, String)> {
     let mut out = Vec::new();
     // In order: the next paragraph with the same place in the memo (two
     // can share one after a paragraph was split; untimed ones all do).
@@ -34,12 +45,12 @@ pub fn markdown(before: &[Paragraph], after: &[Paragraph]) -> Vec<(String, Strin
             }
             None => "",
         };
-        out.push(paragraph(then, &now.text));
+        out.push(paragraph(then, &now.text, escape));
     }
     out
 }
 
-fn paragraph(then: &str, now: &str) -> (String, String) {
+fn paragraph(then: &str, now: &str, escape: fn(&str) -> String) -> (String, String) {
     if then.trim() == now.trim() || then.trim().is_empty() {
         return (escape(then), escape(now));
     }
@@ -100,6 +111,12 @@ fn common(a: &[&str], b: &[&str]) -> Vec<(usize, usize)> {
         }
     }
     pairs
+}
+
+/// Text as it is, not as rich text.
+#[cfg(target_os = "linux")]
+fn html(s: &str) -> String {
+    s.trim().replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
 /// Text as it is, not as markdown: every sign that could mean something
@@ -172,6 +189,19 @@ mod tests {
         );
         let left: Vec<&str> = md.iter().map(|(before, _)| before.as_str()).collect();
         assert_eq!(left, ["Alpha beta\\.", "Gamma\\.", "Delta\\."]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn rich_text_keeps_its_marks_and_escapes_its_signs() {
+        let md = rich(&[p(0, "a <b> & c")], &[p(0, "a <i> & c.")]);
+        assert_eq!(
+            md[0],
+            (
+                "a <font color=\"#d9534f\">&lt;b&gt;</font> &amp; <font color=\"#d9534f\">c</font>".to_string(),
+                "a <font color=\"#2e9e5b\">&lt;i&gt;</font> &amp; <font color=\"#2e9e5b\">c.</font>".to_string()
+            )
+        );
     }
 
     #[test]
