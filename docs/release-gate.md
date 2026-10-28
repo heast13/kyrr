@@ -24,11 +24,16 @@ exception, see Layout):
   file is listed in `packaging/omarchy/contract.json`, with the way the bar
   menu does the same. A new setting without its entry fails here.
 - **Layout** (`crates/kyrr-app/examples/layout.rs`): every page in German and English at
-  scale 1.0 to 2.0 on screens from 720 to 2160 px high. Fails on a window
-  taller than the screen, a page that scrolls although the screen has room,
-  a width that does not follow the scale, and content wider than the window.
-  Its pictures are the CI artifact the layout review looks at. Required on
-  every pull request. The sizing rules are `crates/kyrr-app/src/sizing.rs`,
+  scale 1.0 to 2.0 on screens from 720 to 2160 px high, in four looks: `light`,
+  `dark` (system scheme), and on Linux the Omarchy themes `tokyo-night` (dark)
+  and `catppuccin-latte` (light). Fails on a window taller than the screen, a
+  page that scrolls although the screen has room, a width that does not follow
+  the scale, content wider than the window, a dark look that is not dark, and
+  text or a control that is readable in one look of a pair (light/dark,
+  tokyo-night/catppuccin-latte) but gone in the other. Its pictures are the CI
+  artifacts `layout-windows` (system looks only) and `layout-linux`; the pinned
+  run builds the same pictures locally (section 3, step 0). Required on every
+  pull request. The sizing rules are `crates/kyrr-app/src/sizing.rs`,
   which the check includes, so the app and the check cannot drift apart.
 - **Release rules** (`scripts/release-gate.py`, Linux job): translations complete,
   word rules, no Flatpak, relative links resolve, the contract.
@@ -47,7 +52,10 @@ adds: one version everywhere (Cargo.toml, Cargo.lock, metainfo, CHANGELOG,
 NEWS), the NEWS rules for this version (both languages, an item for each
 system, length), no open gap in the contract (the bar menu does everything
 the window does), external links alive, and a plugin that changed got a new
-version.
+version. Also checked (the Linux news and number format checks run on every pull
+request, the name checks in release mode): window and control names against the UI texts, NEWS
+lines that Linux shows and say "Windows", number format (125% and 125 %) and
+Diktat compounds.
 
 ## 3. The review crew
 
@@ -76,17 +84,31 @@ Every pull request gets the same kind of review once before it is pushed:
 
 How to run the crew (the release thread does this):
 
+0. **Pin the run.** `python3 scripts/gate-prepare.py --plugin ../omarchy-kyrr
+   [--ref <sha>] --out <out>` makes one folder for the run: a detached worktree
+   of the release commit (`<out>/src`) and of the plugin (`<out>/plugin`),
+   `release-gate.txt` (`release-gate.py --release` for exactly that commit),
+   `layout/` (the layout pictures, built here) and `PINNED.md` with the commit.
+   The crew reads only from `<out>`, and its messages name the folder. After a
+   fix: run it again with the new commit and start only the areas the fix
+   touches. At the end: `--clean <out>`.
 1. Release PR is open, its CI and the plugin's CI are green.
 2. One message starting all reviewers in the background, each with
-   "Read docs/release-gate/README-crew.md and docs/release-gate/<area>.md in
-   the kyrr checkout, then do it for version X.Y.Z, previous version W"
-   and the model from the table.
+   "Read <out>/PINNED.md, then <out>/src/docs/release-gate/README-crew.md and
+   <out>/src/docs/release-gate/<area>.md, and review the sources in <out>/src
+   (plugin: <out>/plugin) for version X.Y.Z, previous version W" and the model
+   from the table.
 3. Collect the reports into one gate report for Flo: FAILs first, each with
    its fix (a PR), then WARNs, then the real-device list from the features
    review.
-4. Fix, then run the failed areas again. Repeat until no FAIL.
+4. Fix, then run step 0 again and the failed areas. Repeat until no FAIL.
 
 ## 4. Flo, on real devices
+
+First, the test builds: run `release.yml` by `workflow_dispatch` on the release
+branch. It builds the artifacts `kyrr-installer` and `kyrr-linux` (unsigned:
+signing runs for tags only) and publishes nothing. Send Flo the link to that
+run in the message before he tests.
 
 What only a person at the device can see. The features review writes the
 list for this release; these always belong on it:
@@ -112,4 +134,6 @@ draft release), Flo publishes the draft, then the post-release review
 ([published.md](release-gate/published.md), Haiku) checks what is live:
 release assets and checksums, release notes, README, website, versions,
 links, the repository's About, AUR and winget, and the plugin store entry
-(new commit SHA for a changed plugin).
+(new commit SHA for a changed plugin). Its link check runs
+`release-gate.py --release --online --after-tag`; hosts the cloud proxy blocks
+are checked from another machine, Flo's PC via Remote Control.

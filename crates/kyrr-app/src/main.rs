@@ -1707,7 +1707,12 @@ impl App {
         };
         let Ok(win) = NewsWindow::new() else { return };
         #[cfg(target_os = "linux")]
-        skin::apply(&win.global::<Skin>());
+        {
+            skin::apply(&win.global::<Skin>());
+            if let Some(dark) = skin::dark() {
+                win.invoke_use_scheme(dark);
+            }
+        }
         win.set_version(version.into());
         win.set_mode(mode);
         win.set_news(text.into());

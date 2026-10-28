@@ -43,6 +43,11 @@ pub fn refresh(window: &MainWindow) {
     apply(&window.global::<Skin>());
 }
 
+/// Whether the theme in use is dark (None: kyrr's own look).
+pub fn dark() -> Option<bool> {
+    NOW.with_borrow(|now| now.as_ref().and_then(|(theme, _)| theme.as_ref().map(|t| t.dark)))
+}
+
 /// Gives a window the look in use (each window has its own).
 pub fn apply(skin: &Skin<'_>) {
     NOW.with_borrow(|now| {

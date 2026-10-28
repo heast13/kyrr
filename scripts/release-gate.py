@@ -4,11 +4,15 @@ missing, checked the same way every time. Each check prints `PASS name`,
 `FAIL name: reason` or `WARN name: reason`, with the places it found under it
 (file:line). The exit code is 1 when any check FAILs. Nothing is changed.
 
-Default mode runs on every pull request. --release adds the checks that only
-hold once a release PR has bumped the version: one version everywhere, the
-NEWS rules, and the Omarchy contract without gaps. --online requests every
-external link (FAIL only on 404 and 410). --plugin DIR checks a checkout of
-heast13/omarchy-kyrr: its manifest, and a version bump after changes.
+Default mode runs on every pull request, with the NEWS check for Linux and the
+spacing before %. --release adds the checks that only hold once a release PR
+has bumped the version: one version everywhere, the NEWS rules, the window
+names and quoted names of the newest NEWS version, and the Omarchy contract
+without gaps. --online requests every external link (FAIL only on 404 and
+410; hosts the cloud proxy does not pass on are listed, not counted; 404s of
+URLs with the tag v<version> are listed until --after-tag says the tag
+exists). --plugin DIR checks a checkout of heast13/omarchy-kyrr: its manifest,
+a version bump after changes, and the strings of its Texts.js.
 
   python3 scripts/release-gate.py
   python3 scripts/release-gate.py --release --online --plugin ../omarchy-kyrr
@@ -18,7 +22,9 @@ The rules are described in docs/release-gate.md.
 
 import argparse
 import concurrent.futures
+import difflib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -40,14 +46,19 @@ METAINFO = ROOT / "packaging/linux/io.github.heast13.kyrr.metainfo.xml"
 CHANGELOG = ROOT / "CHANGELOG.md"
 NEWS = ROOT / "NEWS.md"
 README = ROOT / "README.md"
+SITE_EN = ROOT / "site/index.html"
 SITE_DE = ROOT / "site/de/index.html"
 OMARCHY = ROOT / "scripts/check-omarchy-contract.py"
 PLUGIN_ID = "io.github.heast13.kyrr"
 
-# Flo's word rules. Rauschunterdrückung is a FAIL. Diktat for the feature is
-# only a WARN, because a dictated text can be called "Diktat" too.
+# Flo's word rules. Rauschunterdrückung is a FAIL. A compound for the feature
+# (Diktat-Taste, Diktatfunktion) is only a WARN. The bare word Diktat is not
+# checked: a dictated text is called "Diktat" too.
 RAUSCH = re.compile("Rauschunterdrückung")
-DIKTAT = re.compile(r"\bDiktat(?:e|es|en|s)?\b")
+DIKTAT = re.compile(r"\bDiktat-\w+|\bDiktat(?:funktion|modus|taste|fenster|modell|einstellung|schalter)\w*")
+# Percent: 125% in English, 125 % in German. A placeholder counts as a number.
+PERCENT_EN = re.compile(r"[\d}][   ]%")
+PERCENT_DE = re.compile(r"[\d}]%(?![0-9A-Fa-f]{2})")  # not the %20 of a URL
 FLATPAK = re.compile("flatpak", re.I)
 # App texts for normal users: no file paths and no shell commands.
 PATHS_AND_COMMANDS = re.compile(r"/home/|~/|C:\\|%APPDATA%|\.config/|\bsudo |\bpacman |\bapt |\bsystemctl ")
@@ -69,6 +80,29 @@ PLACEHOLDER = re.compile(r"\{[^{}]*\}")
 MARK = re.compile(r"^- \((Windows|Linux)\) ")
 # href, src and markdown links and images; the URL is group 1 or group 2.
 LINK = re.compile(r"""\b(?:href|src)\s*=\s*["']([^"']+)["']|\]\(\s*<?([^)\s>]+)""")
+IMAGE = re.compile(r"<image>\s*(\S+?)\s*</image>")  # the screenshots of the metainfo file
+# Hosts the cloud proxy does not pass on. productionresultssa*.blob.core.windows.net
+# is matched by proxy_blocked.
+PROXY_BLOCKED = {
+    "img.shields.io",
+    "shields.io",
+    "slint.dev",
+    "objects.githubusercontent.com",
+    "release-assets.githubusercontent.com",
+    "github-releases.githubusercontent.com",
+}
+FIRST_LINUX = (0, 5, 3)  # the first version Linux lists, as update.rs has it
+# Quoted names in NEWS.md: "…" and “…” in the English block, „…“ in the Deutsch one.
+QUOTE = {"English": re.compile(r'"([^"\n]+)"|“([^“”\n]+)”'), "Deutsch": re.compile(r"„([^“\n]+)“")}
+# The words that make a quoted name a name of the interface.
+WINDOW_WORD = re.compile(
+    r"\b(?:window|page|menu|button|switch|tab|section|under|Fenster|Seite|Menü|Schaltfläche|Schalter|Karte"
+    r"|Abschnitt|unter)(?:s|n|en|e)?\b",
+    re.I,
+)
+WINDOW = re.compile(r"^export component \w+ inherits Window\b", re.M)
+WINDOW_TITLE = re.compile(r'^    title:\s*@tr\(\s*"((?:[^"\\]|\\.)*)"', re.M)
+JS_STRING = re.compile(r'"((?:[^"\\\n]|\\.)*)"|\'((?:[^\'\\\n]|\\.)*)\'')
 
 results = []  # the verdict of each check, for the summary
 
@@ -142,21 +176,29 @@ def text_units(paths):
                 yield f"{rel(path)}:{no}", unicodedata.normalize("NFC", line)
 
 
-def deutsch_units(path):
-    """(place, line) of the newest `### Deutsch` block of NEWS.md: the notes of
-    released versions stay as they were published."""
-    inside = False
-    sections = 0
-    for no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+def news_blocks():
+    """(version, language, [(place, line)]) for the English and the Deutsch
+    block of every NEWS.md section, the newest section first."""
+    blocks = []
+    for no, raw in enumerate(NEWS.read_text(encoding="utf-8").splitlines(), 1):
+        line = unicodedata.normalize("NFC", raw)
         if line.startswith("## "):
-            inside = False
-            sections += 1
-            if sections > 1:
-                return
+            blocks.append((line[3:].strip(), "English", []))
+        elif not blocks:
+            continue
         elif line.strip() == "### Deutsch":
-            inside = True
-        elif inside:
-            yield f"{rel(path)}:{no}", unicodedata.normalize("NFC", line)
+            blocks.append((blocks[-1][0], "Deutsch", []))
+        else:
+            blocks[-1][2].append((f"{rel(NEWS)}:{no}", line))
+    return blocks
+
+
+def newest_blocks():
+    """(language, [(place, line)]) for the English and the Deutsch block of the
+    newest section. Released versions keep the notes they were published with."""
+    blocks = news_blocks()
+    newest = blocks[0][0] if blocks else None
+    return [(lang, units) for version, lang, units in blocks if version == newest]
 
 
 def new_entry():
@@ -192,6 +234,19 @@ def slint_strings():
     return [(text.count("\n", 0, m.start()) + 1, unescape(m.group(1))) for m in TR.finditer(text)]
 
 
+def window_titles():
+    """(line, msgid) of the @tr title of each window in app.slint. A window with
+    a fixed title, like MainWindow's "kyrr", has none."""
+    text = APP_SLINT.read_text(encoding="utf-8")
+    titles = []
+    for head in WINDOW.finditer(text):
+        end = text.find("\n}", head.end())
+        m = WINDOW_TITLE.search(text, head.end(), len(text) if end < 0 else end)
+        if m:
+            titles.append((text.count("\n", 0, m.start()) + 1, unescape(m.group(1))))
+    return titles
+
+
 def check_translations():
     """Every @tr string has a finished German entry, and every entry a @tr."""
     problems, po = [], {}
@@ -221,11 +276,25 @@ def check_translations():
 
 
 def check_words():
-    """German texts: no Rauschunterdrückung (FAIL), no Diktat for the feature (WARN)."""
+    """German texts: no Rauschunterdrückung (FAIL), no Diktat compound such as Diktatfunktion (WARN)."""
     german = [(f"{rel(PO)}:{e['msgstr_line']}", e["msgstr"]) for e in read_po()]
-    german += list(text_units([SITE_DE, README])) + list(deutsch_units(NEWS))
+    german += list(text_units([SITE_DE, README]))
+    german += [unit for lang, units in newest_blocks() if lang == "Deutsch" for unit in units]
     conclude("words", scan(german, RAUSCH), "line(s) with Rauschunterdrückung (write Geräuschunterdrückung)")
-    conclude("words-diktat", scan(german, DIKTAT), "Diktat word(s) to look at (the feature is Diktierfunktion)", warn=True)
+    conclude("words-diktat", scan(german, DIKTAT), "Diktat compound(s) to look at (the feature is Diktierfunktion)", warn=True)
+
+
+def check_numbers():
+    """Percent: 125% in English texts, 125 % in German ones (WARN). NEWS counts
+    its newest section."""
+    english = list(text_units([README, SITE_EN]))
+    english += [(f"{rel(PO)}:{e['line']}", e["msgid"]) for e in read_po()]
+    german = list(text_units([SITE_DE]))
+    german += [(f"{rel(PO)}:{e['msgstr_line']}", e["msgstr"]) for e in read_po()]
+    for lang, units in newest_blocks():
+        (english if lang == "English" else german).extend(units)
+    hits = scan(english, PERCENT_EN) + scan(german, PERCENT_DE)
+    conclude("number-format", hits, "number(s) with the wrong space before % (English 125%, German 125 %)", warn=True)
 
 
 def check_flatpak():
@@ -269,7 +338,7 @@ def link_answer(url):
     return answer
 
 
-def check_links(online):
+def check_links(online, version, after_tag):
     """Relative links and images must exist; with --online, external ones answer."""
     links = [(path, no, url) for path in link_files() for no, url in links_in(path)]
     broken = []
@@ -284,28 +353,60 @@ def check_links(online):
             broken.append(f"{rel(path)}:{no}: {url} does not exist")
     conclude("links", broken, "broken relative link(s)")
     if online:
-        check_online(links)
+        check_online(links + metainfo_images(), version, after_tag)
 
 
-def check_online(links):
-    """Each external URL once: 404 and 410 FAIL, other failures WARN."""
+def metainfo_images():
+    """(path, line, url) of each screenshot in the metainfo file."""
+    text = METAINFO.read_text(encoding="utf-8")
+    return [(METAINFO, text.count("\n", 0, m.start()) + 1, m.group(1)) for m in IMAGE.finditer(text)]
+
+
+def proxy_blocked(url):
+    """True for a host the cloud proxy does not pass on: PROXY_BLOCKED, or a
+    productionresultssa* host under .blob.core.windows.net."""
+    try:
+        host = urllib.parse.urlsplit(url).hostname or ""
+    except ValueError:
+        return False
+    return host in PROXY_BLOCKED or (host.startswith("productionresultssa") and host.endswith(".blob.core.windows.net"))
+
+
+def check_online(links, version, after_tag):
+    """Each external URL once. 404 and 410 FAIL, other failures WARN. The hosts
+    the cloud proxy does not pass on are listed, not counted. URLs of the tag
+    v<version> answer 404 until the tag exists: listed, unless --after-tag."""
     urls = {}
     for path, no, url in links:
         if url.startswith(("http://", "https://")):
             urls.setdefault(url, []).append(f"{rel(path)}:{no}")
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         answers = list(pool.map(link_answer, urls))
-    dead, unsure = [], []
+    tag = re.compile(rf"/v{re.escape(version)}(?:/|[?#]|$)")
+    # Behind such a proxy (the cloud), a 403 or a refused tunnel is the proxy's answer, not the site's.
+    behind_proxy = any(os.environ.get(name) for name in ("HTTPS_PROXY", "https_proxy"))
+    dead, unsure, blocked, pending = [], [], [], []
     for (url, places), (code, text) in zip(urls.items(), answers):
-        line = f"{', '.join(dict.fromkeys(places))}: {url} ({text})"
-        if code in (404, 410):
-            dead.append(line)
+        where = ", ".join(dict.fromkeys(places))
+        if code == 404 and not after_tag and tag.search(url):
+            pending.append(
+                f"404 until the tag v{version} exists (run again with --after-tag after tagging): {url} ({where})"
+            )
+        elif code in (404, 410):
+            dead.append(f"{where}: {url} ({text})")
+        elif (code in (None, 403) and proxy_blocked(url)) or (
+            behind_proxy and (code == 403 or "Tunnel connection failed" in text)
+        ):
+            blocked.append(f"not reachable through the cloud proxy, check from another machine: {url} ({where})")
         elif code is None or code >= 400:
-            unsure.append(line)
+            unsure.append(f"{where}: {url} ({text})")
+    details = dead + unsure + blocked + pending
     if dead:
-        report("FAIL", "links-online", f"{len(dead)} dead external link(s)", dead + unsure)
+        report("FAIL", "links-online", f"{len(dead)} dead external link(s)", details)
+    elif unsure:
+        report("WARN", "links-online", f"{len(unsure)} external link(s) that did not answer", details)
     else:
-        conclude("links-online", unsure, "external link(s) that did not answer", warn=True)
+        report("PASS", "links-online", details=details)
 
 
 def check_omarchy(release):
@@ -382,7 +483,7 @@ def check_versions(version):
 
 def check_screenshots(version):
     """Screenshots should point at the tag vX.Y.Z, not at a commit (WARN)."""
-    images = re.findall(r"<image>\s*(\S+?)\s*</image>", METAINFO.read_text(encoding="utf-8"))
+    images = IMAGE.findall(METAINFO.read_text(encoding="utf-8"))
     loose = [f"{rel(METAINFO)}: {url}" for url in images if f"/kyrr/v{version}/" not in url]
     conclude("screenshots", loose, f"screenshot(s) not at tag v{version}", warn=True)
 
@@ -397,19 +498,25 @@ def item_marks(body):
     return marks
 
 
-def for_system(body, system):
-    """The lines of a NEWS block that one system sees, as kyrr reads them: an
-    item marked for the other system goes with its continuation lines."""
+def shown_units(units, system):
+    """The (place, line) pairs of a NEWS block that one system sees: the rules of for_system."""
     out, keep = [], True
-    for line in body.splitlines():
+    for unit in units:
+        line = unit[1]
         if line.startswith("- "):
             mark = MARK.match(line)
             keep = mark is None or mark.group(1) == system
         elif not line.strip():
             keep = True
         if keep:
-            out.append(line)
-    return "\n".join(out)
+            out.append(unit)
+    return out
+
+
+def for_system(body, system):
+    """The lines of a NEWS block that one system sees, as kyrr reads them: an
+    item marked for the other system goes with its continuation lines."""
+    return "\n".join(line for _, line in shown_units([(None, line) for line in body.splitlines()], system))
 
 
 def check_news(version):
@@ -443,6 +550,120 @@ def check_news(version):
     elif en != de:
         problems.append("the items are marked differently in English and Deutsch")
     conclude("news", problems, "NEWS problem(s) for this version")
+
+
+def version_tuple(text):
+    """(major, minor, patch) of a NEWS.md heading, None for anything else."""
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", text)
+    return tuple(int(n) for n in m.groups()) if m else None
+
+
+def check_news_linux_view():
+    """The unmarked lines of each version from FIRST_LINUX on are shown on Linux
+    (as the Rust test does): none may say Windows, case-sensitive."""
+    problems = []
+    for version, _, units in news_blocks():
+        parsed = version_tuple(version)
+        if parsed is None or parsed < FIRST_LINUX:
+            continue
+        problems += scan(shown_units(units, "Linux"), re.compile("Windows"))
+    if problems:
+        report(
+            "FAIL",
+            "news-linux-view",
+            f"{len(problems)} line(s) that Linux shows say Windows; unmarked lines are shown on Linux too; "
+            "the plural of Fenster is Fenster, mark the item (Windows) or reword",
+            problems,
+        )
+    else:
+        report("PASS", "news-linux-view")
+
+
+def quoted_text(m):
+    """The text between the quotes of a match: the one group that matched."""
+    return next(g for g in m.groups() if g is not None)
+
+
+def norm(text):
+    """UI texts compare as NFC, without case, with ’ as ', without final . : or …."""
+    return unicodedata.normalize("NFC", text).replace("’", "'").casefold().strip().rstrip(" .:…")
+
+
+def best_title(text, titles):
+    """The title that text resembles most (difflib), or None. The words of the
+    titles count too, so that "Neuigkeiten" finds "neu" in "Was ist neu"."""
+    candidates = {}
+    for title in titles:
+        candidates.setdefault(title.casefold(), title)
+        for word in re.findall(r"\w+", title.casefold()):
+            candidates.setdefault(word, title)
+    match = difflib.get_close_matches(text.casefold(), list(candidates), n=1, cutoff=0.4)
+    return candidates[match[0]] if match else None
+
+
+def js_texts(plugin):
+    """The string literals of the plugin's Texts.js files."""
+    texts = []
+    for path in Path(plugin).rglob("Texts.js"):
+        for m in JS_STRING.finditer(path.read_text(encoding="utf-8")):
+            texts.append(unescape(quoted_text(m)))
+    return texts
+
+
+def check_window_names():
+    """A window title is quoted in its own language only: the English block of
+    the newest section does not quote the German title, the Deutsch block not
+    the English one."""
+    po_text = {e["msgid"]: e["msgstr"] for e in read_po()}
+    titles = window_titles()
+    problems = []
+    for lang, units in newest_blocks():
+        english = lang == "English"
+        for place, line in units:
+            for regex in QUOTE.values():
+                for m in regex.finditer(line):
+                    quoted = quoted_text(m)
+                    for _, en in titles:
+                        de = po_text.get(en, "")
+                        wrong, right = (de, en) if english else (en, de)
+                        if wrong and norm(quoted) == norm(wrong) and norm(wrong) != norm(right):
+                            wrong_lang = "German" if english else "English"
+                            problems.append(f"{place}: '{quoted}' is the {wrong_lang} title; the {lang} block says '{right}'")
+    conclude("window-names", problems, "window title(s) in the wrong language")
+
+
+def check_quoted_names(plugin):
+    """A quoted name next to a window word is a UI text: a msgid or msgstr of
+    kyrr.po, a window title or a string of the plugin's Texts.js (WARN)."""
+    entries = read_po()
+    po_text = {e["msgid"]: e["msgstr"] for e in entries}
+    titles = [en for _, en in window_titles()]
+    texts = js_texts(plugin) if plugin else []
+    problems = []
+    for lang, units in newest_blocks():
+        if lang == "English":
+            own = titles
+            known = [e["msgid"] for e in entries] + titles
+        else:
+            own = [po_text.get(en, "") for en in titles]
+            known = [e["msgstr"] for e in entries] + own
+        known = {norm(text) for text in known + texts}
+        for place, line in units:
+            for m in QUOTE[lang].finditer(line):
+                quoted = quoted_text(m)
+                before = line[max(0, m.start() - 25):m.start()]
+                after = line[m.end():m.end() + 25]
+                if not (WINDOW_WORD.search(before) or WINDOW_WORD.search(after)) or norm(quoted) in known:
+                    continue
+                suggestion = best_title(quoted, own)
+                if lang == "English":
+                    text = f"'{quoted}' is no UI text"
+                    hint = f"; the window is called '{suggestion}'"
+                else:
+                    text = f"'{quoted}' ist kein Text der Oberfläche"
+                    hint = f"; das Fenster heißt '{suggestion}'"
+                problems.append(f"{place}: {text}" + (hint if suggestion else ""))
+    conclude("quoted-names", problems, "quoted name(s) that are no UI text", warn=True)
 
 
 def git(directory, *args):
@@ -486,24 +707,34 @@ def check_plugin(directory):
 
 def main():
     parser = argparse.ArgumentParser(description="kyrr's release gate: the mechanical checks.")
-    parser.add_argument("--release", action="store_true", help="add the release checks: versions, NEWS, Omarchy gaps")
+    parser.add_argument(
+        "--release", action="store_true", help="add the release checks: versions, NEWS, window names, Omarchy gaps"
+    )
     parser.add_argument("--online", action="store_true", help="also request every external link")
+    parser.add_argument(
+        "--after-tag", action="store_true", help="the tag v<version> exists: its URLs must answer, a 404 FAILs"
+    )
     parser.add_argument("--plugin", metavar="DIR", help="a checkout of heast13/omarchy-kyrr to check")
     args = parser.parse_args()
+    version = cargo_version()
+    plugin = Path(args.plugin).resolve() if args.plugin else None
     print(f"release gate, {'release' if args.release else 'default'} mode")
     check_translations()
     check_words()
+    check_numbers()
     check_flatpak()
     check_texts()
-    check_links(args.online)
+    check_news_linux_view()
+    check_links(args.online, version, args.after_tag)
     check_omarchy(args.release)
     if args.release:
-        version = cargo_version()
         check_versions(version)
         check_screenshots(version)
         check_news(version)
-    if args.plugin:
-        check_plugin(Path(args.plugin).resolve())
+        check_window_names()
+        check_quoted_names(plugin)
+    if plugin:
+        check_plugin(plugin)
     counts = {status: results.count(status) for status in ("PASS", "WARN", "FAIL")}
     print(f"\nsummary: {counts['PASS']} PASS, {counts['WARN']} WARN, {counts['FAIL']} FAIL")
     sys.exit(1 if counts["FAIL"] else 0)
