@@ -334,6 +334,43 @@ pub fn set_status(status: String) {
     show(|shown| shown.status = Some(status));
 }
 
+/// The folder of the state and side files, for its owner alone: they hold
+/// the text of voice memos and the user's instructions.
+fn private_dir(dir: &Path) {
+    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+    if std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(dir)
+        .is_ok()
+    {
+        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+    }
+}
+
+/// Writes a file for its owner alone (0600), in place.
+fn write_private(file: &Path, text: &str) {
+    use std::io::Write;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    if let Some(dir) = file.parent() {
+        private_dir(dir);
+    }
+    let opened = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(file);
+    if let Ok(mut f) = opened {
+        let _ = f.set_permissions(std::fs::Permissions::from_mode(0o600));
+        let _ = f.write_all(text.as_bytes());
+    }
+}
+
+/// The most a side file from the menu may hold (a recording's text or an
+/// instruction); more is not read.
+const SIDE_MAX: u64 = 64 * 1024;
+
 /// Only on Omarchy, and only a change.
 fn show(change: impl FnOnce(&mut Shown)) {
     if path().is_none() {
@@ -351,12 +388,9 @@ fn show(change: impl FnOnce(&mut Shown)) {
     let Some(file) = state_file() else {
         return;
     };
-    if let Some(dir) = file.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
     // In one write, in place: the widget watches the file itself. kyrr's
     // process id lets it see a kyrr that ended without deleting the file.
-    let _ = std::fs::write(&file, &text);
+    write_private(&file, &text);
     shown.written = text;
 }
 
@@ -404,12 +438,7 @@ fn set_side(name: &'static str, id: &str, text: Option<&str>) {
         return;
     };
     match &text {
-        Some(text) => {
-            if let Some(dir) = file.parent() {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            let _ = std::fs::write(&file, text);
-        }
+        Some(text) => write_private(&file, text),
         None => {
             let _ = std::fs::remove_file(&file);
         }
@@ -452,7 +481,8 @@ fn take_side(name: &str) -> Option<(String, String)> {
         .ok()
         .and_then(|t| t.elapsed().ok())
         .is_some_and(|age| age < std::time::Duration::from_secs(10));
-    let text = std::fs::read_to_string(&file).ok();
+    let small = std::fs::metadata(&file).is_ok_and(|m| m.len() <= SIDE_MAX);
+    let text = std::fs::read_to_string(&file).ok().filter(|_| small);
     let _ = std::fs::remove_file(&file);
     text.filter(|_| fresh)?
         .split_once('\n')
@@ -707,6 +737,14 @@ mod tests {
         );
         set_compare(Some(("a.opus", "[]")));
         assert_eq!(std::fs::read_to_string(file("compare")).unwrap(), "a.opus\n[]");
+        // The texts of voice memos and instructions are for their owner only.
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = |p: PathBuf| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode(dir.join("kyrr")), 0o700);
+            assert_eq!(mode(file("compare")), 0o600);
+            assert_eq!(mode(file("prompt")), 0o600);
+        }
         // A file the menu removed is not written again for the same text.
         std::fs::remove_file(file("prompt")).unwrap();
         set_prompt(Some((2, "Say it\nin two lines.")));

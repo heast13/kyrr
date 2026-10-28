@@ -16,6 +16,20 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
+## 0.8.1
+
+- kyrr's windows no longer scroll for nothing at display scaling like 125%; they fit their content.
+- The "What's new" window fits its text instead of always scrolling.
+- (Linux) The main window leaves room for the panel instead of reaching under it.
+- (Linux) Omarchy: the bar menu can now change the wording of the AI instructions and shows the text of a recording next to a reworked version (needs plugin 1.4.0). One click on the update row now updates kyrr, the plugin and the bar together.
+
+### Deutsch
+
+- Die Fenster von kyrr scrollen bei Skalierung wie 125 % nicht mehr unnötig; sie passen zu ihrem Inhalt.
+- Das Fenster „Was ist neu“ passt sich seinem Text an, statt immer zu scrollen.
+- (Linux) Das Hauptfenster lässt Platz für die Leiste, statt darunter zu reichen.
+- (Linux) Omarchy: Das Menü in der Leiste kann jetzt den Wortlaut der Anweisungen (Prompts) ändern und zeigt den Text einer Aufzeichnung neben einer überarbeiteten Fassung (braucht Plugin 1.4.0). Ein Klick auf die Update-Zeile aktualisiert jetzt kyrr, das Plugin und die Leiste zusammen.
+
 ## 0.8.0
 
 - Spoken numbers are written as digits where that reads better: "twenty-six" becomes 26, as do times, dates and money. This works in dictation and in the text of voice memos.

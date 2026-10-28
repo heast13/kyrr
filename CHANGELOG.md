@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.8.1 (2026-10-28)
+
+- Omarchy: the bar menu can edit the wording of the AI instructions and shows
+  the two-column comparison of a recording next to a reworked version
+  (plugin 1.4.0). One click on the update row updates kyrr, the plugin and
+  the bar together; the plugin can also be updated on its own.
+- kyrr's windows no longer scroll for nothing at display scaling like 125%
+  (heights are rounded up to whole pixels).
+- Linux: the main window leaves room for the panel instead of reaching
+  under it.
+- The What's new window fits its text instead of always scrolling.
+- Omarchy: the files kyrr shares with the bar menu (recording text, AI
+  instructions) can be read by their owner alone, the menu reads at most
+  64 KB from the files it hands back, and the instructions are shared only
+  while the plugin is on.
+- Release checks: a fixed list of checks (Omarchy contract, layout check on every
+  page, release rules, advisory check) now runs in CI before each release.
+
 ## 0.8.0 (2026-10-28)
 
 - Numbers as digits: spoken numbers are written as digits where that reads
