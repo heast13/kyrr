@@ -79,7 +79,7 @@
       <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.8.1</url>
       <description>
         <ul>
-          <li>kyrr windows no longer scroll for nothing at display scaling like 125 %</li>
+          <li>kyrr windows no longer scroll for nothing at display scaling like 125%</li>
           <li>The What's new window fits its text; the main window leaves room for the panel</li>
           <li>Omarchy: edit the AI instructions and compare a reworked recording in the bar menu</li>
         </ul>
