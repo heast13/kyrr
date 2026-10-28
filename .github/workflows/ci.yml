@@ -66,10 +66,16 @@ jobs:
         # (docs/release-gate.md).
         run: python3 scripts/release-gate.py
       - name: Release rules, release PR
-        # The release PR ("Release X.Y.Z") also needs one version everywhere,
-        # this version's NEWS and no open gap in the Omarchy menu.
-        if: startsWith(github.event.pull_request.title, 'Release ')
-        run: python3 scripts/release-gate.py --release
+        # A pull request that raises the version is a release: it also needs
+        # one version everywhere, this version's NEWS and no open gap in the
+        # Omarchy menu.
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --quiet --depth 1 origin "$GITHUB_BASE_REF"
+          version() { grep -m1 '^version' | cut -d'"' -f2; }
+          if [ "$(version < Cargo.toml)" != "$(git show FETCH_HEAD:Cargo.toml | version)" ]; then
+            python3 scripts/release-gate.py --release
+          fi
       - name: Fetch assets
         run: python3 scripts/fetch-assets.py --linux --test
       - name: Format
