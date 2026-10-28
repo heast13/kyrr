@@ -1,0 +1,1000 @@
+{
+  "about": "What kyrr and its Omarchy bar menu (github.com/heast13/omarchy-kyrr) share: the lines kyrr's socket takes, how each control of the window is done in the menu, and a full sample of the state file. scripts/check-omarchy-contract.py keeps it true against kyrr's code; the menu's CI checks itself against it. See docs/release-gate.md.",
+  "commands": {
+    "background": "a start while kyrr runs: nothing; the menu's 'is kyrr there' probe",
+    "dictate": "dictation key: start or stop",
+    "dictate-start": "dictation key down",
+    "dictate-stop": "dictation key up",
+    "install-update": "tray: install the update",
+    "memo": "memo key pressed",
+    "memo cancel": "<file name>: stops writing its text",
+    "memo copy": "<from byte> <to byte> of the open text (0 0: all)",
+    "memo cursor": "<byte>: where the cursor stands in the open text",
+    "memo delete": "<file name>",
+    "memo edit": "takes what was typed from $XDG_RUNTIME_DIR/kyrr/edit",
+    "memo folder": "",
+    "memo here": "<byte>: plays from there",
+    "memo opentext": "",
+    "memo play": "<file name>: plays or stops it",
+    "memo rename": "[\"file name\", \"new title\"] as JSON",
+    "memo restore": "",
+    "memo reveal": "<file name>: shows it in the file manager",
+    "memo rework": "",
+    "memo search": "<text>",
+    "memo seen": "",
+    "memo show": "[file name]: the text the menu shows (none: closed)",
+    "memo stamps": "0 none, 1 position, 2 clock",
+    "memo start": "",
+    "memo stop": "",
+    "memo stoprework": "",
+    "memo text": "<file name>: writes its text",
+    "memo-start": "memo recording starts",
+    "memo-stop": "memo key up",
+    "menu-closed": "the menu closed",
+    "menu-open": "the menu is open (every few seconds while it is)",
+    "mic <index>": "takes microphone <index> (first-run setup: picks it for Next)",
+    "mic default": "",
+    "mic repair": "",
+    "mic unmute": "",
+    "model cancel": "",
+    "model download": "",
+    "model retry": "",
+    "open feedback": "",
+    "open licenses": "",
+    "open-memos": "tray: the recordings",
+    "page-<1-5>": "opens a page of the window",
+    "quit": "ends kyrr",
+    "set ai.connect": "",
+    "set ai.key": "",
+    "set ai.look": "",
+    "set ai.model": "",
+    "set ai.prompt": "",
+    "set ai.promptReset": "",
+    "set ai.rework": "",
+    "set ai.take": "",
+    "set ai.translate": "",
+    "set ai.url": "",
+    "set asr.connect": "",
+    "set asr.key": "",
+    "set asr.model": "",
+    "set asr.on": "",
+    "set asr.take": "",
+    "set asr.url": "",
+    "set dictation.hold": "",
+    "set dictation.key": "",
+    "set dictation.keyReset": "",
+    "set filter.strength": "",
+    "set general.effort": "",
+    "set general.language": "",
+    "set memos.hold": "",
+    "set memos.key": "",
+    "set memos.keyReset": "",
+    "set memos.reworkAction": "",
+    "set memos.reworkTarget": "",
+    "set voice.air": "",
+    "set voice.body": "",
+    "set voice.comp": "",
+    "set voice.ess": "",
+    "set voice.presence": "",
+    "set voice.reset": "",
+    "set voice.tone": "",
+    "setup done": "",
+    "setup keybutton": "",
+    "setup next": "",
+    "setup overloadSeen": "",
+    "setup skip": "",
+    "show": "shows the window (not on Omarchy)",
+    "test after": "",
+    "test before": "",
+    "test delete": "",
+    "test start": "",
+    "toggle ai.features": "",
+    "toggle ai.on": "",
+    "toggle dictation": "",
+    "toggle filter": "",
+    "toggle general.liveText": "",
+    "toggle general.overload": "",
+    "toggle general.updateCheck": "",
+    "toggle listen": "",
+    "toggle memos": "",
+    "toggle memos.autoText": "",
+    "toggle voice": "",
+    "toggle voice.autoLevel": "",
+    "toggle voice.distance": "",
+    "toggle voice.pops": "",
+    "toggle voice.rumble": "",
+    "toggle-dictation": "tray: dictation on/off",
+    "toggle-filter": "tray: filter on/off",
+    "toggle-memo": "tray: record / stop",
+    "toggle-memos": "tray: memos on/off",
+    "toggle-voice": "tray: voice on/off",
+    "update check": "",
+    "update dismiss": "",
+    "update install": "",
+    "update page": ""
+  },
+  "parity": {
+    "callback ai-features-toggled": {
+      "plugin": [
+        "toggle ai.features"
+      ]
+    },
+    "callback allow-typing": {
+      "windowOnly": "desktop portal dialog (GNOME, KDE); Omarchy types without one"
+    },
+    "callback asr-connect": {
+      "plugin": [
+        "set asr.connect"
+      ],
+      "via": "connect_asr("
+    },
+    "callback asr-model-picked": {
+      "plugin": [
+        "set asr.model"
+      ],
+      "via": "set_asr_model("
+    },
+    "callback asr-take-found": {
+      "plugin": [
+        "set asr.take"
+      ]
+    },
+    "callback asr-toggled": {
+      "plugin": [
+        "set asr.on"
+      ]
+    },
+    "callback attach-microphone": {
+      "plugin": [
+        "mic <index>",
+        "setup next"
+      ]
+    },
+    "callback auto-lean-toggled": {
+      "plugin": [
+        "toggle general.overload"
+      ]
+    },
+    "callback auto-level-toggled": {
+      "plugin": [
+        "toggle voice.autoLevel"
+      ]
+    },
+    "callback autostart-toggled": {
+      "windowOnly": "on Omarchy the plugin starts kyrr; turning the plugin off ends it"
+    },
+    "callback band-changed": {
+      "plugin": [
+        "set voice.air",
+        "set voice.body",
+        "set voice.presence"
+      ],
+      "via": "band("
+    },
+    "callback cancel-download": {
+      "plugin": [
+        "model cancel"
+      ]
+    },
+    "callback capture-key": {
+      "windowOnly": "the window waits for a key in its own field; the menu catches the key itself and sends set dictation.key / memos.key"
+    },
+    "callback change-microphone": {
+      "plugin": [
+        "mic <index>"
+      ],
+      "via": "invoke_attach_microphone"
+    },
+    "callback check-updates": {
+      "plugin": [
+        "update check"
+      ]
+    },
+    "callback compressor-changed": {
+      "plugin": [
+        "set voice.comp"
+      ]
+    },
+    "callback deesser-changed": {
+      "plugin": [
+        "set voice.ess"
+      ]
+    },
+    "callback dictation-retry": {
+      "plugin": [
+        "model retry"
+      ]
+    },
+    "callback dictation-toggled": {
+      "plugin": [
+        "toggle dictation"
+      ]
+    },
+    "callback dismiss-update": {
+      "plugin": [
+        "update dismiss"
+      ]
+    },
+    "callback distance-toggled": {
+      "plugin": [
+        "toggle voice.distance"
+      ]
+    },
+    "callback download-model": {
+      "plugin": [
+        "model download"
+      ]
+    },
+    "callback effort-changed": {
+      "plugin": [
+        "set general.effort"
+      ]
+    },
+    "callback filter-toggled": {
+      "plugin": [
+        "toggle filter"
+      ]
+    },
+    "callback finish-setup": {
+      "plugin": [
+        "setup done"
+      ]
+    },
+    "callback hide": {
+      "windowOnly": "no window on Omarchy"
+    },
+    "callback install-pipewire": {
+      "windowOnly": "Omarchy always has PipeWire"
+    },
+    "callback install-update": {
+      "plugin": [
+        "update install"
+      ]
+    },
+    "callback key-button-clicked": {
+      "plugin": [
+        "setup keybutton"
+      ]
+    },
+    "callback key-reset": {
+      "plugin": [
+        "set dictation.keyReset",
+        "set memos.keyReset"
+      ]
+    },
+    "callback key-toggle-changed": {
+      "plugin": [
+        "set dictation.hold"
+      ]
+    },
+    "callback language-changed": {
+      "plugin": [
+        "set general.language"
+      ]
+    },
+    "callback listen-toggled": {
+      "plugin": [
+        "toggle listen"
+      ]
+    },
+    "callback live-words-toggled": {
+      "plugin": [
+        "toggle general.liveText"
+      ]
+    },
+    "callback local-ai-toggled": {
+      "plugin": [
+        "toggle ai.on"
+      ]
+    },
+    "callback look-changed": {
+      "plugin": [
+        "set voice.tone"
+      ]
+    },
+    "callback low-cut-toggled": {
+      "plugin": [
+        "toggle voice.rumble"
+      ]
+    },
+    "callback memo-auto-text-toggled": {
+      "plugin": [
+        "toggle memos.autoText"
+      ]
+    },
+    "callback memo-cancel-text": {
+      "plugin": [
+        "memo cancel"
+      ]
+    },
+    "callback memo-close-text": {
+      "plugin": [
+        "memo show"
+      ],
+      "via": "show_in_widget"
+    },
+    "callback memo-copy-text": {
+      "plugin": [
+        "memo copy"
+      ]
+    },
+    "callback memo-delete": {
+      "plugin": [
+        "memo delete"
+      ]
+    },
+    "callback memo-here-label": {
+      "windowOnly": "pure function; its text reaches the menu as memos.sheet.here"
+    },
+    "callback memo-open-folder": {
+      "plugin": [
+        "memo folder"
+      ]
+    },
+    "callback memo-open-list": {
+      "plugin": [
+        "memo seen"
+      ],
+      "via": "mark_seen"
+    },
+    "callback memo-open-text": {
+      "plugin": [
+        "memo opentext"
+      ]
+    },
+    "callback memo-play": {
+      "plugin": [
+        "memo play"
+      ]
+    },
+    "callback memo-play-here": {
+      "plugin": [
+        "memo here"
+      ]
+    },
+    "callback memo-record": {
+      "plugin": [
+        "memo start",
+        "memo stop"
+      ]
+    },
+    "callback memo-rename": {
+      "plugin": [
+        "memo rename"
+      ]
+    },
+    "callback memo-restore-text": {
+      "plugin": [
+        "memo restore"
+      ]
+    },
+    "callback memo-rework": {
+      "plugin": [
+        "memo rework"
+      ]
+    },
+    "callback memo-search": {
+      "plugin": [
+        "memo search"
+      ]
+    },
+    "callback memo-sheet-edited": {
+      "plugin": [
+        "memo edit"
+      ],
+      "via": "omarchy_edit"
+    },
+    "callback memo-sheet-stamps-changed": {
+      "plugin": [
+        "memo stamps"
+      ]
+    },
+    "callback memo-show": {
+      "plugin": [
+        "memo reveal"
+      ]
+    },
+    "callback memo-show-compare": {
+      "gap": "the compare view (text before and after the rework) is missing in the menu"
+    },
+    "callback memo-show-text": {
+      "plugin": [
+        "memo show"
+      ],
+      "via": "show_in_widget"
+    },
+    "callback memo-stop-rework": {
+      "plugin": [
+        "memo stoprework"
+      ]
+    },
+    "callback memo-toggle-changed": {
+      "plugin": [
+        "set memos.hold"
+      ]
+    },
+    "callback memo-write-text": {
+      "plugin": [
+        "memo text"
+      ]
+    },
+    "callback memos-toggled": {
+      "plugin": [
+        "toggle memos"
+      ]
+    },
+    "callback move-to-default": {
+      "plugin": [
+        "mic default"
+      ]
+    },
+    "callback next-setup": {
+      "plugin": [
+        "setup next"
+      ]
+    },
+    "callback omarchy-command": {
+      "windowOnly": "the menu's way in: every line it sends"
+    },
+    "callback open-licenses": {
+      "plugin": [
+        "open licenses"
+      ]
+    },
+    "callback open-update": {
+      "windowOnly": "the menu installs the update itself (its update.sh) instead of opening the download page"
+    },
+    "callback page-changed": {
+      "windowOnly": "the window's pages; the menu has its own (set ai.look when the server pages open)"
+    },
+    "callback pipewire-step": {
+      "windowOnly": "Omarchy always has PipeWire"
+    },
+    "callback pops-toggled": {
+      "plugin": [
+        "toggle voice.pops"
+      ]
+    },
+    "callback probe-play": {
+      "plugin": [
+        "test after",
+        "test before"
+      ]
+    },
+    "callback probe-record": {
+      "plugin": [
+        "test start"
+      ]
+    },
+    "callback probe-reset": {
+      "plugin": [
+        "test delete"
+      ]
+    },
+    "callback prompt-picked": {
+      "plugin": [
+        "set ai.prompt"
+      ]
+    },
+    "callback prompt-reset": {
+      "plugin": [
+        "set ai.promptReset"
+      ]
+    },
+    "callback prompt-save": {
+      "gap": "the wording of the AI instructions cannot be edited in the menu, only reset"
+    },
+    "callback quit-app": {
+      "windowOnly": "turning kyrr off on Omarchy = disabling the plugin (Flo, 2026-10-25)"
+    },
+    "callback repair": {
+      "plugin": [
+        "mic repair"
+      ]
+    },
+    "callback rework-changed": {
+      "plugin": [
+        "set ai.rework"
+      ]
+    },
+    "callback rework-connect": {
+      "plugin": [
+        "set ai.connect"
+      ],
+      "via": "connect_rework("
+    },
+    "callback rework-model-picked": {
+      "plugin": [
+        "set ai.model"
+      ],
+      "via": "set_rework_model("
+    },
+    "callback rework-take-found": {
+      "plugin": [
+        "set ai.take"
+      ]
+    },
+    "callback send-feedback": {
+      "plugin": [
+        "open feedback"
+      ]
+    },
+    "callback setup-key": {
+      "windowOnly": "desktop portal dialog (GNOME, KDE); on Omarchy the key comes from Hyprland's binds"
+    },
+    "callback show-current-news": {
+      "windowOnly": "the menu shows `news` on its About page"
+    },
+    "callback show-news": {
+      "windowOnly": "the menu shows the news from the state (update.news, news) on its own pages"
+    },
+    "callback skip-setup": {
+      "plugin": [
+        "setup next",
+        "setup skip"
+      ]
+    },
+    "callback strength-changed": {
+      "plugin": [
+        "set filter.strength"
+      ]
+    },
+    "callback translate-changed": {
+      "plugin": [
+        "set ai.translate"
+      ]
+    },
+    "callback unmute": {
+      "plugin": [
+        "mic unmute"
+      ]
+    },
+    "callback update-auto-toggled": {
+      "plugin": [
+        "toggle general.updateCheck"
+      ]
+    },
+    "callback voice-reset": {
+      "plugin": [
+        "set voice.reset"
+      ]
+    },
+    "callback voice-toggled": {
+      "plugin": [
+        "toggle voice"
+      ]
+    },
+    "callback widget-open": {
+      "windowOnly": "the menu itself: menu-open / menu-closed"
+    },
+    "property ai-features": {
+      "plugin": [
+        "toggle ai.features"
+      ]
+    },
+    "property air-db": {
+      "plugin": [
+        "set voice.air"
+      ],
+      "via": "band(2)"
+    },
+    "property asr-key": {
+      "plugin": [
+        "set asr.key"
+      ]
+    },
+    "property asr-model": {
+      "plugin": [
+        "set asr.model"
+      ]
+    },
+    "property asr-model-index": {
+      "plugin": [
+        "set asr.model"
+      ]
+    },
+    "property asr-url": {
+      "plugin": [
+        "set asr.url"
+      ]
+    },
+    "property auto-lean": {
+      "plugin": [
+        "toggle general.overload"
+      ]
+    },
+    "property auto-level": {
+      "plugin": [
+        "toggle voice.autoLevel"
+      ]
+    },
+    "property autostart": {
+      "windowOnly": "on Omarchy the plugin starts kyrr"
+    },
+    "property body-db": {
+      "plugin": [
+        "set voice.body"
+      ],
+      "via": "band(0)"
+    },
+    "property compressor-index": {
+      "plugin": [
+        "set voice.comp"
+      ]
+    },
+    "property deesser-index": {
+      "plugin": [
+        "set voice.ess"
+      ]
+    },
+    "property dictation-enabled": {
+      "plugin": [
+        "toggle dictation"
+      ]
+    },
+    "property distance": {
+      "plugin": [
+        "toggle voice.distance"
+      ]
+    },
+    "property effort-index": {
+      "plugin": [
+        "set general.effort"
+      ]
+    },
+    "property filter-enabled": {
+      "plugin": [
+        "toggle filter"
+      ]
+    },
+    "property language-index": {
+      "plugin": [
+        "set general.language"
+      ]
+    },
+    "property live-words": {
+      "plugin": [
+        "toggle general.liveText"
+      ]
+    },
+    "property local-ai": {
+      "plugin": [
+        "toggle ai.on"
+      ]
+    },
+    "property look-index": {
+      "plugin": [
+        "set voice.tone"
+      ]
+    },
+    "property low-cut": {
+      "plugin": [
+        "toggle voice.rumble"
+      ]
+    },
+    "property memo-auto-text": {
+      "plugin": [
+        "toggle memos.autoText"
+      ]
+    },
+    "property memo-confirm": {
+      "windowOnly": "the window's 'really delete?' state; the menu asks with its own second press"
+    },
+    "property memo-editing": {
+      "windowOnly": "the window's rename field; the menu renames with memo rename"
+    },
+    "property memo-query": {
+      "plugin": [
+        "memo search"
+      ]
+    },
+    "property memo-rework-action": {
+      "plugin": [
+        "set memos.reworkAction"
+      ]
+    },
+    "property memo-rework-target": {
+      "plugin": [
+        "set memos.reworkTarget"
+      ]
+    },
+    "property memo-sheet-stamps": {
+      "plugin": [
+        "memo stamps"
+      ]
+    },
+    "property memo-sheet-text": {
+      "plugin": [
+        "memo edit"
+      ],
+      "via": "omarchy_edit"
+    },
+    "property memo-sheet-view": {
+      "gap": "switching the text between 'as it is' and 'compared' is missing in the menu"
+    },
+    "property memos-enabled": {
+      "plugin": [
+        "toggle memos"
+      ]
+    },
+    "property mic-index": {
+      "plugin": [
+        "mic <index>"
+      ]
+    },
+    "property overload-note": {
+      "plugin": [
+        "setup overloadSeen"
+      ]
+    },
+    "property page": {
+      "windowOnly": "the window's pages; the menu has its own"
+    },
+    "property pops": {
+      "plugin": [
+        "toggle voice.pops"
+      ]
+    },
+    "property presence-db": {
+      "plugin": [
+        "set voice.presence"
+      ],
+      "via": "band(1)"
+    },
+    "property prompt-index": {
+      "plugin": [
+        "set ai.prompt"
+      ],
+      "via": "invoke_prompt_picked"
+    },
+    "property prompt-text": {
+      "gap": "the wording of the AI instructions cannot be edited in the menu"
+    },
+    "property rework-index": {
+      "plugin": [
+        "set ai.rework"
+      ]
+    },
+    "property rework-key": {
+      "plugin": [
+        "set ai.key"
+      ]
+    },
+    "property rework-model": {
+      "plugin": [
+        "set ai.model"
+      ]
+    },
+    "property rework-model-index": {
+      "plugin": [
+        "set ai.model"
+      ]
+    },
+    "property rework-tips": {
+      "windowOnly": "the window's fold-out tips; the menu shows them as a fixed line"
+    },
+    "property rework-url": {
+      "plugin": [
+        "set ai.url"
+      ]
+    },
+    "property strength-index": {
+      "plugin": [
+        "set filter.strength"
+      ]
+    },
+    "property translate-index": {
+      "plugin": [
+        "set ai.translate"
+      ]
+    },
+    "property update-auto": {
+      "plugin": [
+        "toggle general.updateCheck"
+      ]
+    },
+    "property voice-enabled": {
+      "plugin": [
+        "toggle voice"
+      ]
+    }
+  },
+  "state": {
+    "v": 2,
+    "pid": 4242,
+    "mode": "idle",
+    "lang": "de",
+    "version": "0.8.0",
+    "line": "Lauscht, filtert, schweigt.",
+    "note": "",
+    "noteGood": false,
+    "alert": 0,
+    "overloadNote": "",
+    "oldCpu": false,
+    "levels": {
+      "active": false,
+      "before": 0.0,
+      "after": 0.0
+    },
+    "pulse": "waiting",
+    "setupDone": true,
+    "setupStep": 3,
+    "filter": {
+      "on": true,
+      "strength": 1,
+      "setup": "",
+      "attached": true,
+      "error": "",
+      "state": "running",
+      "mic": "Blue Yeti",
+      "moveTo": "",
+      "moveUnplugged": false
+    },
+    "voice": {
+      "on": true,
+      "tone": "warm",
+      "body": 0,
+      "presence": 2,
+      "air": 0,
+      "comp": 1,
+      "ess": 1,
+      "rumble": true,
+      "rumbleHz": 80,
+      "pops": true,
+      "distance": true,
+      "autoLevel": true,
+      "levelDb": 2.5,
+      "isDefault": false
+    },
+    "dictation": {
+      "on": true,
+      "ready": true,
+      "key": "F9",
+      "hold": true,
+      "note": "",
+      "state": "ready",
+      "message": "",
+      "keyCustom": false,
+      "keyFixed": false,
+      "keyUnbound": false,
+      "keyButton": ""
+    },
+    "memos": {
+      "on": true,
+      "recording": false,
+      "key": "F8",
+      "hold": true,
+      "autoText": true,
+      "folder": "Dokumente",
+      "message": "",
+      "elapsed": "",
+      "canWrite": true,
+      "canHold": true,
+      "keyNote": "",
+      "keyCustom": false,
+      "query": "",
+      "count": 2,
+      "playTime": "",
+      "playFraction": 0.0,
+      "list": [
+        {
+          "id": "2026-10-27 18-04 Einkaufsliste.opus",
+          "title": "Einkaufsliste",
+          "when": "Gestern, 18:04",
+          "length": "0:42",
+          "pending": false,
+          "text": "ready",
+          "progress": 1.0,
+          "left": "",
+          "isNew": true,
+          "waiting": false,
+          "playing": false
+        },
+        {
+          "id": "2026-10-26 09-15 Idee.opus",
+          "title": "Idee",
+          "when": "26. Okt., 09:15",
+          "length": "3:10",
+          "pending": false,
+          "text": "writing",
+          "progress": 0.4,
+          "left": "1 Min.",
+          "isNew": false,
+          "waiting": false,
+          "playing": false
+        }
+      ],
+      "sheet": {
+        "id": "2026-10-27 18-04 Einkaufsliste.opus",
+        "title": "Einkaufsliste",
+        "when": "Gestern, 18:04",
+        "stamps": 0,
+        "saved": true,
+        "copied": false,
+        "empty": false,
+        "here": "Ab hier abspielen",
+        "rework": {
+          "ready": true,
+          "busy": false,
+          "progress": 0.0,
+          "note": "",
+          "action": 1,
+          "target": "",
+          "original": false
+        }
+      }
+    },
+    "general": {
+      "language": "de",
+      "effort": "best",
+      "liveText": true,
+      "overload": true,
+      "updateCheck": true
+    },
+    "mic": {
+      "name": "Blue Yeti",
+      "current": 0,
+      "index": 0,
+      "list": [
+        {
+          "id": 0,
+          "name": "Blue Yeti"
+        },
+        {
+          "id": 1,
+          "name": "Laptop-Mikrofon"
+        }
+      ]
+    },
+    "model": {
+      "state": "ready",
+      "progress": 0.0,
+      "size": "640 MB"
+    },
+    "update": {
+      "state": "available",
+      "version": "0.8.1",
+      "progress": 0.0,
+      "news": "- Allgemeine Fehlerbehebungen",
+      "phase": "",
+      "installable": false,
+      "dismissed": false
+    },
+    "ai": {
+      "url": "http://192.168.1.10:11434",
+      "model": "gemma3:12b",
+      "keySet": false,
+      "models": [
+        "gemma3:12b",
+        "qwen3:8b"
+      ],
+      "busy": false,
+      "note": "",
+      "found": "",
+      "features": true,
+      "on": true,
+      "ready": true,
+      "rework": 1,
+      "translate": "",
+      "prompt": {
+        "index": 0,
+        "own": false
+      },
+      "asr": {
+        "url": "",
+        "model": "",
+        "keySet": false,
+        "models": [],
+        "busy": false,
+        "note": "",
+        "found": "",
+        "on": false
+      }
+    },
+    "probe": "idle",
+    "hasProbe": false,
+    "probeError": "",
+    "listen": false,
+    "news": "- Lokale KI (experimentell)\n- Eigener Diktierserver"
+  }
+}

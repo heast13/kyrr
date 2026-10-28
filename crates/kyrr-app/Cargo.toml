@@ -53,3 +53,8 @@ windows = { version = "0.62", features = ["Win32_Globalization", "Win32_Foundati
 slint-build = "1.18"
 # Icon and version info in kyrr.exe (needs the Windows resource compiler).
 winresource = "0.1"
+
+[dev-dependencies]
+# The contact sheets of the layout check (examples/layout.rs); already in the
+# lock file through Slint's renderers.
+png = "0.18"

@@ -17,6 +17,17 @@ jobs:
       SHERPA_ONNX_LIB_DIR: ${{ github.workspace }}\assets\sherpa-onnx\lib
     steps:
       - uses: actions/checkout@v7
+      - name: Release PR?
+        # A pull request that raises the version is a release: the release
+        # checks below then run too, and the layout check must pass.
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          git fetch --quiet --depth 1 origin "$GITHUB_BASE_REF"
+          version() { grep -m1 '^version' | cut -d'"' -f2; }
+          if [ "$(version < Cargo.toml)" != "$(git show FETCH_HEAD:Cargo.toml | version)" ]; then
+            echo RELEASE=1 >> "$GITHUB_ENV"
+          fi
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
@@ -38,6 +49,24 @@ jobs:
         run: |
           cargo build --release --locked -p kyrr -p kyrr-apo
           python scripts/check-binaries.py
+      - name: Layout
+        # Every page, German and English, scale 1 to 2, screens 720 to 2160 px
+        # high: fails on a window taller than the screen, needless scrolling,
+        # widths that do not follow the scale (docs/release-gate.md).
+        # TODO: required on every pull request once the layout bugs it found
+        # are fixed (Windows 125 %, What's new window, Linux panels); until
+        # then it only warns there, and a release PR must pass it.
+        shell: bash
+        run: |
+          cargo run --release --locked --example layout -- target/layout || {
+            [ -z "${RELEASE:-}" ] && echo "::warning::layout check found problems (target/layout/problems.txt)"
+          }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: layout-windows
+          path: target/layout
+          retention-days: 14
 
   linux:
     runs-on: ubuntu-24.04
@@ -46,6 +75,17 @@ jobs:
       SHERPA_ONNX_LIB_DIR: ${{ github.workspace }}/assets/sherpa-onnx/lib
     steps:
       - uses: actions/checkout@v7
+      - name: Release PR?
+        # A pull request that raises the version is a release: the release
+        # checks below then run too, and the layout check must pass.
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          git fetch --quiet --depth 1 origin "$GITHUB_BASE_REF"
+          version() { grep -m1 '^version' | cut -d'"' -f2; }
+          if [ "$(version < Cargo.toml)" != "$(git show FETCH_HEAD:Cargo.toml | version)" ]; then
+            echo RELEASE=1 >> "$GITHUB_ENV"
+          fi
       - name: System libraries
         run: |
           sudo apt-get update
@@ -60,6 +100,16 @@ jobs:
           # sherpa-onnx-sys unpacks its prebuilt libraries here; the cache
           # would otherwise keep its build output but drop the libraries.
           cache-directories: target/sherpa-onnx-prebuilt
+      - name: Release rules
+        # Translations, word rules, links and the Omarchy contract: every
+        # control of the window has its way in the bar menu
+        # (docs/release-gate.md).
+        run: python3 scripts/release-gate.py
+      - name: Release rules, release PR
+        # One version everywhere, this version's NEWS and no open gap in the
+        # Omarchy menu.
+        if: env.RELEASE == '1'
+        run: python3 scripts/release-gate.py --release
       - name: Fetch assets
         run: python3 scripts/fetch-assets.py --linux --test
       - name: Format
@@ -72,3 +122,33 @@ jobs:
         run: |
           cargo build --release --locked -p kyrr
           python3 scripts/check-binaries.py --linux
+      - name: Layout
+        # Every page, German and English, scale 1 to 2, screens 720 to 2160 px
+        # high: fails on a window taller than the screen, needless scrolling,
+        # widths that do not follow the scale (docs/release-gate.md).
+        # TODO: required on every pull request once the layout bugs it found
+        # are fixed (Windows 125 %, What's new window, Linux panels); until
+        # then it only warns there, and a release PR must pass it.
+        shell: bash
+        run: |
+          cargo run --release --locked --example layout -- target/layout || {
+            [ -z "${RELEASE:-}" ] && echo "::warning::layout check found problems (target/layout/problems.txt)"
+          }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: layout-linux
+          path: target/layout
+          retention-days: 14
+
+  # Known vulnerabilities in the crates kyrr builds with (RustSec), on every
+  # pull request rather than once before a release.
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2.87.32
+        with:
+          tool: cargo-audit
+      - name: Advisories
+        run: cargo audit
