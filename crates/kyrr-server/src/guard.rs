@@ -366,6 +366,167 @@ pub fn fix(orig: &str, out: &str) -> (String, usize) {
     (join(&res), kept)
 }
 
+/// Words whose order decides who does what to whom, or what is negated:
+/// articles, pronouns, negation and focus words, "and/or/but". They keep
+/// their order when words move; so do nouns in German (capitalized).
+const ANCHORS: &str = "der die das den dem des ein eine einen einem einer eines \
+er sie es ihn ihm ihr ihnen ich mich mir du dich dir wir uns euch man sich \
+mein meine meinen meinem meiner dein deine deinen deinem deiner sein seine seinen seinem seiner unser unsere unseren \
+nicht kein keine keinen keinem keiner nie niemals nur auch alle alles jede jeder jedes nichts niemand jemand und oder aber \
+the a an he she it him her they them we us you i me my your his its our their \
+not no never only also all every nothing nobody and or but";
+
+/// Length of the longest increasing run in `seq`.
+fn longest_increasing(seq: &[usize]) -> usize {
+    let mut tails: Vec<usize> = Vec::new();
+    for &v in seq {
+        let i = tails.partition_point(|&t| t < v);
+        if i == tails.len() {
+            tails.push(v);
+        } else {
+            tails[i] = v;
+        }
+    }
+    tails.len()
+}
+
+/// Which dictated word each word of the answer is: the same or a misheard
+/// one, one to one. The words that stayed in order are found first (the
+/// same word counts more than a misheard one), then the same words that
+/// moved, then misheard ones that moved. Also which dictated words are
+/// used.
+fn pair_words(na: &[String], nb: &[String]) -> (Vec<Option<usize>>, Vec<bool>) {
+    let (n, m) = (na.len(), nb.len());
+    let mut mb: Vec<Option<usize>> = vec![None; m];
+    let mut ua = vec![false; n];
+    let gain = |x: &str, y: &str| -> f32 {
+        if x == y {
+            1.0
+        } else if alike(x, y) {
+            0.45
+        } else {
+            0.0
+        }
+    };
+    let mut best = vec![vec![0.0f32; m + 1]; n + 1];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            let g = gain(&na[i], &nb[j]);
+            let mut b = best[i + 1][j].max(best[i][j + 1]);
+            if g > 0.0 {
+                b = b.max(best[i + 1][j + 1] + g);
+            }
+            best[i][j] = b;
+        }
+    }
+    let (mut i, mut j) = (0, 0);
+    while i < n && j < m {
+        let g = gain(&na[i], &nb[j]);
+        if g > 0.0 && (best[i][j] - (best[i + 1][j + 1] + g)).abs() < 1e-6 {
+            mb[j] = Some(i);
+            ua[i] = true;
+            i += 1;
+            j += 1;
+        } else if (best[i][j] - best[i + 1][j]).abs() < 1e-6 {
+            i += 1;
+        } else {
+            j += 1;
+        }
+    }
+    // The same word, somewhere else: it moved.
+    for j in 0..m {
+        if mb[j].is_none() {
+            let nearest = (0..n)
+                .filter(|&i| !ua[i] && na[i] == nb[j])
+                .min_by_key(|&i| i.abs_diff(j));
+            if let Some(i) = nearest {
+                mb[j] = Some(i);
+                ua[i] = true;
+            }
+        }
+    }
+    // A misheard word that moved: the closest pairs first.
+    let mut pairs: Vec<(f32, usize, usize)> = Vec::new();
+    for j in (0..m).filter(|&j| mb[j].is_none()) {
+        for i in (0..n).filter(|&i| !ua[i]) {
+            if alike(&na[i], &nb[j]) {
+                pairs.push((similarity(&na[i], &nb[j]), i, j));
+            }
+        }
+    }
+    pairs.sort_by(|x, y| y.0.total_cmp(&x.0));
+    for (_, i, j) in pairs {
+        if mb[j].is_none() && !ua[i] {
+            mb[j] = Some(i);
+            ua[i] = true;
+        }
+    }
+    (mb, ua)
+}
+
+/// The answer with words moved, if that is all it did: every word of it is
+/// a dictated word (or a misheard one), none is missing (a filler or a
+/// doubled word may go), at most two words changed their place, and the
+/// words that say who does what keep their order. Misheard words must
+/// look like the dictated ones, as in [`fix`].
+fn moved_words(orig: &str, out: &str) -> Option<String> {
+    let (a, b) = (tokens(orig), tokens(out));
+    let na: Vec<String> = a.iter().filter(|t| is_word(&t.text)).map(|t| norm(&t.text)).collect();
+    let nb: Vec<String> = b.iter().filter(|t| is_word(&t.text)).map(|t| norm(&t.text)).collect();
+    if na.is_empty() || nb.is_empty() {
+        return None;
+    }
+    let (mb, ua) = pair_words(&na, &nb);
+    let order: Vec<usize> = mb.iter().copied().collect::<Option<Vec<_>>>()?;
+    for (i, used) in ua.iter().enumerate() {
+        let w = na[i].as_str();
+        let doubled = (i > 0 && na[i - 1] == w) || na.get(i + 1).is_some_and(|n| n == w);
+        if !used && !FILLERS.contains(&w) && !doubled {
+            return None;
+        }
+    }
+    let moved = order.len() - longest_increasing(&order);
+    let allowed = ((0.34 * na.len() as f32).round() as usize).max(1);
+    if moved == 0 || moved > 2 || moved > allowed {
+        return None;
+    }
+    // Nouns (German), articles, pronouns, negation: the same order as said.
+    let german = language_of(orig) == Some("de");
+    let mut first = true;
+    let mut sentence_start = true;
+    let mut anchors: Vec<bool> = Vec::new();
+    for t in &a {
+        if !is_word(&t.text) {
+            sentence_start = matches!(t.text.as_str(), "." | "!" | "?");
+            continue;
+        }
+        let capital = t.text.chars().next().is_some_and(char::is_uppercase);
+        let anchor = ANCHORS.split(' ').any(|w| w == norm(&t.text))
+            || t.text.chars().any(|c| c.is_ascii_digit())
+            || (german && capital && !(first || sentence_start));
+        anchors.push(anchor);
+        first = false;
+        sentence_start = false;
+    }
+    let kept: Vec<usize> = order.iter().copied().filter(|&i| anchors[i]).collect();
+    if kept.windows(2).any(|w| w[0] > w[1]) {
+        return None;
+    }
+    Some(join(&b))
+}
+
+/// Like [`fix`], but the answer may also have words moved to where the
+/// grammar puts them ("weil ich hab keine Zeit" → "weil ich keine Zeit
+/// hab"). Only moved: a new, missing or reworded word, more than two words
+/// moved, or a changed order of names and pronouns, and the answer is
+/// checked as in [`fix`], which undoes every move.
+pub fn fix_ordered(orig: &str, out: &str) -> (String, usize) {
+    match moved_words(orig, out) {
+        Some(text) => (text, 1),
+        None => fix(orig, out),
+    }
+}
+
 /// The numbers in a text, sorted, written alike: "3,5" and "3.5", "10.000",
 /// "10,000" and "10 000" are the same number in another language; "1,5"
 /// and "15" are not.
@@ -677,6 +838,99 @@ pub fn clean(out: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn words_may_move_when_nothing_else_does() {
+        for (said, model) in [
+            (
+                "Ich komme später, weil ich hab noch einen Termin beim Arzt.",
+                "Ich komme später, weil ich noch einen Termin beim Arzt hab.",
+            ),
+            (
+                "Dann wir haben uns getroffen vor dem Bahnhof.",
+                "Dann haben wir uns vor dem Bahnhof getroffen.",
+            ),
+            (
+                "Gestern ich war im Kino mit meiner Schwester.",
+                "Gestern war ich im Kino mit meiner Schwester.",
+            ),
+            (
+                "Ich glaube, das er hat das Pakett schon abgeholt.",
+                "Ich glaube, dass er das Paket schon abgeholt hat.",
+            ),
+            (
+                "Hast du schon gegessen etwas zum Mitagessen?",
+                "Hast du schon etwas zum Mittagessen gegessen?",
+            ),
+            (
+                "Can you tell me where is the nearest pharmacy?",
+                "Can you tell me where the nearest pharmacy is?",
+            ),
+            (
+                "Kannst du mir sagen, wie viel Uhr es ist jetzt?",
+                "Kannst du mir sagen, wie viel Uhr es jetzt ist?",
+            ),
+        ] {
+            assert_eq!(fix_ordered(said, model).0, model, "{said}");
+            // The plain check undoes every move.
+            assert_ne!(fix(said, model).0, model, "{said}");
+        }
+    }
+
+    #[test]
+    fn a_move_that_changes_the_meaning_goes_back() {
+        for (said, model) in [
+            ("Der Hund beißt den Mann.", "Den Mann beißt der Hund."),
+            (
+                "Der Chef hat den Kunden angerufen.",
+                "Den Chef hat der Kunde angerufen.",
+            ),
+            ("Ich habe ihn gesehen, nicht sie.", "Ich habe sie gesehen, nicht ihn."),
+            ("Nur ich habe das gesehen.", "Ich habe nur das gesehen."),
+            ("Ich habe nicht alles gelesen.", "Alles habe ich nicht gelesen."),
+            ("The dog bites the man.", "The man bites the dog."),
+        ] {
+            assert_eq!(fix_ordered(said, model).0, fix(said, model).0, "{said}");
+            assert_ne!(fix_ordered(said, model).0, model, "{said}");
+        }
+    }
+
+    #[test]
+    fn moving_is_no_license_for_other_changes() {
+        // A synonym, an added word, a missing word, many moves: as with the plain check.
+        for (said, model) in [
+            (
+                "Wir haben das Auto gekauft letzte Woche.",
+                "Wir haben letzte Woche den Wagen gekauft.",
+            ),
+            (
+                "Ich glaube, dass er hat das Paket abgeholt.",
+                "Ich glaube, dass er das Paket heute abgeholt hat.",
+            ),
+            (
+                "Ich glaube, dass er hat das Paket schon abgeholt.",
+                "Ich glaube, dass er das Paket abgeholt hat.",
+            ),
+            (
+                "Ich glaube, dass er hat das Paket abgeholt gestern Abend im Büro.",
+                "Ich glaube, dass er gestern Abend im Büro das Paket abgeholt hat.",
+            ),
+        ] {
+            assert_eq!(fix_ordered(said, model).0, fix(said, model).0, "{said}");
+        }
+    }
+
+    #[test]
+    fn mishearings_are_still_fixed_with_word_order_on() {
+        let (text, kept) = fix_ordered(
+            "Die Brainsbelege sind im Beschwächungsraum",
+            "Die Bremsbeläge sind im Besprechungsraum.",
+        );
+        assert_eq!(text, "Die Bremsbeläge sind im Besprechungsraum.");
+        assert_eq!(kept, 2);
+        let q = "Was ist die Hauptstadt von Australien?";
+        assert_eq!(fix_ordered(q, "Die Hauptstadt von Australien ist Canberra.").0, q);
+    }
 
     #[test]
     fn other_words_are_no_mishearing() {
