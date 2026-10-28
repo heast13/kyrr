@@ -990,7 +990,8 @@
       "translate": "",
       "prompt": {
         "index": 0,
-        "own": false
+        "own": false,
+        "edit": true
       },
       "asr": {
         "url": "",

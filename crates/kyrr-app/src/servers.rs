@@ -709,10 +709,12 @@ pub fn widget_state(state: &AppState) -> serde_json::Value {
     ai.insert("ready".into(), json!(state.get_rework_ready()));
     ai.insert("rework".into(), json!(state.get_rework_index()));
     ai.insert("translate".into(), json!(translate_code(state.get_translate_index())));
-    // The instruction shown (0 to 3) and whether it is the user's own.
+    // The instruction shown (0 to 3) and whether it is the user's own;
+    // `edit` says the menu can read and change its wording (`prompt` and
+    // `promptedit` beside the state), which an older kyrr cannot.
     ai.insert(
         "prompt".into(),
-        json!({ "index": state.get_prompt_index(), "own": state.get_prompt_own() }),
+        json!({ "index": state.get_prompt_index(), "own": state.get_prompt_own(), "edit": true }),
     );
     let mut asr = speech.json();
     asr.insert("on".into(), json!(state.get_asr_on()));
