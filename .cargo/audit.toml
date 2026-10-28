@@ -1,0 +1,18 @@
+# Advisories `cargo audit` (CI job "audit") lets pass, each with the reason.
+# The security review of every release (docs/release-gate/security.md) goes
+# through this list again; an entry goes as soon as its reason does.
+
+[advisories]
+ignore = [
+    # zip 2.4.2 and the zstd crates under it come only with sherpa-onnx-sys
+    # 1.13.8, as a build dependency for unpacking iOS archives. kyrr's
+    # builds point it at the unpacked libraries (SHERPA_ONNX_LIB_DIR), so
+    # it unpacks nothing and none of it is in kyrr. Goes with sherpa-onnx 2.
+    "RUSTSEC-2026-0367",
+    "RUSTSEC-2026-0368",
+    "RUSTSEC-2026-0369",
+    "RUSTSEC-2026-0391",
+    "RUSTSEC-2026-0398",
+    "RUSTSEC-2026-0403",
+    "RUSTSEC-2026-0410",
+]

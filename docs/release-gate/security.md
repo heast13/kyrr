@@ -3,9 +3,9 @@
 Input: `git diff vW..HEAD` of both repositories, SECURITY.md, the whole code
 for the items below.
 
-1. Dependencies: `cargo audit` (install with `cargo install cargo-audit
-   --locked` if missing) has no open advisory; new dependencies since vW are
-   named, maintained and needed.
+1. Dependencies: the CI job "audit" (`cargo audit`) is green; every entry
+   in `.cargo/audit.toml` still has a true reason (else FAIL); new
+   dependencies since vW are named, maintained and needed.
 2. Secrets: nothing secret in the diff or in files that ship (keys, tokens,
    personal paths); API keys of own servers are stored only where the code
    says and never logged or put into the state file / process arguments.
