@@ -11,6 +11,10 @@
 - Linux: the main window leaves room for the panel instead of reaching
   under it.
 - The What's new window fits its text instead of always scrolling.
+- Omarchy: the files kyrr shares with the bar menu (recording text, AI
+  instructions) can be read by their owner alone, the menu reads at most
+  64 KB from the files it hands back, and the instructions are shared only
+  while the plugin is on.
 - Release checks: a fixed list of checks (Omarchy contract, layout check on every
   page, release rules, advisory check) now runs in CI before each release.
 
