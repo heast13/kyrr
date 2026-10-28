@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.8.0 (2026-10-28)
+
+- Numbers as digits: spoken numbers are written as digits where that reads
+  better (from 13 up, times, dates, money, decimals), in dictation and in
+  the text of voice memos, German and English.
+- Local AI (experimental, off by default; Setup, "Experimental AI features"):
+  a language model on the own computer or in the home network (Ollama, LM
+  Studio, llama.cpp) fixes mistakes, rewords, makes professional or
+  translates each dictation (17 languages), alone or combined. Every answer
+  is checked before it is typed; if it fails, the text is typed as dictated
+  or only fixed. Voice memos can be reworked the same way, with a
+  two-column comparison and "Restore original".
+- Own dictation model: a speech server (speaches, whisper.cpp, CrispASR) can
+  recognise the dictation instead of the built-in model.
+- Omarchy: the bar menu has Local AI, the own dictation model and reworking
+  of recordings (plugin 1.1.0).
+- The main page scrolls on a small screen instead of reaching beyond it.
+
 ## 0.7.2 (2026-10-26)
 
 - Linux: voice memos are private to their owner. The folder is 0700 and

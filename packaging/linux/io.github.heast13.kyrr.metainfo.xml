@@ -75,6 +75,17 @@
     <keyword>speech to text</keyword>
   </keywords>
   <releases>
+    <release version="0.8.0" date="2026-10-28">
+      <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.8.0</url>
+      <description>
+        <ul>
+          <li>Spoken numbers are written as digits where that reads better</li>
+          <li>Experimental: a language model of your own fixes, rewords or translates dictations and voice memos</li>
+          <li>A speech server of your own can recognise your dictation</li>
+          <li>Omarchy: the bar menu covers the new features</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.7.2" date="2026-10-26">
       <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.7.2</url>
       <description>
