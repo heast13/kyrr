@@ -21,6 +21,7 @@ mod platform;
 mod player;
 mod probe;
 mod recorder;
+mod servers;
 #[cfg(target_os = "linux")]
 mod skin;
 mod update;
@@ -323,8 +324,9 @@ fn show_voice(state: &AppState, v: &VoiceSettings) {
 }
 
 /// Tallest the window gets, screen permitting; more content scrolls. Room
-/// for the tallest settings page (Setup, about 1060).
-const MAX_HEIGHT: f32 = 1310.0;
+/// for the tallest settings page (Setup with an update note, in German about
+/// 1420).
+const MAX_HEIGHT: f32 = 1460.0;
 /// Tallest when the screen is unknown: fits a 768-pixel-high laptop screen
 /// with the taskbar and title bar.
 const FALLBACK_HEIGHT: f32 = 660.0;
@@ -345,11 +347,19 @@ fn screen(w: &MainWindow) -> Option<(i32, i32, i32, i32)> {
 /// and a text to read want room.
 const MEMOS_HEIGHT: f32 = 780.0;
 
-/// The height the content wants, up to what the screen has room for.
-fn wanted_height(w: &MainWindow) -> f32 {
-    let cap = screen(w).map_or(FALLBACK_HEIGHT, |(_, top, _, bottom)| {
+/// The tallest the window gets on the screen it is on.
+fn height_cap(w: &MainWindow) -> f32 {
+    screen(w).map_or(FALLBACK_HEIGHT, |(_, top, _, bottom)| {
         ((bottom - top) as f32 / w.window().scale_factor() - FRAME).clamp(MIN_HEIGHT, MAX_HEIGHT)
-    });
+    })
+}
+
+/// The height the content wants, up to what the screen has room for. Also
+/// tells the window that cap: the main page's height is fixed to its
+/// content, and must not outgrow a small screen.
+fn wanted_height(w: &MainWindow) -> f32 {
+    let cap = height_cap(w);
+    w.set_height_cap(cap);
     let memos = !w.get_setup_mode() && w.global::<AppState>().get_page() == 6;
     let content = w.get_content_height();
     (if memos { content.max(MEMOS_HEIGHT) } else { content }).min(cap)
@@ -469,9 +479,11 @@ fn fit_sheet(w: &MainWindow, open: bool) {
         return;
     }
     let win = w.window();
-    let cap = screen(w).map_or(FALLBACK_HEIGHT, |(_, top, _, bottom)| {
-        ((bottom - top) as f32 / win.scale_factor() - FRAME).clamp(MIN_HEIGHT, MAX_HEIGHT)
-    });
+    // Two columns, side by side, fit on the screen.
+    if let Some((left, _, right, _)) = screen(w) {
+        w.set_widest(((right - left) as f32 / win.scale_factor() - FRAME_SIDES).max(520.0));
+    }
+    let cap = height_cap(w);
     let height = win.size().to_logical(win.scale_factor()).height;
     let wanted = SHEET_HEIGHT.min(cap);
     if wanted > height + 0.5 {
@@ -1260,6 +1272,8 @@ impl App {
             ("toggle", "general.overload") => flip!(get_auto_lean, set_auto_lean, invoke_auto_lean_toggled),
             ("toggle", "general.updateCheck") => flip!(get_update_auto, set_update_auto, invoke_update_auto_toggled),
             ("toggle", "listen") => state.invoke_listen_toggled(),
+            ("toggle", "ai.features") => flip!(get_ai_features, set_ai_features, invoke_ai_features_toggled),
+            ("toggle", "ai.on") => flip!(get_local_ai, set_local_ai, invoke_local_ai_toggled),
             ("set", setting) => self.omarchy_set(&state, setting, value),
             ("mic", "unmute") => state.invoke_unmute(),
             ("mic", "repair") => state.invoke_repair(),
@@ -1338,6 +1352,14 @@ impl App {
                 state.set_memo_sheet_stamps(i);
                 state.invoke_memo_sheet_stamps_changed(i);
             }
+            // The language model on the open text, as chosen with
+            // `set memos.reworkAction|reworkTarget`; typed text goes first.
+            ("memo", "rework") => {
+                self.omarchy_edit(&state);
+                state.invoke_memo_rework(state.get_memo_rework_action(), state.get_memo_rework_target());
+            }
+            ("memo", "stoprework") => state.invoke_memo_stop_rework(),
+            ("memo", "restore") => state.invoke_memo_restore_text(),
             ("memo", "opentext") => {
                 self.omarchy_edit(&state);
                 state.invoke_memo_open_text();
@@ -1391,7 +1413,7 @@ impl App {
     }
 
     /// `set <setting> <value>` from the widget's menu.
-    fn omarchy_set(&self, state: &AppState, setting: &str, value: &str) {
+    fn omarchy_set(self: &Rc<Self>, state: &AppState, setting: &str, value: &str) {
         let pick = |names: &[&str]| -> Option<i32> {
             names
                 .iter()
@@ -1454,6 +1476,10 @@ impl App {
                 state.invoke_key_toggle_changed(tap);
             }
             "memos.hold" => state.invoke_memo_toggle_changed(value != "true"),
+            // Local AI, the own speech server and reworking a recording.
+            _ if setting.starts_with("ai.") || setting.starts_with("asr.") || setting.starts_with("memos.rework") => {
+                servers::widget_set(self, setting, value)
+            }
             "general.language" => {
                 if let Some(i) = pick(&["de", "en", "multi"]).map(|i| i.clamp(0, 2)) {
                     state.set_language_index(i);
@@ -2169,6 +2195,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
             Event::Ends(at) => return wave.set_end(at),
             Event::Limit(text) => return wave.set_limit(text),
             Event::Nothing(text) => return wave.set_note(text),
+            Event::Note(text, tone) => return wave.set_toned(text, tone),
             _ => {}
         }
         if let Event::State(s) = &event {
@@ -2208,7 +2235,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
                 }
                 Event::Progress(p) => state.set_download_progress(p),
                 Event::Typed(text) => state.set_last_text(text.into()),
-                Event::Heard(_) | Event::Ends(_) | Event::Limit(_) | Event::Nothing(_) => {}
+                Event::Heard(_) | Event::Ends(_) | Event::Limit(_) | Event::Nothing(_) | Event::Note(..) => {}
                 Event::Message(m) => state.set_dictation_message(m.unwrap_or_default().into()),
                 Event::Titled(path, title) => {
                     if let Some(m) = memos::memos() {
@@ -2401,6 +2428,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
     });
     state.set_memos_enabled(app.config.borrow().memos);
     state.set_memo_auto_text(app.config.borrow().memo_text_auto);
+    servers::setup(&app, &window);
     tray.set_memos_enabled(app.config.borrow().memos);
     show_voice(&state, &filter.voice);
     tray.set_dictation_enabled(app.config.borrow().dictation);
@@ -2755,6 +2783,7 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
         move || {
             // A key field that waited is gone with its page.
             app.capture(0);
+            servers::look_around(&app);
             if let Some(w) = weak.upgrade() {
                 w.invoke_reset_scroll();
             }
@@ -2780,6 +2809,22 @@ fn run(background: bool, show_requests: Option<mpsc::Receiver<Request>>) -> Resu
     window.on_content_height_changed({
         let weak = window.as_weak();
         move || grow(&weak)
+    });
+    // A memo compared with the text before widens the window for a second
+    // column, and it narrows again after; the height stays.
+    window.on_page_width_changed({
+        let weak = window.as_weak();
+        move || {
+            let weak = weak.clone();
+            slint::Timer::single_shot(Duration::from_millis(10), move || {
+                let Some(w) = weak.upgrade() else { return };
+                let win = w.window();
+                if headless() || !win.is_visible() || win.is_minimized() {
+                    return;
+                }
+                resize(&w, win.size().to_logical(win.scale_factor()).height);
+            });
+        }
     });
     // Closing only hides the window; listening and the meter end with it.
     // The button in the window does the same; quitting is in the tray menu.
@@ -3320,6 +3365,7 @@ fn tell_widget(window: &MainWindow) {
             "here": state
                 .invoke_memo_here_label(sheet_text.clone(), SHEET_CURSOR.get())
                 .as_str(),
+            "rework": servers::widget_memo_rework(&state),
         })
     } else {
         serde_json::Value::Null
@@ -3467,6 +3513,8 @@ fn tell_widget(window: &MainWindow) {
             "installable": state.get_update_installable(),
             "dismissed": state.get_update_dismissed(),
         },
+        // Local AI and the own speech server (kyrr 0.8.0).
+        "ai": servers::widget_state(&state),
         "probe": probe,
         "hasProbe": state.get_has_probe(),
         "probeError": state.get_probe_error().as_str(),
@@ -3542,6 +3590,7 @@ fn new_tray(app: &Rc<App>) -> Result<Tray, slint::PlatformError> {
             }
         }
     });
+    servers::wire_tray(app, &tray);
     Ok(tray)
 }
 

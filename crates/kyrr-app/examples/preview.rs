@@ -190,6 +190,39 @@ fn memos(window: &MinimalSoftwareWindow, ui: &MainWindow, out: &str, lang: &str)
         );
     }
     state.set_memo_sheet_stamps(0);
+    state.set_memo_sheet_text(field(0));
+    // The language model on the text: at work, then done with the original kept.
+    state.set_memo_rework_ready(true);
+    state.set_memo_rework_action(3);
+    state.set_memo_rework_target(1);
+    state.set_memo_rework_busy(true);
+    state.set_memo_rework_progress(0.4);
+    render_at(window, ui, 820.0, &format!("{out}/memos-ai-busy-{lang}.rgba"));
+    state.set_memo_rework_busy(false);
+    state.set_memo_sheet_original(true);
+    state.set_memo_rework_note(t(
+        "Professionell formuliert. 1 von 4 Absätzen unverändert. Das Original ist gesichert.",
+        "Made professional. 1 of 4 paragraphs unchanged. The original is kept.",
+    ));
+    render_at(window, ui, 820.0, &format!("{out}/memos-ai-done-{lang}.rgba"));
+    // Compared with the text before: fixed and made professional, then one
+    // paragraph translated.
+    let styled = |m: &str| slint::StyledText::from_markdown(m).unwrap();
+    state.set_memo_sheet_compare(ModelRc::new(VecModel::from(
+        compare_preview(lang == "de")
+            .iter()
+            .map(|(before, after)| ComparePair {
+                before: styled(before),
+                after: styled(after),
+            })
+            .collect::<Vec<_>>(),
+    )));
+    state.set_memo_sheet_view(1);
+    render_at(window, ui, 820.0, &format!("{out}/memos-ai-compare-{lang}.rgba"));
+    state.set_memo_sheet_view(0);
+    state.set_memo_rework_ready(false);
+    state.set_memo_sheet_original(false);
+    state.set_memo_rework_note("".into());
     state.set_memo_sheet_open(false);
     // Let the text slide away before the next pictures.
     std::thread::sleep(std::time::Duration::from_millis(450));
@@ -206,6 +239,44 @@ fn memos(window: &MinimalSoftwareWindow, ui: &MainWindow, out: &str, lang: &str)
     state.set_memo_new(true);
     render(window, ui, &format!("{out}/main-memo-new-{lang}.rgba"));
     state.set_memo_new(false);
+}
+
+/// What the comparison in the memo text shows (as `memo::compare` writes it):
+/// fixed and made professional, then one paragraph translated.
+fn compare_preview(german: bool) -> Vec<(String, String)> {
+    let (gone, came) = ("#d9534f", "#2e9e5b");
+    let pair = |a: String, b: String| (a, b);
+    if german {
+        vec![
+            pair(
+                format!("<font color=\"{gone}\">Gedanken zur neuen Startseite. Oben soll sofort klar sein, was kyrr macht, ohne Werbesprech.</font>"),
+                format!("<font color=\"{came}\">Überlegungen zur neuen Startseite: Oben muss sofort erkennbar sein, was kyrr leistet, ohne Werbesprache.</font>"),
+            ),
+            pair(
+                format!("Darunter <font color=\"{gone}\">der Download, groß, und gleich daneben</font> die Befehle für Linux zum Kopieren\\."),
+                format!("Darunter <font color=\"{came}\">folgt gut sichtbar der Download, direkt daneben</font> die Befehle für Linux zum Kopieren\\."),
+            ),
+            pair(
+                "Die Beispiel\\-Pille als kurze Schleife, nicht als Video, das lädt sonst ewig\\.".into(),
+                "The example pill as a short loop rather than a video, which would take too long to load\\.".into(),
+            ),
+            pair(
+                "Und unten nur noch die häufigen Fragen, zusammengeklappt\\.".into(),
+                "Und unten nur noch die häufigen Fragen, zusammengeklappt\\.".into(),
+            ),
+        ]
+    } else {
+        vec![
+            pair(
+                format!("<font color=\"{gone}\">Thoughts on the new home page.</font> the top must make clear at once what kyrr does\\."),
+                format!("<font color=\"{came}\">Notes on the new home page:</font> the top must make clear at once what kyrr does\\."),
+            ),
+            pair(
+                "Die Beispiel\\-Pille als kurze Schleife\\.".into(),
+                "The example pill as a short loop\\.".into(),
+            ),
+        ]
+    }
 }
 
 fn main() {
@@ -417,6 +488,65 @@ fn main() {
     render(&window, &ui, &format!("{out}/update-{lang}.rgba"));
     state.set_update_state(UpdateState::Idle);
 
+    // The user's own models: set up, tested, and the choice on the main page.
+    state.set_ai_features(true);
+    state.set_rework_tips(true);
+    state.set_rework_url("http://192.168.1.10:1234".into());
+    state.set_rework_models(ModelRc::new(VecModel::from(vec!["gemma-4-26B-A4B-it".into()])));
+    state.set_rework_model_index(0);
+    state.set_rework_ready(true);
+    state.set_rework_note(
+        if lang == "de" {
+            "Funktioniert (1,1 s): „Ich habe heute die Bremsbeläge am Auto gewechselt.“"
+        } else {
+            "Works (1.1 s): “Ich habe heute die Bremsbeläge am Auto gewechselt.”"
+        }
+        .into(),
+    );
+    state.set_asr_on(true);
+    state.set_asr_url("http://192.168.1.11:8081".into());
+    state.set_asr_note(
+        if lang == "de" {
+            "Funktioniert (0,4 s für eine Sekunde Stille)."
+        } else {
+            "Works (0.4 s for a second of silence)."
+        }
+        .into(),
+    );
+    state.set_page(7);
+    render(&window, &ui, &format!("{out}/own-models-{lang}.rgba"));
+    state.set_page(8);
+    state.set_prompt_text(kyrr_server::rework::DEFAULT_PROMPTS[0].into());
+    state.set_prompt_saved(kyrr_server::rework::DEFAULT_PROMPTS[0].into());
+    render(&window, &ui, &format!("{out}/local-ai-{lang}.rgba"));
+    state.set_rework_tips(false);
+    state.set_local_ai(true);
+    state.set_rework_index(3);
+    state.set_translate_index(3);
+    state.set_page(0);
+    render(&window, &ui, &format!("{out}/main-local-ai-{lang}.rgba"));
+    state.set_page(1);
+    render(&window, &ui, &format!("{out}/own-models-on-{lang}.rgba"));
+    // Switched on, nothing set up yet, Ollama found.
+    state.set_rework_ready(false);
+    state.set_rework_url("".into());
+    state.set_rework_models(ModelRc::new(VecModel::from(Vec::<slint::SharedString>::new())));
+    state.set_rework_note("".into());
+    state.set_rework_found("Ollama".into());
+    state.set_page(0);
+    render(&window, &ui, &format!("{out}/main-local-ai-new-{lang}.rgba"));
+    state.set_page(8);
+    render(&window, &ui, &format!("{out}/local-ai-found-{lang}.rgba"));
+    state.set_rework_found("".into());
+    state.set_local_ai(false);
+    state.set_page(0);
+    render(&window, &ui, &format!("{out}/main-local-ai-off-{lang}.rgba"));
+    state.set_asr_on(false);
+    state.set_ai_features(false);
+    state.set_translate_index(0);
+    state.set_page(1);
+    render(&window, &ui, &format!("{out}/own-models-off-{lang}.rgba"));
+
     // Windows on ARM: no filter, dictation only.
     state.set_filter_enabled(false);
     state.set_voice_enabled(false);
@@ -438,6 +568,12 @@ fn main() {
     state.set_dictation_state(DictationState::Downloading);
     state.set_download_progress(0.42);
     render(&window, &ui, &format!("{out}/setup2-{lang}.rgba"));
+    state.set_asr_on(true);
+    state.set_asr_url("http://192.168.1.11:8081".into());
+    state.set_dictation_state(DictationState::Ready);
+    render(&window, &ui, &format!("{out}/setup2-server-{lang}.rgba"));
+    state.set_asr_on(false);
+    state.set_dictation_state(DictationState::Downloading);
     ui.set_setup_step(2);
     render(&window, &ui, &format!("{out}/setup3-{lang}.rgba"));
     state.set_effort_index(0);

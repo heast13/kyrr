@@ -9,6 +9,8 @@ The details behind each part of the app. For installing, see
 - [Check](#check)
 - [Dictation](#dictation)
 - [Voice memos](#voice-memos)
+- [Numbers](#numbers)
+- [Your own servers (experimental)](#your-own-servers-experimental)
 - [Keys](#keys)
 
 <p align="center">
@@ -163,6 +165,48 @@ On Linux the memo key is set up like the dictation key: GNOME 48 and KDE ask
 for both keys in one dialog, GNOME 46 and 47 get a second custom shortcut,
 and on Hyprland, Sway, river and niri the key goes into kyrr's block in the
 config.
+
+## Numbers
+
+Spoken numbers are written as digits where that reads better: from 13 up
+always ("sechsundzwanzig" becomes 26), times, dates, money and decimals
+("14:30 Uhr", "26. Mai", "349,50 Euro", "3,5"). Numbers from 0 to 12 stay words
+("zwei Kinder") unless a unit follows ("2 Euro", "8 Uhr"). Anything that does
+not read as one clear number stays as it was said. This works in dictation
+and in the text of voice memos, in German and English.
+
+## Your own servers (experimental)
+
+Off by default. Under Setup, "Experimental AI features" switches on the card
+"Local AI" on the main page. It needs a language model that runs on your own
+computer or in your home network (Ollama, LM Studio or llama.cpp; Gemma 4 from
+E4B up is what kyrr is tested with, 12B or 26B recommended). Plain `http`
+goes to the own PC, to home-network addresses and to Tailscale addresses only,
+and kyrr refuses it anywhere else. An `https` address is used as typed.
+
+- **Fix mistakes**, **Nicer** (more fluent wording), **Professional** and
+  **Translate** (17 languages) work on each dictation before it is typed,
+  alone or combined (rework first, then translate). The same choices exist
+  for voice memos, with a comparison of the old and the new text and a way
+  back to the original.
+- kyrr checks every answer before it is typed. "Fix mistakes" may change a
+  word only into one that looks or sounds like it; every task keeps
+  numbers, language and length in range, a question stays a question, and
+  nothing is answered. If the answer fails the check, the model gets one
+  second try; after that "Fix mistakes" is used instead, or the text is typed
+  as dictated. Too slow also means: typed as dictated. The pill says what
+  happened.
+- kyrr switches the model's thinking off itself where the server allows it.
+  The instructions sent to the model can be read and changed in the settings.
+- **Own dictation model:** a speech server (for example speaches or
+  whisper.cpp) can recognise the dictation instead of kyrr's built-in model.
+  Live words are not shown then. If the server cannot be reached, kyrr
+  recognises on the computer, provided the speech model is installed.
+- **Omarchy:** the plugin's menu has all of this (Setup > Experimental AI
+  features adds the row "Local AI"; Setup > Own dictation model), also
+  rework and translation on a recording with "Restore original". Missing
+  there: the comparison of old and new text, and reading or changing the
+  wording of the instructions (they can be reset). Needs plugin 1.1.0.
 
 ## Keys
 

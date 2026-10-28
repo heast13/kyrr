@@ -10,7 +10,8 @@ every app that uses the default microphone.
 
 No. Audio, dictated text and voice memos stay on your PC. kyrr goes online
 only for the speech model, the update check and an update you start
-yourself; see [Privacy](../README.md#privacy).
+yourself; see [Privacy](../README.md#privacy). The one exception is yours to
+switch on: own servers in your home network.
 
 ## How does kyrr compare with NVIDIA Broadcast and Krisp?
 

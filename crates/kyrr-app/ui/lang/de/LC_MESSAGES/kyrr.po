@@ -998,7 +998,6 @@ msgstr "Version {} ist da. Herunterladen und den Installer starten, deine Einste
 msgid "Moves while an app uses the mic."
 msgstr "Bewegt sich, solange eine App das Mikro nutzt."
 
-
 msgid "Off to the corner"
 msgstr "Ab in die Ecke"
 
@@ -1085,7 +1084,6 @@ msgstr "Einschalten"
 
 msgid "Your mic is muted."
 msgstr "Dein Mikro ist stummgeschaltet."
-
 
 msgid "No tray here: closing the window quits kyrr."
 msgstr "Kein Tray hier: Fenster schließen beendet kyrr."
@@ -1496,3 +1494,202 @@ msgstr "Rechner kam nicht mit: jetzt Sparsam."
 
 msgid "The computer cannot keep up: noise removal pauses now and then."
 msgstr "Rechner kommt nicht mit: Geräuschunterdrückung setzt ab und zu aus."
+
+msgid "Fix mishearings"
+msgstr "Fehler ausbessern"
+
+msgid "Reword nicely"
+msgstr "Schöner formulieren"
+
+msgid "Rework"
+msgstr "Überarbeitung"
+
+
+msgid "Set up"
+msgstr "Einrichten"
+
+
+msgid "Address"
+msgstr "Adresse"
+
+msgid "Model"
+msgstr "Modell"
+
+msgid "Filled in once the server answers"
+msgstr "Wird ausgefüllt, sobald der Server antwortet"
+
+msgid "Key, if the server wants one"
+msgstr "Schlüssel, falls der Server einen verlangt"
+
+msgid "Asking…"
+msgstr "Verbinde…"
+
+msgid "Connect and test"
+msgstr "Verbinden und testen"
+
+
+msgid "Dictation model"
+msgstr "Diktiermodell"
+
+msgid "Built in"
+msgstr "Eingebaut"
+
+msgid "Own server"
+msgstr "Eigener Server"
+
+
+msgid "kyrr recognises on this computer. Nothing leaves it."
+msgstr "Die Erkennung läuft auf diesem PC. Keine Daten verlassen ihn."
+
+msgid "Translate into"
+msgstr "Übersetzen in"
+
+msgid "English"
+msgstr "Englisch"
+
+msgid "German"
+msgstr "Deutsch"
+
+msgid "French"
+msgstr "Französisch"
+
+msgid "Spanish"
+msgstr "Spanisch"
+
+msgid "Italian"
+msgstr "Italienisch"
+
+msgid "Dutch"
+msgstr "Niederländisch"
+
+msgid "Portuguese"
+msgstr "Portugiesisch"
+
+msgid "Polish"
+msgstr "Polnisch"
+
+msgid "Czech"
+msgstr "Tschechisch"
+
+msgid "Slovak"
+msgstr "Slowakisch"
+
+msgid "Swedish"
+msgstr "Schwedisch"
+
+msgid "Danish"
+msgstr "Dänisch"
+
+msgid "Norwegian"
+msgstr "Norwegisch"
+
+msgid "Finnish"
+msgstr "Finnisch"
+
+msgid "Hungarian"
+msgstr "Ungarisch"
+
+msgid "Romanian"
+msgstr "Rumänisch"
+
+msgid "Croatian"
+msgstr "Kroatisch"
+
+
+msgid "Experimental AI features"
+msgstr "Experimentelle KI-Features"
+
+
+
+msgid "Which model?"
+msgstr "Welches Modell?"
+
+msgid "Recommended: Gemma 4 from Google from E4B up, best 12B, 26B or 31B. kyrr is tested with these models. Other models may work too, but have not been checked.\n\nkyrr switches thinking off by itself where the server allows it. If the model answers too slowly, kyrr types the text unchanged."
+msgstr "Empfohlen: Gemma 4 von Google ab E4B, am besten 12B, 26B oder 31B. Mit diesen Modellen ist kyrr getestet. Andere Modelle funktionieren möglicherweise auch, wurden aber nicht geprüft.\n\nkyrr schaltet den Denkmodus (Thinking) selbst aus, sofern der Server das zulässt. Antwortet das Modell zu langsam, tippt kyrr den Text unverändert."
+
+msgid "Professional"
+msgstr "Professionell"
+
+msgid "Translate"
+msgstr "Übersetzen"
+
+msgid "Local AI"
+msgstr "Lokale KI"
+
+msgid "Off. Dictations are typed as spoken."
+msgstr "Aus. Diktate werden unverändert getippt."
+
+msgid "Not set up yet: no language model chosen."
+msgstr "Noch nicht eingerichtet: kein Sprachmodell gewählt."
+
+msgid "Your language model edits each dictation before it is typed. Pressing the key meanwhile types the original."
+msgstr "Dein Sprachmodell bearbeitet jedes Diktat vor dem Tippen. Ein Tastendruck währenddessen tippt das Original."
+
+msgid "Own dictation model"
+msgstr "Eigenes Diktiermodell"
+
+msgid "Optional: speech recognition by a server of your own, on this computer or in your home network."
+msgstr "Optional: Spracherkennung über einen eigenen Server, auf diesem PC oder im Heimnetz."
+
+msgid "Local AI is on the main page. Experimental, may still change."
+msgstr "„Lokale KI“ steht auf der Startseite. Experimentell, kann sich noch ändern."
+
+msgid "Off. Switched on, Local AI appears on the main page: a language model of your own corrects, rewords or translates dictations."
+msgstr "Aus. Eingeschaltet erscheint „Lokale KI“ auf der Startseite: Ein eigenes Sprachmodell korrigiert, formuliert um oder übersetzt Diktate."
+
+msgid "Language model"
+msgstr "Sprachmodell"
+
+msgid "Requires a local AI server such as Ollama or LM Studio, on this computer or in your home network."
+msgstr "Voraussetzung: ein lokaler KI-Server wie Ollama oder LM Studio, auf diesem PC oder im Heimnetz."
+
+msgid "{} is running on this computer."
+msgstr "{} läuft auf diesem PC."
+
+msgid "Use it"
+msgstr "Übernehmen"
+
+msgid "Instructions"
+msgstr "Anweisungen (Prompts)"
+
+msgid "What the language model is told for each task. In English, which most models follow best."
+msgstr "Was das Sprachmodell für jede Aufgabe gesagt bekommt. Auf Englisch, das befolgen die meisten Modelle am zuverlässigsten."
+
+msgid "{} stands for the target language."
+msgstr "{} steht für die Zielsprache."
+
+msgid "Not saved yet."
+msgstr "Noch nicht gespeichert."
+
+msgid "Your own instruction."
+msgstr "Eigene Anweisung."
+
+msgid "kyrr's instruction."
+msgstr "Standard von kyrr."
+
+msgid "Save"
+msgstr "Speichern"
+
+msgid "A speech server such as speaches or whisper.cpp recognises your dictation. Live words are not shown then. If the server cannot be reached, kyrr recognises on this computer, provided the speech model is installed."
+msgstr "Ein Sprachserver wie speaches oder whisper.cpp erkennt das Diktat. Live-Wörter werden dann nicht angezeigt. Ist der Server nicht erreichbar, erkennt kyrr auf diesem PC, sofern das Sprachmodell installiert ist."
+
+msgid "Apply"
+msgstr "Anwenden"
+
+msgid "Restore original"
+msgstr "Original wiederherstellen"
+
+msgid "Compare"
+msgstr "Vergleich"
+
+msgid "Text"
+msgstr "Text"
+
+msgid "Red: changed in the original. Green: worded anew. A translation stays unmarked."
+msgstr "Rot: im Original geändert. Grün: neu formuliert. Eine Übersetzung bleibt unmarkiert."
+
+msgid "Original"
+msgstr "Original"
+
+msgid "New version"
+msgstr "Neue Fassung"

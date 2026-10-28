@@ -13,14 +13,17 @@ use std::time::{Duration, SystemTime};
 use chrono::{Local, NaiveDateTime};
 use kyrr_common::wave::{Mode, Overlay};
 use kyrr_dictate::Language;
+use kyrr_server::rework::{self, Outcome, Preset, Why, TARGETS};
+use kyrr_server::{Error, Server};
 use slint::{ComponentHandle, Model, ModelRc, VecModel, Weak};
 
 use crate::dictation::{Command, Job, Text};
+use crate::memo::compare;
 use crate::memo::library::{self, Memo, Stamps};
 use crate::memo::player::Player;
 use crate::memo::recorder::{Ending, Recording};
 use crate::memo::title;
-use crate::{AppState, MainWindow, MemoItem};
+use crate::{AppState, ComparePair, MainWindow, MemoItem};
 
 /// Shorter memos are a key pressed twice by accident: not kept.
 const SHORTEST: f64 = 3.0;
@@ -37,6 +40,29 @@ const WATCH: Duration = Duration::from_secs(1);
 
 /// Told when the list was looked at (seconds since 1970).
 type SeenHook = Box<dyn Fn(u64)>;
+
+/// The user's language model, for rewording or translating a memo's text.
+pub struct MemoRework {
+    pub server: Server,
+    pub model: String,
+    /// The dictation language's code; None with more languages.
+    pub language: Option<&'static str>,
+}
+
+/// How reworking a memo's text went: the text it started from, the
+/// paragraphs now, how many of them changed and how many of those were
+/// only fixed, and what kept the server from finishing, if anything did.
+struct Reworked {
+    from: Vec<library::Paragraph>,
+    paragraphs: Vec<library::Paragraph>,
+    changed: usize,
+    fixed_only: usize,
+    failed: Option<Error>,
+}
+
+/// Paragraphs in a row that may run out of time before the server counts
+/// as gone: a single long one can, a server that went away makes them all.
+const LATE_IN_A_ROW: usize = 2;
 
 pub struct Memos {
     window: Weak<MainWindow>,
@@ -85,6 +111,10 @@ pub struct Memos {
     brief: slint::Timer,
     saving: slint::Timer,
     watching: slint::Timer,
+    /// The language model, when one is set up and switched on.
+    rework: RefCell<Option<MemoRework>>,
+    /// The memo whose text the language model works on, and what stops it.
+    reworking: RefCell<Option<(PathBuf, Arc<AtomicBool>)>>,
 }
 
 thread_local! {
@@ -139,6 +169,8 @@ impl Memos {
             brief: slint::Timer::default(),
             saving: slint::Timer::default(),
             watching: slint::Timer::default(),
+            rework: RefCell::new(None),
+            reworking: RefCell::new(None),
         });
         MEMOS.set(Some(Rc::clone(&memos)));
         window
@@ -359,6 +391,15 @@ impl Memos {
         };
         state.on_memo_record(with0(|m| m.toggle()));
         state.on_memo_close_text(with0(|m| m.close_text()));
+        state.on_memo_restore_text(with0(|m| m.restore_text()));
+        state.on_memo_show_compare(with0(|m| m.show_compare()));
+        state.on_memo_stop_rework(with0(|m| m.stop_rework()));
+        let weak = Rc::downgrade(self);
+        state.on_memo_rework(move |action, target| {
+            if let Some(m) = weak.upgrade() {
+                m.rework_text(action, target);
+            }
+        });
         state.on_memo_open_text(with0(|m| m.open_text()));
         state.on_memo_open_folder(with0(|m| m.open_folder()));
         let weak = Rc::downgrade(self);
@@ -778,6 +819,9 @@ impl Memos {
             self.player.borrow_mut().take();
         }
         let _ = self.worker.send(Command::CancelText(path.clone()));
+        if self.reworking.borrow().as_ref().is_some_and(|(p, _)| *p == path) {
+            self.stop_rework();
+        }
         self.texts.borrow_mut().remove(&path);
         self.auto_named.borrow_mut().remove(&path);
         // Nothing typed into its text is saved after it is gone.
@@ -923,6 +967,12 @@ impl Memos {
         };
         // What could not be saved for the memo before is given up here.
         self.flush();
+        if let Some(w) = self.window.upgrade() {
+            let state = w.global::<AppState>();
+            state.set_memo_rework_note("".into());
+            // Another memo opens as text.
+            state.set_memo_sheet_view(0);
+        }
         self.dirty.set(false);
         *self.sheet.borrow_mut() = Some(path);
         self.show_sheet();
@@ -968,6 +1018,12 @@ impl Memos {
         }
         state.set_memo_sheet_title(memo.title.as_str().into());
         state.set_memo_sheet_when(self.when(memo).into());
+        let original = library::read_original(&memo.path);
+        state.set_memo_sheet_original(original.is_some());
+        match original {
+            Some(before) => state.set_memo_sheet_compare(self.comparison(&before, memo)),
+            None => state.set_memo_sheet_view(0),
+        }
         state.set_memo_copied(false);
         drop(all);
         drop(sheet);
@@ -975,6 +1031,10 @@ impl Memos {
     }
 
     fn close_text(&self) {
+        self.stop_rework();
+        if let Some(w) = self.window.upgrade() {
+            w.global::<AppState>().set_memo_rework_note("".into());
+        }
         self.flush();
         self.watching.stop();
         if let Some(w) = self.window.upgrade() {
@@ -1072,6 +1132,313 @@ impl Memos {
             .find(|m| m.path == path)
             .and_then(|m| m.text.clone())
             .unwrap_or_default()
+    }
+
+    /// The text before and after the language model, marked, paragraph
+    /// beside paragraph.
+    fn comparison(&self, before: &[library::Paragraph], memo: &Memo) -> ModelRc<ComparePair> {
+        let after = memo.text.as_deref().unwrap_or_default();
+        let styled = |markdown: &str| {
+            slint::StyledText::from_markdown(markdown).unwrap_or_else(|e| {
+                eprintln!("kyrr: memo: comparing the text of {}: {e}", memo.path.display());
+                slint::StyledText::from_plain_text(markdown)
+            })
+        };
+        let pairs: Vec<ComparePair> = compare::markdown(before, after)
+            .iter()
+            .map(|(then, now)| ComparePair {
+                before: styled(then),
+                after: styled(now),
+            })
+            .collect();
+        ModelRc::new(VecModel::from(pairs))
+    }
+
+    /// The comparison opens: what was typed counts in it.
+    fn show_compare(&self) {
+        self.flush();
+        self.show_sheet();
+    }
+
+    /// The language model as set up now (None for none or switched off).
+    pub fn set_rework(&self, rework: Option<MemoRework>) {
+        if let Some(w) = self.window.upgrade() {
+            w.global::<AppState>().set_memo_rework_ready(rework.is_some());
+        }
+        *self.rework.borrow_mut() = rework;
+    }
+
+    /// Has the language model fix (1), reword (2) or formalize (3) the open
+    /// text and then translate it (into `TARGETS[target - 1]`), or only one
+    /// of them, paragraph by paragraph beside the window. The text before
+    /// it is kept.
+    fn rework_text(self: &Rc<Self>, action: i32, target: i32) {
+        let Some(w) = self.window.upgrade() else {
+            return;
+        };
+        let state = w.global::<AppState>();
+        let (Some(path), Some(rework)) = (
+            self.sheet.borrow().clone(),
+            self.rework
+                .borrow()
+                .as_ref()
+                .map(|r| (r.server.clone(), r.model.clone(), r.language)),
+        ) else {
+            return;
+        };
+        if self.reworking.borrow().is_some() {
+            return;
+        }
+        let mut steps = Vec::new();
+        match action {
+            1 => steps.push(Preset::Fix),
+            2 => steps.push(Preset::Polish),
+            3 => steps.push(Preset::Business),
+            _ => {}
+        }
+        if let Some((code, _)) = usize::try_from(target - 1).ok().and_then(|i| TARGETS.get(i)) {
+            steps.push(Preset::Translate(code));
+        }
+        if steps.is_empty() {
+            return;
+        }
+        self.flush();
+        // What was typed could not be saved: it is not worked over.
+        if self.dirty.get() {
+            return;
+        }
+        let paragraphs = library::read_text(&path).unwrap_or_default();
+        let from = paragraphs.clone();
+        if paragraphs.iter().all(|p| p.text.trim().is_empty()) {
+            return;
+        }
+        let stop = Arc::new(AtomicBool::new(false));
+        *self.reworking.borrow_mut() = Some((path.clone(), Arc::clone(&stop)));
+        state.set_memo_rework_busy(true);
+        state.set_memo_rework_progress(0.0);
+        state.set_memo_rework_note("".into());
+        let german = self.german();
+        std::thread::spawn(move || {
+            let (server, model, language) = rework;
+            let all = paragraphs.len();
+            let (mut changed, mut fixed_only) = (0, 0);
+            let mut out = Vec::with_capacity(all);
+            let mut failed = None;
+            let mut late = 0;
+            let mut paragraphs = paragraphs.into_iter();
+            for (i, p) in paragraphs.by_ref().enumerate() {
+                if stop.load(Ordering::Relaxed) || failed.is_some() {
+                    out.push(p);
+                    continue;
+                }
+                // Nobody waits at the keyboard: more time than for a dictation.
+                let limit = (rework::time_limit_all(&steps, &p.text) * 4).max(Duration::from_secs(30));
+                let deadline = std::time::Instant::now() + limit;
+                let outcomes = rework::rework_all(&server, &model, &steps, &p.text, language, deadline, &stop);
+                // One paragraph too long for the time: it stays, the next go
+                // on. Anything else, or the time running out again and
+                // again, ends the work; what is done is kept.
+                match outcomes.iter().find_map(|o| match o {
+                    Outcome::Original(Why::Server(e)) => Some(e.clone()),
+                    _ => None,
+                }) {
+                    Some(Error::Timeout) if late + 1 < LATE_IN_A_ROW => late += 1,
+                    Some(e) => failed = Some(e),
+                    None => late = 0,
+                }
+                fixed_only += usize::from(outcomes.iter().any(|o| matches!(o, Outcome::FixedInstead(_))));
+                // Each step went on from the one before: the last text is it.
+                let text = outcomes.into_iter().rev().find_map(|o| match o {
+                    Outcome::Reworked(text) | Outcome::FixedInstead(text) => Some(text),
+                    Outcome::Original(_) => None,
+                });
+                match text {
+                    Some(text) => {
+                        changed += 1;
+                        out.push(library::Paragraph {
+                            seconds: p.seconds,
+                            text,
+                        });
+                    }
+                    None => out.push(p),
+                }
+                let done = (i + 1) as f32 / all as f32;
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(w) = memos().and_then(|m| m.window.upgrade()) {
+                        w.global::<AppState>().set_memo_rework_progress(done);
+                    }
+                });
+            }
+            out.extend(paragraphs);
+            let result = Reworked {
+                from,
+                paragraphs: out,
+                changed,
+                fixed_only,
+                failed,
+            };
+            let stopped = stop.load(Ordering::Relaxed);
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(m) = memos() {
+                    m.reworked(&path, &stop, &steps, (!stopped).then_some(result), german);
+                }
+            });
+        });
+    }
+
+    /// Ends the language model's work on a text; the text stays as it was.
+    fn stop_rework(&self) {
+        if let Some((_, stop)) = self.reworking.borrow_mut().take() {
+            stop.store(true, Ordering::Relaxed);
+        }
+        if let Some(w) = self.window.upgrade() {
+            w.global::<AppState>().set_memo_rework_busy(false);
+        }
+    }
+
+    /// What the language model made of a memo's text: kept as its text, the
+    /// one before kept beside it. None when it was stopped.
+    fn reworked(&self, path: &Path, run: &Arc<AtomicBool>, steps: &[Preset], result: Option<Reworked>, german: bool) {
+        // Stopped, and maybe another one started since.
+        if self
+            .reworking
+            .borrow()
+            .as_ref()
+            .is_none_or(|(_, r)| !Arc::ptr_eq(r, run))
+        {
+            return;
+        }
+        *self.reworking.borrow_mut() = None;
+        let Some(w) = self.window.upgrade() else {
+            return;
+        };
+        let state = w.global::<AppState>();
+        state.set_memo_rework_busy(false);
+        let Some(result) = result else {
+            return;
+        };
+        if !path.exists() {
+            return;
+        }
+        let Reworked {
+            from,
+            paragraphs,
+            changed,
+            fixed_only,
+            failed,
+        } = result;
+        // Written anew meanwhile (a fresh transcript, an edit elsewhere):
+        // that text stays.
+        if library::read_text(path).as_ref() != Some(&from) {
+            state.set_memo_rework_note(
+                self.say(
+                    "Der Text hat sich inzwischen geändert. Bitte nochmal anwenden.",
+                    "The text changed in the meantime. Please apply again.",
+                )
+                .into(),
+            );
+            return;
+        }
+        let note = match (changed, failed) {
+            (0, Some(e)) => crate::servers::problem(german, &e),
+            (0, None) => self.say(
+                "Nichts geändert: Der Text passt so, oder das Modell hat ihn zu stark verändert.",
+                "Nothing changed: the text is fine as it is, or the model changed too much.",
+            ),
+            (changed, failed) => {
+                let all = paragraphs.iter().filter(|p| !p.text.trim().is_empty()).count();
+                let written = library::keep_original(path).and_then(|_| library::write_text(path, &paragraphs));
+                if let Err(e) = written {
+                    eprintln!("kyrr: memo: saving the reworked text of {}: {e}", path.display());
+                    state.set_memo_rework_note(
+                        self.say("Konnte den Text nicht speichern.", "Could not save the text.")
+                            .into(),
+                    );
+                    return;
+                }
+                if let Some(memo) = self.all.borrow_mut().iter_mut().find(|m| m.path == path) {
+                    memo.text = Some(paragraphs);
+                }
+                self.dirty.set(false);
+                if self.sheet.borrow().as_deref() == Some(path) {
+                    self.show_sheet();
+                }
+                let done = steps
+                    .iter()
+                    .enumerate()
+                    .map(|(i, step)| {
+                        let said = match step {
+                            Preset::Fix => self.say("Ausgebessert", "Fixed"),
+                            Preset::Polish => self.say("Umformuliert", "Reworded"),
+                            Preset::Business => self.say("Professionell formuliert", "Made professional"),
+                            Preset::Translate(_) => self.say("Übersetzt", "Translated"),
+                        };
+                        if i == 0 {
+                            said
+                        } else {
+                            said.to_lowercase()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(&self.say(" und ", " and "));
+                let mut note = format!("{done}.");
+                if fixed_only > 0 {
+                    note += &if german {
+                        format!(" {fixed_only} von {all} Absätzen nur ausgebessert.")
+                    } else {
+                        format!(" {fixed_only} of {all} paragraphs only fixed.")
+                    };
+                }
+                if changed < all {
+                    let left = all - changed;
+                    note += &if german {
+                        format!(" {left} von {all} unverändert.")
+                    } else {
+                        format!(" {left} of {all} unchanged.")
+                    };
+                }
+                if let Some(e) = failed {
+                    note += &format!(
+                        " {} {}",
+                        self.say("Dann abgebrochen:", "Then stopped:"),
+                        crate::servers::problem(german, &e)
+                    );
+                }
+                note + &self.say(" Das Original ist gesichert.", " The original is kept.")
+            }
+        };
+        state.set_memo_rework_note(note.into());
+    }
+
+    /// The open text as it was before the first rework.
+    fn restore_text(&self) {
+        let Some(path) = self.sheet.borrow().clone() else {
+            return;
+        };
+        self.stop_rework();
+        self.saving.stop();
+        self.dirty.set(false);
+        if let Err(e) = library::restore_original(&path) {
+            eprintln!("kyrr: memo: restoring the text of {}: {e}", path.display());
+            if let Some(w) = self.window.upgrade() {
+                w.global::<AppState>().set_memo_rework_note(
+                    self.say(
+                        "Konnte das Original nicht zurückholen.",
+                        "Could not bring back the original.",
+                    )
+                    .into(),
+                );
+            }
+            return;
+        }
+        if let Some(memo) = self.all.borrow_mut().iter_mut().find(|m| m.path == path) {
+            memo.text = library::read_text(&path);
+        }
+        if let Some(w) = self.window.upgrade() {
+            w.global::<AppState>()
+                .set_memo_rework_note(self.say("Original wiederhergestellt.", "Original restored.").into());
+        }
+        self.show_sheet();
     }
 
     /// Where the paragraph at `cursor` in `text` starts, as "1:30"; "" when

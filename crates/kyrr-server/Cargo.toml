@@ -1,0 +1,15 @@
+[package]
+name = "kyrr-server"
+description = "Dictation and text rework through the user's own servers in the home network"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+# The same TLS setup as the model download; a server on the own PC or in
+# the home network is mostly plain HTTP anyway.
+ureq = { version = "3", default-features = false, features = ["native-tls"] }
+serde_json = "1"

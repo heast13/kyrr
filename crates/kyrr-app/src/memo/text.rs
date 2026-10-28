@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use kyrr_dictate::{Dictation, Paragraphs};
+use kyrr_dictate::{numerals, Dictation, Language, Paragraphs};
 
 use super::library::{self, Paragraph};
 use super::opusfile::{self, Reader, GRANULE_RATE};
@@ -38,6 +38,7 @@ pub fn write(
     path: &Path,
     cancel: &AtomicBool,
     pause: &AtomicBool,
+    languages: &[Language],
     progress: &mut dyn FnMut(f32, Option<Duration>),
 ) -> Result<Done, String> {
     let total = opusfile::seconds(path).unwrap_or(0.0).max(1.0);
@@ -97,7 +98,7 @@ pub fn write(
         .into_iter()
         .map(|(seconds, text)| Paragraph {
             seconds: seconds as u32,
-            text,
+            text: numerals::digits(&text, languages),
         })
         .collect();
     // Deleted meanwhile: nothing to put beside it.
@@ -105,6 +106,7 @@ pub fn write(
         return Ok(Done::Cancelled);
     }
     let written = library::write_text(path, &paragraphs).map_err(|e| e.to_string())?;
+    library::drop_original(path);
     // Deleted or renamed while it was written: no text without its memo.
     if !path.exists() {
         let _ = std::fs::remove_file(written);
@@ -176,7 +178,10 @@ mod tests {
         assert!(named.contains("Ende") || named.contains("Wurst"), "{named}");
         let mut steps = Vec::new();
         let (cancel, pause) = (AtomicBool::new(false), AtomicBool::new(false));
-        let done = write(&model, &path, &cancel, &pause, &mut |p, _| steps.push(p)).unwrap();
+        let done = write(&model, &path, &cancel, &pause, &[Language::German], &mut |p, _| {
+            steps.push(p)
+        })
+        .unwrap();
         assert!(matches!(done, Done::Written));
         assert_eq!(steps.last(), Some(&1.0));
         let paragraphs = library::read_text(&path).expect("the text is there");

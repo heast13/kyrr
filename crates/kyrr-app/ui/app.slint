@@ -2,7 +2,7 @@
 // first-run setup or the main panel. All texts are English source strings
 // translated through the bundled translations in ui/lang.
 
-import { Button as SystemButton, ComboBox, Switch as SystemSwitch, Slider, ProgressIndicator as SystemProgress, ScrollView, LineEdit, Palette } from "std-widgets.slint";
+import { Button as SystemButton, ComboBox, Switch as SystemSwitch, Slider, ProgressIndicator as SystemProgress, ScrollView, LineEdit, TextEdit, Palette } from "std-widgets.slint";
 
 // detached: Windows (an update, a driver) took kyrr off the microphone.
 // unsupported: this PC cannot run the filter (Windows on ARM, Linux without
@@ -28,6 +28,12 @@ export struct MemoItem {
     text-progress: float,
     // "about 2 min. left", or "".
     text-left: string,
+}
+
+// One paragraph of a memo before and after the language model, marked.
+export struct ComparePair {
+    before: styled-text,
+    after: styled-text,
 }
 
 // How kyrr looks: like the system, or on Omarchy like Omarchy (its theme's
@@ -642,7 +648,7 @@ export global AppState {
 
     // 0 is the main view, 1 the setup, then the settings of each
     // card: 2 noise, 3 voice, 4 dictation, 5 voice memos; 6 the voice memos
-    // themselves.
+    // themselves; 7 the user's own dictation model; 8 Local AI.
     in-out property <int> page;
     // Counts up every few seconds; the status line picks its next phrase
     // from it, so one state does not repeat the same sentence.
@@ -770,6 +776,90 @@ export global AppState {
     callback memo-open-text();
     callback memo-search(string);
     callback memo-open-folder();
+    // The user's language model can rework the open text: what it does
+    // (as `rework-index`) and into which language (as `translate-index`).
+    in property <bool> memo-rework-ready;
+    in property <bool> memo-rework-busy;
+    in property <float> memo-rework-progress;
+    in property <string> memo-rework-note;
+    in-out property <int> memo-rework-action;
+    in-out property <int> memo-rework-target;
+    // The text before the first rework is kept beside it.
+    in property <bool> memo-sheet-original;
+    // The text as it is (0) or compared with the one before (1).
+    in-out property <int> memo-sheet-view;
+    in property <[ComparePair]> memo-sheet-compare;
+    callback memo-show-compare();
+    callback memo-rework(int, int);
+    callback memo-stop-rework();
+    callback memo-restore-text();
+
+    // Own dictation model (page 7): the user's speech server can recognise
+    // dictations. Local AI (page 8): the user's language model reworks
+    // them. That is an experiment: with AI features off, none of it shows;
+    // on, the main page has its card, whose switch is `local-ai`.
+    in-out property <bool> ai-features;
+    callback ai-features-toggled(bool);
+    in-out property <bool> local-ai;
+    callback local-ai-toggled(bool);
+    // A server found on this computer ("" for none), offered to take.
+    in property <string> rework-found;
+    in property <string> rework-found-url;
+    callback rework-take-found();
+    in property <string> asr-found;
+    in property <string> asr-found-url;
+    callback asr-take-found();
+    // The instructions the language model gets: which one is shown (0 fix,
+    // 1 reword, 2 professional, 3 translate), as typed, as saved, and
+    // whether it is the user's own.
+    in-out property <int> prompt-index;
+    in-out property <string> prompt-text;
+    in property <string> prompt-saved;
+    in property <bool> prompt-own;
+    callback prompt-picked(int);
+    callback prompt-save(int, string);
+    callback prompt-reset(int);
+    // The tips on which model to take, open.
+    in-out property <bool> rework-tips;
+    in-out property <string> rework-url;
+    in-out property <string> rework-model;
+    in-out property <string> rework-key;
+    // The models the server offers, once it answered.
+    in property <[string]> rework-models;
+    in-out property <int> rework-model-index;
+    // How the last test went; "" for nothing yet.
+    in property <string> rework-note;
+    in property <bool> rework-busy;
+    // A server and model are set: the choice shows on the main page.
+    in property <bool> rework-ready;
+    // 0 off, 1 fix, 2 reword, 3 professional.
+    in-out property <int> rework-index;
+    // The language translations go into, in the order of
+    // `translate-options` (0: no translating).
+    in-out property <int> translate-index;
+    callback translate-changed(int);
+    in-out property <bool> asr-on;
+    in-out property <string> asr-url;
+    in-out property <string> asr-model;
+    in-out property <string> asr-key;
+    in property <[string]> asr-models;
+    in-out property <int> asr-model-index;
+    in property <string> asr-note;
+    in property <bool> asr-busy;
+    // Saves address, model and key, asks the server and tries it once.
+    callback rework-connect();
+    callback rework-model-picked(int);
+    callback rework-changed(int);
+    callback asr-toggled(bool);
+    callback asr-connect();
+    callback asr-model-picked(int);
+    // What reworking can be, for the choices on the main page.
+    out property <[string]> rework-options: [@tr("Off"), @tr("Fix mishearings"), @tr("Reword nicely"), @tr("Professional")];
+    // The instructions that can be edited, in the order of
+    // `kyrr_server::rework::DEFAULT_PROMPTS`.
+    out property <[string]> prompt-options: [@tr("Fix mishearings"), @tr("Reword nicely"), @tr("Professional"), @tr("Translate")];
+    // In the order of the targets in `kyrr_server::rework::TARGETS`.
+    out property <[string]> translate-options: [@tr("Off"), @tr("English"), @tr("German"), @tr("French"), @tr("Spanish"), @tr("Italian"), @tr("Dutch"), @tr("Portuguese"), @tr("Polish"), @tr("Czech"), @tr("Slovak"), @tr("Swedish"), @tr("Danish"), @tr("Norwegian"), @tr("Finnish"), @tr("Hungarian"), @tr("Romanian"), @tr("Croatian")];
 }
 
 // The tray has its own properties: globals are per component instance, so
@@ -787,6 +877,15 @@ export component Tray inherits SystemTrayIcon {
     in property <string> memo-key-name;
     // A newer version found ("" for none).
     in property <string> update-version;
+    // The user's language model is set up and switched on: what it does,
+    // 0 off, 1 fix, 2 reword, 3 professional; and what it translates into,
+    // 0 nothing.
+    in property <bool> rework-ready;
+    in property <int> rework-index;
+    in property <int> translate-index;
+    in property <[string]> translate-options;
+    callback rework-picked(int);
+    callback translate-picked(int);
     callback open();
     callback toggle-memo();
     callback open-memos();
@@ -834,6 +933,32 @@ export component Tray inherits SystemTrayIcon {
         if root.memos-enabled: MenuItem {
             title: @tr("Open recordings");
             activated => { root.open-memos(); }
+        }
+        if root.rework-ready: Menu {
+            title: @tr("Rework");
+            MenuItem {
+                title: (root.rework-index == 0 ? "✓ " : "") + @tr("Off");
+                activated => { root.rework-picked(0); }
+            }
+            MenuItem {
+                title: (root.rework-index == 1 ? "✓ " : "") + @tr("Fix mishearings");
+                activated => { root.rework-picked(1); }
+            }
+            MenuItem {
+                title: (root.rework-index == 2 ? "✓ " : "") + @tr("Reword nicely");
+                activated => { root.rework-picked(2); }
+            }
+            MenuItem {
+                title: (root.rework-index == 3 ? "✓ " : "") + @tr("Professional");
+                activated => { root.rework-picked(3); }
+            }
+        }
+        if root.rework-ready: Menu {
+            title: @tr("Translate into");
+            for name[i] in root.translate-options: MenuItem {
+                title: (root.translate-index == i ? "✓ " : "") + name;
+                activated => { root.translate-picked(i); }
+            }
         }
         if root.update-version != "": MenuItem {
             title: @tr("Install update {}", root.update-version);
@@ -1252,6 +1377,49 @@ component DictationCard inherits Card {
         text: @tr("Download");
         primary: true;
         clicked => { AppState.download-model(); }
+    }
+}
+
+// Local AI on the main page: the user's language model fixes, rewords or
+// translates each dictation. Shown with AI features on.
+component LocalAiCard inherits Card {
+    RowHead {
+        title: @tr("Local AI");
+        gear-label: @tr("Settings: {}", @tr("Local AI"));
+        gear => { AppState.open-page(8); }
+        checked <=> AppState.local-ai;
+        toggled(on) => { AppState.local-ai-toggled(on); }
+    }
+    Caption {
+        text: !AppState.local-ai ? @tr("Off. Dictations are typed as spoken.")
+            : !AppState.rework-ready ? @tr("Not set up yet: no language model chosen.")
+            : @tr("Your language model edits each dictation before it is typed. Pressing the key meanwhile types the original.");
+    }
+    if AppState.local-ai && !AppState.rework-ready: HorizontalLayout {
+        Rectangle { }
+        Button {
+            text: @tr("Set up");
+            primary: true;
+            clicked => { AppState.open-page(8); }
+        }
+    }
+    if AppState.local-ai && AppState.rework-ready: HorizontalLayout {
+        spacing: 8px;
+        Caption { text: @tr("Rework"); vertical-alignment: center; width: 30%; }
+        ComboBox {
+            model: AppState.rework-options;
+            current-index <=> AppState.rework-index;
+            selected => { AppState.rework-changed(self.current-index); }
+        }
+    }
+    if AppState.local-ai && AppState.rework-ready: HorizontalLayout {
+        spacing: 8px;
+        Caption { text: @tr("Translate into"); vertical-alignment: center; width: 30%; }
+        ComboBox {
+            model: AppState.translate-options;
+            current-index <=> AppState.translate-index;
+            selected => { AppState.translate-changed(self.current-index); }
+        }
     }
 }
 
@@ -2036,6 +2204,216 @@ component GeneralSettings inherits Card {
         Caption { text: AppState.attached-mic != "" ? AppState.attached-mic : @tr("Microphone"); horizontal-stretch: 1; vertical-alignment: center; }
         Button { text: @tr("Change microphone"); clicked => { AppState.change-microphone(); } }
     }
+    Separator { }
+    HorizontalLayout {
+        Caption { text: @tr("Own dictation model"); vertical-alignment: center; }
+        Rectangle { }
+        Button { text: @tr("Set up"); clicked => { AppState.open-page(7); } }
+    }
+    Hint { text: @tr("Optional: speech recognition by a server of your own, on this computer or in your home network."); }
+    HorizontalLayout {
+        Caption { text: @tr("Experimental AI features"); vertical-alignment: center; }
+        Rectangle { }
+        Switch {
+            checked <=> AppState.ai-features;
+            toggled => { AppState.ai-features-toggled(self.checked); }
+        }
+    }
+    Hint {
+        text: AppState.ai-features ? @tr("Local AI is on the main page. Experimental, may still change.")
+            : @tr("Off. Switched on, Local AI appears on the main page: a language model of your own corrects, rewords or translates dictations.");
+    }
+}
+
+// A small round "i" that shows or hides tips beside a heading.
+component InfoButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> open;
+    callback clicked();
+    width: 20px;
+    height: 20px;
+    border-radius: Skin.round(10px);
+    border-width: 1px;
+    border-color: Skin.foreground.with-alpha(root.open || touch.has-hover || key.has-focus ? 0.8 : 0.45);
+    background: root.open ? Skin.foreground.with-alpha(0.12) : transparent;
+    forward-focus: key;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-action-default => { root.clicked(); }
+    Text {
+        text: "i";
+        font-size: 12px;
+        font-weight: 700;
+        color: Skin.foreground.with-alpha(0.8);
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    key := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+        mouse-cursor: pointer;
+    }
+}
+
+// Settings: the user's language model, which reworks dictations.
+component ReworkSettings inherits Card {
+    HorizontalLayout {
+        spacing: 8px;
+        Heading { text: @tr("Language model"); vertical-alignment: center; }
+        InfoButton {
+            label: @tr("Which model?");
+            open: AppState.rework-tips;
+            clicked => { AppState.rework-tips = !AppState.rework-tips; }
+        }
+        Rectangle { }
+    }
+    Hint { text: @tr("Requires a local AI server such as Ollama or LM Studio, on this computer or in your home network."); }
+    if AppState.rework-tips: Hint {
+        text: @tr("Recommended: Gemma 4 from Google from E4B up, best 12B, 26B or 31B. kyrr is tested with these models. Other models may work too, but have not been checked.\n\nkyrr switches thinking off by itself where the server allows it. If the model answers too slowly, kyrr types the text unchanged.");
+    }
+    if AppState.rework-found != "": HorizontalLayout {
+        spacing: 8px;
+        Hint { text: @tr("{} is running on this computer.", AppState.rework-found); vertical-alignment: center; }
+        Button {
+            text: @tr("Use it");
+            primary: true;
+            horizontal-stretch: 0;
+            clicked => { AppState.rework-take-found(); }
+        }
+    }
+    Caption { text: @tr("Address"); }
+    LineEdit {
+        placeholder-text: "http://192.168.1.10:11434";
+        text <=> AppState.rework-url;
+    }
+    Caption { text: @tr("Model"); }
+    if AppState.rework-models.length > 0: ComboBox {
+        model: AppState.rework-models;
+        current-index <=> AppState.rework-model-index;
+        selected => { AppState.rework-model-picked(self.current-index); }
+    }
+    if AppState.rework-models.length == 0: LineEdit {
+        placeholder-text: @tr("Filled in once the server answers");
+        text <=> AppState.rework-model;
+    }
+    Caption { text: @tr("Key, if the server wants one"); }
+    LineEdit {
+        input-type: password;
+        text <=> AppState.rework-key;
+    }
+    HorizontalLayout {
+        Rectangle { }
+        Button {
+            text: AppState.rework-busy ? @tr("Asking…") : @tr("Connect and test");
+            primary: true;
+            enabled: !AppState.rework-busy;
+            clicked => { AppState.rework-connect(); }
+        }
+    }
+    if AppState.rework-note != "": Hint { text: AppState.rework-note; }
+}
+
+// Settings: the instructions the language model gets, each the user's own
+// or kyrr's.
+component PromptSettings inherits Card {
+    Heading { text: @tr("Instructions"); }
+    Hint { text: @tr("What the language model is told for each task. In English, which most models follow best."); }
+    ComboBox {
+        model: AppState.prompt-options;
+        current-index <=> AppState.prompt-index;
+        selected => { AppState.prompt-picked(self.current-index); }
+    }
+    TextEdit {
+        text <=> AppState.prompt-text;
+        wrap: word-wrap;
+        font-size: 12px;
+        height: 200px;
+    }
+    if AppState.prompt-index == 3: Hint { text: @tr("{} stands for the target language.", "{target}"); }
+    HorizontalLayout {
+        spacing: 8px;
+        Caption {
+            text: AppState.prompt-text != AppState.prompt-saved ? @tr("Not saved yet.")
+                : AppState.prompt-own ? @tr("Your own instruction.") : @tr("kyrr's instruction.");
+            vertical-alignment: center;
+        }
+        Rectangle { }
+        Button {
+            text: @tr("Reset");
+            horizontal-stretch: 0;
+            enabled: AppState.prompt-own || AppState.prompt-text != AppState.prompt-saved;
+            clicked => { AppState.prompt-reset(AppState.prompt-index); }
+        }
+        Button {
+            text: @tr("Save");
+            primary: true;
+            horizontal-stretch: 0;
+            enabled: AppState.prompt-text != AppState.prompt-saved;
+            clicked => { AppState.prompt-save(AppState.prompt-index, AppState.prompt-text); }
+        }
+    }
+}
+
+// Settings: dictation through the user's own speech server.
+component SpeechServerSettings inherits Card {
+    Heading { text: @tr("Dictation model"); }
+    Segmented {
+        options: [@tr("Built in"), @tr("Own server")];
+        selected: AppState.asr-on ? 1 : 0;
+        changed(i) => { AppState.asr-toggled(i == 1); }
+    }
+    Hint {
+        text: AppState.asr-on ? @tr("A speech server such as speaches or whisper.cpp recognises your dictation. Live words are not shown then. If the server cannot be reached, kyrr recognises on this computer, provided the speech model is installed.")
+            : @tr("kyrr recognises on this computer. Nothing leaves it.");
+    }
+    if AppState.asr-on && AppState.asr-found != "": HorizontalLayout {
+        spacing: 8px;
+        Hint { text: @tr("{} is running on this computer.", AppState.asr-found); vertical-alignment: center; }
+        Button {
+            text: @tr("Use it");
+            primary: true;
+            horizontal-stretch: 0;
+            clicked => { AppState.asr-take-found(); }
+        }
+    }
+    if AppState.asr-on: Caption { text: @tr("Address"); }
+    if AppState.asr-on: LineEdit {
+        placeholder-text: "http://192.168.1.10:8000";
+        text <=> AppState.asr-url;
+    }
+    if AppState.asr-on: Caption { text: @tr("Model"); }
+    if AppState.asr-on && AppState.asr-models.length > 0: ComboBox {
+        model: AppState.asr-models;
+        current-index <=> AppState.asr-model-index;
+        selected => { AppState.asr-model-picked(self.current-index); }
+    }
+    if AppState.asr-on && AppState.asr-models.length == 0: LineEdit {
+        placeholder-text: @tr("Filled in once the server answers");
+        text <=> AppState.asr-model;
+    }
+    if AppState.asr-on: Caption { text: @tr("Key, if the server wants one"); }
+    if AppState.asr-on: LineEdit {
+        input-type: password;
+        text <=> AppState.asr-key;
+    }
+    if AppState.asr-on: HorizontalLayout {
+        Rectangle { }
+        Button {
+            text: AppState.asr-busy ? @tr("Asking…") : @tr("Connect and test");
+            primary: true;
+            enabled: !AppState.asr-busy;
+            clicked => { AppState.asr-connect(); }
+        }
+    }
+    if AppState.asr-on && AppState.asr-note != "": Hint { text: AppState.asr-note; }
 }
 
 component SetupPage inherits VerticalLayout {
@@ -2088,7 +2466,10 @@ component SetupPage inherits VerticalLayout {
         selected <=> AppState.language-index;
         changed(i) => { AppState.language-changed(i); }
     }
-    if step == 1: DictationCard { in-setup: true; }
+    // The built-in model, or the user's own speech server instead: then
+    // nothing needs to be downloaded.
+    if step == 1: SpeechServerSettings { }
+    if step == 1 && !AppState.asr-on: DictationCard { in-setup: true; }
     if step == 1 && AppState.key-note != "" && !AppState.guide: Hint { text: AppState.key-note; }
     // The desktop's questions, one at a time, each said before it comes.
     if step == 1 && AppState.guide: Caption {
@@ -2725,6 +3106,83 @@ component TranscriptSheet inherits Rectangle {
                 horizontal-stretch: 0;
             }
         }
+        // The user's language model on the whole text, as on the main page:
+        // a rework, a translation or both. The text before is kept, can be
+        // compared and comes back with one button.
+        if AppState.memo-rework-ready: HorizontalLayout {
+            spacing: 8px;
+            Text {
+                text: @tr("Rework");
+                font-size: 12px;
+                color: Skin.foreground.with-alpha(0.65);
+                vertical-alignment: center;
+                width: 110px;
+            }
+            ComboBox {
+                model: AppState.rework-options;
+                current-index <=> AppState.memo-rework-action;
+                enabled: !AppState.memo-rework-busy;
+                // As wide as in the narrow window, also beside the comparison.
+                max-width: 370px;
+            }
+            Rectangle { }
+        }
+        if AppState.memo-rework-ready: HorizontalLayout {
+            spacing: 8px;
+            Text {
+                text: @tr("Translate into");
+                font-size: 12px;
+                color: Skin.foreground.with-alpha(0.65);
+                vertical-alignment: center;
+                width: 110px;
+            }
+            ComboBox {
+                model: AppState.translate-options;
+                current-index <=> AppState.memo-rework-target;
+                enabled: !AppState.memo-rework-busy;
+                max-width: 370px;
+            }
+            Rectangle { }
+        }
+        if AppState.memo-rework-ready || AppState.memo-sheet-original: HorizontalLayout {
+            spacing: 8px;
+            if AppState.memo-rework-ready: Button {
+                text: AppState.memo-rework-busy ? @tr("Cancel") : @tr("Apply");
+                primary: !AppState.memo-rework-busy;
+                horizontal-stretch: 0;
+                enabled: AppState.memo-rework-busy
+                    || (AppState.memo-sheet-text != "" && (AppState.memo-rework-action > 0 || AppState.memo-rework-target > 0));
+                clicked => {
+                    if (AppState.memo-rework-busy) {
+                        AppState.memo-stop-rework();
+                    } else {
+                        AppState.memo-rework(AppState.memo-rework-action, AppState.memo-rework-target);
+                    }
+                }
+            }
+            Rectangle { }
+            if AppState.memo-sheet-original && !AppState.memo-rework-busy: Segmented {
+                options: [@tr("Text"), @tr("Compare")];
+                selected <=> AppState.memo-sheet-view;
+                changed(i) => {
+                    if (i == 1) {
+                        AppState.memo-show-compare();
+                    }
+                }
+                horizontal-stretch: 0;
+                min-width: 170px;
+            }
+            if AppState.memo-sheet-original && !AppState.memo-rework-busy: Button {
+                text: @tr("Restore original");
+                horizontal-stretch: 0;
+                clicked => { AppState.memo-restore-text(); }
+            }
+        }
+        if AppState.memo-rework-ready && AppState.memo-rework-busy: ProgressIndicator {
+            progress: AppState.memo-rework-progress;
+            height: 6px;
+        }
+        if AppState.memo-rework-note != "": Hint { text: AppState.memo-rework-note; }
         Rectangle {
             background: Skin.alternate-background;
             border-radius: Skin.round(10px);
@@ -2736,10 +3194,13 @@ component TranscriptSheet inherits Rectangle {
                 y: 12px;
                 width: parent.width - 24px;
                 height: parent.height - 24px;
+                visible: AppState.memo-sheet-view == 0 || !AppState.memo-sheet-original || AppState.memo-rework-busy;
                 content-width: self.visible-width;
                 content-height: max(self.visible-height, input.preferred-height);
                 input := TextInput {
                     text <=> AppState.memo-sheet-text;
+                    // The language model writes into it meanwhile.
+                    read-only: AppState.memo-rework-busy;
                     single-line: false;
                     wrap: word-wrap;
                     font-size: 15px;
@@ -2772,6 +3233,64 @@ component TranscriptSheet inherits Rectangle {
                     }
                 }
             }
+            // Before on the left, after on the right, paragraph beside
+            // paragraph: what went in red, what came in green.
+            if AppState.memo-sheet-view == 1 && AppState.memo-sheet-original && !AppState.memo-rework-busy: VerticalLayout {
+                x: 12px;
+                y: 12px;
+                width: parent.width - 24px;
+                height: parent.height - 24px;
+                spacing: 8px;
+                HorizontalLayout {
+                    spacing: 25px;
+                    Text {
+                        text: @tr("Original");
+                        font-size: 12px;
+                        font-weight: 600;
+                        color: Skin.foreground.with-alpha(0.65);
+                        width: (parent.width - 25px) / 2;
+                    }
+                    Text {
+                        text: @tr("New version");
+                        font-size: 12px;
+                        font-weight: 600;
+                        color: Skin.foreground.with-alpha(0.65);
+                        width: (parent.width - 25px) / 2;
+                    }
+                }
+                ScrollView {
+                    content-width: self.visible-width;
+                    content-height: max(self.visible-height, compare.preferred-height);
+                    // The line between the two columns.
+                    Rectangle {
+                        x: (parent.width - 1px) / 2;
+                        y: 0;
+                        width: 1px;
+                        height: max(parent.height, compare.preferred-height);
+                        background: Skin.foreground.with-alpha(0.12);
+                    }
+                    compare := VerticalLayout {
+                        width: parent.width;
+                        alignment: start;
+                        spacing: 14px;
+                        for pair in AppState.memo-sheet-compare: HorizontalLayout {
+                            spacing: 25px;
+                            StyledText {
+                                text: pair.before;
+                                default-color: Skin.foreground;
+                                default-font-size: 15px;
+                                width: (parent.width - 25px) / 2;
+                            }
+                            StyledText {
+                                text: pair.after;
+                                default-color: Skin.foreground;
+                                default-font-size: 15px;
+                                width: (parent.width - 25px) / 2;
+                            }
+                        }
+                    }
+                }
+            }
             if AppState.memo-sheet-text == "": Caption {
                 x: 14px;
                 y: 14px;
@@ -2795,8 +3314,12 @@ component TranscriptSheet inherits Rectangle {
                 }
             }
             Hint {
-                text: @tr("Select and copy: the times stay behind. What you type is saved by itself.");
+                text: AppState.memo-sheet-view == 1 && AppState.memo-sheet-original && !AppState.memo-rework-busy
+                    ? @tr("Red: changed in the original. Green: worded anew. A translation stays unmarked.")
+                    : @tr("Select and copy: the times stay behind. What you type is saved by itself.");
                 vertical-alignment: center;
+                // The room a wide window has goes to the hint, not the button.
+                horizontal-stretch: 1;
             }
         }
     }
@@ -2812,8 +3335,13 @@ export component MainWindow inherits Window {
     callback shown();
     changed content-height => { root.content-height-changed(); }
     // One column, 380 px, on every page; the recordings are wider, so a
-    // text reads comfortably.
-    out property <length> page-width: memos-page ? 520px : 380px;
+    // text reads comfortably, and twice as wide while a memo is compared
+    // with the text before (as wide as the screen allows, the app says).
+    out property <length> page-width: memos-page && comparing ? min(1040px, root.widest) : memos-page ? 520px : 380px;
+    in property <length> widest: 1040px;
+    property <bool> comparing: AppState.memo-sheet-open && AppState.memo-sheet-view == 1 && AppState.memo-sheet-original;
+    callback page-width-changed();
+    changed page-width => { root.page-width-changed(); }
     title: "kyrr";
     icon: @image-url("icons/kyrr-256.png");
     background: Skin.background;
@@ -2831,8 +3359,12 @@ export component MainWindow inherits Window {
     // The same height as a maximum for a moment, so a compositor that keeps
     // its own idea of the size (Hyprland) lets the window shrink too.
     in property <bool> fit-hold;
-    min-height: main-page ? layout.preferred-height : root.fit-height;
-    max-height: main-page ? layout.preferred-height : root.fit-hold ? root.fit-height : 16384px;
+    // The tallest the screen has room for (the app says): a main page with
+    // everything on it (Local AI, an update note) scrolls on a small screen
+    // instead of reaching beyond it.
+    in property <length> height-cap: 16384px;
+    min-height: main-page ? min(layout.preferred-height, root.height-cap) : root.fit-height;
+    max-height: main-page ? min(layout.preferred-height, root.height-cap) : root.fit-hold ? root.fit-height : 16384px;
 
     // A new page starts at the top, not where the last one was scrolled to.
     public function reset-scroll() {
@@ -2851,12 +3383,14 @@ export component MainWindow inherits Window {
     }
 
     property <bool> main-page: !setup-mode && AppState.page == 0;
-    property <bool> settings-page: !setup-mode && AppState.page >= 1 && AppState.page <= 5;
+    property <bool> settings-page: !setup-mode && ((AppState.page >= 1 && AppState.page <= 5) || AppState.page == 7 || AppState.page == 8);
     property <bool> memos-page: !setup-mode && AppState.page == 6;
     property <string> page-title: AppState.page == 2 ? @tr("Isolate your voice")
         : AppState.page == 3 ? @tr("Improve voice")
         : AppState.page == 4 ? @tr("Dictation")
         : AppState.page == 5 ? @tr("Voice memo")
+        : AppState.page == 7 ? @tr("Own dictation model")
+        : AppState.page == 8 ? @tr("Local AI")
         : @tr("Setup");
     // Where the memos are, as the user knows the folder.
     in property <string> memo-folder;
@@ -2890,6 +3424,7 @@ export component MainWindow inherits Window {
             if main-page: NoiseCard { }
             if main-page: VoiceCard { }
             if main-page: DictationCard { }
+            if main-page && AppState.ai-features: LocalAiCard { }
             if main-page: RecordingCard { }
             if main-page && !AppState.update-dismissed && (AppState.update-state == UpdateState.available
                 || AppState.update-state == UpdateState.downloading || AppState.update-state == UpdateState.installing
@@ -2935,7 +3470,8 @@ export component MainWindow inherits Window {
                     text: @tr("← Back");
                     horizontal-stretch: 0;
                     clicked => {
-                        AppState.page = 0;
+                        // Own models were opened from the general settings.
+                        AppState.page = AppState.page == 7 ? 1 : 0;
                         AppState.page-changed();
                     }
                 }
@@ -2950,6 +3486,9 @@ export component MainWindow inherits Window {
             if settings-page && AppState.page == 3: LevelSettings { }
             if settings-page && AppState.page == 4: DictationSettings { }
             if settings-page && AppState.page == 5: RecordingSettings { folder: root.memo-folder; }
+            if settings-page && AppState.page == 7: SpeechServerSettings { }
+            if settings-page && AppState.page == 8: ReworkSettings { }
+            if settings-page && AppState.page == 8: PromptSettings { }
             if memos-page: MemosPage { }
             if settings-page && AppState.page == 1: Caption {
                 // English in every language, on purpose.

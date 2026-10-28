@@ -2892,6 +2892,7 @@ dependencies = [
  "kyrr-denoise",
  "kyrr-dictate",
  "kyrr-linux",
+ "kyrr-server",
  "kyrr-voice",
  "kyrr-windows",
  "ogg",
@@ -2967,6 +2968,14 @@ dependencies = [
  "x11rb",
  "xkbcommon",
  "zbus",
+]
+
+[[package]]
+name = "kyrr-server"
+version = "0.7.2"
+dependencies = [
+ "serde_json",
+ "ureq 3.4.2",
 ]
 
 [[package]]

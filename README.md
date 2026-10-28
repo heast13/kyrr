@@ -4,8 +4,9 @@
 
 A free app for your microphone on **Windows** and **Linux**. It removes
 background noise, makes your voice sound better and turns speech into text.
-Everything runs on your own computer: your voice and text never leave it,
-and there is no account.
+Everything runs on your own computer, and there is no account. Your voice and
+text stay there too, unless you switch on an AI server of your own (see
+[Privacy](#privacy)).
 
 <p>
   <a href="https://github.com/heast13/kyrr/releases/latest/download/kyrr-setup.exe"><img src="https://img.shields.io/github/v/release/heast13/kyrr?label=Download%20for%20Windows&style=for-the-badge&color=005fb8" alt="Download kyrr for Windows"></a>
@@ -35,8 +36,17 @@ and there is no account.
 - **Voice memos**: hold F8 and talk. kyrr saves the recording in
   Documents/kyrr, names it after its first words and writes it out as text on
   request.
+- **Numbers as digits**: "twenty-six" becomes 26, "14:30 Uhr", "26. Mai" and
+  "349,50 Euro" are written as digits. Dictation and voice memos, German and
+  English. Zero to twelve stay words, unless a unit follows ("2 Euro").
 - **Follows your microphone**: plug in another one and kyrr moves along. A
   ten-second test lets you hear the difference.
+- **Experimental, off by default**: a language model on your own computer or
+  in your home network (Ollama, LM Studio, llama.cpp) can fix mistakes in each
+  dictation, reword it, make it professional or translate it into 17
+  languages. A speech server of your own can take over the recognition.
+  Switch it on under Setup, "Experimental AI features". Details in [How kyrr
+  works](docs/how-it-works.md#your-own-servers-experimental).
 
 More about each part in [How kyrr works](docs/how-it-works.md).
 
@@ -111,7 +121,8 @@ in [kyrr for Omarchy](https://github.com/heast13/omarchy-kyrr).
 ## Privacy
 
 Your voice, your dictated text and your voice memos never leave your
-computer. No telemetry. kyrr goes online for exactly three things:
+computer, with one exception that you switch on yourself (see below). No
+telemetry. kyrr goes online for exactly three things:
 
 - **The speech model**, once, from kyrr's own mirrors
   ([Hugging Face](https://huggingface.co/heast13/kyrr-models), else
@@ -131,6 +142,13 @@ computer. No telemetry. kyrr goes online for exactly three things:
 
 Nothing is installed without your click. Record other people only when they
 agree to it.
+
+The one exception: only if you switch on the experimental own servers (see
+[How kyrr works](docs/how-it-works.md#your-own-servers-experimental)) does
+kyrr send dictated text or audio, and only to the server address you enter
+yourself, meant for your own computer or a computer in your home network (or
+Tailscale). kyrr refuses plain `http` to any other address; an `https` address you type is
+used as typed.
 
 ## Code signing policy
 

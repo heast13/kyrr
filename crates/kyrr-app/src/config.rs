@@ -64,6 +64,34 @@ pub struct Config {
     /// "hold" once; after that the user's own choice stays.
     #[serde(default = "never")]
     pub memo_hold_default: bool,
+    /// Experimental AI features (off by default): with it off, nothing of
+    /// the language model shows or runs. The own speech server is no
+    /// experiment and works either way.
+    #[serde(alias = "own_models")]
+    pub ai_features: bool,
+    /// The user's own language model that reworks dictations (see
+    /// `kyrr_server`): its address ("" for none) and model.
+    pub rework_url: String,
+    pub rework_model: String,
+    /// Local AI on the main page: the language model reworks and
+    /// translates dictations (with AI features on and a model set up).
+    pub local_ai: bool,
+    /// What it does with a dictation: 0 nothing, 1 fix what was misheard,
+    /// 2 reword it, 3 make it professional.
+    pub rework: u8,
+    /// The language it then translates into, a code; "" for none.
+    pub translate_into: String,
+    /// Test builds before had translating as rework 3, into this.
+    #[serde(rename = "rework_target", skip_serializing)]
+    pub old_target: String,
+    /// The user's own instructions for the language model, in the order of
+    /// `kyrr_server::rework::DEFAULT_PROMPTS`; "" for kyrr's own.
+    pub prompts: Vec<String>,
+    /// Dictation through the user's own speech server instead of the
+    /// built-in model, its address and model.
+    pub asr_server: bool,
+    pub asr_url: String,
+    pub asr_model: String,
 }
 
 /// A setting that an older settings file does not have yet.
@@ -97,6 +125,17 @@ impl Default for Config {
             memo_stamps: 0,
             memos_seen: 0,
             memo_hold_default: true,
+            ai_features: false,
+            rework_url: String::new(),
+            rework_model: String::new(),
+            local_ai: false,
+            rework: 0,
+            translate_into: String::new(),
+            old_target: String::new(),
+            prompts: Vec::new(),
+            asr_server: false,
+            asr_url: String::new(),
+            asr_model: String::new(),
         }
     }
 }
@@ -119,6 +158,14 @@ impl Config {
             }
         };
         let (mut config, whole) = parse(&bytes);
+        // Translating was rework 3 in test builds before; there the
+        // target came along.
+        if config.rework == 3 && !config.old_target.is_empty() {
+            config.rework = 0;
+            config.translate_into = std::mem::take(&mut config.old_target);
+            config.local_ai = true;
+        }
+        config.rework = config.rework.min(3);
         if !config.memo_hold_default {
             config.memo_toggle = false;
             config.memo_hold_default = true;
@@ -262,6 +309,41 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     result
 }
 
+/// The keys for the user's own servers, if they need one: kept apart from
+/// the settings, so a settings file shown to someone does not give them
+/// away. Only the user may read the file (Linux; on Windows it lies in the
+/// user's own profile).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Keys {
+    pub rework: String,
+    pub asr: String,
+}
+
+impl Keys {
+    pub fn load() -> Keys {
+        std::fs::read(keys_file())
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn save(&self) {
+        let path = keys_file();
+        if self.rework.is_empty() && self.asr.is_empty() {
+            let _ = std::fs::remove_file(path);
+        } else if let Ok(json) = serde_json::to_vec(self) {
+            if let Err(e) = write_atomic(&path, &json) {
+                eprintln!("kyrr: could not save the server keys: {e}");
+            }
+        }
+    }
+}
+
+fn keys_file() -> PathBuf {
+    config_dir().join("keys.json")
+}
+
 /// German for German-speaking systems, English otherwise.
 fn system_language() -> Language {
     #[cfg(windows)]
@@ -343,6 +425,28 @@ mod tests {
             ..Config::default()
         };
         assert_eq!(config.language(), Language::German);
+    }
+
+    #[test]
+    fn translating_from_a_test_build_before_goes_on() {
+        let dir = std::env::temp_dir().join(format!("kyrr-config-{}", std::process::id()));
+        let path = dir.join("config.json");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&path, br#"{"own_models": true, "rework": 3, "rework_target": "fr"}"#).unwrap();
+        let config = Config::load_from(&path);
+        assert!(config.ai_features);
+        assert_eq!((config.rework, config.translate_into.as_str()), (0, "fr"));
+        config.save_to(&path);
+        let saved = std::fs::read_to_string(&path).unwrap();
+        assert!(!saved.contains("rework_target") && saved.contains("ai_features"));
+        std::fs::write(&path, br#"{"rework": 2, "rework_target": "en"}"#).unwrap();
+        let config = Config::load_from(&path);
+        assert_eq!((config.rework, config.translate_into.as_str()), (2, ""));
+        // Business language is rework 3 now.
+        std::fs::write(&path, br#"{"rework": 3}"#).unwrap();
+        let config = Config::load_from(&path);
+        assert_eq!((config.rework, config.translate_into.as_str()), (3, ""));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

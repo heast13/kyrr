@@ -12,8 +12,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
+use kyrr_common::wave::Tone;
 use kyrr_dictate::download::{download, DownloadError};
-use kyrr_dictate::{european, Dictation, Language, Live, ModelSpec, Transcript};
+use kyrr_dictate::{european, numerals, Dictation, Language, Live, ModelSpec, Transcript};
+use kyrr_server::rework::{self, Outcome, Preset, Why};
+use kyrr_server::Server;
 
 use crate::memo::text;
 use crate::recorder::{Recording, MAX_SECONDS};
@@ -67,6 +70,40 @@ const NOTHING_MIN: f32 = 0.8;
 /// the next tap. A held key still starts late, and its release ends it.
 const STALE_PRESS: Duration = Duration::from_secs(1);
 
+/// A rework that has not come back this long after its own time limit (a
+/// name that never resolves, say) is given up: the dictation is typed.
+const REWORK_GRACE: Duration = Duration::from_secs(1);
+
+/// How long the language model may take to read ahead (and load).
+const PRIME_TIME: Duration = Duration::from_secs(30);
+
+/// The user's language model, which reworks every dictation.
+#[derive(Clone, Debug)]
+pub struct Reworker {
+    pub server: Server,
+    pub model: String,
+    /// Fixing or rewording, translating, or one and then the other.
+    pub steps: Vec<Preset>,
+}
+
+/// The user's speech server, which recognises dictations instead of the
+/// built-in model.
+#[derive(Clone, Debug)]
+pub struct Recognizer {
+    pub server: Server,
+    pub model: String,
+}
+
+/// A dictation out at the language model.
+struct Reworking {
+    id: u64,
+    steps: Vec<Preset>,
+    original: String,
+    until: Instant,
+    stop: Arc<AtomicBool>,
+    started: Instant,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum State {
     Off,
@@ -111,6 +148,9 @@ pub enum Event {
     Limit(String),
     /// A real dictation that came out empty: this, for a moment in the pill.
     Nothing(String),
+    /// How reworking the text went: this, for a moment in the pill, in the
+    /// colour of the tone.
+    Note(String, Tone),
     /// Something to tell the user; `None` clears an earlier message.
     Message(Option<String>),
     /// The title heard at the start of the voice memo at this path; None
@@ -180,6 +220,12 @@ pub enum Command {
     CancelText(PathBuf),
     /// Internal: the job beside the worker is done.
     JobDone,
+    /// Every dictation goes through the user's language model (or not).
+    Rework(Option<Reworker>),
+    /// Dictations are recognised by the user's speech server (or not).
+    Recognizer(Option<Recognizer>),
+    /// Internal: rework number `.0` came back.
+    Reworked(u64, Vec<Outcome>),
 }
 
 pub type Notify = Arc<dyn Fn(Event) + Send + Sync>;
@@ -283,10 +329,109 @@ fn say(language: Language, what: &str) -> String {
             "Your microphone is muted in Windows. You can switch that off on the main page."
         }
         ("muted", true) => "Dein Mikrofon ist stummgeschaltet. Auf der Hauptseite kannst du das aufheben.",
+        ("fixing", true) => "Korrigiere…",
+        ("fixing", false) => "Fixing…",
+        ("fixing+translating", true) => "Korrigiere und übersetze…",
+        ("fixing+translating", false) => "Fixing and translating…",
+        ("polishing+translating", true) => "Formuliere und übersetze…",
+        ("formalizing", true) => "Formuliere professionell…",
+        ("formalizing", false) => "Making it professional…",
+        ("formalizing+translating", true) => "Formuliere professionell und übersetze…",
+        ("formalizing+translating", false) => "Making it professional and translating…",
+        ("formalized", true) => "Professionell formuliert",
+        ("formalized", false) => "Made professional",
+        ("not formalized", true) => "nicht professionell formuliert",
+        ("not formalized", false) => "not made professional",
+        ("polishing+translating", false) => "Rewording and translating…",
+        ("and", true) => "und",
+        ("and", false) => "and",
+        ("not fixed", true) => "nicht ausgebessert",
+        ("not fixed", false) => "not fixed",
+        ("not polished", true) => "nicht umformuliert",
+        ("not polished", false) => "not reworded",
+        ("not translated", true) => "nicht übersetzt",
+        ("not translated", false) => "not translated",
+        ("polishing", true) => "Formuliere…",
+        ("polishing", false) => "Rewording…",
+        ("translating", true) => "Übersetze…",
+        ("translating", false) => "Translating…",
+        ("rework asleep", true) => "Server schläft, Original getippt",
+        ("rework asleep", false) => "Server asleep, typed as said",
+        ("rework thinks", true) => "Modell denkt nach, Original getippt",
+        ("rework thinks", false) => "Model is thinking, typed as said",
+        ("rework refused", true) => "Server lehnt ab, Original getippt",
+        ("rework refused", false) => "Server refused, typed as said",
+        ("rework free", true) => "Abgelehnt, Original getippt",
+        ("rework free", false) => "Refused, typed as said",
+        ("fixed", true) => "Ausgebessert",
+        ("fixed", false) => "Fixed",
+        ("fixed only", true) => "Nur ausgebessert",
+        ("fixed only", false) => "Only fixed",
+        ("polished", true) => "Umformuliert",
+        ("polished", false) => "Reworded",
+        ("translated", true) => "Übersetzt",
+        ("translated", false) => "Translated",
+        ("fine", true) => "Passte schon",
+        ("fine", false) => "Nothing to change",
+        ("asr local", true) => "Server nicht erreichbar, hier erkannt.",
+        ("asr local", false) => "Server out of reach, recognised here.",
+        ("asr gone", true) => "Der Diktier-Server antwortet nicht. Läuft er noch?",
+        ("asr gone", false) => "The dictation server does not answer. Is it still running?",
         ("muted", false) => "Your microphone is muted. You can switch that off on the main page.",
         (other, _) => other,
     }
     .to_string()
+}
+
+/// What the pill says after reworking: green when it went through, red
+/// when something was refused, plain when there was nothing to change.
+fn rework_note(language: Language, steps: &[Preset], outcomes: &[Outcome]) -> Option<(String, Tone)> {
+    let done = |p: &Preset| match p {
+        Preset::Fix => "fixed",
+        Preset::Polish => "polished",
+        Preset::Business => "formalized",
+        Preset::Translate(_) => "translated",
+    };
+    let not_done = |p: &Preset| match p {
+        Preset::Fix => "not fixed",
+        Preset::Polish => "not polished",
+        Preset::Business => "not formalized",
+        Preset::Translate(_) => "not translated",
+    };
+    let (mut good, mut bad, mut plain) = (Vec::new(), Vec::new(), false);
+    // Rewording was refused and only fixing went through: not red, not green.
+    let mut partly = false;
+    for (step, outcome) in steps.iter().zip(outcomes) {
+        match outcome {
+            Outcome::Reworked(_) => good.push(done(step)),
+            Outcome::FixedInstead(_) => {
+                good.push("fixed only");
+                partly = true;
+            }
+            Outcome::Original(why) => match why {
+                Why::Server(kyrr_server::Error::Refused(_) | kyrr_server::Error::NotLocal) => {
+                    bad.push((step, "rework refused"))
+                }
+                Why::Server(kyrr_server::Error::Thinks) => bad.push((step, "rework thinks")),
+                Why::Server(_) => bad.push((step, "rework asleep")),
+                Why::Checked(_) => bad.push((step, "rework free")),
+                Why::Nothing => plain = true,
+                Why::Short | Why::Same | Why::Skipped => {}
+            },
+        }
+    }
+    let say = |key| say(language, key);
+    let tone = if partly { Tone::Plain } else { Tone::Good };
+    match (good.as_slice(), bad.first()) {
+        ([], Some((_, why))) => Some((say(why), Tone::Bad)),
+        ([], None) => plain.then(|| (say("fine"), Tone::Plain)),
+        ([one], None) => Some((say(one), tone)),
+        ([first, then, ..], None) => Some((
+            format!("{} {} {}", say(first), say("and"), say(then).to_lowercase()),
+            tone,
+        )),
+        ([first, ..], Some((step, _))) => Some((format!("{}, {}", say(first), say(not_done(step))), Tone::Bad)),
+    }
 }
 
 struct Worker {
@@ -341,6 +486,13 @@ struct Worker {
     jobs: VecDeque<Job>,
     job: Option<(Option<PathBuf>, Arc<AtomicBool>)>,
     pause: Arc<AtomicBool>,
+    /// The user's language model and speech server, if set up.
+    reworker: Option<Reworker>,
+    recognizer: Option<Recognizer>,
+    reworking: Option<Reworking>,
+    rework_id: u64,
+    /// The speech server could not be reached once: said only once.
+    told_local: bool,
     tx: mpsc::Sender<Command>,
     notify: Notify,
     typer: Typer,
@@ -392,6 +544,11 @@ pub fn spawn(
         jobs: VecDeque::new(),
         job: None,
         pause: Arc::new(AtomicBool::new(false)),
+        reworker: None,
+        recognizer: None,
+        reworking: None,
+        rework_id: 0,
+        told_local: false,
         tx: tx.clone(),
         notify,
         typer,
@@ -408,6 +565,7 @@ pub fn spawn(
                     worker.until_look(),
                     worker.until_typed(),
                     worker.until_ahead(),
+                    worker.until_reworked(),
                 ]
                 .into_iter()
                 .flatten()
@@ -427,11 +585,14 @@ pub fn spawn(
                         Err(_) if due(worker.until_typed()) => worker.type_waiting(),
                         Err(_) if due(worker.until_look()) => worker.look(),
                         Err(_) if due(worker.until_ahead()) => worker.work_ahead(),
+                        Err(_) if due(worker.until_reworked()) => worker.rework_late(),
                         Err(_) => worker.unload_when_idle(),
                     }
                     // A job waits while a dictation runs or is being typed.
-                    let busy =
-                        worker.recording.is_some() || worker.state == State::Transcribing || worker.waiting.is_some();
+                    let busy = worker.recording.is_some()
+                        || worker.state == State::Transcribing
+                        || worker.waiting.is_some()
+                        || worker.reworking.is_some();
                     worker.pause.store(busy, Ordering::Relaxed);
                     worker.next_job();
                 }));
@@ -444,6 +605,9 @@ pub fn spawn(
             }
             if let Some(cancel) = &worker.download_cancel {
                 cancel.store(true, Ordering::Relaxed);
+            }
+            if let Some(r) = &worker.reworking {
+                r.stop.store(true, Ordering::Relaxed);
             }
         })
         .expect("dictation thread starts");
@@ -476,6 +640,11 @@ impl Worker {
         self.recording = None;
         self.transcript = None;
         self.waiting = None;
+        // A dictation out at the language model is typed as it was.
+        if let Some(r) = self.reworking.take() {
+            r.stop.store(true, Ordering::Relaxed);
+            let _ = catch_unwind(AssertUnwindSafe(|| self.type_text(r.original)));
+        }
         self.pause.store(false, Ordering::Relaxed);
         let _ = catch_unwind(AssertUnwindSafe(|| self.refresh()));
     }
@@ -494,7 +663,7 @@ impl Worker {
         }
         // A model change (the language) waits until the running dictation
         // is typed: `key_up` comes back here.
-        if self.enabled && self.recording.is_some() {
+        if self.enabled && (self.recording.is_some() || self.reworking.is_some()) {
             return;
         }
         if !self.enabled {
@@ -505,6 +674,13 @@ impl Worker {
             self.transcript = None;
             self.recording = None;
             self.set_state(State::Off);
+            return;
+        }
+        // The speech server recognises: no model needed here (one loaded
+        // for a memo's text stays until that is done).
+        if self.recognizer.is_some() {
+            self.transcript = None;
+            self.set_state(State::Ready);
             return;
         }
         let spec = self.spec();
@@ -610,7 +786,7 @@ impl Worker {
     fn until_look(&self) -> Option<Duration> {
         let next = self
             .next_look
-            .filter(|_| self.live && self.recording.is_some() && self.model.is_some())?;
+            .filter(|_| self.live && self.recording.is_some() && self.model.is_some() && self.recognizer.is_none())?;
         Some(next.saturating_duration_since(Instant::now()))
     }
 
@@ -832,6 +1008,22 @@ impl Worker {
                     self.model = None;
                 }
             }
+            Command::Rework(reworker) => self.reworker = reworker,
+            Command::Recognizer(recognizer) => {
+                // Back to the built-in model in the middle of a dictation:
+                // it loads while the recording runs.
+                if recognizer.is_none() && self.recording.is_some() && self.model.is_none() {
+                    self.start_load();
+                }
+                self.recognizer = recognizer;
+                self.told_local = false;
+                self.refresh();
+            }
+            Command::Reworked(id, outcomes) => {
+                if self.reworking.as_ref().is_some_and(|r| r.id == id) {
+                    self.reworked(outcomes);
+                }
+            }
             Command::Quit => {}
         }
     }
@@ -870,6 +1062,7 @@ impl Worker {
         };
         self.job = Some((path, Arc::clone(&cancel)));
         let (pause, notify, tx) = (Arc::clone(&self.pause), Arc::clone(&self.notify), self.tx.clone());
+        let languages = self.numerals();
         let spawned = std::thread::Builder::new()
             .name("kyrr-memo-text".into())
             .spawn(move || {
@@ -887,7 +1080,7 @@ impl Worker {
                         let started = Instant::now();
                         let mut progress = |done, left| notify(Event::Text(path.clone(), Text::Writing(done, left)));
                         let result = catch_unwind(AssertUnwindSafe(|| {
-                            text::write(&model, &path, &cancel, &pause, &mut progress)
+                            text::write(&model, &path, &cancel, &pause, &languages, &mut progress)
                         }))
                         .unwrap_or_else(|_| Err("crashed".into()));
                         let state = match result {
@@ -916,6 +1109,12 @@ impl Worker {
     fn key_down(&mut self, at: Instant, tap: bool) {
         // Still waiting for the key (its release got lost): first that.
         self.type_waiting();
+        // The key while the language model works: the dictation as it was,
+        // without waiting (once the key is up again, in hold mode).
+        if self.reworking.is_some() {
+            self.reworked(vec![Outcome::Original(Why::Skipped)]);
+            return;
+        }
         // While the model loads, the recording starts all the same.
         let ready = matches!(self.state, State::Ready | State::Loading);
         if !ready || self.recording.is_some() || (tap && at.elapsed() > STALE_PRESS) {
@@ -923,7 +1122,7 @@ impl Worker {
         }
         match Recording::start(self.microphone.as_deref()) {
             Ok(rec) => {
-                self.transcript = Some(Transcript::new(rec.rate()));
+                self.transcript = self.recognizer.is_none().then(|| Transcript::new(rec.rate()));
                 self.recording = Some(rec);
                 self.words = Live::default();
                 self.next_look = Some(Instant::now() + LOOK_FIRST);
@@ -935,8 +1134,17 @@ impl Worker {
                 self.set_state(State::Recording);
                 (self.notify)(Event::Ends(self.ends));
                 // Asleep after a long pause: load while the recording runs.
-                if self.model.is_none() {
+                if self.model.is_none() && self.recognizer.is_none() {
                     self.start_load();
+                }
+                // The language model reads its instructions while the user
+                // speaks (and loads, if it was asleep).
+                if let Some(r) = self.reworker.clone() {
+                    if let Some(&first) = r.steps.first() {
+                        let _ = std::thread::Builder::new().name("kyrr-prime".into()).spawn(move || {
+                            rework::prime(&r.server, &r.model, first, PRIME_TIME);
+                        });
+                    }
                 }
             }
             Err(_) => self.tell("mic"),
@@ -961,7 +1169,13 @@ impl Worker {
         let transcript = self.transcript.take();
         let ahead = transcript.as_ref().map_or(0, Transcript::pieces);
         let mut ran = false;
+        let served = self.recognizer.clone().and_then(|r| self.recognize(&r, rate, &samples));
         let text = match &self.model {
+            _ if served.is_some() => {
+                ran = true;
+                served.unwrap_or_default()
+            }
+            None if self.recognizer.is_some() => String::new(),
             Some(model) => match catch_unwind(AssertUnwindSafe(|| match transcript {
                 Some(mut transcript) => {
                     transcript.push(samples.get(transcript.taken()..).unwrap_or_default());
@@ -992,6 +1206,8 @@ impl Worker {
             },
             None => String::new(),
         };
+        // Numbers as digits, before anything else sees the text.
+        let text = numerals::digits(&text, &self.numerals());
         self.last_used = Instant::now();
         eprintln!(
             "kyrr: dictation: {}, recognized in {:.1} s after the key, {ahead} pieces while recording",
@@ -1008,7 +1224,9 @@ impl Worker {
             );
         }
         let heard = !text.is_empty();
-        if heard && self.held {
+        if heard && self.reworker.is_some() {
+            self.start_rework(text);
+        } else if heard && self.held {
             self.waiting = Some((text, Instant::now()));
         } else if heard {
             self.type_text(text);
@@ -1023,7 +1241,169 @@ impl Worker {
             (self.notify)(Event::Nothing(say(self.language, "nothing")));
         }
         // The language may have changed while recording: back to whatever
-        // the settings say, not blindly to Ready.
+        // the settings say, not blindly to Ready. A rework comes back there.
+        if self.reworking.is_none() {
+            self.refresh();
+        }
+    }
+
+    /// Whose rules write numbers as digits: in many languages, German and
+    /// English both.
+    fn numerals(&self) -> Vec<Language> {
+        if self.more_languages {
+            vec![Language::German, Language::English]
+        } else {
+            vec![self.language]
+        }
+    }
+
+    /// The text of a recording from the user's speech server; None when it
+    /// could not be reached, and the built-in model, if it is on the
+    /// computer, recognised it instead (or nothing could).
+    fn recognize(&mut self, recognizer: &Recognizer, rate: u32, samples: &[f32]) -> Option<String> {
+        if rate == 0 || (samples.len() as f32) < kyrr_dictate::MIN_SECONDS * rate as f32 {
+            return Some(String::new());
+        }
+        let started = Instant::now();
+        let audio = kyrr_dictate::at_model_rate(rate, samples);
+        let seconds = audio.len() as f32 / 16_000.0;
+        let timeout = Duration::from_secs_f32(3.0 + 0.5 * seconds);
+        let language = (!self.more_languages).then(|| self.language.code());
+        let wav = kyrr_server::wav(&audio);
+        match kyrr_server::transcribe(&recognizer.server, &recognizer.model, &wav, language, timeout) {
+            Ok(text) => {
+                eprintln!(
+                    "kyrr: dictation: the speech server took {:.1} s for {seconds:.1} s",
+                    started.elapsed().as_secs_f32()
+                );
+                return Some(kyrr_dictate::tidy(&text));
+            }
+            Err(e) => eprintln!("kyrr: dictation: the speech server did not help: {e:?}"),
+        }
+        // Here then, with the built-in model if it is on the computer.
+        if self.model.is_none() && self.spec().is_installed(&self.root) {
+            let threads = std::thread::available_parallelism().map_or(4, |n| n.get().min(4));
+            if self.loader.is_none() {
+                match Dictation::load(&self.root, self.spec(), threads) {
+                    Ok(model) => self.model = Some(Arc::new(model)),
+                    Err(e) => eprintln!("kyrr: dictation: the speech model would not load: {e}"),
+                }
+            } else {
+                self.finish_load();
+            }
+        }
+        match &self.model {
+            Some(model) => {
+                if !std::mem::replace(&mut self.told_local, true) {
+                    self.tell("asr local");
+                }
+                let model = Arc::clone(model);
+                catch_unwind(AssertUnwindSafe(|| model.transcribe(rate, samples))).ok()
+            }
+            None => {
+                self.tell("asr gone");
+                None
+            }
+        }
+    }
+
+    /// Sends the dictation to the user's language model, beside the worker,
+    /// which meanwhile listens to the key (one press: the dictation as it
+    /// was). The pill says what it waits for.
+    fn start_rework(&mut self, text: String) {
+        let Some(reworker) = self.reworker.clone() else {
+            return;
+        };
+        self.rework_id += 1;
+        let id = self.rework_id;
+        let steps = reworker.steps.clone();
+        let limit = rework::time_limit_all(&steps, &text);
+        let stop = Arc::new(AtomicBool::new(false));
+        let language = (!self.more_languages).then(|| self.language.code());
+        let busy = match steps.as_slice() {
+            [Preset::Fix, Preset::Translate(_)] => "fixing+translating",
+            [Preset::Polish, Preset::Translate(_)] => "polishing+translating",
+            [Preset::Business, Preset::Translate(_)] => "formalizing+translating",
+            [Preset::Fix, ..] => "fixing",
+            [Preset::Polish, ..] => "polishing",
+            [Preset::Business, ..] => "formalizing",
+            _ => "translating",
+        };
+        (self.notify)(Event::Heard(vec![say(self.language, busy)]));
+        let (tx, original, cancel) = (self.tx.clone(), text.clone(), Arc::clone(&stop));
+        let deadline = Instant::now() + limit;
+        let spawned = std::thread::Builder::new().name("kyrr-rework".into()).spawn(move || {
+            let outcomes = catch_unwind(AssertUnwindSafe(|| {
+                rework::rework_all(
+                    &reworker.server,
+                    &reworker.model,
+                    &reworker.steps,
+                    &original,
+                    language,
+                    deadline,
+                    &cancel,
+                )
+            }))
+            .unwrap_or_else(|_| vec![Outcome::Original(Why::Server(kyrr_server::Error::Answer))]);
+            let _ = tx.send(Command::Reworked(id, outcomes));
+        });
+        if spawned.is_err() {
+            self.type_text(text);
+            return;
+        }
+        self.reworking = Some(Reworking {
+            id,
+            steps,
+            original: text,
+            until: deadline + REWORK_GRACE,
+            stop,
+            started: Instant::now(),
+        });
+    }
+
+    /// Time until a rework is given up; None while none runs.
+    fn until_reworked(&self) -> Option<Duration> {
+        let r = self.reworking.as_ref()?;
+        Some(r.until.saturating_duration_since(Instant::now()))
+    }
+
+    fn rework_late(&mut self) {
+        self.reworked(vec![Outcome::Original(Why::Server(kyrr_server::Error::Timeout))]);
+    }
+
+    /// Types what came back from the language model, or the dictation as
+    /// it was, with a word in the pill how it went.
+    fn reworked(&mut self, outcomes: Vec<Outcome>) {
+        let Some(r) = self.reworking.take() else {
+            return;
+        };
+        r.stop.store(true, Ordering::Relaxed);
+        let took = r.started.elapsed().as_secs_f32();
+        for outcome in &outcomes {
+            // Numbers only, never the text.
+            match outcome {
+                Outcome::Reworked(_) => eprintln!("kyrr: dictation: reworked after {took:.1} s"),
+                Outcome::FixedInstead(_) => eprintln!("kyrr: dictation: only fixed after {took:.1} s"),
+                Outcome::Original(why) => eprintln!("kyrr: dictation: left as it was after {took:.1} s: {why:?}"),
+            }
+        }
+        let note = rework_note(self.language, &r.steps, &outcomes);
+        let text = outcomes
+            .into_iter()
+            .rev()
+            .find_map(|o| match o {
+                Outcome::Reworked(text) | Outcome::FixedInstead(text) => Some(text),
+                Outcome::Original(_) => None,
+            })
+            .unwrap_or(r.original);
+        if self.held {
+            self.waiting = Some((text, Instant::now()));
+        } else {
+            self.type_text(text);
+        }
+        if let Some((note, tone)) = note {
+            (self.notify)(Event::Note(note, tone));
+        }
         self.refresh();
     }
 
@@ -1117,5 +1497,45 @@ mod tests {
                 last = word;
             }
         }
+    }
+
+    #[test]
+    fn the_pill_says_how_each_step_went() {
+        use kyrr_server::guard::Refusal;
+        let de = Language::German;
+        let both = [Preset::Polish, Preset::Translate("fr")];
+        let done = |s: &str| Outcome::Reworked(s.into());
+        let refused = Outcome::Original(Why::Checked(Refusal::Length));
+        assert_eq!(
+            rework_note(de, &both, &[done("a"), done("b")]),
+            Some(("Umformuliert und übersetzt".into(), Tone::Good))
+        );
+        assert_eq!(
+            rework_note(de, &both, &[refused.clone(), done("b")]),
+            Some(("Übersetzt, nicht umformuliert".into(), Tone::Bad))
+        );
+        assert_eq!(
+            rework_note(de, &both, &[done("a"), Outcome::Original(Why::Same)]),
+            Some(("Umformuliert".into(), Tone::Good))
+        );
+        assert_eq!(
+            rework_note(
+                de,
+                &both,
+                &[Outcome::Original(Why::Server(kyrr_server::Error::Timeout))]
+            ),
+            Some(("Server schläft, Original getippt".into(), Tone::Bad))
+        );
+        assert_eq!(
+            rework_note(de, &[Preset::Fix], &[Outcome::Original(Why::Nothing)]),
+            Some(("Passte schon".into(), Tone::Plain))
+        );
+        assert_eq!(rework_note(de, &[Preset::Fix], &[Outcome::Original(Why::Short)]), None);
+        // Professional refused twice, fixed instead, then translated.
+        let business = [Preset::Business, Preset::Translate("en")];
+        assert_eq!(
+            rework_note(de, &business, &[Outcome::FixedInstead("a".into()), done("b")]),
+            Some(("Nur ausgebessert und übersetzt".into(), Tone::Plain))
+        );
     }
 }

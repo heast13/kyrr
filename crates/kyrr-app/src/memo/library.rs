@@ -273,10 +273,14 @@ pub fn rename(path: &Path, title: &str) -> io::Result<PathBuf> {
         return Ok(to);
     }
     std::fs::rename(path, &to)?;
-    let text = text_path(path);
-    if text.exists() {
-        if let Err(e) = std::fs::rename(&text, text_path(&to)) {
-            eprintln!("kyrr: memo: moving the text of {}: {e}", path.display());
+    for (from, into) in [
+        (text_path(path), text_path(&to)),
+        (original_path(path), original_path(&to)),
+    ] {
+        if from.exists() {
+            if let Err(e) = std::fs::rename(&from, into) {
+                eprintln!("kyrr: memo: moving the text of {}: {e}", path.display());
+            }
         }
     }
     Ok(to)
@@ -285,9 +289,10 @@ pub fn rename(path: &Path, title: &str) -> io::Result<PathBuf> {
 /// Deletes the memo and its text, for good.
 pub fn delete(path: &Path) -> io::Result<()> {
     std::fs::remove_file(path)?;
-    let text = text_path(path);
-    if text.exists() {
-        let _ = std::fs::remove_file(text);
+    for text in [text_path(path), original_path(path)] {
+        if text.exists() {
+            let _ = std::fs::remove_file(text);
+        }
     }
     Ok(())
 }
@@ -295,6 +300,45 @@ pub fn delete(path: &Path) -> io::Result<()> {
 /// Where the text of the memo at `path` lies.
 pub fn text_path(path: &Path) -> PathBuf {
     path.with_extension("txt")
+}
+
+/// Where the text of the memo at `path` is kept as it was before a
+/// language model reworded or translated it.
+pub fn original_path(path: &Path) -> PathBuf {
+    path.with_extension("original.txt")
+}
+
+/// Keeps the text as it is now, before a language model changes it; a text
+/// kept already stays, so the first one is always there to go back to.
+pub fn keep_original(path: &Path) -> io::Result<()> {
+    let original = original_path(path);
+    if original.exists() {
+        return Ok(());
+    }
+    let text = std::fs::read(text_path(path))?;
+    // Whole or not at all: a half one would be kept for good.
+    let part = original.with_extension("txt.part");
+    write_private(&part, &text)?;
+    std::fs::rename(&part, &original)
+}
+
+/// The text as it was before the first rework, while it is kept.
+pub fn read_original(path: &Path) -> Option<Vec<Paragraph>> {
+    let text = std::fs::read_to_string(original_path(path)).ok()?;
+    Some(paragraphs(&text))
+}
+
+/// The text kept before the first rework is the text again.
+pub fn restore_original(path: &Path) -> io::Result<()> {
+    std::fs::rename(original_path(path), text_path(path))
+}
+
+/// A text written anew from the recording needs no older one kept.
+pub fn drop_original(path: &Path) {
+    let original = original_path(path);
+    if original.exists() {
+        let _ = std::fs::remove_file(original);
+    }
 }
 
 /// Minutes and seconds, as in 1:05, or with hours, as in 1:02:05.
@@ -699,6 +743,36 @@ mod tests {
 
         delete(&renamed).unwrap();
         assert!(!renamed.exists() && !text_path(&renamed).exists());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_first_text_stays_until_it_is_back() {
+        let dir = temp("original");
+        let when = NaiveDateTime::parse_from_str("2026-10-27 09-30", STAMP).unwrap();
+        let memo = free_path(&dir, when, "Angebot");
+        std::fs::write(&memo, b"x").unwrap();
+        std::fs::write(text_path(&memo), "[0:00] also das mit dem angebot\n").unwrap();
+        keep_original(&memo).unwrap();
+        std::fs::write(text_path(&memo), "[0:00] Zum Angebot\n").unwrap();
+        // Reworked again: the first text is the one kept.
+        keep_original(&memo).unwrap();
+        std::fs::write(text_path(&memo), "[0:00] About the offer\n").unwrap();
+        assert_eq!(
+            original_path(&memo).file_name().unwrap(),
+            "2026-10-27 09-30 Angebot.original.txt"
+        );
+        // It goes along with the memo, and back into place.
+        let renamed = rename(&memo, "Kunde").unwrap();
+        assert!(!original_path(&memo).exists() && original_path(&renamed).exists());
+        restore_original(&renamed).unwrap();
+        assert_eq!(read_text(&renamed).unwrap()[0].text, "also das mit dem angebot");
+        assert!(!original_path(&renamed).exists());
+        // Deleted with the memo.
+        keep_original(&renamed).unwrap();
+        delete(&renamed).unwrap();
+        assert!(!original_path(&renamed).exists());
+        assert!(list(&dir).is_empty());
         let _ = std::fs::remove_dir_all(dir);
     }
 
