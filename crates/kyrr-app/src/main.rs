@@ -1361,6 +1361,8 @@ impl App {
             ("memo", "stoprework") => state.invoke_memo_stop_rework(),
             ("memo", "restore") => state.invoke_memo_restore_text(),
             ("memo", "view") => {
+                // What was typed counts in the comparison.
+                self.omarchy_edit(&state);
                 // 0 the text as it is, 1 the text beside the one before.
                 let compare = value == "1";
                 state.set_memo_sheet_view(i32::from(compare));
