@@ -2534,6 +2534,10 @@ export component NewsWindow inherits Window {
     // 0: the version on offer, 1: the one that just got installed, 2: all of them.
     in property <int> mode;
     callback close();
+    // Omarchy's theme is dark or light: the system's controls follow it.
+    public function use-scheme(dark: bool) {
+        Palette.color-scheme = dark ? ColorScheme.dark : ColorScheme.light;
+    }
     title: @tr("What's new");
     background: Skin.background;
     default-font-family: Skin.font;

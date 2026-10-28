@@ -1,9 +1,10 @@
 # Versions and release notes (Haiku)
 
-Input: the release PR.
+Input: the pinned run (`PINNED.md`): its `release-gate.txt` and `<out>/src`.
 
-1. `python3 scripts/release-gate.py --release --online --plugin <omarchy-kyrr>`
-   has no FAIL (paste its output).
+1. `release-gate.txt` of the pinned run has no FAIL (paste its output). If it
+   was made without `--online`, run `python3 scripts/release-gate.py --release
+   --online --plugin <out>/plugin` in `<out>/src` and paste that instead.
 2. NEWS.md of this version: only what users notice, plain sentences, the
    `(Windows)`/`(Linux)` marks right (an item marked for one system really is
    only there), German matches English, each block under about 2000

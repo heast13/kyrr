@@ -3,19 +3,22 @@
 //! on the classic layout bugs: window sizes that do not follow the display
 //! scale or the screen, needless scrolling, content in the margins.
 //! `cargo run --release --example layout -- <out-dir> [lang=de,en] [scale=1,1.25,1.5,2]
-//! [os=windows|linux] [panel=<px>] [sheets=off] [verbose=on] [selftest=on]`.
+//! [look=light,dark,tokyo-night,catppuccin-latte] [os=windows|linux] [panel=<px>]
+//! [sheets=off] [verbose=on] [selftest=on]`.
 //! The exit code is 1 when anything is wrong, with one line per problem
 //! (also in `<out-dir>/problems.txt`). Besides that, `<out-dir>` gets contact
-//! sheets of all pages, one set of PNG files per language and scale
-//! (`sheet-<lang>-<scale>-<n>.png` with `.txt` beside it, naming the numbered
-//! pages). `scale` takes a list, `selftest=on` runs with sizing rules that are
+//! sheets of all pages, one set of PNG files per look, language and scale
+//! (`sheet-<look>-<lang>-<scale>-<n>.png` with `.txt` beside it, naming the
+//! numbered pages). `scale` takes a list, `selftest=on` runs with sizing rules that are
 //! wrong on purpose and must find problems, `verbose=on` prints every page's
 //! measurements. `os` is the machine's by default: Windows keeps the taskbar
 //! out of the screen the app measures, Linux does not know about panels
 //! (`panel` is the one the check assumes, as many px as the app keeps free).
 //!
-//! What it checks, for each page in German and English, at the display
-//! scales 1, 1.25, 1.5 and 2 and on the screens in `SCREENS`:
+//! What it checks, for each page in German and English, in each look (the
+//! system's light and dark scheme, and on Linux two Omarchy themes, a dark
+//! and a light one), at the display scales 1, 1.25, 1.5 and 2 and on the
+//! screens in `SCREENS`:
 //! - the window's height (the way main.rs picks it: content, up to what the
 //!   screen has room for) leaves the window within the screen's free height;
 //! - the page does not scroll although the screen has room for all of it,
@@ -29,7 +32,12 @@
 //! - the layout does not depend on the scale (the content's height in logical
 //!   pixels stays about the same);
 //! - the memo's text field and the news window do not scroll although the
-//!   screen has room (found in the rendered picture too).
+//!   screen has room (found in the rendered picture too);
+//! - every look has the colours it should (a dark window is dark, a light
+//!   one light), and no part of a page is readable in the light look and
+//!   lost in the dark one or the other way round (text in a fixed colour
+//!   that vanishes on the other background): the two pictures of a pair of
+//!   looks are compared tile by tile.
 //!
 //! What it cannot check: the real window of the operating system (frame,
 //! taskbar, panel, what a compositor does with a window). The screen is a
@@ -95,6 +103,89 @@ impl Os {
             Os::Windows => 34.0,
             // GNOME's client side decoration, the tallest of the usual ones.
             Os::Linux => 38.0,
+        }
+    }
+}
+
+/// One way the window can look: the system's light or dark scheme, or the
+/// colours of an Omarchy theme (the app takes them from the theme in use).
+#[derive(Clone, Copy)]
+struct Look {
+    name: &'static str,
+    dark: bool,
+    /// Omarchy's theme: background, foreground, accent, red, yellow, green.
+    theme: Option<[[u8; 3]; 6]>,
+    /// The looks of a group are the same layout in light and dark colours.
+    group: &'static str,
+}
+
+const LOOKS: [Look; 4] = [
+    Look {
+        name: "light",
+        dark: false,
+        theme: None,
+        group: "system",
+    },
+    Look {
+        name: "dark",
+        dark: true,
+        theme: None,
+        group: "system",
+    },
+    // Omarchy's default theme and a light one, with the colours of their palettes.
+    Look {
+        name: "tokyo-night",
+        dark: true,
+        theme: Some([
+            [0x1a, 0x1b, 0x26],
+            [0xa9, 0xb1, 0xd6],
+            [0x7a, 0xa2, 0xf7],
+            [0xf7, 0x76, 0x8e],
+            [0xe0, 0xaf, 0x68],
+            [0x9e, 0xce, 0x6a],
+        ]),
+        group: "omarchy",
+    },
+    Look {
+        name: "catppuccin-latte",
+        dark: false,
+        theme: Some([
+            [0xef, 0xf1, 0xf5],
+            [0x4c, 0x4f, 0x69],
+            [0x1e, 0x66, 0xf5],
+            [0xd2, 0x0f, 0x39],
+            [0xdf, 0x8e, 0x1d],
+            [0x40, 0xa0, 0x2b],
+        ]),
+        group: "omarchy",
+    },
+];
+
+impl Look {
+    /// What `kyrr` does for the theme in use: the scheme, the colours, and
+    /// the square Omarchy look.
+    fn skin(self, skin: &Skin<'_>) {
+        let Some([background, foreground, accent, red, yellow, green]) = self.theme else {
+            skin.set_omarchy(false);
+            return;
+        };
+        let color = |c: [u8; 3]| slint::Color::from_rgb_u8(c[0], c[1], c[2]);
+        skin.set_theme_background(color(background));
+        skin.set_theme_foreground(color(foreground));
+        skin.set_theme_accent(color(accent));
+        skin.set_theme_red(color(red));
+        skin.set_theme_yellow(color(yellow));
+        skin.set_theme_green(color(green));
+        skin.set_omarchy(true);
+    }
+
+    /// The colour the window's background must have: dark looks are dark, light ones light.
+    fn background_fits(self, bg: [u8; 3]) -> bool {
+        let l = luminance(bg);
+        if self.dark {
+            l < 0.25
+        } else {
+            l > 0.5
         }
     }
 }
@@ -341,7 +432,7 @@ impl Sheets {
         let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), SHEET_WIDTH as u32, height as u32);
         encoder.set_color(png::ColorType::Rgb);
         encoder.set_depth(png::BitDepth::Eight);
-        encoder.set_compression(png::Compression::Fast);
+        encoder.set_compression(png::Compression::Balanced);
         let mut writer = encoder.write_header().expect("a PNG header");
         writer
             .write_image_data(&self.canvas[..SHEET_WIDTH * height * 3])
@@ -510,9 +601,18 @@ enum Kind {
 struct Ctx {
     de: bool,
     os: Os,
+    look: Look,
 }
 
 impl Ctx {
+    fn lang(self) -> &'static str {
+        if self.de {
+            "de"
+        } else {
+            "en"
+        }
+    }
+
     fn t(self, german: &str, english: &str) -> SharedString {
         if self.de { german } else { english }.into()
     }
@@ -1585,9 +1685,162 @@ fn news_text_bottom(img: &Image, scale: f32) -> Option<usize> {
 // The run.
 // ---------------------------------------------------------------------------
 
+/// Relative luminance of an sRGB colour, 0 (black) to 1 (white).
+fn luminance(c: [u8; 3]) -> f32 {
+    let lin = |v: u8| {
+        let v = f32::from(v) / 255.0;
+        if v <= 0.04045 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2])
+}
+
+/// The contrast ratio of two colours, 1 (the same) to 21 (black on white).
+fn contrast(a: [u8; 3], b: [u8; 3]) -> f32 {
+    let (a, b) = (luminance(a) + 0.05, luminance(b) + 0.05);
+    a.max(b) / a.min(b)
+}
+
+/// Edge of a tile of the readability comparison, in logical pixels.
+const TILE: usize = 16;
+/// A tile whose strongest ink has this contrast to its background is
+/// readable; below `LOST` it is as good as gone.
+const READABLE: f32 = 4.5;
+const LOST: f32 = 1.5;
+/// So many tiles that are readable in one look and lost in the other make a
+/// problem (an icon's edge or a shadow alone do not).
+const LOST_TILES: usize = 8;
+
+/// For each tile of a picture the contrast of its strongest ink to the
+/// colour the tile mostly has (1 for a tile of one colour).
+struct TileMap {
+    width: usize,
+    height: usize,
+    cols: usize,
+    ratio: Vec<f32>,
+}
+
+impl TileMap {
+    fn of(img: &Image, scale: f32) -> TileMap {
+        let side = ((TILE as f32 * scale).round() as usize).max(1);
+        // Every pixel of a 1x picture, every second one at 2x: text strokes are thicker than that.
+        let step = (scale.floor() as usize).max(1);
+        let (cols, rows) = (img.width.div_ceil(side), img.height.div_ceil(side));
+        let mut ratio = Vec::with_capacity(cols * rows);
+        for ty in 0..rows {
+            for tx in 0..cols {
+                let (x0, y0) = (tx * side, ty * side);
+                let (x1, y1) = ((x0 + side).min(img.width), (y0 + side).min(img.height));
+                // The tile's colour: the one most of 25 samples share (ink is the minority).
+                let samples: Vec<[u8; 3]> = (0..25)
+                    .map(|i| img.px(x0 + (x1 - x0 - 1) * (i % 5) / 4, y0 + (y1 - y0 - 1) * (i / 5) / 4))
+                    .collect();
+                let bg = *samples
+                    .iter()
+                    .max_by_key(|c| samples.iter().filter(|o| !differs(**c, **o)).count())
+                    .expect("25 samples");
+                let mut best = 1.0f32;
+                for y in (y0..y1).step_by(step) {
+                    for x in (x0..x1).step_by(step) {
+                        let px = img.px(x, y);
+                        if differs(px, bg) {
+                            best = best.max(contrast(px, bg));
+                        }
+                    }
+                }
+                ratio.push(best);
+            }
+        }
+        TileMap {
+            width: img.width,
+            height: img.height,
+            cols,
+            ratio,
+        }
+    }
+
+    /// The tiles readable here and lost in the other map (`None` when the
+    /// pictures differ in size), as the logical position of the first.
+    fn lost_in(&self, other: &TileMap, scale: f32) -> Option<(usize, Option<(f32, f32)>)> {
+        if (self.width, self.height) != (other.width, other.height) {
+            return None;
+        }
+        let side = TILE as f32 * scale;
+        let hits: Vec<usize> = (0..self.ratio.len())
+            .filter(|&i| self.ratio[i] >= READABLE && other.ratio[i] < LOST)
+            .collect();
+        let first = hits.first().map(|&i| {
+            (
+                (i % self.cols) as f32 * side / scale,
+                (i / self.cols) as f32 * side / scale,
+            )
+        });
+        Some((hits.len(), first))
+    }
+}
+
+/// The tile maps of the first look of each pair, waiting for the second:
+/// by page, language, scale and group of looks.
+type Tiles = BTreeMap<(String, &'static str, u32, &'static str), (Look, TileMap)>;
+
+/// What the run has found so far.
+#[derive(Default)]
+struct Findings {
+    problems: Vec<Problem>,
+    tiles: Tiles,
+}
+
+/// What is wrong with a picture of a page in its look: the background of the
+/// wrong brightness, and, as the second of a pair of looks, anything that
+/// is readable in one look and lost in the other.
+fn look_check(tiles: &mut Tiles, page: &str, c: Ctx, scale: f32, img: &Image) -> Vec<String> {
+    let mut found = Vec::new();
+    let bg = img.px(0, 0);
+    if !c.look.background_fits(bg) {
+        found.push(format!(
+            "the window's background is #{:02x}{:02x}{:02x}, not {} as the {} look is",
+            bg[0],
+            bg[1],
+            bg[2],
+            if c.look.dark { "dark" } else { "light" },
+            c.look.name
+        ));
+    }
+    let map = TileMap::of(img, scale);
+    let key = (page.to_string(), c.lang(), (scale * 100.0) as u32, c.look.group);
+    let Some((other, theirs)) = tiles.remove(&key) else {
+        tiles.insert(key, (c.look, map));
+        return found;
+    };
+    let Some((first_lost, first_at)) = theirs.lost_in(&map, scale) else {
+        found.push(format!(
+            "the {} and the {} look do not lay the page out the same ({}x{} and {}x{} px)",
+            other.name, c.look.name, theirs.width, theirs.height, map.width, map.height
+        ));
+        return found;
+    };
+    let (second_lost, second_at) = map.lost_in(&theirs, scale).unwrap_or((0, None));
+    for (count, at, readable, lost) in [
+        (first_lost, first_at, other.name, c.look.name),
+        (second_lost, second_at, c.look.name, other.name),
+    ] {
+        if count >= LOST_TILES {
+            let (x, y) = at.unwrap_or_default();
+            found.push(format!(
+                "{count} places of the page are readable in the {readable} look and lost in the {lost} look (text in a fixed colour on the wrong background?), the first at x={x:.0}, y={y:.0} px"
+            ));
+        }
+    }
+    found
+}
+
 struct Problem {
     page: String,
     lang: &'static str,
+    look: &'static str,
     scale: f32,
     screen: String,
     text: String,
@@ -1597,8 +1850,8 @@ impl std::fmt::Display for Problem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "page={} lang={} scale={} screen={}: {}",
-            self.page, self.lang, self.scale, self.screen, self.text
+            "page={} look={} lang={} scale={} screen={}: {}",
+            self.page, self.look, self.lang, self.scale, self.screen, self.text
         )
     }
 }
@@ -1607,6 +1860,7 @@ struct Options {
     out: PathBuf,
     langs: Vec<&'static str>,
     scales: Vec<f32>,
+    looks: Vec<Look>,
     os: Os,
     panel: f32,
     sheets: bool,
@@ -1622,6 +1876,7 @@ fn options() -> Result<Options, String> {
         out: PathBuf::from("."),
         langs: LANGS.to_vec(),
         scales: SCALES.to_vec(),
+        looks: Vec::new(),
         os: if cfg!(windows) { Os::Windows } else { Os::Linux },
         panel: DEFAULT_PANEL,
         sheets: true,
@@ -1639,6 +1894,18 @@ fn options() -> Result<Options, String> {
                     .map(|x| x.parse().map_err(|_| format!("scale={v}: not a list of numbers")))
                     .collect::<Result<_, _>>()?;
             }
+            Some(("look", v)) => {
+                o.looks = v
+                    .split(',')
+                    .map(|x| {
+                        LOOKS
+                            .iter()
+                            .find(|l| l.name == x)
+                            .copied()
+                            .ok_or(format!("look={v}: no look {x}"))
+                    })
+                    .collect::<Result<_, _>>()?;
+            }
             Some(("os", "windows")) => o.os = Os::Windows,
             Some(("os", "linux")) => o.os = Os::Linux,
             Some(("panel", v)) => o.panel = v.parse().map_err(|_| format!("panel={v}: not a number"))?,
@@ -1648,6 +1915,14 @@ fn options() -> Result<Options, String> {
             _ if !arg.contains('=') => o.out = PathBuf::from(arg),
             _ => return Err(format!("unknown argument {arg}")),
         }
+    }
+    if o.looks.is_empty() {
+        // Omarchy's themes only exist on Linux.
+        o.looks = LOOKS
+            .iter()
+            .filter(|l| l.theme.is_none() || o.os == Os::Linux)
+            .copied()
+            .collect();
     }
     Ok(o)
 }
@@ -1660,16 +1935,17 @@ fn check_page(
     c: Ctx,
     o: &Options,
     rules: &Rules,
-    lang: &'static str,
     reference: &mut BTreeMap<(&'static str, String), (f32, f32)>,
     sheets: &mut Sheets,
-    problems: &mut Vec<Problem>,
+    found: &mut Findings,
 ) {
     let scale = rig.scale.get();
+    let lang = c.lang();
     let mut report = |screen: &str, text: String| {
-        problems.push(Problem {
+        found.problems.push(Problem {
             page: sc.name.clone(),
             lang,
+            look: c.look.name,
             scale,
             screen: screen.into(),
             text,
@@ -1678,6 +1954,8 @@ fn check_page(
     let ui = MainWindow::new().expect("the main window");
     let s = ui.global::<AppState>();
     baseline(&ui, &s, c);
+    ui.invoke_use_scheme(c.look.dark);
+    c.look.skin(&ui.global::<Skin>());
     (sc.set)(&ui, &s, c);
     ui.set_widest(1040.0 + sizing::FRAME_SIDES);
     ui.show().expect("show");
@@ -1700,10 +1978,15 @@ fn check_page(
         if let Some(text) = margin_problem(&img, scale) {
             report("any", text);
         }
+        for text in look_check(&mut found.tiles, &sc.name, c, scale, &img) {
+            report("any", text);
+        }
         sheets.add(&sc.name, &img);
     }
     // The layout is the same at every scale, up to a wrapped word.
-    let (first_scale, first_content) = *reference.entry((lang, sc.name.clone())).or_insert((scale, content));
+    let (first_scale, first_content) = *reference
+        .entry((c.look.name, format!("{lang}/{}", sc.name)))
+        .or_insert((scale, content));
     if (content - first_content).abs() > SCALE_SLACK {
         report(
             "any",
@@ -1779,7 +2062,8 @@ fn check_page(
                 ),
             );
         }
-        if matches!(sc.kind, Kind::Text | Kind::Compare) {
+        // The text field is found by its shade of the system's look.
+        if matches!(sc.kind, Kind::Text | Kind::Compare) && c.look.theme.is_none() {
             rig.set_size(width, height);
             match field_facts(rig, &mut needed_at) {
                 None => report(&label, "the text field of the memo was not found in the picture".into()),
@@ -1821,22 +2105,26 @@ fn check_page(
 fn check_news(
     rig: &Rig,
     case: &NewsCase,
-    lang: &'static str,
+    c: Ctx,
     o: &Options,
     rules: &Rules,
     sheets: &mut Sheets,
-    problems: &mut Vec<Problem>,
+    found: &mut Findings,
 ) {
     let scale = rig.scale.get();
+    let lang = c.lang();
     let win = NewsWindow::new().expect("the news window");
+    win.invoke_use_scheme(c.look.dark);
+    c.look.skin(&win.global::<Skin>());
     win.set_version(case.version.as_str().into());
     win.set_mode(case.mode);
     win.set_news(case.text.as_str().into());
     win.show().expect("show");
     let mut report = |screen: String, text: String| {
-        problems.push(Problem {
+        found.problems.push(Problem {
             page: case.name.into(),
             lang,
+            look: c.look.name,
             scale,
             screen,
             text,
@@ -1855,37 +2143,44 @@ fn check_news(
     if let Some(text) = margin_problem(&img, scale) {
         report("any".into(), text);
     }
+    for text in look_check(&mut found.tiles, case.name, c, scale, &img) {
+        report("any".into(), text);
+    }
     let viewport_bottom = last_block_top(&img, scale).map(|top| top as f32 - 12.0 * scale);
     sheets.add(case.name, &img);
     rig.set_size(sizing::NEWS_WIDTH, 6000.0);
     let tall = rig.draw();
     let text_bottom = news_text_bottom(&tall, scale);
     win.hide().expect("hide");
-    let (Some(viewport_bottom), Some(text_bottom)) = (viewport_bottom, text_bottom) else {
-        report(
-            "any".into(),
-            "the text and the button of the news window were not found in the picture".into(),
-        );
-        return;
-    };
-    // The text's last line ends a little above its box.
-    let missing = (text_bottom as f32 + 4.0 * scale - viewport_bottom) / scale;
-    if o.verbose {
-        eprintln!(
-            "{lang} x{scale} {}: content {content:.2} px, window {natural:.2} px, {missing:.0} px hidden",
-            case.name
-        );
-    }
-    // A window exactly as tall as the text still shows 2 to 3 px "missing"
-    // here: where the picture puts the last line is a few pixels off.
-    if missing > 4.0 && content + sizing::FRAME <= biggest.usable {
-        report(
+    // Where the text ends and the button starts is found by the system's
+    // look of the button; Omarchy's square one is not what that looks for.
+    if c.look.theme.is_none() {
+        let (Some(viewport_bottom), Some(text_bottom)) = (viewport_bottom, text_bottom) else {
+            report(
+                "any".into(),
+                "the text and the button of the news window were not found in the picture".into(),
+            );
+            return;
+        };
+        // The text's last line ends a little above its box.
+        let missing = (text_bottom as f32 + 4.0 * scale - viewport_bottom) / scale;
+        if o.verbose {
+            eprintln!(
+                "{lang} x{scale} {}: content {content:.2} px, window {natural:.2} px, {missing:.0} px hidden",
+                case.name
+            );
+        }
+        // A window exactly as tall as the text still shows 2 to 3 px "missing"
+        // here: where the picture puts the last line is a few pixels off.
+        if missing > 4.0 && content + sizing::FRAME <= biggest.usable {
+            report(
             "all".into(),
             format!(
                 "the news text scrolls ({missing:.0} px of it are hidden in the window of {} x {natural:.0} px that opens) although the screen has room for a window of {content:.0} px",
                 sizing::NEWS_WIDTH
             ),
         );
+        }
     }
     for size in SCREENS {
         let screen = Screen::new(o.os, size, scale, o.panel, rules);
@@ -1927,43 +2222,36 @@ fn main() {
     let rig = Rig::new();
     // The bundled translations only exist once a component has been made.
     let _first = MainWindow::new().expect("the main window");
-    let mut problems: Vec<Problem> = Vec::new();
+    let mut found = Findings::default();
     let mut reference = BTreeMap::new();
-    for lang in &o.langs {
-        let de = *lang == "de";
-        if let Err(e) = slint::select_bundled_translation(lang) {
-            eprintln!("layout: no translation {lang}: {e}");
-            std::process::exit(2);
-        }
-        let c = Ctx { de, os: o.os };
-        let list = scenarios();
-        for &scale in &o.scales {
-            rig.set_scale(scale);
-            let mut sheets = Sheets::new(&o.out, format!("sheet-{lang}-{scale}"), o.sheets);
-            for sc in &list {
-                check_page(
-                    &rig,
-                    sc,
-                    c,
-                    &o,
-                    &rules,
-                    lang,
-                    &mut reference,
-                    &mut sheets,
-                    &mut problems,
+    for &look in &o.looks {
+        for lang in &o.langs {
+            let de = *lang == "de";
+            if let Err(e) = slint::select_bundled_translation(lang) {
+                eprintln!("layout: no translation {lang}: {e}");
+                std::process::exit(2);
+            }
+            let c = Ctx { de, os: o.os, look };
+            let list = scenarios();
+            for &scale in &o.scales {
+                rig.set_scale(scale);
+                let mut sheets = Sheets::new(&o.out, format!("sheet-{}-{lang}-{scale}", look.name), o.sheets);
+                for sc in &list {
+                    check_page(&rig, sc, c, &o, &rules, &mut reference, &mut sheets, &mut found);
+                }
+                for case in news_cases(c) {
+                    check_news(&rig, &case, c, &o, &rules, &mut sheets, &mut found);
+                }
+                sheets.flush();
+                eprintln!(
+                    "layout: {} look, {lang} at scale {scale} done, {} problems so far",
+                    look.name,
+                    found.problems.len()
                 );
             }
-            for case in news_cases(c) {
-                check_news(&rig, &case, lang, &o, &rules, &mut sheets, &mut problems);
-            }
-            sheets.flush();
-            eprintln!(
-                "layout: {lang} at scale {scale} done, {} problems so far",
-                problems.len()
-            );
         }
     }
-    lines.extend(merged(&problems));
+    lines.extend(merged(&found.problems));
     report(&o.out, &lines, started);
 }
 
@@ -1971,7 +2259,7 @@ fn main() {
 fn merged(problems: &[Problem]) -> Vec<String> {
     let mut order: Vec<(String, Vec<&str>)> = Vec::new();
     for p in problems {
-        let key = format!("page={} lang={} scale={}", p.page, p.lang, p.scale);
+        let key = format!("page={} look={} lang={} scale={}", p.page, p.look, p.lang, p.scale);
         let text = format!("{key} screen=@: {}", p.text);
         match order.iter_mut().find(|(t, _)| *t == text) {
             Some((_, screens)) => screens.push(&p.screen),
