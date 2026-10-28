@@ -2540,11 +2540,15 @@ export component NewsWindow inherits Window {
     icon: @image-url("icons/kyrr-256.png");
     preferred-width: 380px;
     min-width: 320px;
-    preferred-height: 320px;
+    // The height the text wants, at the width the window has (the app sizes
+    // the window to it, up to what the screen has room for).
+    out property <length> content-height: 2 * 18px + 2 * 12px + heading.preferred-height + body.preferred-height + buttons.preferred-height;
+    in property <length> wanted-height: 320px;
+    preferred-height: root.wanted-height;
     VerticalLayout {
         padding: 18px;
         spacing: 12px;
-        Heading {
+        heading := Heading {
             text: root.mode == 2 ? @tr("What's new in kyrr")
                 : root.mode == 1 ? @tr("What kyrr {} brings", root.version)
                 : @tr("kyrr {} is out", root.version);
@@ -2554,14 +2558,14 @@ export component NewsWindow inherits Window {
             VerticalLayout {
                 alignment: start;
                 width: parent.visible-width;
-                Text {
+                body := Text {
                     text: root.news;
                     wrap: word-wrap;
                     font-size: 13px;
                 }
             }
         }
-        HorizontalLayout {
+        buttons := HorizontalLayout {
             Rectangle { }
             Button {
                 text: @tr("Close");

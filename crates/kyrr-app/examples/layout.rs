@@ -12,7 +12,7 @@
 //! wrong on purpose and must find problems, `verbose=on` prints every page's
 //! measurements. `os` is the machine's by default: Windows keeps the taskbar
 //! out of the screen the app measures, Linux does not know about panels
-//! (`panel` is the one the check assumes, 32 px).
+//! (`panel` is the one the check assumes, as many px as the app keeps free).
 //!
 //! What it checks, for each page in German and English, at the display
 //! scales 1, 1.25, 1.5 and 2 and on the screens in `SCREENS`:
@@ -33,9 +33,8 @@
 //!
 //! What it cannot check: the real window of the operating system (frame,
 //! taskbar, panel, what a compositor does with a window). The screen is a
-//! model (`Os`), and the sizing rules of main.rs are copied here, because
-//! main.rs is a program, not a library; a changed rule there fails the check
-//! until the copy is looked at (`check_source`). Text that is cut off inside
+//! model (`Os`); the sizing rules are the app's own (src/sizing.rs is
+//! included here, `check_source` sees that main.rs uses them). Text that is cut off inside
 //! its own element cannot be told from text that fits, and the layout's own
 //! minimum width cannot be read from outside, only what shows in the margins.
 //! The unfolded credits on the general settings page and pop-ups cannot be
@@ -54,6 +53,10 @@ use slint::platform::{Platform, WindowAdapter, WindowEvent};
 use slint::{ComponentHandle, ModelRc, PhysicalSize, SharedString, VecModel};
 
 slint::include_modules!();
+
+// The sizing rules of the app itself, not a copy.
+#[path = "../src/sizing.rs"]
+mod sizing;
 
 // ---------------------------------------------------------------------------
 // What is walked through.
@@ -99,7 +102,7 @@ impl Os {
 /// The taskbar of Windows, in logical pixels (it does not grow with the scale).
 const TASKBAR: f32 = 48.0;
 /// The panel of GNOME or KDE at the top or bottom, in logical pixels.
-const DEFAULT_PANEL: f32 = 32.0;
+const DEFAULT_PANEL: f32 = sizing::LINUX_PANEL;
 
 /// How many logical pixels left and right of the content must stay empty
 /// (the window's padding is 18).
@@ -110,8 +113,6 @@ const SCALE_SLACK: f32 = 40.0;
 /// The memo text needs at least this many logical pixels of height to be
 /// read and edited.
 const TEXT_FIELD_MIN: f32 = 120.0;
-/// The news window comes up this big (its preferred size in app.slint).
-const NEWS_SIZE: (f32, f32) = (380.0, 320.0);
 /// Taller than this the contact sheet starts another picture.
 const SHEET_WIDTH: usize = 3200;
 const SHEET_HEIGHT: usize = 3600;
@@ -356,73 +357,22 @@ impl Sheets {
 }
 
 // ---------------------------------------------------------------------------
-// The sizing rules of main.rs.
+// The sizing rules.
 // ---------------------------------------------------------------------------
 
-/// main.rs is a program, so its rules are copied below. These are the
-/// numbers (read from main.rs itself) and a fingerprint of each function
-/// that the copy models; a rule that changes there fails the check, so the
-/// copy cannot drift unseen.
+/// The sizing rules are in src/sizing.rs, which this file includes. What
+/// main.rs does with them cannot be included; this only checks that the
+/// window's size is always set in logical pixels.
 const MAIN_RS: &str = include_str!("../src/main.rs");
 const PLATFORM_RS: &str = include_str!("../src/platform.rs");
-const GUARDED: [(&str, u64); 3] = [
-    ("fn height_cap(", 0xdb5d_9c8f_3c47_9a90),
-    ("fn wanted_height(", 0x2018_2521_e0ea_ee32),
-    ("fn fit_sheet(", 0x3795_8bae_2083_8641),
-];
 
+/// What the check changes in the rules on purpose (`selftest=on`).
 struct Rules {
-    max_height: f32,
-    min_height: f32,
-    frame: f32,
-    frame_sides: f32,
-    memos_height: f32,
-    sheet_height: f32,
+    selftest: bool,
 }
 
-/// The text of a function of main.rs without comments and blanks.
-fn function_text(name: &str) -> Option<String> {
-    let start = MAIN_RS.find(name)?;
-    let body = &MAIN_RS[start..];
-    let end = body.find("\n}\n")? + 3;
-    let mut text = String::new();
-    for line in body[..end].lines() {
-        let line = line.split("//").next().unwrap_or("");
-        text.extend(line.chars().filter(|c| !c.is_whitespace()));
-    }
-    Some(text)
-}
-
-fn fingerprint(text: &str) -> u64 {
-    text.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| {
-        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
-    })
-}
-
-fn constant(name: &str) -> Result<f32, String> {
-    let key = format!("const {name}: f32 = ");
-    let start = MAIN_RS.find(&key).ok_or(format!("main.rs: no `{key}…;` any more"))? + key.len();
-    let end = MAIN_RS[start..].find(';').ok_or("main.rs: a constant without end")?;
-    MAIN_RS[start..start + end]
-        .trim()
-        .parse()
-        .map_err(|_| format!("main.rs: `{name}` is not a plain number any more"))
-}
-
-/// Reads the numbers and notices every change of the rules that this file
-/// models.
-fn check_source() -> (Result<Rules, String>, Vec<String>) {
+fn check_source() -> Vec<String> {
     let mut problems = Vec::new();
-    for (name, wanted) in GUARDED {
-        match function_text(name) {
-            None => problems.push(format!("source: main.rs has no `{name}` any more; update the model in layout.rs")),
-            Some(text) if fingerprint(&text) != wanted => problems.push(format!(
-                "source: `{name}` in main.rs changed (fingerprint {:#018x}); check the model in layout.rs, then put this fingerprint into GUARDED",
-                fingerprint(&text)
-            )),
-            Some(_) => {}
-        }
-    }
     // The window is always sized in logical pixels, so it follows the scale.
     for (file, source) in [("main.rs", MAIN_RS), ("platform.rs", PLATFORM_RS)] {
         if source.contains("PhysicalSize") {
@@ -442,17 +392,22 @@ fn check_source() -> (Result<Rules, String>, Vec<String>) {
             }
         }
     }
-    let rules = (|| {
-        Ok(Rules {
-            max_height: constant("MAX_HEIGHT")?,
-            min_height: constant("MIN_HEIGHT")?,
-            frame: constant("FRAME")?,
-            frame_sides: constant("FRAME_SIDES")?,
-            memos_height: constant("MEMOS_HEIGHT")?,
-            sheet_height: constant("SHEET_HEIGHT")?,
-        })
-    })();
-    (rules, problems)
+    // The app takes its sizes from the rules above.
+    for needed in [
+        "sizing::height_cap(",
+        "sizing::wanted_height(",
+        "sizing::sheet_height(",
+        "sizing::widest(",
+        "sizing::news_height(",
+        "sizing::whole_pixels(",
+    ] {
+        if !MAIN_RS.contains(needed) {
+            problems.push(format!(
+                "source: main.rs does not use `{needed}…` any more; it must size its windows with the rules in sizing.rs"
+            ));
+        }
+    }
+    problems
 }
 
 /// A screen, as the app sees it and as it really is, in logical pixels.
@@ -475,10 +430,14 @@ impl Screen {
             Os::Windows => (height as f32 - TASKBAR, phys_h - (TASKBAR * scale).round()),
             Os::Linux => (height as f32 - panel, phys_h),
         };
-        // height_cap in main.rs.
-        let cap = (seen_h / scale - rules.frame).clamp(rules.min_height, rules.max_height);
-        // fit_sheet in main.rs.
-        let widest = (phys_w / scale - rules.frame_sides).max(520.0);
+        // The free screen the app sees (a Linux app keeps room for panels).
+        let area = Some((0, 0, phys_w as i32, seen_h as i32));
+        let mut cap = sizing::height_cap(area, scale, sizing::panel(os == Os::Linux));
+        if rules.selftest {
+            // Wrong on purpose: no room for the frame, and a low maximum.
+            cap = (cap + sizing::FRAME).min(900.0);
+        }
+        let widest = sizing::widest((0, 0, phys_w as i32, phys_h as i32), scale);
         Screen {
             width,
             height,
@@ -504,22 +463,24 @@ fn intended_width(kind: Kind, screen: &Screen) -> f32 {
     }
 }
 
-/// The height main.rs gives the window for a page whose content is `content`
-/// high: `wanted_height`, and `fit_sheet` for a memo's text.
-fn window_height(kind: Kind, content: f32, screen: &Screen, rules: &Rules) -> f32 {
-    let memos = content.max(rules.memos_height).min(screen.cap);
-    match kind {
+/// The height the app gives the window for a page whose content is
+/// `content` high (`resize` after `wanted_height`, and `fit_sheet` for a
+/// memo's text), in whole physical pixels.
+fn window_height(kind: Kind, content: f32, screen: &Screen, scale: f32) -> f32 {
+    let memos = sizing::wanted_height(content, screen.cap, true);
+    let height = match kind {
         Kind::Memos => memos,
-        Kind::Text | Kind::Compare => memos.max(rules.sheet_height.min(screen.cap)),
-        _ => content.min(screen.cap),
-    }
+        Kind::Text | Kind::Compare => memos.max(sizing::sheet_height(screen.cap)),
+        _ => sizing::wanted_height(content, screen.cap, false),
+    };
+    sizing::whole_pixels(height, scale)
 }
 
 /// The window's height in physical pixels as it ends up. Slint raises a
 /// window to its minimum height and rounds that up (the main page on every
 /// system, every page on Linux, where the app sets the minimum); a plain
 /// request (the other pages on Windows) is rounded to the nearest pixel,
-/// which can leave the window a fraction of a pixel shorter than its content.
+/// which the app prevents by asking for whole pixels.
 fn window_px(os: Os, kind: Kind, height: f32, scale: f32) -> u32 {
     let exact = height * scale;
     if kind == Kind::Main || os == Os::Linux {
@@ -1718,7 +1679,7 @@ fn check_page(
     let s = ui.global::<AppState>();
     baseline(&ui, &s, c);
     (sc.set)(&ui, &s, c);
-    ui.set_widest(1040.0 + rules.frame_sides);
+    ui.set_widest(1040.0 + sizing::FRAME_SIDES);
     ui.show().expect("show");
     // The width first, as main.rs does, then a window far taller than any
     // page, to see how tall the content wants to be.
@@ -1730,8 +1691,8 @@ fn check_page(
     // A page that scrolls on a big screen is drawn whole, so its scrollbar
     // does not stand in the margin.
     let natural = match sc.kind {
-        Kind::Text | Kind::Compare => window_height(sc.kind, content, &biggest, rules),
-        _ => window_height(sc.kind, content, &biggest, rules).max(content) + 2.0,
+        Kind::Text | Kind::Compare => window_height(sc.kind, content, &biggest, scale),
+        _ => window_height(sc.kind, content, &biggest, scale).max(content) + 2.0,
     };
     rig.set_size(ui.get_page_width(), natural);
     if sc.drawn {
@@ -1780,16 +1741,17 @@ fn check_page(
                 ),
             );
         }
-        if width + rules.frame_sides > screen.width as f32 + 0.5 {
+        if width + sizing::FRAME_SIDES > screen.width as f32 + 0.5 {
             report(
                 &label,
                 format!(
                     "the window is {width} px wide (+ {} for its frame) on a screen {} px wide",
-                    rules.frame_sides, screen.width
+                    sizing::FRAME_SIDES,
+                    screen.width
                 ),
             );
         }
-        let height = window_height(sc.kind, content, &screen, rules);
+        let height = window_height(sc.kind, content, &screen, scale);
         let free = screen.usable;
         if height + o.os.frame() > free + 0.5 {
             report(
@@ -1809,7 +1771,7 @@ fn check_page(
         // the window (the window is whole pixels).
         let px = window_px(o.os, sc.kind, height, scale);
         let seen = px as f32 / scale;
-        if content > seen + 0.02 && content + rules.frame <= free {
+        if content > seen + 0.02 && content + sizing::FRAME <= free {
             report(
                 &label,
                 format!(
@@ -1836,7 +1798,7 @@ fn check_page(
                     }
                     if let Some(needed) = needed.filter(|n| *n > field + 3.0) {
                         let wanted = height + needed - field;
-                        if wanted + rules.frame <= free {
+                        if wanted + sizing::FRAME <= free {
                             report(
                                 &label,
                                 format!(
@@ -1854,8 +1816,8 @@ fn check_page(
     rig.set_size(380.0, 660.0);
 }
 
-/// The news window, which the app does not size: it opens at its preferred
-/// size, and its text scrolls.
+/// The news window, which the app sizes to its text, up to what the screen
+/// has room for.
 fn check_news(
     rig: &Rig,
     case: &NewsCase,
@@ -1871,62 +1833,82 @@ fn check_news(
     win.set_mode(case.mode);
     win.set_news(case.text.as_str().into());
     win.show().expect("show");
-    rig.set_size(NEWS_SIZE.0, NEWS_SIZE.1);
-    let img = rig.draw();
-    if let Some(text) = margin_problem(&img, scale) {
-        problems.push(Problem {
-            page: case.name.into(),
-            lang,
-            scale,
-            screen: "any".into(),
-            text,
-        });
-    }
-    let viewport_bottom = last_block_top(&img, scale).map(|top| top as f32 - 12.0 * scale);
-    sheets.add(case.name, &img);
-    rig.set_size(NEWS_SIZE.0, 6000.0);
-    let tall = rig.draw();
-    let text_bottom = news_text_bottom(&tall, scale);
-    win.hide().expect("hide");
-    let (Some(viewport_bottom), Some(text_bottom)) = (viewport_bottom, text_bottom) else {
-        problems.push(Problem {
-            page: case.name.into(),
-            lang,
-            scale,
-            screen: "any".into(),
-            text: "the text and the button of the news window were not found in the picture".into(),
-        });
-        return;
-    };
-    // The text's last line ends a little above its box.
-    let missing = (text_bottom as f32 + 4.0 * scale - viewport_bottom) / scale;
-    if missing <= 2.0 {
-        return;
-    }
-    let wanted = NEWS_SIZE.1 + missing;
-    // The screens that have room for a window that shows all of it.
-    let fits: Vec<String> = SCREENS
-        .iter()
-        .map(|size| Screen::new(o.os, *size, scale, o.panel, rules))
-        .filter(|s| wanted + rules.frame <= s.usable)
-        .map(|s| s.label())
-        .collect();
-    if !fits.is_empty() {
-        let screen = if fits.len() == SCREENS.len() {
-            "all".into()
-        } else {
-            fits.join(",")
-        };
+    let mut report = |screen: String, text: String| {
         problems.push(Problem {
             page: case.name.into(),
             lang,
             scale,
             screen,
-            text: format!(
-                "the news text scrolls ({missing:.0} px of it are hidden in the window of {} x {} px that opens) although the screen has room for a window of {wanted:.0} px",
-                NEWS_SIZE.0, NEWS_SIZE.1
-            ),
+            text,
         });
+    };
+    // The text's height at the window's width, as the app measures it: in a
+    // tall window, so no scrollbar narrows the text.
+    rig.set_size(sizing::NEWS_WIDTH, sizing::MAX_HEIGHT);
+    let content = win.get_content_height();
+    let height_on = |screen: &Screen| sizing::whole_pixels(sizing::news_height(content, screen.cap), scale);
+    let biggest = Screen::new(o.os, (3840, 2160), scale, o.panel, rules);
+    let natural = height_on(&biggest);
+    win.set_wanted_height(natural);
+    rig.set_size(sizing::NEWS_WIDTH, natural);
+    let img = rig.draw();
+    if let Some(text) = margin_problem(&img, scale) {
+        report("any".into(), text);
+    }
+    let viewport_bottom = last_block_top(&img, scale).map(|top| top as f32 - 12.0 * scale);
+    sheets.add(case.name, &img);
+    rig.set_size(sizing::NEWS_WIDTH, 6000.0);
+    let tall = rig.draw();
+    let text_bottom = news_text_bottom(&tall, scale);
+    win.hide().expect("hide");
+    let (Some(viewport_bottom), Some(text_bottom)) = (viewport_bottom, text_bottom) else {
+        report(
+            "any".into(),
+            "the text and the button of the news window were not found in the picture".into(),
+        );
+        return;
+    };
+    // The text's last line ends a little above its box.
+    let missing = (text_bottom as f32 + 4.0 * scale - viewport_bottom) / scale;
+    if o.verbose {
+        eprintln!(
+            "{lang} x{scale} {}: content {content:.2} px, window {natural:.2} px, {missing:.0} px hidden",
+            case.name
+        );
+    }
+    // A window exactly as tall as the text still shows 2 to 3 px "missing"
+    // here: where the picture puts the last line is a few pixels off.
+    if missing > 4.0 && content + sizing::FRAME <= biggest.usable {
+        report(
+            "all".into(),
+            format!(
+                "the news text scrolls ({missing:.0} px of it are hidden in the window of {} x {natural:.0} px that opens) although the screen has room for a window of {content:.0} px",
+                sizing::NEWS_WIDTH
+            ),
+        );
+    }
+    for size in SCREENS {
+        let screen = Screen::new(o.os, size, scale, o.panel, rules);
+        let height = height_on(&screen);
+        if height + o.os.frame() > screen.usable + 0.5 {
+            report(
+                screen.label(),
+                format!(
+                    "the news window is {height:.0} px tall + {} for its frame, the screen has {:.0} px free: {:.0} px too tall",
+                    o.os.frame(),
+                    screen.usable,
+                    height + o.os.frame() - screen.usable
+                ),
+            );
+        }
+        if height + 0.5 < content && content + sizing::FRAME <= screen.usable {
+            report(
+                screen.label(),
+                format!(
+                    "the news window is {height:.0} px tall for {content:.0} px of text, although the screen has room for it"
+                ),
+            );
+        }
     }
 }
 
@@ -1940,21 +1922,8 @@ fn main() {
     };
     let started = Instant::now();
     std::fs::create_dir_all(&o.out).expect("the output directory");
-    let (rules, source_problems) = check_source();
-    let mut lines: Vec<String> = source_problems;
-    let rules = match rules {
-        Ok(rules) => rules,
-        Err(e) => {
-            lines.push(e);
-            report(&o.out, &lines, started);
-        }
-    };
-
-    let mut rules = rules;
-    if o.selftest {
-        rules.max_height = 900.0;
-        rules.frame = 0.0;
-    }
+    let mut lines: Vec<String> = check_source();
+    let rules = Rules { selftest: o.selftest };
     let rig = Rig::new();
     // The bundled translations only exist once a component has been made.
     let _first = MainWindow::new().expect("the main window");
