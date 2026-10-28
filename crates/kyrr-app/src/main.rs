@@ -1280,6 +1280,7 @@ impl App {
             ("toggle", "general.updateCheck") => flip!(get_update_auto, set_update_auto, invoke_update_auto_toggled),
             ("toggle", "listen") => state.invoke_listen_toggled(),
             ("toggle", "ai.features") => flip!(get_ai_features, set_ai_features, invoke_ai_features_toggled),
+            ("toggle", "ai.fixOrder") => flip!(get_fix_order, set_fix_order, invoke_fix_order_toggled),
             ("toggle", "ai.on") => flip!(get_local_ai, set_local_ai, invoke_local_ai_toggled),
             ("set", setting) => self.omarchy_set(&state, setting, value),
             ("mic", "unmute") => state.invoke_unmute(),

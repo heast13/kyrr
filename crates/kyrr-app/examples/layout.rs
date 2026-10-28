@@ -1032,6 +1032,14 @@ fn scenarios() -> Vec<Scenario> {
         s.set_rework_index(3);
         s.set_translate_index(3);
     });
+    // "Fix mistakes" with the word order switch under it, switched on.
+    add(&mut v, "main-local-ai-fix-order", Kind::Main, |_, s, _| {
+        s.set_ai_features(true);
+        s.set_local_ai(true);
+        s.set_rework_ready(true);
+        s.set_rework_index(1);
+        s.set_fix_order(true);
+    });
     // The status line wraps to a second line for a long phrase: the main
     // window grows and shrinks with it. Heights only.
     for (state, phrase) in [("idle", 0..20), ("memo", 0..20)] {

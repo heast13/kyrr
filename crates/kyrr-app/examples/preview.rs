@@ -525,6 +525,12 @@ fn main() {
     state.set_translate_index(3);
     state.set_page(0);
     render(&window, &ui, &format!("{out}/main-local-ai-{lang}.rgba"));
+    // "Fix mistakes" with the word order switch under it, switched on.
+    state.set_rework_index(1);
+    state.set_fix_order(true);
+    render(&window, &ui, &format!("{out}/main-local-ai-fix-order-{lang}.rgba"));
+    state.set_fix_order(false);
+    state.set_rework_index(3);
     state.set_page(1);
     render(&window, &ui, &format!("{out}/own-models-on-{lang}.rgba"));
     // Switched on, nothing set up yet, Ollama found.
