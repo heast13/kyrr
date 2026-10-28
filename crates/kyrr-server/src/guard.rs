@@ -1,6 +1,7 @@
 //! The checks on what the language model sends back, before kyrr types it.
 //!
-//! Fixing goes word by word: a change stays only if it looks like a
+//! Fixing goes word by word (with word order on, words may also move, see
+//! [`fix_ordered`]): a change stays only if it looks like a
 //! mishearing of what was dictated (similar spelling or sound), or is
 //! punctuation, case, a compound split or joined, a doubled word or a filler
 //! dropped. Everything else goes back to the dictation. Rewording and
@@ -366,28 +367,49 @@ pub fn fix(orig: &str, out: &str) -> (String, usize) {
     (join(&res), kept)
 }
 
-/// Words whose order decides who does what to whom, or what is negated:
-/// articles, pronouns, negation and focus words, "and/or/but". They keep
-/// their order when words move; so do nouns in German (capitalized).
-const ANCHORS: &str = "der die das den dem des ein eine einen einem einer eines \
+/// German words that must stay where they are: they say who does what to
+/// whom, or what is negated (articles, pronouns, negation and focus words,
+/// "and/or/but"). Nouns and names (capitalized) stay too.
+const STAY_DE: &str = "der die das den dem des ein eine einen einem einer eines \
 er sie es ihn ihm ihr ihnen ich mich mir du dich dir wir uns euch man sich \
 mein meine meinen meinem meiner dein deine deinen deinem deiner sein seine seinen seinem seiner unser unsere unseren \
-nicht kein keine keinen keinem keiner nie niemals nur auch alle alles jede jeder jedes nichts niemand jemand und oder aber \
-the a an he she it him her they them we us you i me my your his its our their \
-not no never only also all every nothing nobody and or but";
+nicht kein keine keinen keinem keiner nie niemals nur auch alle alles jede jeder jedes nichts niemand jemand und oder aber";
 
-/// Length of the longest increasing run in `seq`.
-fn longest_increasing(seq: &[usize]) -> usize {
-    let mut tails: Vec<usize> = Vec::new();
-    for &v in seq {
-        let i = tails.partition_point(|&t| t < v);
-        if i == tails.len() {
-            tails.push(v);
-        } else {
-            tails[i] = v;
+/// Capitalized only because they start a sentence: these may move.
+const START_DE: &str =
+    "gestern heute morgen dann zuerst danach nachher jetzt später früher manchmal immer oft bald schon noch";
+
+/// English words that may move: auxiliaries and time adverbs. English
+/// nouns cannot be told from verbs here, so nothing else moves.
+const MOVE_EN: &str =
+    "is are was were am be been has have had will would can could should must may might do does did shall \
+always usually often sometimes already still yesterday today tomorrow now then soon later again";
+
+/// The words that kept their place: the longest run of `order` that only
+/// goes up, and among equally long ones the one that keeps most words that
+/// `stays` calls fixed. Returns for each word whether it kept its place.
+fn kept_in_place(order: &[usize], stays: &[bool]) -> Vec<bool> {
+    let n = order.len();
+    // Weight: a word counts 1000, 1 more if it must stay.
+    let weight = |k: usize| 1000 + usize::from(stays[order[k]]);
+    let mut best = vec![0usize; n];
+    let mut from: Vec<Option<usize>> = vec![None; n];
+    for k in 0..n {
+        best[k] = weight(k);
+        for j in 0..k {
+            if order[j] < order[k] && best[j] + weight(k) > best[k] {
+                best[k] = best[j] + weight(k);
+                from[k] = Some(j);
+            }
         }
     }
-    tails.len()
+    let mut kept = vec![false; n];
+    let mut at = (0..n).max_by_key(|&k| best[k]);
+    while let Some(k) = at {
+        kept[k] = true;
+        at = from[k];
+    }
+    kept
 }
 
 /// Which dictated word each word of the answer is: the same or a misheard
@@ -422,12 +444,12 @@ fn pair_words(na: &[String], nb: &[String]) -> (Vec<Option<usize>>, Vec<bool>) {
     let (mut i, mut j) = (0, 0);
     while i < n && j < m {
         let g = gain(&na[i], &nb[j]);
-        if g > 0.0 && (best[i][j] - (best[i + 1][j + 1] + g)).abs() < 1e-6 {
+        if g > 0.0 && (best[i][j] - (best[i + 1][j + 1] + g)).abs() < 1e-4 {
             mb[j] = Some(i);
             ua[i] = true;
             i += 1;
             j += 1;
-        } else if (best[i][j] - best[i + 1][j]).abs() < 1e-6 {
+        } else if (best[i][j] - best[i + 1][j]).abs() < 1e-4 {
             i += 1;
         } else {
             j += 1;
@@ -464,18 +486,34 @@ fn pair_words(na: &[String], nb: &[String]) -> (Vec<Option<usize>>, Vec<bool>) {
     (mb, ua)
 }
 
+/// Longest dictation line the move check works on: its table grows with
+/// the square of the words.
+const MOST_WORDS: usize = 300;
+
 /// The answer with words moved, if that is all it did: every word of it is
-/// a dictated word (or a misheard one), none is missing (a filler or a
-/// doubled word may go), at most two words changed their place, and the
-/// words that say who does what keep their order. Misheard words must
-/// look like the dictated ones, as in [`fix`].
+/// a dictated word (or a misheard one, as in [`fix`]), none is missing (a
+/// filler or a doubled word may go), at most two words (and a third of the
+/// text) changed their place, and the words that moved are ones that may:
+/// in German anything but articles, pronouns, negation, nouns and names; in
+/// English only auxiliaries and time adverbs; in other languages nothing.
+/// So who does what to whom, and what is negated, stays as said.
 fn moved_words(orig: &str, out: &str) -> Option<String> {
     let (a, b) = (tokens(orig), tokens(out));
     let na: Vec<String> = a.iter().filter(|t| is_word(&t.text)).map(|t| norm(&t.text)).collect();
     let nb: Vec<String> = b.iter().filter(|t| is_word(&t.text)).map(|t| norm(&t.text)).collect();
-    if na.is_empty() || nb.is_empty() {
+    if na.is_empty() || nb.is_empty() || na.len() > MOST_WORDS || nb.len() > MOST_WORDS {
         return None;
     }
+    // Only German and English, told apart by their small words (the other
+    // languages share too many of them to be told from a short line).
+    let ws = words(orig);
+    let (de, en) = (small_words(&ws, "de"), small_words(&ws, "en"));
+    let language = match (de.cmp(&en), de.max(en)) {
+        (_, 0) => return None,
+        (std::cmp::Ordering::Greater, _) => "de",
+        (std::cmp::Ordering::Less, _) => "en",
+        _ => return None,
+    };
     let (mb, ua) = pair_words(&na, &nb);
     let order: Vec<usize> = mb.iter().copied().collect::<Option<Vec<_>>>()?;
     for (i, used) in ua.iter().enumerate() {
@@ -485,31 +523,32 @@ fn moved_words(orig: &str, out: &str) -> Option<String> {
             return None;
         }
     }
-    let moved = order.len() - longest_increasing(&order);
-    let allowed = ((0.34 * na.len() as f32).round() as usize).max(1);
-    if moved == 0 || moved > 2 || moved > allowed {
-        return None;
-    }
-    // Nouns (German), articles, pronouns, negation: the same order as said.
-    let german = language_of(orig) == Some("de");
-    let mut first = true;
+    // Which dictated words may not move.
+    let mut stays: Vec<bool> = Vec::new();
     let mut sentence_start = true;
-    let mut anchors: Vec<bool> = Vec::new();
     for t in &a {
         if !is_word(&t.text) {
             sentence_start = matches!(t.text.as_str(), "." | "!" | "?");
             continue;
         }
+        let word = norm(&t.text);
         let capital = t.text.chars().next().is_some_and(char::is_uppercase);
-        let anchor = ANCHORS.split(' ').any(|w| w == norm(&t.text))
-            || t.text.chars().any(|c| c.is_ascii_digit())
-            || (german && capital && !(first || sentence_start));
-        anchors.push(anchor);
-        first = false;
+        stays.push(if language == "de" {
+            STAY_DE.split(' ').any(|w| w == word)
+                || t.text.chars().any(|c| c.is_ascii_digit())
+                || (capital && !(sentence_start && START_DE.split(' ').any(|w| w == word)))
+        } else {
+            !MOVE_EN.split(' ').any(|w| w == word)
+        });
         sentence_start = false;
     }
-    let kept: Vec<usize> = order.iter().copied().filter(|&i| anchors[i]).collect();
-    if kept.windows(2).any(|w| w[0] > w[1]) {
+    let kept = kept_in_place(&order, &stays);
+    let moved = kept.iter().filter(|&&k| !k).count();
+    let allowed = ((0.34 * na.len() as f32).round() as usize).max(1);
+    if moved == 0 || moved > 2 || moved > allowed {
+        return None;
+    }
+    if (0..order.len()).any(|k| !kept[k] && stays[order[k]]) {
         return None;
     }
     Some(join(&b))
@@ -517,9 +556,11 @@ fn moved_words(orig: &str, out: &str) -> Option<String> {
 
 /// Like [`fix`], but the answer may also have words moved to where the
 /// grammar puts them ("weil ich hab keine Zeit" → "weil ich keine Zeit
-/// hab"). Only moved: a new, missing or reworded word, more than two words
-/// moved, or a changed order of names and pronouns, and the answer is
-/// checked as in [`fix`], which undoes every move.
+/// hab"). Only moved: a new or missing word, more than two words moved, a
+/// noun, name, pronoun or negation moved (or any word but an auxiliary or
+/// time adverb in English, any word in other languages), and the answer is
+/// checked as in [`fix`], which undoes every move. Misheard words in it are
+/// fixed as in [`fix`].
 pub fn fix_ordered(orig: &str, out: &str) -> (String, usize) {
     match moved_words(orig, out) {
         Some(text) => (text, 1),
@@ -889,10 +930,31 @@ mod tests {
             ("Nur ich habe das gesehen.", "Ich habe nur das gesehen."),
             ("Ich habe nicht alles gelesen.", "Alles habe ich nicht gelesen."),
             ("The dog bites the man.", "The man bites the dog."),
+            ("The dog bites the boy.", "The boy bites the dog."),
+            ("John gave Mary the book.", "Mary gave John the book."),
+            (
+                "Maria hat Peter den Brief geschrieben.",
+                "Peter hat Maria den Brief geschrieben.",
+            ),
+            ("Peter sieht Maria heute Abend.", "Maria sieht Peter heute Abend."),
+            // Another language than German and English: nothing moves.
+            (
+                "Je pense que nous devons le faire demain matin.",
+                "Je pense que nous devons demain matin le faire.",
+            ),
         ] {
             assert_eq!(fix_ordered(said, model).0, fix(said, model).0, "{said}");
             assert_ne!(fix_ordered(said, model).0, model, "{said}");
         }
+    }
+
+    #[test]
+    fn a_very_long_line_is_not_checked_for_moves() {
+        let said = "Das ist ein langer Satz mit vielen kleinen Wörtern. ".repeat(60);
+        let model = said.replacen("Das ist", "Ist das", 1);
+        let started = std::time::Instant::now();
+        assert_eq!(fix_ordered(&said, &model).0, fix(&said, &model).0);
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
     }
 
     #[test]
