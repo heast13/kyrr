@@ -60,6 +60,10 @@ jobs:
           # sherpa-onnx-sys unpacks its prebuilt libraries here; the cache
           # would otherwise keep its build output but drop the libraries.
           cache-directories: target/sherpa-onnx-prebuilt
+      - name: Omarchy contract
+        # Every control of the window has its way in the Omarchy bar menu
+        # (packaging/omarchy/contract.json, docs/release-gate.md).
+        run: python3 scripts/check-omarchy-contract.py
       - name: Fetch assets
         run: python3 scripts/fetch-assets.py --linux --test
       - name: Format
