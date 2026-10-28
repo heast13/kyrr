@@ -2058,6 +2058,8 @@ impl App {
             m.set_language(language);
             m.set_can_write(model_installed(&self.config.borrow()));
         }
+        // The language model's checks go by the dictation language too.
+        servers::send(self);
         self.apply_key();
         self.refresh_filter();
     }

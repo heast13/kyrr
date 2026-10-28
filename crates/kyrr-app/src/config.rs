@@ -169,7 +169,10 @@ impl Config {
             config.translate_into = std::mem::take(&mut config.old_target);
             config.local_ai = true;
         }
-        config.rework = config.rework.min(3);
+        // Something nobody offers is no rework (not the last one, "professional").
+        if config.rework > 3 {
+            config.rework = 0;
+        }
         if !config.memo_hold_default {
             config.memo_toggle = false;
             config.memo_hold_default = true;

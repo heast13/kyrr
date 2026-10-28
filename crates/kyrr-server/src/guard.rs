@@ -607,8 +607,8 @@ fn numbers(s: &str) -> Vec<String> {
 
 const STOP: [(&str, &str); 17] = [
     ("de", "der die das und ist nicht ich du er sie wir ihr es ein eine zu mit auf für von den dem des im mich mir sich bei nach sind war hat haben auch noch wie aber oder wenn dass einen einem einer sein seine seiner jeder jede gegen über aus vom zum zur nur schon kann wird werden hier"),
-    ("en", "the and is not you he she we they it a an to with on for of in was were has have also still how but or if that this"),
-    ("fr", "le la les et est pas je tu il elle nous vous un une des du de en pour avec sur que qui"),
+    ("en", "the and is not you he she we they it a an to with on for of in was were has have also still how but or if that this i my me are be do would can at by"),
+    ("fr", "le la les et est pas je tu il elle nous vous un une des du de en pour avec sur que qui on au ce ne dans sont mais ou"),
     ("es", "el la los las y es no yo tú él ella nosotros un una de en para con que por del se"),
     ("it", "il lo la gli le e è non io tu lui lei noi voi un una di in per con su che chi del della sono"),
     ("nl", "de het een en is niet ik jij je hij zij wij we jullie van in op met voor dat die er maar ook nog zijn was hebben heeft hoe wat waarom"),
@@ -797,7 +797,15 @@ fn rewritten(orig: &str, out: &str, language: Option<&str>, length: (f32, f32), 
 /// dictation.
 pub fn translated(orig: &str, out: &str, target: &str) -> Result<(), Refusal> {
     whole(orig, out, (0.5, 2.0))?;
-    if language_of(out).is_some_and(|found| !kin(found, target)) {
+    // Another language must have more small words than the one asked for;
+    // in a short sentence a tie is no proof either ("on" and "i" are
+    // English, French, Finnish and Polish alike).
+    let ws = words(out);
+    let long = ws.len() > 6;
+    if language_of(out).is_some_and(|found| {
+        let (theirs, ours) = (small_words(&ws, found), small_words(&ws, target));
+        !kin(found, target) && (theirs > ours || (long && theirs == ours))
+    }) {
         return Err(Refusal::Language);
     }
     Ok(())
@@ -878,6 +886,7 @@ pub fn clean(out: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -992,6 +1001,45 @@ mod tests {
         assert_eq!(kept, 2);
         let q = "Was ist die Hauptstadt von Australien?";
         assert_eq!(fix_ordered(q, "Die Hauptstadt von Australien ist Canberra.").0, q);
+    }
+
+    #[test]
+    fn small_words_of_two_languages_are_no_proof_against_a_translation() {
+        // "on" and "i" are small words of several languages.
+        assert_eq!(
+            translated(
+                "Wir treffen uns morgen im Büro.",
+                "On se retrouve demain au bureau.",
+                "fr"
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            translated("Ich komme gleich zurück.", "I'm coming right back.", "en"),
+            Ok(())
+        );
+        assert_eq!(
+            translated("Entschuldigung für die Verspätung.", "Please excuse my delay.", "en"),
+            Ok(())
+        );
+        // Short, and "on" is Finnish as well as English: a tie.
+        assert_eq!(
+            translated(
+                "Kannst du mir sagen, wie spät es ist?",
+                "Voitko kertoa minulle, paljonko kello on?",
+                "fi"
+            ),
+            Ok(())
+        );
+        // A plainly other language still is none.
+        assert_eq!(
+            translated(
+                "Ich bin heute nicht im Büro.",
+                "Je ne suis pas dans le bureau aujourd'hui.",
+                "en"
+            ),
+            Err(Refusal::Language)
+        );
     }
 
     #[test]

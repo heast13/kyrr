@@ -13,6 +13,7 @@ use std::time::{Duration, SystemTime};
 use chrono::{Local, NaiveDateTime};
 use kyrr_common::wave::{Mode, Overlay};
 use kyrr_dictate::Language;
+use kyrr_server::guard;
 use kyrr_server::rework::{self, Outcome, Preset, Why, TARGETS};
 use kyrr_server::{Error, Server};
 use slint::{ComponentHandle, Model, ModelRc, VecModel, Weak};
@@ -57,6 +58,10 @@ struct Reworked {
     paragraphs: Vec<library::Paragraph>,
     changed: usize,
     fixed_only: usize,
+    /// Paragraphs the translation step made, and those it found already in
+    /// the language asked for.
+    translated: usize,
+    same: usize,
     failed: Option<Error>,
 }
 
@@ -399,7 +404,7 @@ impl Memos {
         state.on_memo_close_text(with0(|m| m.close_text()));
         state.on_memo_restore_text(with0(|m| m.restore_text()));
         state.on_memo_show_compare(with0(|m| m.show_compare()));
-        state.on_memo_stop_rework(with0(|m| m.stop_rework()));
+        state.on_memo_stop_rework(with0(|m| m.cancel_rework()));
         let weak = Rc::downgrade(self);
         state.on_memo_rework(move |action, target| {
             if let Some(m) = weak.upgrade() {
@@ -882,6 +887,7 @@ impl Memos {
     /// A memo renamed while its text waits or is being written: the text
     /// starts again under the new name.
     fn moved(&self, from: &Path, to: &Path) {
+        self.rework_moved(from, to);
         if self.texts.borrow_mut().remove(from).is_some() {
             let _ = self.worker.send(Command::CancelText(from.to_path_buf()));
             let _ = self.worker.send(Command::Job(Job::Text(to.to_path_buf())));
@@ -939,10 +945,21 @@ impl Memos {
         let Ok(to) = library::rename(&path, &title) else {
             return path;
         };
+        self.rework_moved(&path, &to);
         if self.sheet.borrow().as_ref() == Some(&path) {
             *self.sheet.borrow_mut() = Some(to.clone());
         }
         to
+    }
+
+    /// A memo renamed while the language model works on its text: the
+    /// result still goes to it.
+    fn rework_moved(&self, from: &Path, to: &Path) {
+        if let Some((path, _)) = self.reworking.borrow_mut().as_mut() {
+            if path == from {
+                *path = to.to_path_buf();
+            }
+        }
     }
 
     /// How the text of a memo comes along.
@@ -973,6 +990,10 @@ impl Memos {
         };
         // What could not be saved for the memo before is given up here.
         self.flush();
+        // The language model works on one text only: the one on the sheet.
+        if self.reworking.borrow().as_ref().is_some_and(|(p, _)| *p != path) {
+            self.stop_rework();
+        }
         if let Some(w) = self.window.upgrade() {
             let state = w.global::<AppState>();
             state.set_memo_rework_note("".into());
@@ -1197,6 +1218,10 @@ impl Memos {
 
     /// The language model as set up now (None for none or switched off).
     pub fn set_rework(&self, rework: Option<MemoRework>) {
+        // Switched off while it works: the cancel button goes with it.
+        if rework.is_none() {
+            self.stop_rework();
+        }
         if let Some(w) = self.window.upgrade() {
             w.global::<AppState>().set_memo_rework_ready(rework.is_some());
         }
@@ -1240,13 +1265,29 @@ impl Memos {
         self.flush();
         // What was typed could not be saved: it is not worked over.
         if self.dirty.get() {
+            state.set_memo_rework_note(
+                self.say("Konnte den Text nicht speichern.", "Could not save the text.")
+                    .into(),
+            );
             return;
         }
         let paragraphs = library::read_text(&path).unwrap_or_default();
         let from = paragraphs.clone();
         if paragraphs.iter().all(|p| p.text.trim().is_empty()) {
+            state.set_memo_rework_note(self.say("Kein Text zum Überarbeiten.", "No text to rework.").into());
             return;
         }
+        // The text may be in another language than the one dictated in: it
+        // was translated before, or the memo was said in another one. The
+        // checks go by what it is in now, else a second go (rewording an
+        // English text "in German") is refused, or translating it back into
+        // the dictation language is taken for done.
+        let whole: String = paragraphs
+            .iter()
+            .map(|p| p.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let rework = (rework.0, rework.1, guard::language_of(&whole).or(rework.2));
         let stop = Arc::new(AtomicBool::new(false));
         *self.reworking.borrow_mut() = Some((path.clone(), Arc::clone(&stop)));
         state.set_memo_rework_busy(true);
@@ -1256,7 +1297,8 @@ impl Memos {
         std::thread::spawn(move || {
             let (server, model, language) = rework;
             let all = paragraphs.len();
-            let (mut changed, mut fixed_only) = (0, 0);
+            let (mut changed, mut fixed_only, mut translated, mut same) = (0, 0, 0, 0);
+            let translating = steps.iter().position(|s| matches!(s, Preset::Translate(_)));
             let mut out = Vec::with_capacity(all);
             let mut failed = None;
             let mut late = 0;
@@ -1282,6 +1324,15 @@ impl Memos {
                     None => late = 0,
                 }
                 fixed_only += usize::from(outcomes.iter().any(|o| matches!(o, Outcome::FixedInstead(_))));
+                // Only the translation step's own outcome says whether it
+                // happened: an earlier step's text stands without it.
+                if let Some(at) = translating {
+                    match outcomes.get(at) {
+                        Some(Outcome::Reworked(_)) => translated += 1,
+                        Some(Outcome::Original(Why::Same)) => same += 1,
+                        _ => {}
+                    }
+                }
                 // Each step went on from the one before: the last text is it.
                 let text = outcomes.into_iter().rev().find_map(|o| match o {
                     Outcome::Reworked(text) | Outcome::FixedInstead(text) => Some(text),
@@ -1298,9 +1349,15 @@ impl Memos {
                     None => out.push(p),
                 }
                 let done = (i + 1) as f32 / all as f32;
+                let run = Arc::clone(&stop);
                 let _ = slint::invoke_from_event_loop(move || {
-                    if let Some(w) = memos().and_then(|m| m.window.upgrade()) {
-                        w.global::<AppState>().set_memo_rework_progress(done);
+                    // A run stopped meanwhile does not move the next one's bar.
+                    if let Some(m) =
+                        memos().filter(|m| m.reworking.borrow().as_ref().is_some_and(|(_, r)| Arc::ptr_eq(r, &run)))
+                    {
+                        if let Some(w) = m.window.upgrade() {
+                            w.global::<AppState>().set_memo_rework_progress(done);
+                        }
                     }
                 });
             }
@@ -1310,15 +1367,35 @@ impl Memos {
                 paragraphs: out,
                 changed,
                 fixed_only,
+                translated,
+                same,
                 failed,
             };
             let stopped = stop.load(Ordering::Relaxed);
             let _ = slint::invoke_from_event_loop(move || {
                 if let Some(m) = memos() {
-                    m.reworked(&path, &stop, &steps, (!stopped).then_some(result), german);
+                    m.reworked(&stop, &steps, (!stopped).then_some(result), german);
                 }
             });
         });
+    }
+
+    /// The user ends the language model's work: the text stays as it was,
+    /// and it says so.
+    fn cancel_rework(&self) {
+        let running = self.reworking.borrow().is_some();
+        self.stop_rework();
+        if running {
+            if let Some(w) = self.window.upgrade() {
+                w.global::<AppState>().set_memo_rework_note(
+                    self.say(
+                        "Abgebrochen. Der Text ist unverändert.",
+                        "Stopped. The text is unchanged.",
+                    )
+                    .into(),
+                );
+            }
+        }
     }
 
     /// Ends the language model's work on a text; the text stays as it was.
@@ -1333,16 +1410,15 @@ impl Memos {
 
     /// What the language model made of a memo's text: kept as its text, the
     /// one before kept beside it. None when it was stopped.
-    fn reworked(&self, path: &Path, run: &Arc<AtomicBool>, steps: &[Preset], result: Option<Reworked>, german: bool) {
+    fn reworked(&self, run: &Arc<AtomicBool>, steps: &[Preset], result: Option<Reworked>, german: bool) {
         // Stopped, and maybe another one started since.
-        if self
-            .reworking
-            .borrow()
-            .as_ref()
-            .is_none_or(|(_, r)| !Arc::ptr_eq(r, run))
-        {
-            return;
-        }
+        // The memo may have been renamed meanwhile: the name is the one
+        // the run is held under now.
+        let owned = match self.reworking.borrow().as_ref() {
+            Some((p, r)) if Arc::ptr_eq(r, run) => p.clone(),
+            _ => return,
+        };
+        let path: &Path = &owned;
         *self.reworking.borrow_mut() = None;
         let Some(w) = self.window.upgrade() else {
             return;
@@ -1360,8 +1436,11 @@ impl Memos {
             paragraphs,
             changed,
             fixed_only,
+            translated,
+            same,
             failed,
         } = result;
+        let translating = steps.iter().any(|s| matches!(s, Preset::Translate(_)));
         // Written anew meanwhile (a fresh transcript, an edit elsewhere):
         // that text stays.
         if library::read_text(path).as_ref() != Some(&from) {
@@ -1376,6 +1455,10 @@ impl Memos {
         }
         let note = match (changed, failed) {
             (0, Some(e)) => crate::servers::problem(german, &e),
+            (0, None) if same > 0 => self.say(
+                "Nichts geändert: Der Text ist schon in dieser Sprache.",
+                "Nothing changed: the text is already in that language.",
+            ),
             (0, None) => self.say(
                 "Nichts geändert: Der Text passt so, oder das Modell hat ihn zu stark verändert.",
                 "Nothing changed: the text is fine as it is, or the model changed too much.",
@@ -1398,8 +1481,10 @@ impl Memos {
                 if self.sheet.borrow().as_deref() == Some(path) {
                     self.show_sheet();
                 }
+                // Translating is named only if it happened.
                 let done = steps
                     .iter()
+                    .filter(|step| !matches!(step, Preset::Translate(_)) || translated > 0)
                     .enumerate()
                     .map(|(i, step)| {
                         let said = match step {
@@ -1417,19 +1502,42 @@ impl Memos {
                     .collect::<Vec<_>>()
                     .join(&self.say(" und ", " and "));
                 let mut note = format!("{done}.");
+                // "von 1 Absatz", "von 3 Absätzen".
+                let of = if german {
+                    if all == 1 {
+                        format!("von {all} Absatz")
+                    } else {
+                        format!("von {all} Absätzen")
+                    }
+                } else if all == 1 {
+                    format!("of {all} paragraph")
+                } else {
+                    format!("of {all} paragraphs")
+                };
                 if fixed_only > 0 {
                     note += &if german {
-                        format!(" {fixed_only} von {all} Absätzen nur ausgebessert.")
+                        format!(" {fixed_only} {of} nur ausgebessert.")
                     } else {
-                        format!(" {fixed_only} of {all} paragraphs only fixed.")
+                        format!(" {fixed_only} {of} only fixed.")
+                    };
+                }
+                if translating && translated < all {
+                    let not = all - translated;
+                    note += &match (german, translated, same == all) {
+                        (true, _, true) => " Schon in dieser Sprache.".to_string(),
+                        (true, 0, _) => " Nicht übersetzt.".to_string(),
+                        (true, _, _) => format!(" {not} {of} nicht übersetzt."),
+                        (false, _, true) => " Already in that language.".to_string(),
+                        (false, 0, _) => " Not translated.".to_string(),
+                        (false, _, _) => format!(" {not} {of} not translated."),
                     };
                 }
                 if changed < all {
                     let left = all - changed;
                     note += &if german {
-                        format!(" {left} von {all} unverändert.")
+                        format!(" {left} {of} unverändert.")
                     } else {
-                        format!(" {left} of {all} unchanged.")
+                        format!(" {left} {of} unchanged.")
                     };
                 }
                 if let Some(e) = failed {

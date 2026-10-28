@@ -423,7 +423,7 @@ fn show_tray(app: &App, tray: &Tray) {
 }
 
 /// The settings as they are now, to the worker, the window and the tray.
-fn send(app: &App) {
+pub(crate) fn send(app: &App) {
     let config = app.config.borrow().clone();
     let keys = Keys::load();
     let _ = app.worker.send(Command::Rework(reworker(&config, &keys)));
@@ -758,7 +758,7 @@ pub fn widget_set(app: &Rc<App>, setting: &str, value: &str) {
     let Some(w) = app.window.upgrade() else { return };
     let state = w.global::<AppState>();
     let value = value.trim();
-    let number = |max: i32| value.parse::<i32>().ok().map(|i| i.clamp(0, max));
+    let number = |max: i32| value.parse::<i32>().ok().filter(|i| (0..=max).contains(i));
     match setting {
         "ai.rework" => {
             if let Some(i) = number(3) {
@@ -778,8 +778,8 @@ pub fn widget_set(app: &Rc<App>, setting: &str, value: &str) {
         }
         "ai.promptSave" => {
             // The wording the menu put into its file, for the task it names.
-            if let Some((kind, text)) = crate::platform::take_widget_prompt_edit() {
-                state.invoke_prompt_save(kind.min(3) as i32, text.into());
+            if let Some((kind, text)) = crate::platform::take_widget_prompt_edit().filter(|(kind, _)| *kind <= 3) {
+                state.invoke_prompt_save(kind as i32, text.into());
             }
         }
         "ai.promptReset" => state.invoke_prompt_reset(state.get_prompt_index()),

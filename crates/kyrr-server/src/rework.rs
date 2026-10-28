@@ -483,7 +483,9 @@ pub fn rework(
     let words = text.split_whitespace().count();
     match preset {
         Preset::Translate(target) => {
-            let found = guard::language_of(text).or(language);
+            // Not recognized is not "in the dictation language": a short
+            // English memo translated into German must not stay English.
+            let found = guard::language_of(text);
             // Said in the dictation language, it is translated unless it
             // clearly is not in it: small words of both are no proof.
             let said_elsewhere = language.is_none_or(|l| l == target || guard::other_language(text, l));
@@ -518,7 +520,7 @@ pub fn rework(
             let (fixed, kept) = check_fix(fixing_order(), line, &answer);
             // Case alone counts as no change of words.
             refused |= kept == 0 && !guard::same_words(line, &answer);
-            changed |= fixed != line;
+            changed |= fixed.split_whitespace().ne(line.split_whitespace());
             out.push(fixed);
             continue;
         }
@@ -588,6 +590,8 @@ fn fix_instead(
         match rework(server, model, Preset::Fix, text, language, deadline, stop) {
             Outcome::Reworked(fixed) => return Outcome::FixedInstead(fixed),
             skipped @ Outcome::Original(Why::Skipped) => return skipped,
+            // A server that fails while fixing is not a text that was fine.
+            failed @ Outcome::Original(Why::Server(_)) => return failed,
             _ => {}
         }
     }
@@ -642,6 +646,10 @@ mod tests {
     }
     use std::io::{BufRead, BufReader, Read, Write};
     use std::net::TcpListener;
+
+    /// The user's own instructions are one setting for the whole process:
+    /// tests that set or expect them take turns.
+    static OWN: Mutex<()> = Mutex::new(());
 
     /// A language model that answers every request with `reply`, and the
     /// requests it got.
@@ -992,6 +1000,119 @@ mod tests {
         assert_eq!(outcomes, vec![Outcome::Original(Why::Server(Error::Offline))]);
     }
 
+    /// What reaches the model for each kind: its own instruction and its
+    /// own examples, never another kind's; the user's own instruction in
+    /// place of only that kind's.
+    #[test]
+    fn every_kind_sends_its_own_instruction_and_examples() {
+        let _own = OWN.lock().unwrap_or_else(|e| e.into_inner());
+        let text = "Also ich wollte kurz sagen dass wir das Angebot am Freitag schicken";
+        let kinds: [(Preset, usize, &str); 4] = [
+            (Preset::Fix, 0, FIX_SHOTS[0].0),
+            (Preset::Polish, 1, POLISH_SHOTS[0].0),
+            (Preset::Business, 2, BUSINESS_SHOTS[0].0),
+            (Preset::Translate("fr"), 3, TRANSLATE_SHOT.0),
+        ];
+        let sent = |preset: Preset| -> Value {
+            let (server, requests) = fake("Wir schicken das Angebot am Freitag.", 200);
+            let deadline = Instant::now() + Duration::from_secs(5);
+            rework(
+                &server,
+                "m",
+                preset,
+                text,
+                Some("de"),
+                deadline,
+                &AtomicBool::new(false),
+            );
+            serde_json::from_str(&requests.recv().unwrap()).unwrap()
+        };
+        for (preset, kind, shot) in kinds {
+            let body = sent(preset);
+            let m = body["messages"].as_array().unwrap();
+            let system = m[0]["content"].as_str().unwrap();
+            let expected = if let Preset::Translate(_) = preset {
+                DEFAULT_PROMPTS[kind].replace("{target}", "French")
+            } else {
+                DEFAULT_PROMPTS[kind].to_string()
+            };
+            assert_eq!(system, expected, "{preset:?}");
+            assert_eq!(
+                m[1]["content"].as_str().unwrap(),
+                format!("<dictation>\n{shot}\n</dictation>"),
+                "{preset:?}"
+            );
+            assert!(m.last().unwrap()["content"].as_str().unwrap().contains(text));
+        }
+        // Only fixing and translating are sent with temperature 0.
+        assert_eq!(sent(Preset::Fix)["temperature"], json!(0));
+        assert!(sent(Preset::Business).get("temperature").is_none());
+    }
+
+    /// A text that is English now (translated before) is reworded and
+    /// translated back by what it is in, not by the language said in.
+    #[test]
+    fn a_translated_text_goes_on_in_its_own_language() {
+        let english = "We are sending the offer on Friday because the boss still wants to look at it.";
+        let polished = "We will send the offer on Friday, as the boss still wants to review it.";
+        let go = |preset, language| {
+            let (server, _) = fake(polished, 200);
+            let deadline = Instant::now() + Duration::from_secs(5);
+            rework(
+                &server,
+                "m",
+                preset,
+                english,
+                language,
+                deadline,
+                &AtomicBool::new(false),
+            )
+        };
+        // The language of the text, as the memo takes it from the text.
+        let found = guard::language_of(english);
+        assert_eq!(found, Some("en"));
+        assert_eq!(go(Preset::Polish, found), Outcome::Reworked(polished.into()));
+        assert_eq!(go(Preset::Business, found), Outcome::Reworked(polished.into()));
+        // Told it is German, the English is no rewording: the old mistake.
+        assert!(matches!(
+            go(Preset::Polish, Some("de")),
+            Outcome::FixedInstead(_) | Outcome::Original(_)
+        ));
+        // Back into German from English is a translation, whatever the
+        // language dictated in.
+        let (server, requests) = fake(
+            "Wir schicken das Angebot am Freitag, weil der Chef noch darüber schauen will.",
+            200,
+        );
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let outcome = rework(
+            &server,
+            "m",
+            Preset::Translate("de"),
+            english,
+            found,
+            deadline,
+            &AtomicBool::new(false),
+        );
+        assert!(matches!(outcome, Outcome::Reworked(_)), "{outcome:?}");
+        assert_eq!(requests.try_iter().count(), 1);
+        // A text too short to tell its language is translated, not taken
+        // for the dictation language.
+        let (server, requests) = fake("Guten Morgen, Anna.", 200);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let outcome = rework(
+            &server,
+            "m",
+            Preset::Translate("de"),
+            "Good morning, Anna.",
+            Some("de"),
+            deadline,
+            &AtomicBool::new(false),
+        );
+        assert!(matches!(outcome, Outcome::Reworked(_)), "{outcome:?}");
+        assert_eq!(requests.try_iter().count(), 1);
+    }
+
     #[test]
     fn thinking_is_switched_off_and_noticed() {
         let (server, requests) = fake_message(json!({"content": "", "reasoning_content": "Let me think…"}), 200);
@@ -1064,6 +1185,7 @@ mod tests {
 
     #[test]
     fn own_prompts_go_out_and_back() {
+        let _own = OWN.lock().unwrap_or_else(|e| e.into_inner());
         assert_eq!(prompt(0), FIX);
         set_prompts([
             String::new(),
