@@ -181,17 +181,18 @@ Off by default. Under Setup, "Experimental AI features" switches on the card
 "Local AI" on the main page. It needs a language model that runs on your own
 computer or in your home network (Ollama, LM Studio or llama.cpp; Gemma 4 from
 E4B up is what kyrr is tested with, 12B or 26B recommended). Plain `http`
-goes to the own PC and to home-network addresses only, and kyrr refuses it
-anywhere else. An `https` address is used as typed.
+goes to the own PC, to home-network addresses and to Tailscale addresses only,
+and kyrr refuses it anywhere else. An `https` address is used as typed.
 
 - **Fix mistakes**, **Nicer** (more fluent wording), **Professional** and
   **Translate** (17 languages) work on each dictation before it is typed,
   alone or combined (rework first, then translate). The same choices exist
   for voice memos, with a comparison of the old and the new text and a way
   back to the original.
-- kyrr checks every answer word by word: a changed word must look or sound
-  like the original, a question stays a question, nothing is answered, and
-  numbers and names stay. If the answer fails the check, the model gets one
+- kyrr checks every answer before it is typed. "Fix mistakes" may change a
+  word only into one that looks or sounds like it; every task keeps
+  numbers, language and length in range, a question stays a question, and
+  nothing is answered. If the answer fails the check, the model gets one
   second try; after that "Fix mistakes" is used instead, or the text is typed
   as dictated. Too slow also means: typed as dictated. The pill says what
   happened.

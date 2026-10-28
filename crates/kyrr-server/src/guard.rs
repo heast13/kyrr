@@ -618,7 +618,7 @@ fn whole(orig: &str, out: &str, (lo, hi): (f32, f32)) -> Result<(), Refusal> {
     if numbers(orig).iter().any(|n| !after.contains(n)) {
         return Err(Refusal::Numbers);
     }
-    if !orig.contains('\n') && out.matches('\n').count() > 1 {
+    if !orig.contains('\n') && out.matches('\n').count() > 0 {
         return Err(Refusal::Lines);
     }
     if orig.contains('?') && !out.contains(['?', '？']) {
@@ -630,7 +630,11 @@ fn whole(orig: &str, out: &str, (lo, hi): (f32, f32)) -> Result<(), Refusal> {
 /// What every answer goes through first: thinking, code fences, quotes and
 /// markers around it.
 pub fn clean(out: &str) -> String {
-    let mut s = out.to_string();
+    // Control characters would be typed as keys (a backspace, a tab).
+    let mut s: String = out
+        .chars()
+        .map(|c| if c.is_control() && c != '\n' { ' ' } else { c })
+        .collect();
     // gpt-oss hands its channels on as they are: the answer is the final one.
     if let Some(at) = s.rfind("<|channel|>final<|message|>") {
         s = s[at + "<|channel|>final<|message|>".len()..].to_string();
@@ -966,6 +970,12 @@ mod tests {
             "Er hat die Gemüse- oder Blumenbeete gemulcht.",
         );
         assert_eq!(text, "Er hat die Gemüse- oder Blumenbeete gemulcht.");
+    }
+
+    #[test]
+    fn control_characters_are_not_typed() {
+        assert_eq!(clean("Das ist\u{8}\tgut."), "Das ist  gut.");
+        assert_eq!(clean("Erste Zeile\nzweite"), "Erste Zeile\nzweite");
     }
 
     #[test]

@@ -146,8 +146,8 @@ agree to it.
 The one exception: only if you switch on the experimental own servers (see
 [How kyrr works](docs/how-it-works.md#your-own-servers-experimental)) does
 kyrr send dictated text or audio, and only to the server address you enter
-yourself, meant for your own computer or a computer in your home network. kyrr
-refuses plain `http` to any other address; an `https` address you type is
+yourself, meant for your own computer or a computer in your home network (or
+Tailscale). kyrr refuses plain `http` to any other address; an `https` address you type is
 used as typed.
 
 ## Code signing policy

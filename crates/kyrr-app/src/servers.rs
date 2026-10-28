@@ -763,7 +763,9 @@ pub fn widget_set(app: &Rc<App>, setting: &str, value: &str) {
         }
         "ai.promptReset" => state.invoke_prompt_reset(state.get_prompt_index()),
         "ai.url" => {
-            state.set_rework_url(value.into());
+            // Only an address kyrr accepts goes into the state the menu
+            // reads (an address with a name and password does not).
+            state.set_rework_url(kyrr_server::address(value).unwrap_or_default().into());
             state.set_rework_found("".into());
             connect_rework(app);
         }
@@ -790,7 +792,7 @@ pub fn widget_set(app: &Rc<App>, setting: &str, value: &str) {
             look_for(app, true, false);
         }
         "asr.url" => {
-            state.set_asr_url(value.into());
+            state.set_asr_url(kyrr_server::address(value).unwrap_or_default().into());
             state.set_asr_found("".into());
             connect_asr(app);
         }

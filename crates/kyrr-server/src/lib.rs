@@ -376,7 +376,7 @@ mod tests {
     #[test]
     fn plain_http_stays_at_home() {
         assert_eq!(allowed("http://127.0.0.1:8080"), Ok(()));
-        assert_eq!(allowed("http://192.168.88.112:1234"), Ok(()));
+        assert_eq!(allowed("http://192.168.1.10:1234"), Ok(()));
         assert_eq!(allowed("http://10.0.0.2"), Ok(()));
         assert_eq!(allowed("http://100.101.102.103:8080"), Ok(()));
         assert_eq!(allowed("http://[::1]:11434"), Ok(()));

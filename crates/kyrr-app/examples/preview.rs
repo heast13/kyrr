@@ -491,7 +491,7 @@ fn main() {
     // The user's own models: set up, tested, and the choice on the main page.
     state.set_ai_features(true);
     state.set_rework_tips(true);
-    state.set_rework_url("http://192.168.88.112:1234".into());
+    state.set_rework_url("http://192.168.1.10:1234".into());
     state.set_rework_models(ModelRc::new(VecModel::from(vec!["gemma-4-26B-A4B-it".into()])));
     state.set_rework_model_index(0);
     state.set_rework_ready(true);
@@ -504,7 +504,7 @@ fn main() {
         .into(),
     );
     state.set_asr_on(true);
-    state.set_asr_url("http://192.168.88.118:8081".into());
+    state.set_asr_url("http://192.168.1.11:8081".into());
     state.set_asr_note(
         if lang == "de" {
             "Funktioniert (0,4 s für eine Sekunde Stille)."
@@ -569,7 +569,7 @@ fn main() {
     state.set_download_progress(0.42);
     render(&window, &ui, &format!("{out}/setup2-{lang}.rgba"));
     state.set_asr_on(true);
-    state.set_asr_url("http://192.168.88.118:8081".into());
+    state.set_asr_url("http://192.168.1.11:8081".into());
     state.set_dictation_state(DictationState::Ready);
     render(&window, &ui, &format!("{out}/setup2-server-{lang}.rgba"));
     state.set_asr_on(false);
