@@ -3399,7 +3399,9 @@ fn tell_widget(window: &MainWindow) {
     kyrr_linux::omarchy::set_prompt(
         state
             .get_ai_features()
-            .then(|| (state.get_prompt_index().clamp(0, 3) as usize, prompt_saved.as_str())),
+            .then_some(())
+            .filter(|_| platform::widget_shown())
+            .map(|_| (state.get_prompt_index().clamp(0, 3) as usize, prompt_saved.as_str())),
     );
     let sheet = if sheet_open {
         json!({

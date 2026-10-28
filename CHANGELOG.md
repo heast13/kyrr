@@ -3,8 +3,9 @@
 ## 0.8.1 (2026-10-28)
 
 - Omarchy: the bar menu can edit the wording of the AI instructions and shows
-  the two-column comparison of a recording next to a reworked version (plugin 1.4.0). The
-  plugin can also be updated on its own from the menu.
+  the two-column comparison of a recording next to a reworked version
+  (plugin 1.4.0). One click on the update row updates kyrr, the plugin and
+  the bar together; the plugin can also be updated on its own.
 - kyrr's windows no longer scroll for nothing at display scaling like 125%
   (heights are rounded up to whole pixels).
 - Linux: the main window leaves room for the panel instead of reaching
