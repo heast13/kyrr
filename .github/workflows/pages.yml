@@ -27,7 +27,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       # Browsers keep style.css and app.js for a while; a new version in the
       # link makes a visitor get the files that belong to the page.
       - name: Version the CSS and JS links
