@@ -87,6 +87,9 @@ component SquareButton inherits Rectangle {
     preferred-width: label.preferred-width + 24px;
     min-width: label.min-width + 16px;
     min-height: 32px;
+    // Like the system's button: never taller than its text asks for, however
+    // much room the layout around it has.
+    max-height: 32px;
     border-width: 1px;
     border-color: focus.has-focus ? Skin.theme-accent
         : Skin.theme-foreground.with-alpha(root.primary ? 0 : 0.4);

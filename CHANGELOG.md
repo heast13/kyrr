@@ -13,7 +13,8 @@
   answer is checked and falls back to the plain fix if more than a few words
   would move.
 - Linux: the What's new window follows the light or dark look of the desktop,
-  also on Omarchy.
+  also on Omarchy, where buttons in the voice memo text and that window
+  are no longer stretched tall.
 - Omarchy: the bar menu has the word-order switch (plugin 1.5.0) and looks
   for a newer plugin by its newest commit instead of downloading a file
   (plugin 1.5.1).
