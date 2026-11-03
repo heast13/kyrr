@@ -12,6 +12,8 @@
   mishearings" move words into their right place in German and English; the
   answer is checked and falls back to the plain fix if more than a few words
   would move.
+- Linux: the What's new window follows the light or dark look of the desktop,
+  also on Omarchy.
 - Omarchy: the bar menu has the word-order switch (plugin 1.5.0) and looks
   for a newer plugin by its newest commit instead of downloading a file
   (plugin 1.5.1).
