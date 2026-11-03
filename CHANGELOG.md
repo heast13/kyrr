@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.8.2 (2026-11-03)
+
+- Voice memos: reworking a text a second time after translating it works now,
+  and so does translating it back into the dictated language (the text is
+  judged by the language it is in now, not the one it was dictated in).
+- Voice memos: the notes under a reworked text name translating only when it
+  happened. Renaming a memo while the AI works on it keeps the result;
+  switching memos or switching the AI off stops the run, and cancel says so.
+- Local AI: "Fixing also fixes word order" (off by default) lets "Fix
+  mishearings" move words into their right place in German and English; the
+  answer is checked and falls back to the plain fix if more than a few words
+  would move.
+- Linux: the What's new window follows the light or dark look of the desktop,
+  also on Omarchy, where buttons in the voice memo text and that window
+  are no longer stretched tall.
+- Omarchy: the bar menu has the word-order switch (plugin 1.5.0) and looks
+  for a newer plugin by its newest commit instead of downloading a file
+  (plugin 1.5.1).
+- Updated libraries (arboard, serde_json, sha2, libc, rustix, pulldown-cmark,
+  clipboard-win) and build actions.
+
 ## 0.8.1 (2026-10-28)
 
 - Omarchy: the bar menu can edit the wording of the AI instructions and shows

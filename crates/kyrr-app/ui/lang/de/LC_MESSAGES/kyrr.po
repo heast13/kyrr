@@ -1376,10 +1376,10 @@ msgid "Waiting for its turn…"
 msgstr "Wartet, bis sie dran ist…"
 
 msgid "Writing… {}% · {}"
-msgstr "Schreibt mit… {} % · {}"
+msgstr "Schreibt … {} % · {}"
 
 msgid "Writing… {}%"
-msgstr "Schreibt mit… {} %"
+msgstr "Schreibt … {} %"
 
 msgid "That did not work. Try again?"
 msgstr "Das hat nicht geklappt. Nochmal versuchen?"

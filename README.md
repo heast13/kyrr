@@ -43,7 +43,7 @@ text stay there too, unless you switch on an AI server of your own (see
   ten-second test lets you hear the difference.
 - **Experimental, off by default**: a language model on your own computer or
   in your home network (Ollama, LM Studio, llama.cpp) can fix mistakes in each
-  dictation, reword it, make it professional or translate it into 17
+  dictation (optionally also the word order), reword it, make it professional or translate it into 17
   languages. A speech server of your own can take over the recognition.
   Switch it on under Setup, "Experimental AI features". Details in [How kyrr
   works](docs/how-it-works.md#your-own-servers-experimental).
