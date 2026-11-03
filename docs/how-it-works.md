@@ -157,6 +157,13 @@ time of day or not at all, and "Play from here" plays from the paragraph the
 cursor is in. You can edit the `.txt` by hand as well; kyrr reads it again
 when you open the text.
 
+With Local AI on, a memo's text can be reworked or translated (see
+[Your own servers](#your-own-servers-experimental)). The text is judged by
+the language it is in now, so it can be reworked again after translating and
+translated back. Renaming a memo while the AI works keeps the result;
+switching to another memo, or switching the AI off, stops the run, and
+cancelling says so.
+
 Dictation comes first: while you dictate, the text waits. The memo key does
 nothing while you dictate, and the dictation key nothing while a memo
 records.
@@ -184,17 +191,17 @@ E4B up is what kyrr is tested with, 12B or 26B recommended). Plain `http`
 goes to the own PC, to home-network addresses and to Tailscale addresses only,
 and kyrr refuses it anywhere else. An `https` address is used as typed.
 
-- **Fix mistakes**, **Nicer** (more fluent wording), **Professional** and
+- **Fix mishearings**, **Nicer** (more fluent wording), **Professional** and
   **Translate** (17 languages) work on each dictation before it is typed,
   alone or combined (rework first, then translate). With "Fixing also
-  fixes word order" on, "Fix mistakes" may also move words around, but never
+  fixes word order" on, "Fix mishearings" may also move words around, but never
   adds or drops one. The same choices exist for voice memos, with a
   comparison of the old and the new text and a way back to the original.
-- kyrr checks every answer before it is typed. "Fix mistakes" may change a
+- kyrr checks every answer before it is typed. "Fix mishearings" may change a
   word only into one that looks or sounds like it; every task keeps
   numbers, language and length in range, a question stays a question, and
   nothing is answered. If the answer fails the check, the model gets one
-  second try; after that "Fix mistakes" is used instead, or the text is typed
+  second try; after that "Fix mishearings" is used instead, or the text is typed
   as dictated. Too slow also means: typed as dictated. The pill says what
   happened.
 - kyrr switches the model's thinking off itself where the server allows it.
@@ -208,7 +215,7 @@ and kyrr refuses it anywhere else. An `https` address is used as typed.
   rework and translation on a recording with "Restore original", the
   comparison of old and new text, and reading or changing the wording of the
   instructions (they can be reset), and the switch "Fixing also fixes word
-  order". Needs plugin 1.5.0 and kyrr 0.8.2.
+  order". Needs plugin 1.5.1 and kyrr 0.8.2.
 
 ## Keys
 
