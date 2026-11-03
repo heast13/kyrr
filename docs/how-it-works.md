@@ -207,7 +207,8 @@ and kyrr refuses it anywhere else. An `https` address is used as typed.
   features adds the row "Local AI"; Setup > Own dictation model), also
   rework and translation on a recording with "Restore original", the
   comparison of old and new text, and reading or changing the wording of the
-  instructions (they can be reset). Needs plugin 1.4.0 and kyrr 0.8.1.
+  instructions (they can be reset), and the switch "Fixing also fixes word
+  order". Needs plugin 1.5.0 and kyrr 0.8.2.
 
 ## Keys
 

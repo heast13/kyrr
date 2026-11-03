@@ -16,6 +16,20 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
+## 0.8.2
+
+- Voice memos: you can rework a text again after translating it, and translate it back into the language you dictated in.
+- Voice memos: the notes under a reworked text only mention translating when it happened. Renaming a memo while the AI works on it keeps the result, and switching memos or switching the AI off stops the run.
+- New in Local AI, off by default: "Fixing also fixes word order" lets "Fix mishearings" also put misplaced words in their right place.
+- (Linux) Omarchy: the bar menu has the word-order switch (needs plugin 1.5.0) and looks for a newer plugin without downloading anything.
+
+### Deutsch
+
+- Sprachaufzeichnungen: Du kannst einen Text nach dem Übersetzen noch einmal überarbeiten und ihn zurück in die Sprache übersetzen, in der Du diktiert hast.
+- Sprachaufzeichnungen: Die Hinweise unter einem überarbeiteten Text nennen das Übersetzen nur, wenn es passiert ist. Wenn Du eine Aufzeichnung umbenennst, während die KI daran arbeitet, bleibt das Ergebnis erhalten; wenn Du die Aufzeichnung wechselst oder die KI ausschaltest, stoppt der Lauf.
+- Neu bei der Lokalen KI, standardmäßig aus: „Ausbessern korrigiert auch die Satzstellung“ lässt „Fehler ausbessern“ auch falsch gestellte Wörter an die richtige Stelle rücken.
+- (Linux) Omarchy: Das Menü in der Leiste hat den Schalter für die Satzstellung (braucht Plugin 1.5.0) und sucht ein neues Plugin, ohne etwas herunterzuladen.
+
 ## 0.8.1
 
 - kyrr's windows no longer scroll for nothing at display scaling like 125%; they fit their content.

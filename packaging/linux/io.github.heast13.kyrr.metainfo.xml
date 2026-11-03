@@ -47,11 +47,11 @@
          the files; when the screenshots change, point it at the new commit. -->
     <screenshot type="default">
       <caption>Noise filter, voice and dictation, each with one switch</caption>
-      <image>https://raw.githubusercontent.com/heast13/kyrr/v0.8.1/docs/screenshots/main.png</image>
+      <image>https://raw.githubusercontent.com/heast13/kyrr/v0.8.2/docs/screenshots/main.png</image>
     </screenshot>
     <screenshot>
       <caption>Settings</caption>
-      <image>https://raw.githubusercontent.com/heast13/kyrr/v0.8.1/docs/screenshots/settings.png</image>
+      <image>https://raw.githubusercontent.com/heast13/kyrr/v0.8.2/docs/screenshots/settings.png</image>
     </screenshot>
   </screenshots>
   <branding>
@@ -75,6 +75,16 @@
     <keyword>speech to text</keyword>
   </keywords>
   <releases>
+    <release version="0.8.2" date="2026-11-03">
+      <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.8.2</url>
+      <description>
+        <ul>
+          <li>Voice memos: rework a text again after translating it, and translate it back</li>
+          <li>Local AI: optional word-order fixing for "Fix mishearings"</li>
+          <li>Omarchy: word-order switch in the bar menu</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.8.1" date="2026-10-28">
       <url type="details">https://github.com/heast13/kyrr/releases/tag/v0.8.1</url>
       <description>
