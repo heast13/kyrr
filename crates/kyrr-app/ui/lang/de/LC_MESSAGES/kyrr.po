@@ -1616,6 +1616,9 @@ msgstr "Übersetzen"
 msgid "Fix word order"
 msgstr "Satzstellung korrigieren"
 
+msgid "Fix mishearings + word order"
+msgstr "Fehler ausbessern + Satzstellung"
+
 msgid "Local AI"
 msgstr "Lokale KI"
 

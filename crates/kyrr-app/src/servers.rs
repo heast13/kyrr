@@ -21,10 +21,11 @@ use crate::{tray, App, AppState, MainWindow, Tray};
 thread_local! {
     /// For what comes back from a server, on the window's thread.
     static APP: RefCell<RcWeak<App>> = const { RefCell::new(RcWeak::new()) };
-    /// The instruction shown in the editor, and what was typed into the
-    /// others without saving: switching back brings it again.
+    /// The instruction shown in the editor (its place in
+    /// `rework::DEFAULT_PROMPTS`), and what was typed into the others
+    /// without saving: switching back brings it again.
     static PROMPT_SHOWN: Cell<usize> = const { Cell::new(0) };
-    static PROMPT_DRAFTS: RefCell<[Option<String>; 4]> = const { RefCell::new([None, None, None, None]) };
+    static PROMPT_DRAFTS: RefCell<[Option<String>; 5]> = const { RefCell::new([None, None, None, None, None]) };
 }
 
 /// A sentence with a mishearing in it, for the test: fixed, it says
@@ -112,41 +113,58 @@ fn memo_rework(app: &App, config: &Config, keys: &Keys) -> Option<MemoRework> {
 
 /// The user's own instructions for the language model, in the order of
 /// `rework::DEFAULT_PROMPTS` ("" for kyrr's own).
-fn own_prompts(config: &Config) -> [String; 4] {
+fn own_prompts(config: &Config) -> [String; 5] {
     std::array::from_fn(|i| config.prompts.get(i).cloned().unwrap_or_default())
 }
 
-/// The instruction the language model gets now for `kind`.
-fn prompt_text(config: &Config, kind: usize) -> String {
-    let own = own_prompts(config)[kind].clone();
+/// The instruction the language model gets now at `slot`.
+fn prompt_text(config: &Config, slot: usize) -> String {
+    let own = own_prompts(config)[slot].clone();
     if own.trim().is_empty() {
-        rework::DEFAULT_PROMPTS[kind].to_string()
+        rework::DEFAULT_PROMPTS[slot].to_string()
     } else {
         own
+    }
+}
+
+/// Where the instruction for the task `kind` (0 to 3, as the list shows
+/// them) is kept: fixing has another one while the word order is on.
+fn prompt_slot(config: &Config, kind: i32) -> usize {
+    rework::prompt_slot(kind.clamp(0, 3) as usize, config.fix_order)
+}
+
+/// Puts what is typed into the editor aside if it was not saved, so that
+/// showing another instruction does not lose it.
+fn keep_draft(state: &AppState) {
+    if state.get_prompt_text() != state.get_prompt_saved() {
+        let typed = state.get_prompt_text().to_string();
+        PROMPT_DRAFTS.with_borrow_mut(|drafts| drafts[PROMPT_SHOWN.get()] = Some(typed));
     }
 }
 
 fn show_prompt(app: &App, kind: i32) {
     let Some(w) = app.window.upgrade() else { return };
     let state = w.global::<AppState>();
-    let kind = kind.clamp(0, 3) as usize;
+    let kind = kind.clamp(0, 3);
     let config = app.config.borrow();
-    let text = prompt_text(&config, kind);
-    let draft = PROMPT_DRAFTS.with_borrow_mut(|drafts| drafts[kind].take());
-    PROMPT_SHOWN.set(kind);
-    state.set_prompt_index(kind as i32);
+    let slot = prompt_slot(&config, kind);
+    let text = prompt_text(&config, slot);
+    let draft = PROMPT_DRAFTS.with_borrow_mut(|drafts| drafts[slot].take());
+    PROMPT_SHOWN.set(slot);
+    state.set_prompt_index(kind);
     state.set_prompt_text(draft.as_deref().unwrap_or(&text).into());
     state.set_prompt_saved(text.as_str().into());
-    state.set_prompt_own(!own_prompts(&config)[kind].trim().is_empty());
+    state.set_prompt_own(!own_prompts(&config)[slot].trim().is_empty());
 }
 
 fn save_prompt(app: &App, kind: i32, text: &str) {
-    let kind = kind.clamp(0, 3) as usize;
+    let kind = kind.clamp(0, 3);
     {
         let mut config = app.config.borrow_mut();
+        let slot = prompt_slot(&config, kind);
         let mut own = own_prompts(&config);
         // kyrr's own, typed back in, is kyrr's own again: it follows updates.
-        own[kind] = if text.trim() == rework::DEFAULT_PROMPTS[kind].trim() {
+        own[slot] = if text.trim() == rework::DEFAULT_PROMPTS[slot].trim() {
             String::new()
         } else {
             text.to_string()
@@ -158,7 +176,7 @@ fn save_prompt(app: &App, kind: i32, text: &str) {
         }
         config.save();
     }
-    show_prompt(app, kind as i32);
+    show_prompt(app, kind);
 }
 
 fn recognizer(config: &Config, keys: &Keys) -> Option<Recognizer> {
@@ -266,11 +284,7 @@ pub fn setup(app: &Rc<App>, window: &MainWindow) {
         let app = Rc::clone(app);
         move |i| {
             if let Some(w) = app.window.upgrade() {
-                let state = w.global::<AppState>();
-                if state.get_prompt_text() != state.get_prompt_saved() {
-                    let typed = state.get_prompt_text().to_string();
-                    PROMPT_DRAFTS.with_borrow_mut(|drafts| drafts[PROMPT_SHOWN.get()] = Some(typed));
-                }
+                keep_draft(&w.global::<AppState>());
             }
             show_prompt(&app, i)
         }
@@ -318,6 +332,12 @@ pub fn setup(app: &Rc<App>, window: &MainWindow) {
             app.config.borrow_mut().fix_order = on;
             app.config.borrow().save();
             rework::set_fix_order(on);
+            // The instruction for fixing is another one now: show it.
+            if let Some(w) = app.window.upgrade() {
+                let state = w.global::<AppState>();
+                keep_draft(&state);
+                show_prompt(&app, state.get_prompt_index());
+            }
             send(&app);
         }
     });
@@ -849,6 +869,49 @@ pub fn widget_set(app: &Rc<App>, setting: &str, value: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The instruction the settings show is the instruction the model gets,
+    /// for every task, with the word order on and off, kyrr's own and the
+    /// user's. (It was not once: with the word order on, the settings kept
+    /// showing the plain fixing instruction that forbids moving words.)
+    #[test]
+    fn the_settings_show_the_instruction_that_is_sent() {
+        for own in [false, true] {
+            for fix_order in [false, true] {
+                let prompts = if own {
+                    (0..5).map(|i| format!("own instruction {i}")).collect()
+                } else {
+                    Vec::new()
+                };
+                let config = Config {
+                    fix_order,
+                    prompts,
+                    ..Config::default()
+                };
+                rework::set_prompts(own_prompts(&config));
+                for kind in 0..4 {
+                    let shown = prompt_text(&config, prompt_slot(&config, kind));
+                    assert_eq!(
+                        shown,
+                        rework::instruction(kind as usize, fix_order),
+                        "kind {kind}, word order {fix_order}, own {own}"
+                    );
+                }
+            }
+        }
+        // With the word order on, fixing shows another instruction than without.
+        let config = Config::default();
+        rework::set_prompts(own_prompts(&config));
+        let plain = prompt_text(&config, prompt_slot(&config, 0));
+        let config = Config {
+            fix_order: true,
+            ..config
+        };
+        let ordered = prompt_text(&config, prompt_slot(&config, 0));
+        assert_ne!(plain, ordered);
+        assert!(ordered.contains("word order"));
+        rework::set_prompts(Default::default());
+    }
 
     #[test]
     fn languages_by_code() {

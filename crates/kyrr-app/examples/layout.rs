@@ -62,6 +62,20 @@ use slint::{ComponentHandle, ModelRc, PhysicalSize, SharedString, VecModel};
 
 slint::include_modules!();
 
+// A ruler for text: how wide a line is when nothing makes it wrap or cut it.
+slint::slint! {
+    export component Ruler inherits Window {
+        in property <string> sample;
+        in property <length> size: 12px;
+        out property <length> natural: probe.preferred-width;
+        probe := Text {
+            text: root.sample;
+            font-size: root.size;
+            wrap: no-wrap;
+        }
+    }
+}
+
 // The sizing rules of the app itself, not a copy.
 #[path = "../src/sizing.rs"]
 mod sizing;
@@ -496,6 +510,133 @@ fn check_source() -> Vec<String> {
             problems.push(format!(
                 "source: main.rs does not use `{needed}…` any more; it must size its windows with the rules in sizing.rs"
             ));
+        }
+    }
+    problems
+}
+
+const APP_SLINT: &str = include_str!("../ui/app.slint");
+const GERMAN_PO: &str = include_str!("../ui/lang/de/LC_MESSAGES/kyrr.po");
+
+/// The width of the card on a page of the narrowest window, in logical
+/// pixels: the window (380) less the page's 18 px on each side and the
+/// card's 14 px and its border.
+const CARD_INNER: f32 = 380.0 - 2.0 * 18.0 - 2.0 * 14.0 - 2.0;
+/// What a switch and the gap before it take from a row.
+const SWITCH_AND_GAP: f32 = 36.0 + 8.0;
+/// The reserve a label must keep on top of what is measured here: none, as the
+/// machine's default font (DejaVu Sans on the runners) is wider than Segoe UI
+/// and the desktops' own fonts, so the measure already has a reserve.
+const LABEL_RESERVE: f32 = 1.0;
+
+/// German texts of the window by their English original, from the .po file.
+fn german_texts() -> BTreeMap<String, String> {
+    let mut map = BTreeMap::new();
+    let (mut id, mut text, mut in_str) = (String::new(), String::new(), 0u8);
+    let quoted = |line: &str| -> String {
+        let (open, close) = (line.find('"').map_or(0, |i| i + 1), line.rfind('"').unwrap_or(0));
+        let q = line.get(open..close.max(open)).unwrap_or_default().to_string();
+        q.replace("\\\"", "\"").replace("\\n", "\n")
+    };
+    for line in GERMAN_PO.lines().chain(std::iter::once("")) {
+        if line.starts_with("msgid ") {
+            if !id.is_empty() && !text.is_empty() {
+                map.insert(std::mem::take(&mut id), std::mem::take(&mut text));
+            }
+            id = quoted(line);
+            text.clear();
+            in_str = 1;
+        } else if line.starts_with("msgstr ") {
+            text = quoted(line);
+            in_str = 2;
+        } else if line.starts_with('"') {
+            let more = quoted(line);
+            if in_str == 1 {
+                id.push_str(&more);
+            } else if in_str == 2 {
+                text.push_str(&more);
+            }
+        } else if line.trim().is_empty() {
+            if !id.is_empty() && !text.is_empty() {
+                map.insert(std::mem::take(&mut id), std::mem::take(&mut text));
+            }
+            id.clear();
+            text.clear();
+            in_str = 0;
+        }
+    }
+    map
+}
+
+/// The labels of the rows that share their line with a control (a switch, a
+/// choice) in the window's source: the text, and the width the row gives it.
+/// Such a label cuts off or wraps into the next row when it is too long, and
+/// the contact sheets do not show it unless somebody reads that very row.
+fn row_labels(source: &str) -> Vec<(usize, String, f32)> {
+    let mut found = Vec::new();
+    for (n, line) in source.lines().enumerate() {
+        // The entries of a drop-down list: its width less the arrow and padding.
+        if line.contains("-options: [") && line.contains("@tr(") {
+            let mut rest = line;
+            while let Some(i) = rest.find("@tr(\"") {
+                rest = &rest[i + 5..];
+                let Some(end) = rest.find('"') else { break };
+                found.push((n + 1, rest[..end].to_string(), CARD_INNER - 50.0));
+                rest = &rest[end..];
+            }
+            continue;
+        }
+        let Some(at) = line.find("Caption {") else { continue };
+        if !line.contains("vertical-alignment: center") {
+            continue;
+        }
+        let width = if let Some(w) = line.split("width: ").nth(1).filter(|_| !line.contains("max-width")) {
+            let digits: String = w.chars().take_while(|c| c.is_ascii_digit()).collect();
+            let unit: String = w[digits.len()..].chars().take(2).collect();
+            match (digits.parse::<f32>(), unit.as_str()) {
+                (Ok(p), u) if u.starts_with('%') => CARD_INNER * p / 100.0 - 8.0,
+                (Ok(px), "px") => px,
+                _ => CARD_INNER - SWITCH_AND_GAP,
+            }
+        } else {
+            CARD_INNER - SWITCH_AND_GAP
+        };
+        let mut rest = &line[at..];
+        while let Some(i) = rest.find("@tr(\"") {
+            rest = &rest[i + 5..];
+            let Some(end) = rest.find('"') else { break };
+            let text = &rest[..end];
+            if !text.contains("{}") {
+                found.push((n + 1, text.to_string(), width));
+            }
+            rest = &rest[end..];
+        }
+    }
+    found
+}
+
+/// Every label of a row, German and English, on one line at 12 px with the
+/// reserve, against the width its row gives it.
+fn check_labels(source: &str, german: &BTreeMap<String, String>) -> Vec<String> {
+    let ruler = Ruler::new().expect("the ruler");
+    let mut problems = Vec::new();
+    let labels = row_labels(source);
+    if labels.len() < 10 {
+        return vec![format!(
+            "labels: only {} row labels found in app.slint; the check no longer reads its rows (Caption with vertical-alignment: center)",
+            labels.len()
+        )];
+    }
+    for (line, english, room) in labels {
+        for (lang, text) in [("en", Some(english.clone())), ("de", german.get(&english).cloned())] {
+            let Some(text) = text else { continue };
+            ruler.set_sample(text.as_str().into());
+            let needs = ruler.get_natural() * LABEL_RESERVE;
+            if needs > room {
+                problems.push(format!(
+                    "labels: app.slint:{line} \"{text}\" ({lang}) needs {needs:.0} px on one line but its row gives {room:.0} px; it will be cut off or wrap into the row below. Shorten it or give the row a line of its own"
+                ));
+            }
         }
     }
     problems
@@ -1251,6 +1392,14 @@ fn scenarios() -> Vec<Scenario> {
         s.set_ai_features(true);
         s.set_prompt_text(kyrr_server::rework::DEFAULT_PROMPTS[0].into());
         s.set_prompt_saved(kyrr_server::rework::DEFAULT_PROMPTS[0].into());
+    });
+    // Fixing with the word order: its own instruction, and the longer name.
+    add(&mut v, "local-ai-fix-order", Kind::Settings, |_, s, _| {
+        s.set_page(8);
+        s.set_ai_features(true);
+        s.set_fix_order(true);
+        s.set_prompt_text(kyrr_server::rework::DEFAULT_PROMPTS[4].into());
+        s.set_prompt_saved(kyrr_server::rework::DEFAULT_PROMPTS[4].into());
     });
     add(&mut v, "local-ai-tips", Kind::Settings, |_, s, c| {
         s.set_page(8);
@@ -2228,6 +2377,17 @@ fn main() {
     let mut lines: Vec<String> = check_source();
     let rules = Rules { selftest: o.selftest };
     let rig = Rig::new();
+    // Labels of rows: measured once, in logical pixels, whatever the scale.
+    let german = german_texts();
+    lines.extend(check_labels(APP_SLINT, &german));
+    if o.selftest {
+        // The word-order label of 0.8.2, in a row of a switch, must be found.
+        let old = "        Caption { text: @tr(\"Fixing also fixes word order and then some more words\"); vertical-alignment: center; horizontal-stretch: 1; }\n".repeat(12);
+        assert!(
+            !check_labels(&old, &german).is_empty(),
+            "selftest: a too long label was not found"
+        );
+    }
     // The bundled translations only exist once a component has been made.
     let _first = MainWindow::new().expect("the main window");
     let mut found = Findings::default();

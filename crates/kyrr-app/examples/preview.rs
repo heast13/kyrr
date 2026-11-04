@@ -519,6 +519,12 @@ fn main() {
     state.set_prompt_text(kyrr_server::rework::DEFAULT_PROMPTS[0].into());
     state.set_prompt_saved(kyrr_server::rework::DEFAULT_PROMPTS[0].into());
     render(&window, &ui, &format!("{out}/local-ai-{lang}.rgba"));
+    // The same with the word order on: fixing has its own instruction.
+    state.set_fix_order(true);
+    state.set_prompt_text(kyrr_server::rework::DEFAULT_PROMPTS[4].into());
+    state.set_prompt_saved(kyrr_server::rework::DEFAULT_PROMPTS[4].into());
+    render(&window, &ui, &format!("{out}/local-ai-fix-order-{lang}.rgba"));
+    state.set_fix_order(false);
     state.set_rework_tips(false);
     state.set_local_ai(true);
     state.set_rework_index(3);

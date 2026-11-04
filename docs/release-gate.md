@@ -35,6 +35,17 @@ exception, see Layout):
   run builds the same pictures locally (section 3, step 0). Required on every
   pull request. The sizing rules are `crates/kyrr-app/src/sizing.rs`,
   which the check includes, so the app and the check cannot drift apart.
+- **Row labels** (the same example, `labels:` lines): every label that shares
+  its row with a switch or a choice in `app.slint` is measured in German and
+  English on one line (in the runner's font, which is wider than Segoe UI) against the width
+  its row gives it. Too long fails with the label and the numbers (the 0.8.2
+  word-order label went through the gate cut off). The bar menu has the same
+  rule as a test (`tests/labels.test.mjs` in the plugin: longest label per row
+  kind).
+- **What is shown is what is sent** (`servers.rs`, test
+  `the_settings_show_the_instruction_that_is_sent`): the instruction Local AI
+  shows for each task, with the word order on and off, is the one the model
+  gets. A new behaviour switch gets its line in that test.
 - **Release rules** (`scripts/release-gate.py`, Linux job): translations complete,
   word rules, no Flatpak, relative links resolve, the contract.
 
