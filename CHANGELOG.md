@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.3 (2026-11-04)
+
+- Local AI: the word-order switch is now called "Fix word order" so the
+  whole text fits, and it shows only while "Fix mishearings" is chosen (it does
+  nothing in the other modes). Omarchy: the same in the bar menu (plugin 1.5.2).
+
 ## 0.8.2 (2026-11-03)
 
 - Voice memos: reworking a text a second time after translating it works now,
