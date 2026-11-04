@@ -22,3 +22,13 @@ the plugin's `git log` since kyrr's previous release.
    can follow without knowing the code, each with what should happen. Always
    include the fixed items of `docs/release-gate.md` section 4, then one block
    per new feature. Mark items that only this release needs.
+6. **Visible where it acts.** Every setting that changes what the app does
+   must show that change in the place that describes the behaviour, on every
+   system. Typical case: a switch that changes the instruction sent to the
+   language model must change the instruction shown and editable under Local
+   AI (window and bar menu); a switch that changes a text must change the
+   text shown. For each new or changed setting: set it, open the place that
+   describes the behaviour, and write down what it shows (PASS only when it
+   shows the changed behaviour; a place that still describes the old
+   behaviour is a FAIL, even when the feature itself works). 0.8.2 shipped
+   the word-order switch with Local AI still showing "keep the word order".

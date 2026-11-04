@@ -16,6 +16,14 @@ load test's pictures: see omarchy.md.
    buttons, cards), nothing overlapping, no text running out of its box, no
    empty band where the window is taller than its content, icons sharp at
    every scale.
+   Labels in particular: for every label that is new or changed in this
+   version, find it in the pictures at 1.0 and 2.0 and read it to the last
+   letter, in German and English, in every look. A label that ends in "…" or
+   whose last word is missing is a FAIL, whatever `problems.txt` says (it
+   cannot see text cut off inside its own box; its `labels:` lines only
+   catch rows that are too long on paper). The bar menu's labels are checked
+   by the plugin test `tests/labels.test.mjs`; for new ones look at the
+   Quickshell load test pictures of the plugin's CI too.
 3. German is the long language: every German page fits as well as English.
 4. Looks: for each page, find its sheet in each look (the `.txt` beside each
    sheet names the pages) and look at the four side by side: `light` and
