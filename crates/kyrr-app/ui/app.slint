@@ -1418,9 +1418,10 @@ component LocalAiCard inherits Card {
             selected => { AppState.rework-changed(self.current-index); }
         }
     }
-    if AppState.local-ai && AppState.rework-ready: HorizontalLayout {
+    // Only "Fix mishearings" (index 1) can fix the word order.
+    if AppState.local-ai && AppState.rework-ready && AppState.rework-index == 1: HorizontalLayout {
         spacing: 8px;
-        Caption { text: @tr("Fixing also fixes word order"); vertical-alignment: center; horizontal-stretch: 1; }
+        Caption { text: @tr("Improve word order"); vertical-alignment: center; horizontal-stretch: 1; }
         Switch {
             checked <=> AppState.fix-order;
             toggled => { AppState.fix-order-toggled(self.checked); }

@@ -16,6 +16,14 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
+## 0.8.3
+
+- The word-order switch under Local AI is now called "Improve word order", so the whole text is readable, and it only shows while "Fix mishearings" is chosen.
+
+### Deutsch
+
+- Der Schalter für die Satzstellung bei der Lokalen KI heißt jetzt „Satzstellung verbessern“, damit der ganze Text lesbar ist, und erscheint nur, wenn „Fehler ausbessern“ gewählt ist.
+
 ## 0.8.2
 
 - Voice memos: you can rework a text again after translating it, and translate it back into the language you dictated in.
