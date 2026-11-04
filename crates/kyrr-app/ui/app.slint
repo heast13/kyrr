@@ -1412,7 +1412,7 @@ component LocalAiCard inherits Card {
     }
     if AppState.local-ai && AppState.rework-ready: HorizontalLayout {
         spacing: 8px;
-        Caption { text: @tr("Rework"); vertical-alignment: center; width: 30%; }
+        Caption { text: @tr("Rework"); vertical-alignment: center; width: 34%; }
         ComboBox {
             model: AppState.rework-options;
             current-index <=> AppState.rework-index;
@@ -1430,7 +1430,7 @@ component LocalAiCard inherits Card {
     }
     if AppState.local-ai && AppState.rework-ready: HorizontalLayout {
         spacing: 8px;
-        Caption { text: @tr("Translate into"); vertical-alignment: center; width: 30%; }
+        Caption { text: @tr("Translate into"); vertical-alignment: center; width: 34%; }
         ComboBox {
             model: AppState.translate-options;
             current-index <=> AppState.translate-index;
