@@ -195,8 +195,9 @@ and kyrr refuses it anywhere else. An `https` address is used as typed.
   **Translate** (17 languages) work on each dictation before it is typed,
   alone or combined (rework first, then translate). With "Fix word
   order" on, "Fix mishearings" may also move words around, but never
-  adds or drops one. The same choices exist for voice memos, with a
-  comparison of the old and the new text and a way back to the original.
+  adds or drops one; that mode has its own instruction under Instructions.
+  The same choices exist for voice memos, with a comparison of the old and
+  the new text and a way back to the original.
 - kyrr checks every answer before it is typed. "Fix mishearings" may change a
   word only into one that looks or sounds like it; every task keeps
   numbers, language and length in range, a question stays a question, and
@@ -215,7 +216,7 @@ and kyrr refuses it anywhere else. An `https` address is used as typed.
   rework and translation on a recording with "Restore original", the
   comparison of old and new text, and reading or changing the wording of the
   instructions (they can be reset), and the switch "Fix word
-  order" (shown with "Fix mishearings"). Needs plugin 1.5.2 and kyrr 0.8.3.
+  order" (shown with "Fix mishearings"). Needs plugin 1.5.3 and kyrr 0.8.4.
 
 ## Keys
 

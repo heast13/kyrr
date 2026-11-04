@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.4 (2026-11-04)
+
+- Local AI: with "Fix word order" on, Settings > Local AI > Instructions now
+  shows the instruction that is really sent ("Fix mishearings + word order"),
+  and it can be edited and reset like the others. Before, it kept showing the
+  plain fixing instruction that forbids moving words. A fixing instruction of
+  your own is not used in this mode: it has its own, starting from kyrr's.
+  Omarchy: the same in the bar menu (plugin 1.5.3).
+- The labels "Rework" and "Translate into" get a little more room, so
+  "Überarbeitung" is not cut off.
+
 ## 0.8.3 (2026-11-04)
 
 - Local AI: the word-order switch is now called "Fix word order" so the

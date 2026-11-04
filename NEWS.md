@@ -16,6 +16,16 @@ marked `(Windows)`), or the Windows test fails. A release that only changes
 Linux still gets a plain line like `(Windows) General bug fixes.`, never a
 line saying nothing changes on Windows.
 
+## 0.8.4
+
+- With "Fix word order" on, the instructions under Local AI now show the instruction that is really used, and you can change it. Your own fixing instruction is not used in that mode.
+- The labels "Rework" and "Translate into" have a little more room.
+
+### Deutsch
+
+- Ist „Satzstellung korrigieren“ an, zeigen die „Anweisungen (Prompts)“ bei der Lokalen KI jetzt die Anweisung, die wirklich verwendet wird, und du kannst sie ändern. Eine eigene Anweisung zum Ausbessern gilt in diesem Modus nicht.
+- Die Beschriftungen „Überarbeitung“ und „Übersetzen in“ haben etwas mehr Platz.
+
 ## 0.8.3
 
 - The word-order switch under Local AI is now called "Fix word order", so the whole text is readable, and it only shows while "Fix mishearings" is chosen.
