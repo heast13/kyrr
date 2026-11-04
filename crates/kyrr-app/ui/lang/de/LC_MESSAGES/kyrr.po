@@ -1613,8 +1613,8 @@ msgstr "Professionell"
 msgid "Translate"
 msgstr "Übersetzen"
 
-msgid "Improve word order"
-msgstr "Satzstellung verbessern"
+msgid "Fix word order"
+msgstr "Satzstellung korrigieren"
 
 msgid "Local AI"
 msgstr "Lokale KI"

@@ -193,7 +193,7 @@ and kyrr refuses it anywhere else. An `https` address is used as typed.
 
 - **Fix mishearings**, **Nicer** (more fluent wording), **Professional** and
   **Translate** (17 languages) work on each dictation before it is typed,
-  alone or combined (rework first, then translate). With "Improve word
+  alone or combined (rework first, then translate). With "Fix word
   order" on, "Fix mishearings" may also move words around, but never
   adds or drops one. The same choices exist for voice memos, with a
   comparison of the old and the new text and a way back to the original.
@@ -214,7 +214,7 @@ and kyrr refuses it anywhere else. An `https` address is used as typed.
   features adds the row "Local AI"; Setup > Own dictation model), also
   rework and translation on a recording with "Restore original", the
   comparison of old and new text, and reading or changing the wording of the
-  instructions (they can be reset), and the switch "Improve word
+  instructions (they can be reset), and the switch "Fix word
   order" (shown with "Fix mishearings"). Needs plugin 1.5.2 and kyrr 0.8.3.
 
 ## Keys

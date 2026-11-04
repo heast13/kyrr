@@ -1421,7 +1421,7 @@ component LocalAiCard inherits Card {
     // Only "Fix mishearings" (index 1) can fix the word order.
     if AppState.local-ai && AppState.rework-ready && AppState.rework-index == 1: HorizontalLayout {
         spacing: 8px;
-        Caption { text: @tr("Improve word order"); vertical-alignment: center; horizontal-stretch: 1; }
+        Caption { text: @tr("Fix word order"); vertical-alignment: center; horizontal-stretch: 1; }
         Switch {
             checked <=> AppState.fix-order;
             toggled => { AppState.fix-order-toggled(self.checked); }

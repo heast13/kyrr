@@ -18,11 +18,11 @@ line saying nothing changes on Windows.
 
 ## 0.8.3
 
-- The word-order switch under Local AI is now called "Improve word order", so the whole text is readable, and it only shows while "Fix mishearings" is chosen.
+- The word-order switch under Local AI is now called "Fix word order", so the whole text is readable, and it only shows while "Fix mishearings" is chosen.
 
 ### Deutsch
 
-- Der Schalter für die Satzstellung bei der Lokalen KI heißt jetzt „Satzstellung verbessern“, damit der ganze Text lesbar ist, und erscheint nur, wenn „Fehler ausbessern“ gewählt ist.
+- Der Schalter für die Satzstellung bei der Lokalen KI heißt jetzt „Satzstellung korrigieren“, damit der ganze Text lesbar ist, und erscheint nur, wenn „Fehler ausbessern“ gewählt ist.
 
 ## 0.8.2
 
