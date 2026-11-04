@@ -864,7 +864,7 @@ export global AppState {
     // The instructions that can be edited, in the order of
     // `kyrr_server::rework::DEFAULT_PROMPTS`. With the word order on, fixing
     // has another instruction (the fifth), and the list says so.
-    out property <[string]> prompt-options: [fix-order ? @tr("Fix mishearings and word order") : @tr("Fix mishearings"), @tr("Reword nicely"), @tr("Professional"), @tr("Translate")];
+    out property <[string]> prompt-options: [fix-order ? @tr("Fix mishearings + word order") : @tr("Fix mishearings"), @tr("Reword nicely"), @tr("Professional"), @tr("Translate")];
     // In the order of the targets in `kyrr_server::rework::TARGETS`.
     out property <[string]> translate-options: [@tr("Off"), @tr("English"), @tr("German"), @tr("French"), @tr("Spanish"), @tr("Italian"), @tr("Dutch"), @tr("Portuguese"), @tr("Polish"), @tr("Czech"), @tr("Slovak"), @tr("Swedish"), @tr("Danish"), @tr("Norwegian"), @tr("Finnish"), @tr("Hungarian"), @tr("Romanian"), @tr("Croatian")];
 }

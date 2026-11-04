@@ -524,7 +524,7 @@ const GERMAN_PO: &str = include_str!("../ui/lang/de/LC_MESSAGES/kyrr.po");
 const CARD_INNER: f32 = 380.0 - 2.0 * 18.0 - 2.0 * 14.0 - 2.0;
 /// What a switch and the gap before it take from a row.
 const SWITCH_AND_GAP: f32 = 36.0 + 8.0;
-/// The reserve a label must keep on top of what is measured here. None: the
+/// The reserve a label must keep on top of what is measured here: none, as the
 /// machine's default font (DejaVu Sans on the runners) is wider than Segoe UI
 /// and the desktops' own fonts, so the measure already has a reserve.
 const LABEL_RESERVE: f32 = 1.0;
@@ -534,7 +534,8 @@ fn german_texts() -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
     let (mut id, mut text, mut in_str) = (String::new(), String::new(), 0u8);
     let quoted = |line: &str| -> String {
-        let q = line[line.find('"').unwrap_or(0) + 1..line.rfind('"').unwrap_or(0).max(1)].to_string();
+        let (open, close) = (line.find('"').map_or(0, |i| i + 1), line.rfind('"').unwrap_or(0));
+        let q = line.get(open..close.max(open)).unwrap_or_default().to_string();
         q.replace("\\\"", "\"").replace("\\n", "\n")
     };
     for line in GERMAN_PO.lines().chain(std::iter::once("")) {
@@ -574,6 +575,17 @@ fn german_texts() -> BTreeMap<String, String> {
 fn row_labels(source: &str) -> Vec<(usize, String, f32)> {
     let mut found = Vec::new();
     for (n, line) in source.lines().enumerate() {
+        // The entries of a drop-down list: its width less the arrow and padding.
+        if line.contains("-options: [") && line.contains("@tr(") {
+            let mut rest = line;
+            while let Some(i) = rest.find("@tr(\"") {
+                rest = &rest[i + 5..];
+                let Some(end) = rest.find('"') else { break };
+                found.push((n + 1, rest[..end].to_string(), CARD_INNER - 50.0));
+                rest = &rest[end..];
+            }
+            continue;
+        }
         let Some(at) = line.find("Caption {") else { continue };
         if !line.contains("vertical-alignment: center") {
             continue;
